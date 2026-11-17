@@ -786,6 +786,44 @@ Two incompatible diagnoses are on record and one of them must be wrong:
   sign-extension expander emits those two as one unit, which would close the
   route entirely.
 
-Settling this is worth three functions at once, and it is the single most
-valuable open question in the unit. It should be settled from the RTL dumps
-and `scratch/gcc-src/cdk-gcc-b18/`, not by trying spellings.
+**SETTLED the same day, from the compiler source, and both diagnoses were
+wrong about the reason.**
+
+**The local-alloc route is closed, and not for the reason given.** There is
+no priority inversion to fix: `find_free_reg` builds its `used` set over a
+half-open `[birth, death)` range (`local-alloc.c:2180`), so **two local
+quantities of one block whose ranges are disjoint both get the same
+register**, in either sort order. The `.lreg` dump says so outright --
+`;; Register 177 in 2.` and `;; Register 181 in 2.`. The inequalities solved
+for the spans were arithmetically right but described an instruction order
+that is not the target's. **The residue is a missing CONFLICT, not a
+mis-sorted priority.**
+
+**So the temp must be a global allocno -- and that route is hard, not
+closed.** The claim that it needs a basic-block boundary between the `sll`
+and the `sra` names only ONE of flow's two routes to globalness. The other
+(`flow.c:2561`) marks any pseudo **referenced in two different blocks**. And
+`flow_analysis` runs **exactly once** (`toplev.c:3463`), **before**
+`combine_instructions` (`:3488`), and `reg_basic_block` is never recomputed:
+**a second-block reference that exists at flow time and that combine later
+deletes makes the pseudo global for zero words.** The same block already
+shows combine doing precisely that to an orphaned `(use (reg:SI 179))`, and
+the target's own companion temp is global because cse unified a later
+comparison onto it across a boundary.
+
+The handle is free: naming the expander's shift temp as a C variable
+(`sh = ((s32)want) << 16; ... (sh >> 16)`) is an exact tie -- same words, same
+two rows, not one instruction changed -- and it turns the pair into two C
+expressions a second reference can name.
+
+**Do not queue the permuter.** The pass that has to move is `flow`'s
+`reg_basic_block`, fixed before combine; a search that permutes statements
+inside one basic block cannot change it, whatever its score says.
+
+One further measured fact, because it explains why the obvious attempts
+misfire: an inner `do { } while (0)`'s loop notes are a **full scheduling
+barrier** on the insn carrying them (`sched.c:2088` -- a dependence on every
+register's last use and last set, kind 0, then `flush_pending_lists`), so
+every placement that buys the reference weight also reorders the block. The
+allocation flip IS reachable -- one such placement produced the target's
+register for the first time -- but at the wrong instruction order, 8 rows.

@@ -1,90 +1,174 @@
-/* PARKED 2026-11-16, j50; j69 took it from 15 aligned rows to 2 the same day.
+/* PARKED 2026-11-16, j50; j69 took it 15 aligned rows -> 2; j74 settled WHY the
+   last two will not move, and the answer closes a question that was open
+   across TWO parks (this one and func_8008EAC8, whose residue is the same two
+   instructions of the same shared source snippet).
    target 397 words, candidate 397 words, **2 aligned differences**.
 
    WHAT IS LEFT, AND IT IS ONLY THIS:
      136  sll v0,a0,0x10   vs   sll $v1, $a0, 16
      137  sra a1,v0,0x10   vs   sra $a1, $v1, 16
-   The SImode temp that holds `want << 16` on the way to its sign extension
-   (`.lreg` pseudo 181) gets $v0 where the target has $v1.  Everything else --
-   including the $a0/$a1 pair that was the whole of the old residue -- is
-   byte-identical, and the function is the right length.
+   The SImode temp holding `want << 16` (pseudo 181) gets $v0 where the target
+   has $v1.  Everything else is byte-identical and the length is right.
 
-   ================= HOW THE 15 ROWS WENT (j69, ONE COMPILE) =================
+   ========== j74: THE RESIDUE IS A MISSING CONFLICT, NOT A QTY INVERSION ======
 
-   j50's diagnosis named the right pass and the wrong cure.  `allocno_compare`
-   scores `floor_log2(refs) * refs / live_length`, and with j50's permuted
-   `do { } while (0)` in place the real numbers (tools/decomp/dump.sh, -G0, on
-   a standalone file of the unit's declaration block + this body) were:
+   j69 diagnosed a `local-alloc` qty-priority inversion and derived inequalities
+   (an insn strictly between the `sll` and the `lh`; the `subu` immediately
+   after the `sra`).  THE ARITHMETIC IS RIGHT AND THE DIAGNOSIS IS WRONG, and
+   the reason is one line of `local-alloc.c` nobody had checked:
+
+     `find_free_reg` builds its `used` set as
+     `for (ins = born_index; ins < dead_index; ins++) used |= regs_live_at[ins]`
+     (local-alloc.c:2178), and `post_mark_life` marks exactly `[birth, death)`
+     (local-alloc.c:2300ish).  Births are `2*insn_number`, deaths
+     `2*insn_number + output_p` (`reg_is_set` :2038, `wipe_dead_reg` :2126),
+     and deaths are processed BEFORE births inside one insn (:1477 vs :1487).
+
+   In the TARGET's own instruction order -- `join, sll, sra, lh, lhu, subu` --
+   that makes the two quantities' ranges
+
+       181 = want << 16   [2*n(sll),  2*n(sra))   = two slots
+       177 = the `lh`     [2*n(lh),   2*n(subu))
+
+   **DISJOINT.**  So whichever quantity `qty_compare` sorts first takes $v0, and
+   the other finds $v0 free over its own range and takes $v0 TOO.  That is not a
+   prediction: it is what our build does -- the `.lreg` dump prints
+   `;; Register 177 in 2.` and `;; Register 181 in 2.`, both $v0, and the
+   emitted code reuses $v0 for the `lh` one insn after the `sra` kills it.
+
+   **Exchanging the allocation order therefore cannot change anything.**  There
+   is no inversion to fix.  What the target needs is a CONFLICT: 181 must still
+   be live when 177 is born.
+
+   =============== WHY NO C SPELLING CAN BUY THAT CONFLICT =================
+
+   181 is born at the `sll` and dies at its LAST REFERENCE.  For a conflict its
+   last reference must be scheduled at or after the `lh`.  And `cur`'s own
+   register pins the other end: the target's `lhu $v1` at word 139 REUSES 181's
+   $v1, so 181 must be dead before the `lhu` -- `cur` is a global allocno and
+   `global_conflicts` would see the overlap.  So 181's last reference must land
+   STRICTLY BETWEEN the `lh` and the `lhu`, and it must emit no word.
+
+   Every zero-word insn fails that, for a reason read off sched.c:
+
+   (1) A zero-word insn is scheduled AFTER the `lh` only if the `lh` depends on
+       it -- sched runs BACKWARD, so a dependent is scheduled first and placed
+       later.  Anything the `lh` depends on is therefore scheduled before the
+       `lh` in the backward pass.
+   (2) Such an insn carries priority 1 unless `adjust_priority` boosts it, and
+       the boost needs `birthing_insn_p` to see a SET of a REG with
+       `reg_n_sets == 1` that is live (sched.c:2513, :2551).  A `use`, a bare
+       `__asm__("")`, a non-volatile `__asm__("" ::"r"(x))` and an
+       `__asm__("" : "+r"(x))` (two sets!) are ALL priority 1.
+   (3) A priority-1 insn loses every tie to the boosted `sra`/`sll`/`lh`/`lhu`,
+       so it is scheduled only once nothing boosted is ready -- which is after
+       the `sra`.  The `lh`, blocked behind it, then lands after the `sra` too,
+       and THE EMITTED ORDER CHANGES: `sll, lh, sra, ...`, which is not the
+       target's.  MEASURED, five ways, all 6-9 rows (below).
+   (4) A BOOSTED zero-word insn (an asm with an `"=r"` output whose pseudo is
+       live out of the block) is the opposite failure: it has no dependent in
+       the block, so `sched_block` gives it an anti-dependence on the jump
+       (sched.c:3409), it is ready at T-2 and its boost wins immediately, and it
+       is placed at the END of the block -- past the `lhu`, which is the one
+       place 181 must not reach.
+
+   So the last reference can land between the `sll` and the `sra` (no overlap),
+   or after the `lh` with the order destroyed, or at the block end with `cur`
+   broken.  **There is no fourth slot.  The local-alloc route is closed.**
+
+   ============ WHAT THAT MEANS, AND WHERE THE FIX MUST COME FROM ===========
+
+   If local-alloc cannot do it, 181 is NOT a local quantity in the target: it
+   is a GLOBAL allocno, and `global_alloc` gave it $v1.  That is j71's reading
+   of func_8008EAC8 and it is the correct one -- but its stated reason ("you
+   would need a basic-block boundary between the `sll` and the `sra`, and the
+   sign-extension expander emits them as one unit") is only ONE of flow's two
+   routes to globalness, and the cheaper one was missed:
+
+     * flow.c:1480 -- a pseudo LIVE AT A BASIC BLOCK END is marked
+       REG_BLOCK_GLOBAL.  (This is the boundary route j71 named.)
+     * flow.c:2559-2562 -- a pseudo REFERENCED IN TWO BLOCKS is marked
+       REG_BLOCK_GLOBAL.
+
+   and, decisively, **`flow` runs ONCE, BEFORE `combine`** (toplev.c:3463 vs
+   :3488), while `reg_basic_block` is never recomputed.  So a second-block
+   reference that exists at flow time and that COMBINE later deletes still
+   makes the temp global at local-alloc time, for zero words.  This unit
+   already shows combine doing exactly that kind of deletion in this very
+   block: pre-combine the `lh` was `179 = cur << 16; 177 = 179 >> 16` (cse had
+   made `*(s16 *)(d+0x2A)` a sign-extension of `cur`), combine folded it to one
+   `extendhisi2` from memory, and the leftover `(use (reg:SI 179))` is still
+   sitting at the head of the block in the `.sched`/`.lreg` dumps.
+
+   **THE HANDLE FOR ANY SUCH ATTEMPT IS NEW AND FREE, AND IT IS MEASURED:**
+
+       sh = ((s32)want) << 16;
+       delta = (*((s16 *)(d + 0x2A))) - (sh >> 16);
+
+   with `s32 sh;` is an EXACT TIE -- 397 words, the same 2 rows (j74).  It
+   names the shift temp as a C variable without changing one instruction, which
+   is the thing the next attempt needs: the two halves of the sign extension
+   become separate C expressions that control flow can be put between, and the
+   temp becomes something a second reference can name.  What did NOT work from
+   there: a second reference to `sh` from a later block costs a word (398, the
+   value gets rematerialised in the `bgez` delay slot).
+
+   =============== WHAT IS NEVERTHELESS PROVEN TO MOVE IT ==================
+
+   The allocation CAN be flipped -- j74 got `sll $v1, $a0, 16` ALIGNED WITH THE
+   TARGET for the first time -- by raising 177's loop-depth-weighted reference
+   count, because `QTY_CMP_PRI` is
+   `floor_log2(n_refs) * n_refs * size / (death - birth)` and `flow` adds
+   `loop_depth` PER REFERENCE (flow.c:2566, :2780):
+
+       do { ... cur = *((u16 *)(d + 0x2A));
+            do { h = *((s16 *)(d + 0x2A)); } while (0);      <-- depth 3
+       } while (0);
+       delta = h - want;                                  <-- depth 1
+
+   gives 177 four weighted refs against 181's two, 177 sorts first, and 181 is
+   pushed to $v1.  It is 8 rows, not 0, and for a reason that is itself a lever
+   worth recording: **an inner `do { } while (0)`'s LOOP notes are a FULL
+   SCHEDULING BARRIER on the insn that carries them.**  `sched_analyze_insn`,
+   when `loop_notes` is non-zero, makes that insn depend on the last set of
+   EVERY register (kind 0, i.e. DATA, so loads cost 2) and flushes the memory
+   lists (sched.c:2086-2104).  So the note before the `delta` statement pins the
+   `sll` behind both loads and the emitted order becomes `lhu, lh, sll, sra,
+   subu`.  Every placement of the inner loop that buys the weight also buys
+   that barrier; every placement that avoids the barrier loses the weight.
+
+   The same note mechanism explains the baseline order, which nothing had: the
+   `bgez` carries this body's NOTE_INSN_LOOP_CONT/LOOP_END, so it has a DATA
+   dependence on all seven insns of the block, which is why both loads are
+   launched at a cost of 2 and the `lhu` reaches the ready list at T-3, beats
+   the `sra` on `schedule_select`'s potential-hazard rule, and pushes the `sra`
+   ahead of the `lh`.  That is also why `__asm__("" : "+r"(delta))` works the
+   way j69 saw it: it occupies T-2, the `subu` slips to T-4, and the `lh` is
+   then launched where only the `sll` competes.
+
+   =================== HOW THE 15 ROWS WENT (j69, ONE COMPILE) ==============
+
+   `allocno_compare` scores `floor_log2(refs) * refs / live_length`, and with
+   j50's permuted `do { } while (0)` the real numbers (tools/decomp/dump.sh,
+   -G0) were:
 
      98  = want                      12 refs / 28 insns -> 12857   got $a1
      154 = the raw *(u16 *)(d + 0x2A) 6 refs /  9 insns -> 13333   got $a0
      155 = the `& 0xFFF` result       5 refs /  7 insns -> 14285   got $v1
 
-   so `want` had to land strictly between 154 and 155, i.e. in [13333, 14285)
-   -- a tie at 13333 goes to `want` on `allocno_compare`'s `v1 - v2`
-   allocno-number tie-break.
-
-   The cure is NOT to buy `want` a reference.  **`flow` adds `loop_depth`, not
-   1, per reference**, so the `do { } while (0)`'s LOOP notes were DOUBLE-
-   COUNTING the two references to the raw halfword that happened to sit inside
-   them:
+   so `want` had to land strictly between 154 and 155.  The cure was NOT to buy
+   `want` a reference: the `do { } while (0)`'s LOOP notes were DOUBLE-COUNTING
+   the two references to the raw halfword inside them, so moving
 
        *(s16 *)(d + 0x2A) |= 0xF800;   /   *(s16 *)(d + 0x2A) &= 0x7FF;
 
-   Moving that if/else OUT of the `do { } while (0)` -- leaving only the
-   `want` ternary, `cur` and `delta` inside -- takes 154 from 6 refs to 4
-   (8888) and leaves 98 at 12 refs / 28 (12857).  The pair flips, and with it
-   all thirteen of the rows that fell out of it.  15 -> 2, first compile.
+   OUT of the `do { } while (0)` took 154 from 6 refs to 4 (8888) and left 98 at
+   12/28 (12857).  The pair flipped and thirteen rows went with it.
 
-   **THE `do { } while (0)` IS STILL LOAD-BEARING**: it is what keeps the
-   three references to `want` inside it weighted at depth 2, which is what
-   holds 98 at 12 refs rather than 7.  Do not delete it, and do not put the
-   halfword if/else back inside it.
-
-   ============== WHAT IS LEFT IS A local-alloc QTY INVERSION ===============
-
-   Both survivors are LOCAL quantities of the basic block that starts at
-   .L800965A0 (the ternary's join copy) and ends at the `bgez`:
-
-     181 = want << 16   4 refs, born at the `sll`, dies at the `sra`
-     177 = the `lh`     4 refs, born at the `lh`,  dies at the `subu`
-
-   `local-alloc.c`'s `QTY_CMP_PRI` is
-   `floor_log2(n_refs) * n_refs * size / (qty_death - qty_birth)`, with
-   birth = `2*insn + 1` for a set and death = `2*insn` for a last use
-   (local-alloc.c:382, :2126, :1693).  In the sched1 order this body produces
-   -- `join, sll, sra, lh, lhu, subu, bgez` -- 181's span is 1 and 177's is 3,
-   so 181 sorts first, takes the first free register ($v0), and 177 reuses
-   $v0 after it dies.  The target needs the opposite: 177 allocated FIRST
-   (taking $v0) with 181 CONFLICTING with it, so that 181 is pushed to $v1.
-
-   THE ARITHMETIC OF WHAT WOULD DO IT.  With a = pos(sll), b = pos(lh),
-   c = pos(sra), d = pos(subu) in the post-sched1 insn order, the two
-   requirements are
-
-       overlap:        b < c
-       177 sorts first: d - b < c - a
-
-   which together force **b >= a + 2 and d = c + 1**: at least one insn
-   strictly between the `sll` and the `lh`, and the `subu` immediately after
-   the `sra`.  The only other insn available in the block is the `lhu` that
-   loads `cur`, and putting it there is self-defeating: `cur` is a global
-   allocno, `global_conflicts` would then see it live across 181's $v1, and
-   the target's own `lhu $v1` at word 139 proves it is not.  Every other
-   ordering either ties (and the tie goes to 181, which is born first and so
-   has the lower qty number) or removes the overlap.
-
-   So the lever, if there is one, is a ZERO-WORD INSN SCHEDULED BETWEEN THE
-   `sll` AND THE `lh`, with the `lhu` after the `subu`.  Note which half of
-   that is already reachable: `__asm__("" : "+r"(delta))` after the
-   subtraction moves the `lhu` to the end of the block all by itself (order
-   becomes sll, lh, sra, subu, lhu) -- it just also puts the `lh` at a+1, so
-   the two spans tie at 3 and 181 keeps $v0.  That spelling is 6 rows, not 2,
-   but it is the half of the mechanism that works.
-
-   A no-op `use` cannot be that insn: it carries priority 1 while the `sll`
-   carries `adjust_priority`'s birthing boost (0x7f000001), so the scheduler
-   always emits it ahead of the `sll`, never between.
+   **THE `do { } while (0)` IS STILL LOAD-BEARING**: it is what keeps the three
+   references to `want` inside it weighted at depth 2, which holds 98 at 12 refs
+   rather than 7.  Do not delete it, and do not put the halfword if/else back
+   inside it.
 
    ====================== DECLARATIONS THIS BODY NEEDS ======================
        extern u8 D_800245A8[];
@@ -126,7 +210,6 @@
      `u16 cur`, `s16 delta`, six declaration orders       no change
 
    ============ MEASURED AND REJECTED (j69, against the 2-row body) =========
-   Each of these is a whole-function aligndiff against the body below.
      cur read after `delta`, both still inside the do-while      2  (a tie)
      `delta = -(want - *(s16 *)(d + 0x2A))`                      2  (a tie)
      `delta = *(s16 *)(d + 0x2A) - (s32)want`                    2  (a tie)
@@ -146,8 +229,52 @@
      the `if (delta < 0)` abs pulled INSIDE the do-while         20, 403 words
      `delta = *(s16 *)(d + 0x2A); delta -= want;`                20
      `s16 delta`                                                 41, 400 words
-   The ones marked "a tie" leave exactly the two rows above; they are
-   alternative spellings of the same allocation, not progress.
+
+   ============== MEASURED AND REJECTED (j74, 397 words unless noted) =======
+   Every one of these is a whole-function aligndiff against the body below.
+   The ones that reached `sll $v1` are marked -- they are the ones that prove
+   the mechanism, and they fail only on the emitted ORDER of the two loads.
+     `sh = ((s32)want) << 16;` + `(sh >> 16)`                     2  (a tie)
+         -- the free handle on the shift temp; see above
+     `h = *(s16 *)(d+0x2A)` inside, `delta = h - want` outside    9
+     ... with an inner do-while round the `h` statement           8   $v1 REACHED
+     ... that, plus `__asm__("" : "+r"(delta))`                   9
+     inner do-while round the `delta` statement only              8
+     inner do-while round the `delta` statement, no `h` local    10
+     inner do-while round `h`, plus `+r(delta)`                   8
+     `__asm__("" ::"r"(h))` before the subtraction                8
+     `__asm__("" ::"r"(h))` after the subtraction                 8
+     `+r(delta)` plus `"r"(h)` after                              7
+     `+r(delta)` plus `"r"(h)` before                             7
+     `sh` + `__asm__("" ::"r"(sh))` after the subtraction         8, 398 words
+     `sh` + `__asm__("" ::"r"(sh), "r"(h), "r"(h))`               8, 398 words
+     `sh` + `__asm__("" ::"r"(sh))` in the `if (delta < 0)` block 19
+   In EVERY one of the 8/9-row rows the two loads are hoisted above the `sll`
+   (`lhu, lh, sll, sra, subu`); in the 6/7-row rows the `lh` sits between the
+   `sll` and the `sra` (`sll, lh, sra, subu, lhu`).  Both are the same thing in
+   two directions: whatever gives 181 a long enough life to conflict also moves
+   the `lh` relative to the `sra`.
+
+   =============== WHAT THE NEXT ATTEMPT SHOULD AND SHOULD NOT DO ==========
+   DO NOT re-run any spelling above, and DO NOT look for a zero-word insn
+   between the `sll` and the `lh`: j69's inequalities describe an order that is
+   not the target's, and sched2 does not restore the target's order -- measured
+   on nine variants, the post-sched1 (`.lreg`) order equals the emitted order
+   EVERY time, so the order local-alloc prices is the order that ships.
+
+   DO attack globalness, which is where the target's $v1 has to come from, and
+   remember it is decided PRE-COMBINE.  The target's own
+   `slt $v0, $a1, $v0` at word 153 shows the companion temp 180 (the `sra`
+   result) IS global -- cse unified the later `*(s16 *)(d+0x2A) > want` test
+   onto it across a block boundary, which is exactly the kind of second-block
+   reference 181 needs and does not have.  A spelling that makes cse stop one
+   level short -- unifying `want << 16` across the two tests but NOT the full
+   sign extension -- would give 181 a second-block reference at flow time; with
+   `sh` now available as a named C variable that is a reachable experiment
+   rather than a wish.  The permuter is still the wrong tool here (a pure
+   register residue at the correct word count), and this park now says exactly
+   which pass has to move, so a search that cannot change `reg_basic_block`
+   cannot win.
  */
 
 void func_80096384(u8 *p, void *b, u8 *c, u8 *d)
