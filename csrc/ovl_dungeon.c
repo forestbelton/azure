@@ -355,6 +355,286 @@ extern s16 D_8008346A;
 /* The kill handlers' callees and tables. D_80082E80 is csrc/ovl_town.c's
    UnkTownScene; only its address is wanted. */
 extern u8 D_80082E80[];
+extern u8 D_800245A8[];
+extern void (*D_800DD830[])(void);
+extern u8 D_80050CAC[];
+void func_8008B9FC(u8 *, void *, u8 *, u8 *);
+void func_8008C468(u8 *, void *, u8 *, u8 *);
+void func_8008C514(u8 *, void *, u8 *, u8 *);
+s32 func_8008C5C4(u8 *, UnkVec *, u8 *, u8 *);
+void func_8008C7B4(u8 *, void *, u8 *, u8 *);
+s16 func_8008C8BC(u8 *, UnkVec *, u8 *, u8 *);
+void func_8008CAA0(u8 *, void *, u8 *, u8 *);
+void func_8008CBA0(void *, void *, void *, u8 *);
+void func_8008CCB0(u8 *, void *, u8 *, u8 *);
+void func_8008CF6C(UnkDungeonActor *, void *, u8 *, u8 *);
+s32 func_8008D024(u8 *, void *, u8 *, s16, s16);
+s32 func_8008D1D0(u8 *, void *, u8 *, u8 *);
+void func_8008D7D0(u8 *, void *, u8 *, u8 *);
+void func_8008D94C(u8 *, void *, u8 *, u8 *);
+void func_80090200(u8 *, void *, u8 *, u8 *);
+s32 func_8009074C(s16, u16 *, u16 *);
+void func_80091B5C(u8 *, void *, u8 *, u8 *);
+s32 func_80094270(u8 *, void *, u8 *, u8 *, s16);
+void func_80094548(s16, s32);
+void func_8009456C(s16, u8);
+void func_8009458C(s16, u8);
+void func_800945C4(s16, s32);
+s32 func_80094EA4(void);
+s16 func_80095538(u8 *, s16, s16);
+void func_800956B8(u8 *, void *, void *, u8 *);
+s32 func_80095854(UnkDungeonActor *, void *, u8 *, u8 *);
+UnkNode *func_80098CF8(u8 *, void *, u8 *, u8 *);
+u8 *func_8009F868(void);
+u8 *func_8009F988(void);
+void func_8009FAAC(void);
+void *func_8009FADC(s16);
+s16 func_800A1C58(u8 *);
+s32 func_800A2C34(u8 *);
+void func_800A4300(u8 *, u8 *);
+s32 func_800A4474(s16, s16);
+/* cfc2 $12, $31 + nop + sw: the GTE flag register read func_800CF8E4 uses to
+   reject a triangle whose RTPT overflowed.  Spelled like gte_stszotz above it
+   in include/gte_inline.h -- hard $12, `: "memory"` -- because the listing's
+   scratchpad store must not sink past it. */
+#define gte_stflg(r0) __asm__ volatile("cfc2 $12, $31\n\tnop\n\tsw $12, 0(%0)" ::"r"(r0) : "$12", "memory")
+/* func_800CF8E4's map-cell render pass.  Same shape as csrc/ovl_town.c's
+   func_800AC4C4 (0.602 by opcode stream) but around a 6-byte map cell rather
+   than a bare u16, so the types are its own rather than UnkTownAC*. */
+typedef struct UnkDungeonCF8E4Cell
+{
+    u16 unk_00;
+    s16 unk_02;
+    u16 unk_04;
+} UnkDungeonCF8E4Cell;
+typedef struct UnkDungeonCF8E4Vtx
+{
+    s32 unk_00;
+    u16 unk_04;
+    u16 unk_06;
+} UnkDungeonCF8E4Vtx;
+typedef struct UnkDungeonCF8E4Nrm
+{
+    s32 unk_00;
+    s16 unk_04;
+    s16 unk_06;
+} UnkDungeonCF8E4Nrm;
+typedef struct UnkDungeonCF8E4Obj
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u16 unk_06;
+    u32 unk_08;
+    u32 unk_0C;
+    s32 unk_10;
+    s32 unk_14;
+} UnkDungeonCF8E4Obj;
+typedef struct UnkDungeonCF8E4Map
+{
+    UnkDungeonCF8E4Cell *unk_00;
+    UnkDungeonCF8E4Obj **unk_04;
+    UnkDungeonCF8E4Vtx *unk_08;
+    UnkDungeonCF8E4Nrm *unk_0C;
+    u8 pad_10[0x4];
+    s16 unk_14;
+    s16 unk_16;
+    s16 unk_18;
+    s16 unk_1A;
+} UnkDungeonCF8E4Map;
+/* D_80083160 + 0x18 as func_800CF8E4 reads it: the camera record, with the
+   eye/target halfword triples at +0x08..+0x2C that the D_800DCF58 arm snaps
+   and the other arm halves towards. */
+typedef struct UnkDungeonCF8E4View
+{
+    u8 pad_00[0x8];
+    s16 unk_08;
+    s16 unk_0A;
+    s16 unk_0C;
+    u8 pad_0E[0x2];
+    s16 unk_10;
+    s16 unk_12;
+    s16 unk_14;
+    u8 pad_16[0x2];
+    s16 unk_18;
+    s16 unk_1A;
+    s16 unk_1C;
+    u8 pad_1E[0x2];
+    s16 unk_20;
+    s16 unk_22;
+    s16 unk_24;
+    u8 pad_26[0x2];
+    s16 unk_28;
+    s16 unk_2A;
+    s16 unk_2C;
+    u8 pad_2E[0x56];
+    s32 unk_84;
+    s32 unk_88;
+    u8 pad_8C[0x4];
+    u32 unk_90;
+    u8 pad_94[0x10];
+    u16 unk_A4;
+    u16 unk_A6;
+    u16 unk_A8;
+} UnkDungeonCF8E4View;
+/* The 0x1F800000 scratchpad as func_800CF8E4 lays it out: a word at
+   0xE0/0xE8/0xF0/0xF8 and a halfword at +4 of each, which SVECTOR cannot
+   spell.  0x10, 0x164, 0x16C and 0x170 are each stored as ONE WORD and read
+   back as halfwords or bytes, so they stay s32 here and the half reads are
+   casts off `sp` -- csrc/ovl_town.c's func_800AC4C4 spelling.  Declaring them
+   SPLIT instead (a u16 pair with the word store through an (s32 *) cast) is
+   measurably worse: 0x164 split is 51 aligned rows against 4, and 0x16C with
+   0x170 split together is 125. */
+typedef struct UnkDungeonCF8E4Vert
+{
+    u32 unk_00;
+    u16 unk_04;
+    u16 unk_06;
+} UnkDungeonCF8E4Vert;
+typedef struct UnkDungeonCF8E4SP
+{
+    u32 unk_00;
+    u32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    s32 unk_10;
+    s32 unk_14;
+    s32 unk_18;
+    Unk46C20B unk_1C[4];
+    u32 *unk_BC;
+    u8 pad_C0[0x8];
+    s32 unk_C8;
+    u8 pad_CC[0x8];
+    s32 unk_D4;
+    s32 unk_D8;
+    s32 unk_DC;
+    UnkDungeonCF8E4Vert unk_E0;
+    UnkDungeonCF8E4Vert unk_E8;
+    UnkDungeonCF8E4Vert unk_F0;
+    UnkDungeonCF8E4Vert unk_F8;
+    u8 pad_100[0x10];
+    u32 unk_110;
+    s32 unk_114;
+    s32 unk_118;
+    s32 unk_11C;
+    s32 unk_120;
+    s32 unk_124;
+    s32 unk_128;
+    s32 unk_12C;
+    u8 pad_130[0x4];
+    s32 unk_134;
+    s32 unk_138;
+    s32 unk_13C;
+    u8 pad_140[0x4];
+    s32 unk_144;
+    s32 unk_148;
+    s32 unk_14C;
+    u8 pad_150[0x8];
+    s32 unk_158;
+    u8 pad_15C[0x8];
+    s32 unk_164;
+    u8 pad_168[0x4];
+    s32 unk_16C;
+    s32 unk_170;
+    u16 unk_174;
+    u16 unk_176;
+    u16 unk_178;
+    u8 pad_17A[0x2];
+    u32 unk_17C;
+} UnkDungeonCF8E4SP;
+/* Resident libgte, unnamed in splat/common_syms.txt but in the matrix block
+   beside SetColorMatrix/SetLightMatrix; copied from csrc/ovl_town.c. */
+/* Defined below; func_800894A0 above calls it. */
+/* The dungeon's map-cell render pass: walk the four view-span edges across the
+   cell grid, and for every object in a visible cell transform its quad, light
+   it from the cell's normal and link it into the OT.  932 words, 0 differing.
+   IT IS csrc/ovl_town.c's func_800AC4C4 REBUILT AROUND A 6-BYTE MAP CELL, and
+   that is the whole reason this landed: the object loop, the four edge loops,
+   the vertex block, the LINE_F4 block and the backface tail are town's shape
+   statement for statement, and town's own scheduler levers transfer verbatim.
+   `xsibs.py` scores the pair at only 0.602 and badly undersells it.  What
+   differs from town: the cell is a 6-byte record so every cell reference is
+   `*6` instead of `*2`; the camera record at +0x18 is snapped or halved
+   towards its target by the D_800DCF58 arm at the head, which town has no
+   counterpart for; func_800BCB04 supplies a floor height into sp->unk_158 that
+   the LINE_F4 gate tests, and sp->unk_148 is a per-cell light threshold; town's
+   sp->unk_168/0x16A are this function's 0x164/0x166 and town's sp->unk_164
+   (the prim limit) is this function's 0x17C; and the quad floor prim town draws
+   for a 0xC000 cell is absent.
+   THE FOUR SPELLINGS THAT MATTER, in the order they were worth the most.  Each
+   number is aligned rows from `aligndiff.py` at the point it was measured.
+   (1) `h1 = (u16)sp->unk_14;` READ INTO A LOCAL BEFORE THE SECOND VERTEX'S +4
+   STATEMENT -- town's own last lever, and here it is the LAST FOUR ROWS: 4 to
+   0.  Both orders are legal; SCHED_SORT picks within the priority group by
+   INSN_LUID, and hoisting that one read swaps two LUIDs and nothing else.
+   EVERY OTHER read of `(u16)sp->unk_14` must stay its own expression.
+   (2) THE THREE VERTEX INDEX LOCALS AND WHERE THEY SIT, worth 44 rows to 6.
+   `vi0`/`vi1`/`vi2` each feed only the `sp->unk_164 = vt[vi].unk_00` store,
+   while the `.unk_04` read beside it goes through `o->unk_0X` again -- the
+   target really does load each index twice, because the `sp->unk_164` store in
+   between is at a constant address and `o`'s is not, so cse cannot fold them.
+   The PLACEMENT is the lever, not the locals: `vi1` must sit between the first
+   vertex's +4 and +0 statements and `vi2` between the second's, and the head
+   must be `unk_170, vi0, unk_16C, unk_164` in that order.  Measured: all six
+   permutations of the head (17/24/16/6/20/23 rows), all four placements of
+   `vi1` (33/6/28/28) and all twelve orderings of the second vertex's group
+   (6 through 59).  `vi0` before `unk_170` is 17; all three indices hoisted to
+   the top of the loop is 119.
+   (3) THE unk_148 STORE WRITTEN AT EVERY EARLY-OUT, NOT BEHIND ONE LABEL --
+   13 rows, and it is an ALLOCNO PRIORITY, not a scheduling fact.  Read off
+   `tools/decomp/dump.sh`: pseudo 96 is `h`, 804 is addPrim's 0xFF000000, and
+   `allocno_compare` ranks by floor_log2(refs)*refs/live_length while `flow`
+   adds loop_depth per reference.  With one `sp->unk_148 = h;` behind a
+   `setBig:` label, 96 has 8 weighted refs against 804's 17, loses the sort,
+   and the two swap registers -- which is exactly the "register swap of two
+   hoisted constants" this function was parked on for a day.  Writing the store
+   at FIVE of the six early-outs as `sp->unk_148 = h; goto doLight;` takes 96
+   to 28 weighted refs and puts it ahead, and jump2's cross-jumping -- which
+   runs AFTER greg -- merges them back into the single `sw $t3, 0x148($s0)` the
+   target has, for no words.  The SIXTH, the `cf & 0x40` test, must stay
+   `goto setBig`, because there the target branches FORWARD to the store and
+   falls through to the negate; writing all six is 73 rows against 62.
+   (4) THE EARLY-OUTS GO TO `cellDone`, NOT TO `allDone` -- one word and 17
+   rows.  Every `bltz`/`beqz`/`beq` in the object loop that reads as "give up"
+   targets the per-cell `sp->unk_17C < (u32)p` test; only the `while` headers
+   reach the function tail.  Sixteen of those 17 rows were branch
+   DISPLACEMENTS, which read as a length artefact rather than as a wrong
+   destination, so this one is worth checking first in any sibling.
+   And five smaller ones, each measured here:
+   * `one = 1;` then `h = 0x7FFF;` as the FIRST TWO statements of the outer
+     loop body.  scan_loop hoists a user variable only through arm 1
+     (`! maybe_never && ! loop_reg_used_before_p`), so the same statement four
+     lines down is not hoisted at all, and the preheader emits hoisted movables
+     in the order their set insns appear -- which is what gives the target's
+     `1, 0x7FFF` rather than `0x7FFF, 1`.
+   * `addPrim(...); p++;` DUPLICATED into both arms of the 0x1BE gate, so
+     jump.c cannot merge the two `p->code |= 2` tails into the join, and the
+     gate written `if ((u32)x < 0x1BE) {...} else {...}` and never as `>=`.
+   * `v = (UnkDungeonCF8E4View *)((u8 *)g + 0x18);` must be assigned BEFORE the
+     `D_80013714 & 2` gate, and the six pointer locals in the order
+     `g, v, m, cell, vt, nm`.  After the gate, `lui $s0, 0x1F80` falls into the
+     second basic block; in any other order the prologue's `sw $s1, 0x44($sp)`
+     comes out two slots late (6 rows against 4).
+   * the D_800DCF58 arm's NINE SELF-ASSIGNMENTS (`v->unk_10 = v->unk_10;` and
+     eight more) are really in the target -- `lhu`/`sh`, same base, same
+     displacement -- and its first three stores must be CHAINED
+     (`v->unk_28 = v->unk_08 = buf[0].vx;`).  Two statements cost two
+     `addu rd, rs, $zero` copies and pushed the twelve halfword loads up one
+     register each.  The other arm's tail is 0x28, 0x2A, 0x2C in that order:
+     the LAST of the three is the one sched1 hoists.
+   * the inner `while (unk_10 >= 0)` body is `unk_00 +=; unk_10 -=; unk_20 -=;`
+     and then tests unk_20, so the `blez` reads unk_20's new value out of a
+     register; with `unk_20 -=` before `unk_10 -=` the test reloads 0x3C.
+   Spellings that are byte-identical, so pick on taste: `(u16)sp->unk_12C` as
+   `*(u16 *)((u8 *)sp + 0x12C)` at all four sites, or sp->unk_12C declared as a
+   `u16`/`u16` pair with the word store cast.  Spellings that are NOT: the two
+   `|` operands swapped (89 rows), 0x164 split into a `u16` pair (51), 0x16C or
+   0x170 split (125 together), and a `: "memory"` clobber on gte_ldv3 (no
+   change at 4 rows, 51 rows earlier -- it is not a lever here).
+   SVECTOR buf[6] is 0x30 bytes of locals, which is what puts the register
+   saves at 0x40 and makes the frame 0x60; buf[5] gives a 0x58 frame. */
+void func_80064624(s32, s32);
+void func_800CF8E4(void);
 extern u8 D_800DCF5C;
 extern s16 D_800DCF5E;
 extern u8 D_800E0C34[];
@@ -2513,7 +2793,366 @@ void func_8008ACD4(void)
 {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008ACDC);
+void func_8008ACDC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    Unk80083160 *g = &D_80083160;
+    u8 *q;
+    u8 *m;
+    u8 *u;
+    u8 *t;
+    u8 *t2;
+    s32 r;
+    s32 n;
+    s32 w;
+    s32 w2;
+    s32 j;
+    s32 jj;
+    s16 i;
+    s16 want;
+    s16 e;
+    s32 cur;
+    s32 delta;
+
+    if (p[0x9A] != 0xE)
+    {
+        if (p[0x9A] != 0x17)
+        {
+            if ((*(u16 *)(p + 0xA2) & 0x100) != 0)
+            {
+                func_8008D94C(p, b, c, d);
+                return;
+            }
+            p[0x9A] = 0xE;
+            *(u16 *)(p + 0xA2) &= 0xFEFF;
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+            p[0x9B] = 0;
+            *(s16 *)(p + 0xA4) = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+        }
+        *(s16 *)(p + 0x96) = 0;
+        func_800A4300(c, d);
+    }
+    q = (u8 *)&D_80083460;
+    *(u16 *)(q + 0x2) &= 0xFF7F;
+    r = *(s16 *)(d + 0x64);
+    if (r < 0 || (*(u16 *)(p + 0x10C) & 1) != 0)
+    {
+        func_8008CAA0(p, b, c, d);
+        return;
+    }
+    if (r > 0)
+    {
+        func_8008CBA0(p, b, c, d);
+    }
+    if ((*(s32 *)(d + 0x14) & 0x20000) != 0)
+    {
+        func_80091B5C(p, b, c, d);
+        return;
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x10) == 0)
+    {
+        func_8008C468(p, b, c, d);
+        return;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x200) != 0)
+    {
+        func_80090200(p, b, c, d);
+        return;
+    }
+    if ((s16)func_800A1C58(d) != 0)
+    {
+        if (func_8008D1D0(p, b, c, d) != 0)
+        {
+            return;
+        }
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x80) != 0)
+    {
+        func_8008D7D0(p, b, c, d);
+        return;
+    }
+    if ((*(u16 *)(q + 0x2) & 0x4) != 0)
+    {
+        goto tail;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x20) != 0)
+    {
+        if ((*(u16 *)0x80013714 & 1) == 0 && (g->unk_08 & 0x80) != 0)
+        {
+            *(s16 *)(d + 0x8A) = 2;
+            D_800E4940 = 2;
+            func_8008CF6C((UnkDungeonActor *)p, b, c, D_8004F5F4);
+            D_80082EB0 = NULL;
+            *(s32 *)(p + 0xC8) = 0;
+            *(s32 *)(p + 0x104) = 0;
+            return;
+        }
+        func_8008C7B4(p, b, c, d);
+        return;
+    }
+    if ((*(u16 *)0x80013714 & 1) != 0)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFFFE;
+        if ((*(u16 *)(p + 0xA2) & 0x200) != 0)
+        {
+            *(u16 *)(p + 0xA2) &= 0xFDFF;
+        }
+        m = func_8009F868();
+        if (m == NULL)
+        {
+            return;
+        }
+        want = (m[0x1] & 7) << 9;
+        *(s16 *)(d + 0x2A) &= 0xFFF;
+        if (*(s16 *)(d + 0x2A) != want)
+        {
+            if ((*(u16 *)(d + 0x2A) & 0x800) != 0)
+            {
+                *(s16 *)(d + 0x2A) |= 0xF800;
+            }
+            else
+            {
+                *(s16 *)(d + 0x2A) &= 0x7FF;
+            }
+            do
+            {
+                want = (want & 0x800) ? (want | 0xF800) : (want & 0x7FF);
+                cur = *(u16 *)(d + 0x2A);
+                r = (u16)want;
+                r <<= 16;
+                delta = *(s16 *)(d + 0x2A) - (r >> 16);
+            } while (0);
+            if (delta < 0)
+            {
+                delta = -delta;
+            }
+            if (delta > 0x800)
+            {
+                *(s16 *)(d + 0x2A) = (want & ~0xFFF) | (cur & 0xFFF);
+            }
+            if (*(s16 *)(d + 0x2A) > (r >> 16))
+            {
+                *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) - 0x200;
+            }
+            else
+            {
+                *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) + 0x200;
+            }
+            func_8009F988();
+            goto tail;
+        }
+        D_800E3544 = m[0x1] & 0xF8;
+        switch (D_800E3544)
+        {
+        case 0x8:
+        case 0xE0:
+        case 0xE8:
+        case 0xF0:
+        case 0xF8:
+            func_8008B9FC(p, b, c, d);
+            return;
+        case 0x10:
+            func_8008C7B4(p, b, c, d);
+            return;
+        case 0x18:
+            func_8008C8BC(p, b, c, d);
+            return;
+        case 0x20:
+            func_8008C5C4(p, b, c, d);
+            return;
+        case 0x30:
+            func_8008C514(p, b, c, d);
+            return;
+        case 0x48:
+            if ((s16)func_80095538(p, m[0x0] & 0x1F, m[0x2] & 0x1F) < 0)
+            {
+                func_8009F988();
+            }
+            else
+            {
+                func_8009FAAC();
+            }
+            return;
+        case 0x50:
+            i = (m[0x0] & 0x60) >> 5;
+            if (func_80098920(*(u8 **)(p + 0xAC + i * 4), func_8009FADC(m[0x0] & 0x1F), 0x15, 0) < 0)
+            {
+                func_8009F988();
+            }
+            return;
+        case 0x58:
+            func_80098CF8(p, b, c, func_8009FADC(m[0x0] & 0x1F));
+            return;
+        case 0x68:
+            func_80094270(p, b, c, func_8009FADC(m[0x0] & 0x1F), j = (m[0x0] & 0x60) >> 5);
+            return;
+        case 0x88:
+            jj = (m[0x0] & 0x60) >> 5;
+            u = *(u8 **)(p + 0xD0 + jj * 4);
+            func_80094270(p, b, c, u, jj);
+            return;
+        case 0x70:
+            func_80094548((m[0x0] & 0x60) >> 5, m[0x0] & 7);
+            return;
+        case 0x78:
+            func_8009458C((m[0x0] & 0x60) >> 5, m[0x0] & 0x1F);
+            return;
+        case 0x80:
+            func_800945C4((m[0x0] & 0x60) >> 5, m[0x0] & 0x1F);
+            return;
+        case 0x90:
+            func_8009456C((m[0x0] & 0x60) >> 5, m[0x0] & 7);
+            return;
+        case 0x98:
+            u = func_8009FADC(m[0x0] & 0x1F);
+            if ((u[0x3] & 0x20) != 0)
+            {
+                func_800956B8(p, b, c, u);
+            }
+            else
+            {
+                func_80095854((UnkDungeonActor *)p, b, c, u);
+            }
+            return;
+        case 0xA0:
+            func_8002534C(p, b, c, d);
+            return;
+        case 0xC8:
+            i = m[0x0] & 0x7F;
+            *(s16 *)(p + 0x96) = i;
+            func_8008D368(p, b, c, D_800DD148, 2);
+            return;
+        case 0xD8:
+            D_800DD830[m[0x0] & 0x7F]();
+            return;
+        }
+        return;
+    }
+    D_800E3544 = 0;
+    if ((*(u16 *)0x80013714 & 4) != 0)
+    {
+        if (D_800E3CD0 != 0)
+        {
+            return;
+        }
+        D_800E3CD0 = 1;
+        func_80040AA0(3);
+        return;
+    }
+    if ((s16)func_80094EA4() != 0)
+    {
+        *(s16 *)(p + 0xA4) = 0;
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x200) != 0 && (s16)func_800A2C34(d) == 0 && (*(u16 *)(q + 0x2) & 0x4) == 0)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFDFF;
+        if ((s16)func_800A4474(c[0x24], c[0x25]) != 0)
+        {
+            func_8008CF6C((UnkDungeonActor *)p, b, c, D_800245A8);
+            return;
+        }
+    }
+    w = g->unk_08;
+    if ((w & 0x80) != 0)
+    {
+        func_8008CF6C((UnkDungeonActor *)p, b, c, D_80050CAC);
+        return;
+    }
+    if ((w & 0x10) == 0 && (w & 3) != 0)
+    {
+        if (func_8008D024(p, b, c, (((u32)w >> 1) ^ 1) & 1, 0) != 0)
+        {
+            return;
+        }
+    }
+    n = func_8009074C(*(s16 *)(p + 0x9E), (u16 *)(p + 0xA2), (u16 *)(d + 0x2A));
+    if ((s16)n != 0xFFF)
+    {
+        *(s16 *)(d + 0x2A) = n;
+        if ((g->unk_08 & 0x10) == 0 && (*(u16 *)(p + 0xA2) & 0x400) == 0)
+        {
+            *(u16 *)(p + 0xA2) &= 0xFFFE;
+            if ((*(s32 *)(d + 0x1C) & 0x400) != 0)
+            {
+                *(u16 *)(d + 0x2A) += func_800A6D30() & 0xE00;
+            }
+            func_8008B9FC(p, b, c, d);
+            if (p[0x9A] != 0xE)
+            {
+                return;
+            }
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+    }
+    w2 = g->unk_08;
+    if ((w2 & 0x30) == 0x30)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFFFE;
+        func_8008C7B4(p, b, c, d);
+        return;
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x40) != 0)
+    {
+        if ((w2 & 0x40) == 0)
+        {
+            *(u16 *)(p + 0xA2) &= 0xFFBF;
+        }
+    }
+    else if ((w2 & 0x40) != 0)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFFFE;
+        if ((g->unk_08 & 0x20) == 0)
+        {
+            if ((s16)func_8008C8BC(p, b, c, d) == 0)
+            {
+                return;
+            }
+            goto tail2;
+        }
+        else
+        {
+            if (func_8008C5C4(p, b, c, d) != 0)
+            {
+                return;
+            }
+        }
+    }
+    if ((*(u16 *)0x80013714 & 9) != 0)
+    {
+        *(s16 *)(p + 0xA4) = 0;
+    }
+    if (p[0x9A] == 0xE)
+    {
+        e = *(u16 *)(p + 0xA4) + 1;
+        *(s16 *)(p + 0xA4) = e;
+        if (e >= 0x3D)
+        {
+            *(s16 *)(p + 0xA4) = 0x3C;
+            func_8008CCB0(p, b, c, d);
+            return;
+        }
+    }
+tail:
+    if ((*(u16 *)(p + 0xA2) & 1) != 0)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFFFE;
+        t = D_800DD058;
+        *(u8 **)(c + 0x2C) = t;
+        func_80048A44(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+    }
+tail2:
+    if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+    {
+        t2 = D_800DCFB0;
+        *(u8 **)(c + 0x2C) = t2;
+        func_80048A44(c, t2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+    }
+}
 
 /* func_80097C78's longer twin: the same +0x64 fork, the same
    0x80013714 / D_80083160 gate and the same +0x9A tail, with a mover reset
@@ -4238,7 +4877,306 @@ void func_8008EA40(UnkDungeonActor *a, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008EAC8);
+void func_8008EAC8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    Unk80083160 *g = &D_80083160;
+    u8 *q;
+    u8 *m;
+    u8 *t;
+    u8 *t2;
+    u8 *u;
+    s32 e;
+    s32 w;
+    s32 w2;
+    s32 r;
+    s32 n;
+    s16 i;
+    s32 j;
+    s32 cur;
+    s32 delta;
+    s16 want;
+    u16 k;
+
+    if (p[0x9A] != 0xE)
+    {
+        if ((*(u16 *)(p + 0xA2) & 0x100) != 0)
+        {
+            func_8008D94C(p, b, c, d);
+            return;
+        }
+    }
+    p[0x9A] = 0xE;
+    if ((*(s32 *)(d + 0x14) & 0x100000) == 0)
+    {
+        func_800A4300(c, d);
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+    }
+    *(u16 *)(c + 0x14) &= 0xF7FF;
+    q = (u8 *)&D_80083460;
+    p[0x9B] = 0;
+    *(u16 *)(q + 0x2) &= 0xFF7F;
+    r = *(s16 *)(d + 0x64);
+    if (r < 0 || (*(u16 *)(p + 0x10C) & 1) != 0)
+    {
+        func_8008CAA0(p, b, c, d);
+        return;
+    }
+    if (r > 0)
+    {
+        func_8008CBA0(p, b, c, d);
+    }
+    if ((*(s32 *)(d + 0x14) & 0x20000) != 0)
+    {
+        *(s32 *)(d + 0x14) &= 0xFFFDFFFF;
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x10) == 0)
+    {
+        func_8008C468(p, b, c, d);
+        return;
+    }
+    e = *(s32 *)(d + 0x1C);
+    if ((e & 0x200) != 0)
+    {
+        func_80090200(p, b, c, d);
+        return;
+    }
+    if ((e & 0x100000) == 0)
+    {
+        *(void **)(p + 0x8C) = func_8008ACDC;
+        t2 = D_800DCFB0;
+        *(u8 **)(c + 0x2C) = t2;
+        func_80048A44(c, t2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        return;
+    }
+    if (*(s32 *)(p + 0x124) == 0)
+    {
+        return;
+    }
+    if ((s16)func_800A1C58(d) != 0)
+    {
+        if (func_8008D1D0(p, b, c, d) != 0)
+        {
+            return;
+        }
+    }
+    if ((*(u16 *)(q + 0x2) & 0x4) != 0)
+    {
+        goto tail;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x20) != 0)
+    {
+        if ((*(u16 *)0x80013714 & 1) == 0 && (g->unk_08 & 0x80) != 0)
+        {
+            *(s16 *)(d + 0x8A) = 2;
+            D_800E4940 = 2;
+            func_8008CF6C((UnkDungeonActor *)p, b, c, D_8004F5F4);
+            D_80082EB0 = NULL;
+            *(s32 *)(p + 0xC8) = 0;
+            *(s32 *)(p + 0x104) = 0;
+            return;
+        }
+        func_8008C7B4(p, b, c, d);
+        return;
+    }
+    if ((*(u16 *)0x80013714 & 1) != 0)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFFFE;
+        if ((*(u16 *)(p + 0xA2) & 0x200) != 0)
+        {
+            *(u16 *)(p + 0xA2) &= 0xFDFF;
+        }
+        m = func_8009F868();
+        if (m == NULL)
+        {
+            return;
+        }
+        want = (m[0x1] & 7) << 9;
+        *(s16 *)(d + 0x2A) &= 0xFFF;
+        if (*(s16 *)(d + 0x2A) != want)
+        {
+            if ((*(u16 *)(d + 0x2A) & 0x800) != 0)
+            {
+                *(s16 *)(d + 0x2A) |= 0xF800;
+            }
+            else
+            {
+                *(s16 *)(d + 0x2A) &= 0x7FF;
+            }
+            do
+            {
+                want = (want & 0x800) ? (want | 0xF800) : (want & 0x7FF);
+                cur = *(u16 *)(d + 0x2A);
+                e = (u16)want;
+                e <<= 16;
+                delta = *(s16 *)(d + 0x2A) - (e >> 16);
+            } while (0);
+            if (delta < 0)
+            {
+                delta = -delta;
+            }
+            if (delta > 0x800)
+            {
+                *(s16 *)(d + 0x2A) = (want & ~0xFFF) | (cur & 0xFFF);
+            }
+            if (*(s16 *)(d + 0x2A) > (e >> 16))
+            {
+                *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) - 0x200;
+            }
+            else
+            {
+                *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) + 0x200;
+            }
+            func_8009F988();
+            goto tail;
+        }
+        D_800E3544 = m[0x1] & 0xF8;
+        switch (D_800E3544)
+        {
+        case 0x8:
+            func_8008C13C(p, b, c, d);
+            return;
+        case 0x10:
+            func_8008C7B4(p, b, c, d);
+            return;
+        case 0x28:
+            func_8008F6EC(p, b, c, d);
+            return;
+        case 0x30:
+            *(s16 *)(p + 0x96) = 6;
+            func_8008FA14(p, b, c, d);
+            return;
+        case 0x48:
+            if ((s16)func_80095538(p, m[0x0] & 0x1F, m[0x2] & 0x1F) < 0)
+            {
+                func_8009F988();
+            }
+            else
+            {
+                func_8009FAAC();
+            }
+            return;
+        case 0x50:
+            i = m[0x0];
+            m = (u8 *)((i & 0x60) >> 5);
+            if (func_80098920(*(u8 **)(p + 0xAC + (s32)m * 4), func_8009FADC(i & 0x1F), 0x15, 0) < 0)
+            {
+                func_8009F988();
+            }
+            return;
+        case 0x68:
+            func_80094270(p, b, c, func_8009FADC(m[0x0] & 0x1F), (m[0x0] & 0x60) >> 5);
+            return;
+        case 0x88:
+            j = (m[0x0] & 0x60) >> 5;
+            u = *(u8 **)(p + 0xD0 + j * 4);
+            func_80094270(p, b, c, u, j);
+            return;
+        case 0x70:
+            func_80094548((m[0x0] & 0x60) >> 5, m[0x0] & 7);
+            return;
+        case 0x78:
+            func_8009458C((m[0x0] & 0x60) >> 5, m[0x0] & 0x1F);
+            return;
+        case 0x80:
+            func_800945C4((m[0x0] & 0x60) >> 5, m[0x0] & 0x1F);
+            return;
+        case 0x90:
+            func_8009456C((m[0x0] & 0x60) >> 5, m[0x0] & 7);
+            return;
+        case 0x98:
+            u = func_8009FADC(m[0x0] & 0x1F);
+            if ((u[0x3] & 0x20) != 0)
+            {
+                func_800956B8(p, b, c, u);
+            }
+            else
+            {
+                func_80095854(p, b, c, u);
+            }
+            return;
+        case 0xA0:
+            func_8002534C(p, b, c, d);
+            return;
+        case 0xD8:
+            D_800DD830[m[0x0] & 0x7F]();
+            return;
+        }
+        return;
+    }
+    k = *(u16 *)(p + 0xA2);
+    D_800E3544 = 0;
+    if ((k & 0x200) != 0 && (s16)func_800A2C34(d) == 0 && (*(u16 *)(q + 0x2) & 0x4) == 0)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFDFF;
+        if ((s16)func_800A4474(c[0x24], c[0x25]) != 0)
+        {
+            func_8008CF6C((UnkDungeonActor *)p, b, c, D_800245A8);
+            return;
+        }
+    }
+    w = g->unk_08;
+    if ((w & 0x80) != 0)
+    {
+        func_8008CF6C((UnkDungeonActor *)p, b, c, D_80050CAC);
+        return;
+    }
+    if ((w & 0x10) == 0 && (w & 3) != 0)
+    {
+        if (func_8008D024(p, b, c, (((u32)w >> 1) ^ 1) & 1, 0) != 0)
+        {
+            return;
+        }
+    }
+    n = func_8009074C(*(s16 *)(p + 0x9E), (u16 *)(p + 0xA2), (u16 *)(d + 0x2A));
+    if ((s16)n != 0xFFF)
+    {
+        *(s16 *)(d + 0x2A) = n;
+        if ((g->unk_08 & 0x10) == 0 && (*(u16 *)(p + 0xA2) & 0x400) == 0)
+        {
+            *(u16 *)(p + 0xA2) &= 0xFFFE;
+            if ((*(s32 *)(d + 0x1C) & 0x400) != 0)
+            {
+                *(u16 *)(d + 0x2A) += func_800A6D30() & 0xE00;
+            }
+            func_8008C13C(p, b, c, d);
+            return;
+        }
+    }
+    w2 = g->unk_08;
+    if ((w2 & 0x30) == 0x30)
+    {
+        *(u16 *)(p + 0xA2) &= 0xFFFE;
+        func_8008C7B4(p, b, c, d);
+        return;
+    }
+    if ((*(u16 *)(p + 0xA2) & 0x40) != 0)
+    {
+        if ((w2 & 0x40) == 0)
+        {
+            *(u16 *)(p + 0xA2) &= 0xFFBF;
+        }
+    }
+    else if ((w2 & 0x40) != 0)
+    {
+        if ((w2 & 0x20) == 0)
+        {
+            func_8008F6EC(p, b, c, d);
+            return;
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 6;
+            func_8008FA14(p, b, c, d);
+            return;
+        }
+    }
+tail:
+    t = D_800DD0B8;
+    *(u8 **)(c + 0x2C) = t;
+    func_80048A44(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+}
 
 /* RETIRES THE func_8008F428 PARK (177 of 177 words, 15 differing, thirteen
    of them the two masks in the `p[0x9B] == 1` arm). The park's residue was
@@ -8415,7 +9353,228 @@ s32 func_80096100(u8 *p)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80096384);
+void func_80096384(u8 *p, void *b, u8 *c, u8 *d)
+{
+    Unk80083160 *g = &D_80083160;
+    u8 *q;
+    void **t;
+    void **t2;
+    s32 cur;
+    u8 *m;
+    u16 k;
+    s32 e;
+    s32 f;
+    s32 w;
+    s32 n;
+    s32 r;
+    s32 delta;
+    s16 want;
+    if (p[0x9A] != 0x32)
+    {
+        t = D_800DD274;
+        *((void ***)(c + 0x2C)) = t;
+        func_8003DB94(c, t[(((g->unk_C8 + (*((s16 *)(d + 0x2A)))) + 0x100) >> 9) & 7], 0);
+        p[0x9A] = 0x32;
+        *((u16 *)(p + 0xA2)) &= 0xFEFF;
+        *((u16 *)(c + 0x14)) &= 0xF7FF;
+        p[0x9B] = 0;
+        *((s16 *)(p + 0x96)) = 0;
+        func_800A4300(c, d);
+    }
+    q = (u8 *)(&D_80083460);
+    *((u16 *)(q + 0x2)) &= 0xFF7F;
+    r = *((s16 *)(d + 0x64));
+    if (r < 0)
+    {
+        func_80097898(p, b, c, d);
+        return;
+    }
+    if (r > 0)
+    {
+        func_8008CBA0(p, b, c, d);
+    }
+    if (((*((s32 *)(d + 0x14))) & 0x20000) != 0)
+    {
+        *((s32 *)(d + 0x14)) &= 0xFFFDFFFF;
+    }
+    if (((*((u16 *)(p + 0xA2))) & 0x10) == 0)
+    {
+        func_80096AC0(p, b, c, d);
+        return;
+    }
+    e = *((s32 *)(d + 0x1C));
+    if ((e & 0x200) != 0)
+    {
+        func_80097C50((UnkDungeonActor *)p, b, c, d);
+        return;
+    }
+    if (((*((u16 *)(q + 0x2))) & 0x4) == 0)
+    {
+        if ((e & 0x20) != 0)
+        {
+            func_800969B8(p, b, c, d);
+            return;
+        }
+        k = *((u16 *)0x80013714);
+        if ((k & 1) != 0)
+        {
+            *((u16 *)(p + 0xA2)) &= 0xFFFE;
+            if (((*((u16 *)(p + 0xA2))) & 0x200) != 0)
+            {
+                *((u16 *)(p + 0xA2)) &= 0xFDFF;
+            }
+            m = func_8009F868();
+            if (m == 0)
+            {
+                return;
+            }
+            want = (m[0x1] & 7) << 9;
+            *((s16 *)(d + 0x2A)) &= 0xFFF;
+            if ((*((s16 *)(d + 0x2A))) != want)
+            {
+                if (((*((u16 *)(d + 0x2A))) & 0x800) != 0)
+                {
+                    *((s16 *)(d + 0x2A)) |= 0xF800;
+                }
+                else
+                {
+                    *((s16 *)(d + 0x2A)) &= 0x7FF;
+                }
+                do
+                {
+                    want = (want & 0x800) ? (want | 0xF800) : (want & 0x7FF);
+                    cur = *((u16 *)(d + 0x2A));
+                    f = (u16)want;
+                    f <<= 16;
+                    delta = (*((s16 *)(d + 0x2A))) - (f >> 16);
+                } while (0);
+                if (delta < 0)
+                {
+                    delta = -delta;
+                }
+                if (delta > 0x800)
+                {
+                    *((s16 *)(d + 0x2A)) = (want & (~0xFFF)) | (cur & 0xFFF);
+                }
+                if ((*((s16 *)(d + 0x2A))) > (f >> 16))
+                {
+                    *((s16 *)(d + 0x2A)) = (*((u16 *)(d + 0x2A))) - 0x200;
+                }
+                else
+                {
+                    *((s16 *)(d + 0x2A)) = (*((u16 *)(d + 0x2A))) + 0x200;
+                }
+                func_8009F988();
+                goto tail;
+            }
+            D_800E3544 = m[0x1] & 0xF8;
+            switch (D_800E3544)
+            {
+            case 8:
+                func_80096C24(p, b, c, d);
+                return;
+
+            case 0x10:
+                func_800969B8(p, b, c, d);
+                return;
+
+            case 0x18:
+                func_800973F0(p, b, c, d);
+                goto tail;
+
+            case 0xD8:
+                D_800DD830[m[0x0] & 0x7F]();
+                goto tail;
+            }
+
+            goto tail;
+        }
+        D_800E3544 = 0;
+        if ((k & 4) != 0)
+        {
+            func_80040AA0(3);
+            return;
+        }
+        if (((s16)func_80094EA4()) != 0)
+        {
+            *((s16 *)(p + 0xA4)) = 0;
+        }
+        if ((((((*((u16 *)(p + 0xA2))) & 0x200) != 0) && (((s16)func_800A2C34(d)) == 0)) && (((*((u16 *)(q + 0x2))) & 0x4) == 0)) && (((s16)func_800A4474(c[0x24], c[0x25])) != 0))
+        {
+            *((u16 *)(p + 0xA2)) &= 0xFDFF;
+            func_8008CF6C((UnkDungeonActor *)p, b, c, D_800245A8);
+            return;
+        }
+        f = g->unk_08;
+        if ((f & 0x80) != 0)
+        {
+            *((s16 *)(d + 0x8A)) = 2;
+            D_800E4940 = 2;
+            func_8008CF6C((UnkDungeonActor *)p, b, c, D_8004F5F4);
+            D_80082EB0 = 0;
+            *((s32 *)(p + 0xC8)) = 0;
+            *((s32 *)(p + 0x104)) = 0;
+            return;
+        }
+        if ((f & 3) != 0)
+        {
+            func_800A56E0(0x506);
+            return;
+        }
+        n = func_8009074C(*((s16 *)(p + 0x9E)), (u16 *)(p + 0xA2), (u16 *)(d + 0x2A));
+        if (((s16)n) != 0xFFF)
+        {
+            *((s16 *)(d + 0x2A)) = n;
+            if (((g->unk_08 & 0x10) == 0) && (((*((u16 *)(p + 0xA2))) & 0x400) == 0))
+            {
+                *((u16 *)(p + 0xA2)) &= 0xFFFE;
+                if (((*((s32 *)(d + 0x1C))) & 0x400) != 0)
+                {
+                    *((u16 *)(d + 0x2A)) += func_800A6D30() & 0xE00;
+                }
+                func_80096C24(p, b, c, d);
+                if (p[0x9A] != 0x32)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                *((s16 *)(p + 0x96)) = 0;
+            }
+        }
+        w = g->unk_08;
+        if ((w & 0x30) == 0x30)
+        {
+            *((u16 *)(p + 0xA2)) &= 0xFFFE;
+            func_800969B8(p, b, c, d);
+            return;
+        }
+        if (((*((u16 *)(p + 0xA2))) & 0x40) != 0)
+        {
+            if ((w & 0x40) == 0)
+            {
+                *((u16 *)(p + 0xA2)) &= 0xFFBF;
+            }
+        }
+        else if ((w & 0x40) != 0)
+        {
+            *((u16 *)(p + 0xA2)) &= 0xFFFE;
+            if (((s16)func_800973F0(p, b, c, d)) != 0)
+            {
+                return;
+            }
+        }
+    }
+tail:
+    if (((*((u16 *)(p + 0xA2))) & 0x1) != 0)
+    {
+        *((u16 *)(p + 0xA2)) &= 0xFFFE;
+        t2 = D_800DD274;
+        *((void ***)(c + 0x2C)) = t2;
+        func_8003DB94(c, t2[(((D_80083228 + (*((s16 *)(d + 0x2A)))) + 0x100) >> 9) & 7], 0);
+    }
+}
 
 /* 0x80013714 IS A CONSTANT ADDRESS, NOT THE SYMBOL. `D_80013714 & 2` -- the
    declaration structs.h:2129 gives it, and the spelling every other landed
@@ -39146,7 +40305,419 @@ void func_800CEFB8(u8 *arg0, UnkVec *v, UnkSlot *s, s16 arg3, s16 arg4)
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CF8E4);
+void func_800CF8E4(void)
+{
+    UnkDungeonCF8E4SP *sp = (UnkDungeonCF8E4SP *)0x1F800000;
+    Unk80083160 *g;
+    UnkDungeonCF8E4Map *m;
+    UnkDungeonCF8E4Cell *cell;
+    UnkDungeonCF8E4Vtx *vt;
+    UnkDungeonCF8E4Nrm *nm;
+    UnkDungeonCF8E4Obj *o;
+    UnkDungeonCF8E4View *v;
+    POLY_FT4 *p;
+    LINE_F4 *l;
+    SVECTOR buf[6];
+    u8 *q;
+    u8 *z;
+    u8 *z2;
+    s32 i;
+    s32 t;
+    s32 vi0, vi1, vi2;
+    u16 h1;
+    s32 one;
+    s32 h;
+    s32 a, b, c, d;
+    u32 w;
+    u16 x, y;
+    u16 cf;
+
+    g = &D_80083160;
+    v = (UnkDungeonCF8E4View *)((u8 *)g + 0x18);
+    m = (UnkDungeonCF8E4Map *)((u8 *)g + 0x1DC);
+    cell = (UnkDungeonCF8E4Cell *)g->unk_1DC;
+    vt = m->unk_08;
+    nm = m->unk_0C;
+    if ((D_80013714 & 2) != 0)
+    {
+        return;
+    }
+    t = (s16)func_800BCB04(v->unk_A4, v->unk_A6, v->unk_A8 - 0x20);
+    if (t < 0x201)
+    {
+        sp->unk_158 = t;
+    }
+    else
+    {
+        sp->unk_158 = 0;
+    }
+    SetColorMatrix((MATRIX *)((u8 *)v + 0x58));
+    func_80064624(v->unk_84, v->unk_88);
+    SetLightMatrix((MATRIX *)((u8 *)v + 0x38));
+    *(s16 *)((u8 *)g + 0x1E) = 0x1BA;
+    func_80046884((RECT *)v, buf, sp->unk_158);
+    if (D_800DCF58 != 0)
+    {
+        D_800DCF58 = 0;
+        v->unk_28 = v->unk_08 = buf[0].vx;
+        v->unk_0A = buf[0].vy;
+        v->unk_2C = v->unk_0C = buf[0].vz;
+        v->unk_10 = v->unk_10;
+        v->unk_12 = v->unk_12;
+        v->unk_14 = v->unk_14;
+        v->unk_18 = v->unk_18;
+        v->unk_1A = v->unk_1A;
+        v->unk_1C = v->unk_1C;
+        v->unk_20 = v->unk_20;
+        v->unk_22 = v->unk_22;
+        v->unk_24 = v->unk_24;
+    }
+    else
+    {
+        v->unk_08 += (buf[0].vx - v->unk_08) >> 1;
+        v->unk_0A += (buf[0].vy - v->unk_0A) >> 1;
+        v->unk_0C += (buf[0].vz - v->unk_0C) >> 1;
+        v->unk_10 += (buf[1].vx - v->unk_10) >> 1;
+        v->unk_12 += (buf[1].vy - v->unk_12) >> 1;
+        v->unk_14 += (buf[1].vz - v->unk_14) >> 1;
+        v->unk_18 += (buf[2].vx - v->unk_18) >> 1;
+        v->unk_1A += (buf[2].vy - v->unk_1A) >> 1;
+        v->unk_1C += (buf[2].vz - v->unk_1C) >> 1;
+        v->unk_20 += (buf[3].vx - v->unk_20) >> 1;
+        v->unk_22 += (buf[3].vy - v->unk_22) >> 1;
+        v->unk_24 += (buf[3].vz - v->unk_24) >> 1;
+        v->unk_28 = v->unk_08;
+        v->unk_2A = v->unk_0A;
+        v->unk_2C = v->unk_0C;
+    }
+    sp->unk_00 = v->unk_90;
+    q = (u8 *)0x80010000;
+    z = g->unk_00;
+    a = m->unk_14;
+    b = m->unk_16;
+    c = m->unk_18;
+    d = m->unk_1A;
+    w = *(u32 *)(q + 0x3180);
+    x = q[0x3184];
+    y = q[0x3185];
+    sp->unk_BC = (u32 *)(z + 0xB8);
+    sp->unk_124 = a;
+    sp->unk_178 = y;
+    sp->unk_114 = 0x40 << sp->unk_124;
+    sp->unk_128 = b;
+    sp->unk_11C = c;
+    sp->unk_120 = d;
+    sp->unk_110 = w;
+    sp->unk_176 = x;
+    sp->unk_118 = 0x40 << sp->unk_128;
+    z2 = g->unk_00;
+    p = (POLY_FT4 *)*(u32 *)(z2 + 0x8D0);
+    sp->unk_17C = (u32)z2 + 0xAF3A;
+    sp->unk_14C = 0xFFFF;
+    sp->unk_174 = 4;
+    sp->unk_0C = (s16)func_80046C20((Unk46C20A *)&v->unk_08, sp->unk_1C, &sp->unk_174);
+    while (sp->unk_174 != 0)
+    {
+        one = 1;
+        h = 0x7FFF;
+        for (i = 3; i >= 0; i--)
+        {
+            if (sp->unk_1C[i].unk_1C == 0 && sp->unk_1C[i].unk_18 <= sp->unk_0C)
+            {
+                sp->unk_1C[i].unk_1C = one;
+            }
+        }
+        sp->unk_14 = h;
+        sp->unk_18 = -0x7FFF;
+        for (i = 3; i >= 0; i--)
+        {
+            if (sp->unk_1C[i].unk_1C > 0)
+            {
+                sp->unk_08 = sp->unk_1C[i].unk_00;
+                if (sp->unk_08 < sp->unk_14)
+                {
+                    sp->unk_14 = sp->unk_08;
+                }
+                else if (sp->unk_08 > sp->unk_18)
+                {
+                    sp->unk_18 = sp->unk_08;
+                }
+                sp->unk_1C[i].unk_10 += sp->unk_1C[i].unk_08;
+                while (sp->unk_1C[i].unk_10 >= 0)
+                {
+                    sp->unk_1C[i].unk_00 += sp->unk_1C[i].unk_14;
+                    sp->unk_1C[i].unk_10 -= sp->unk_1C[i].unk_04;
+                    sp->unk_1C[i].unk_20 -= 0x40;
+                    if (sp->unk_1C[i].unk_20 <= 0)
+                    {
+                        break;
+                    }
+                }
+                sp->unk_08 = sp->unk_1C[i].unk_00;
+                if (sp->unk_08 < sp->unk_14)
+                {
+                    sp->unk_14 = sp->unk_08;
+                }
+                if (sp->unk_08 > sp->unk_18)
+                {
+                    sp->unk_18 = sp->unk_08;
+                }
+            }
+        }
+        if (sp->unk_0C >= 0 && sp->unk_0C <= sp->unk_118)
+        {
+            sp->unk_14 = (sp->unk_14 - 0x20) & -0x40;
+            if (sp->unk_14 < 0)
+            {
+                sp->unk_14 = 0;
+            }
+            sp->unk_18 = (sp->unk_18 + 0x20) & -0x40;
+            if (sp->unk_18 > sp->unk_114)
+            {
+                sp->unk_18 = sp->unk_114;
+            }
+            sp->unk_138 = (((u32)sp->unk_0C >> 6) & sp->unk_120) << sp->unk_124;
+            sp->unk_134 = ((u32)sp->unk_14 >> 6) & sp->unk_11C;
+            while (sp->unk_14 <= sp->unk_18)
+            {
+                sp->unk_144 = sp->unk_138 + sp->unk_134;
+                if (cell[sp->unk_144].unk_00 != 0)
+                {
+                    sp->unk_12C = cell[sp->unk_144].unk_02;
+                    o = m->unk_04[cell[sp->unk_144].unk_00];
+                    for (;;)
+                    {
+                        sp->unk_170 = o->unk_10;
+                        vi0 = o->unk_00;
+                        sp->unk_16C = o->unk_14;
+                        sp->unk_164 = vt[vi0].unk_00;
+                        sp->unk_E0.unk_04 = vt[o->unk_00].unk_04 - (u16)sp->unk_12C;
+                        vi1 = o->unk_02;
+                        sp->unk_E0.unk_00 = (u16)((u16)sp->unk_14 + (u16)sp->unk_164) |
+                                            ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x166))) << 16);
+                        sp->unk_164 = vt[vi1].unk_00;
+                        h1 = (u16)sp->unk_14;
+                        sp->unk_E8.unk_04 = vt[o->unk_02].unk_04 - (u16)sp->unk_12C;
+                        vi2 = o->unk_04;
+                        sp->unk_E8.unk_00 = (u16)(h1 + (u16)sp->unk_164) |
+                                            ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x166))) << 16);
+                        sp->unk_164 = vt[vi2].unk_00;
+                        sp->unk_F0.unk_00 = (u16)((u16)sp->unk_14 + (u16)sp->unk_164) |
+                                            ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x166))) << 16);
+                        sp->unk_F0.unk_04 = vt[o->unk_04].unk_04 - (u16)sp->unk_12C;
+                        gte_ldv3(&sp->unk_E0, &sp->unk_E8, &sp->unk_F0);
+                        sp->unk_F8.unk_04 = vt[o->unk_06].unk_04 - (u16)sp->unk_12C;
+                        gte_rtpt_b();
+                        gte_nclip();
+                        gte_stopz(&sp->unk_DC);
+                        if (sp->unk_DC < 0)
+                        {
+                            goto backFace;
+                        }
+                        gte_stflg(&sp->unk_D8);
+                        if (sp->unk_D8 != 0)
+                        {
+                            goto cellDone;
+                        }
+                        gte_stsxy3_ft4(p);
+                        gte_avsz3();
+                        gte_stotz(&sp->unk_C8);
+                        t = (u16)sp->unk_170;
+                        if (sp->unk_14C != t)
+                        {
+                            sp->unk_14C = t;
+                            if (nm[t].unk_04 < 0)
+                            {
+                                sp->unk_148 = h;
+                                goto doLight;
+                            }
+                            if ((nm[t].unk_00 & 0xFFF0FFF) != 0)
+                            {
+                                sp->unk_148 = h;
+                                goto doLight;
+                            }
+                            sp->unk_10 = nm[t].unk_00;
+                            if ((s16)(*(u16 *)((u8 *)sp + 0x10)) > 0)
+                            {
+                                *(s16 *)((u8 *)sp + 0x10) = one;
+                            }
+                            else if ((s16)(*(u16 *)((u8 *)sp + 0x10)) < 0)
+                            {
+                                *(s16 *)((u8 *)sp + 0x10) = -1;
+                            }
+                            if ((s16)(*(u16 *)((u8 *)sp + 0x12)) > 0)
+                            {
+                                *(s16 *)((u8 *)sp + 0x12) = one << sp->unk_124;
+                            }
+                            else if ((s16)(*(u16 *)((u8 *)sp + 0x12)) < 0)
+                            {
+                                *(s16 *)((u8 *)sp + 0x12) = -(one << sp->unk_124);
+                            }
+                            sp->unk_13C =
+                                (sp->unk_134 + (s16)(*(u16 *)((u8 *)sp + 0x10))) & sp->unk_11C;
+                            sp->unk_13C += (sp->unk_138 + (s16)(*(u16 *)((u8 *)sp + 0x12))) &
+                                           (sp->unk_120 << sp->unk_124);
+                            cf = cell[sp->unk_13C].unk_04;
+                            if ((cf & 1) != 0)
+                            {
+                                sp->unk_148 = h;
+                                goto doLight;
+                            }
+                            if ((cf & 0x80) != 0)
+                            {
+                                if ((cell[sp->unk_144].unk_04 & 0x80) == 0)
+                                {
+                                    sp->unk_148 = h;
+                                    goto doLight;
+                                }
+                                if (((*(u8 *)((u8 *)sp + 0x16F)) & 2) != 0)
+                                {
+                                    sp->unk_148 = h;
+                                    goto doLight;
+                                }
+                                if ((*(u8 *)((u8 *)sp + 0x16E)) == one && (s8)(*(u8 *)((u8 *)sp + 0x16F)) < 0)
+                                {
+                                    goto cellDone;
+                                }
+                                o++;
+                                sp->unk_14C = 0xFFFF;
+                                continue;
+                            }
+                            if ((cf & 0x40) != 0)
+                            {
+                                goto setBig;
+                            }
+                            sp->unk_148 = -cell[sp->unk_13C].unk_02;
+                            goto doLight;
+                        setBig:
+                            sp->unk_148 = h;
+                        doLight:
+                            gte_ldrgb(&sp->unk_00);
+                            gte_ldv0(&nm[sp->unk_14C]);
+                            gte_nccs();
+                            gte_strgb(&sp->unk_04);
+                        }
+                        if ((s16)sp->unk_E0.unk_04 >= sp->unk_148 &&
+                            (s16)sp->unk_E8.unk_04 >= sp->unk_148 &&
+                            (s16)sp->unk_F0.unk_04 >= sp->unk_148 &&
+                            (s16)sp->unk_F8.unk_04 >= sp->unk_148)
+                        {
+                            if ((s8)(*(u8 *)((u8 *)sp + 0x16F)) < 0)
+                            {
+                                goto cellDone;
+                            }
+                            o += (*(u8 *)((u8 *)sp + 0x16E)) & 0xF;
+                            continue;
+                        }
+                        sp->unk_164 = vt[o->unk_06].unk_00;
+                        sp->unk_F8.unk_00 = (u16)((u16)sp->unk_14 + (u16)sp->unk_164) |
+                                            ((sp->unk_0C + (s16)(*(u16 *)((u8 *)sp + 0x166))) << 16);
+                        gte_ldv0(&sp->unk_F8);
+                        *(u32 *)&p->u0 = o->unk_08;
+                        gte_rtps_b();
+                        *(u32 *)&p->u1 = o->unk_0C;
+                        *(u16 *)&p->u2 = *(u16 *)((u8 *)sp + 0x172);
+                        *(u16 *)&p->u3 = (u16)sp->unk_16C;
+                        gte_stsxy(&p->x3);
+                        gte_stszotz(&sp->unk_D4);
+                        sp->unk_C8 = (sp->unk_C8 + sp->unk_C8 * 2 + sp->unk_D4) >> 2;
+                        if ((u32)sp->unk_C8 < 0x1BE)
+                        {
+                            setlen(p, 9);
+                            *(u32 *)&p->r0 = sp->unk_04;
+                            if (((*(u8 *)((u8 *)sp + 0x16F)) & 1) != 0)
+                            {
+                                p->code |= 2;
+                            }
+                            else if ((u16)sp->unk_178 != 0 &&
+                                     (cell[sp->unk_144].unk_04 & 0x80) != 0 &&
+                                     ((*(u8 *)((u8 *)sp + 0x16F)) & 2) == 0 &&
+                                     ((s16)sp->unk_E0.unk_04 < sp->unk_158 ||
+                                      (s16)sp->unk_E8.unk_04 < sp->unk_158 ||
+                                      (s16)sp->unk_F0.unk_04 < sp->unk_158 ||
+                                      (s16)sp->unk_F8.unk_04 < sp->unk_158))
+                            {
+                                l = (LINE_F4 *)p;
+                                *(u32 *)&l->x1 = *(u32 *)&p->x1;
+                                *(u32 *)&l->x2 = *(u32 *)&p->x2;
+                                *(u32 *)&l->x3 = *(u32 *)&p->x3;
+                                *(u32 *)&p->r0 = sp->unk_110;
+                                setlen(p, 5);
+                                addPrim(&sp->unk_BC[sp->unk_C8], p);
+                                p++;
+                                setlen(p, one);
+                                *(u32 *)&p->r0 = ((u16)sp->unk_176 & 0x9FF) | 0xE1000000;
+                            }
+                            addPrim(&sp->unk_BC[sp->unk_C8], p);
+                            p++;
+                        }
+                        else
+                        {
+                            if ((u32)sp->unk_C8 >= 0x1DE)
+                            {
+                                goto cellDone;
+                            }
+                            setlen(p, 9);
+                            *(u32 *)&p->r0 = sp->unk_04;
+                            p->code |= 2;
+                            addPrim(&sp->unk_BC[sp->unk_C8], p);
+                            p++;
+                        }
+                        if (((*(u8 *)((u8 *)sp + 0x16E)) & 0xF) != one)
+                        {
+                            o++;
+                            continue;
+                        }
+                        if ((s8)(*(u8 *)((u8 *)sp + 0x16F)) < 0)
+                        {
+                            goto cellDone;
+                        }
+                        o += ((*(u8 *)((u8 *)sp + 0x16E)) >> 4) + 1;
+                        continue;
+                    backFace:
+                        if (nm[(u16)sp->unk_170].unk_04 < 0)
+                        {
+                            if ((*(u16 *)((u8 *)sp + 0x16E) & 0x80FF) == 0x8001)
+                            {
+                                goto cellDone;
+                            }
+                            o++;
+                            continue;
+                        }
+                        if (((*(u8 *)((u8 *)sp + 0x16E)) & 0xF0) == 0 && (s8)(*(u8 *)((u8 *)sp + 0x16F)) < 0)
+                        {
+                            goto cellDone;
+                        }
+                        o += (*(u8 *)((u8 *)sp + 0x16E)) & 0xF;
+                    }
+                cellDone:
+                    if (sp->unk_17C < (u32)p)
+                    {
+                        goto allDone;
+                    }
+                }
+                sp->unk_134++;
+                sp->unk_134 &= sp->unk_11C;
+                sp->unk_14 += 0x40;
+            }
+        }
+        sp->unk_0C += 0x40;
+        for (i = 3; i >= 0; i--)
+        {
+            if (sp->unk_1C[i].unk_1C > 0)
+            {
+                sp->unk_1C[i].unk_0C -= 0x40;
+                if (sp->unk_1C[i].unk_0C < -0x7F)
+                {
+                    sp->unk_1C[i].unk_1C = -1;
+                    sp->unk_174--;
+                }
+            }
+        }
+    }
+allDone:
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)p;
+}
 
 s32 func_800D0774(u8 *p, UnkVec *v, UnkSlot *s)
 {
