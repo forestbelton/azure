@@ -243,10 +243,13 @@ cost a round trip or worse on a real run:
 
 **AND IF YOU LAND SOMETHING, WRITE IT TO THE REPO AS SOON AS IT LANDS.**
 
-You have NO channel for an interim message to me -- `SendMessage` reaches
-agents you spawn, not your caller -- so do not plan around sending one. An
-earlier version of this brief asked for one anyway, which was impossible to
-comply with.
+**You CAN send me an interim message**, and one agent did so on 2026-11-16
+the moment its function landed. Another agent reported on the same day that
+no such channel existed -- that was wrong, and this brief repeated it for an
+hour. If your tooling appears to offer no way, say so in your final report
+rather than assuming; do not spend budget hunting for it.
+
+But a message is not what protects the work.
 
 What survives instead is the repo. The moment a body measures `0 differing`,
 or a park moves, rewrite the park file with the current body and the current
