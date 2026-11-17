@@ -27,31 +27,55 @@ UNIT = os.path.join(PROJ, "csrc/ovl_dungeon.c")
 
 
 DECL_RE = re.compile(
-    r"^\s*DECLARATIONS\s*\n(.*?)^\s*END DECLARATIONS\s*$",
+    r"^\s*DECLARATIONS\b[^\n]*\n(.*?)^\s*END DECLARATIONS\s*$",
     re.M | re.S)
+
+# A line that is plausibly a C declaration: an extern, a typedef, or a
+# function prototype. Agents write these inside prose, so matching the shape
+# is more reliable than demanding an exact marker format -- the first version
+# of this tool required a bare "DECLARATIONS" line and silently found nothing
+# in a park whose block was headed "DECLARATIONS THIS BODY NEEDS (new; ...):".
+# A prototype needs a RETURN TYPE -- at least two words before the "(".
+# Without that rule this also matched `func_80094270(p, b, c, u, j);` quoted
+# in a park's prose, i.e. a CALL, which then re-declared the callee wrongly.
+DECL_LINE = re.compile(
+    r"^\s*(extern\s+[\w ]+[\w\*\[\]]+\s*(\[\s*\])?\s*;"
+    r"|\w+[\w \*]*\s+\**\w+\s*\([^;{]*\)\s*(__asm__\s*\([^)]*\))?\s*;)\s*$")
 
 
 def decls_of(path):
-    """Extract a park's DECLARATIONS block, if it has one.
+    """Extract the declarations a park's body needs from its header.
 
     A park body is NOT self-contained: it needs externs, typedefs and callee
     prototypes that live in the unit's top block. Those were historically
-    reported only in the agent's hand-back message -- which is a transcript,
-    not the repo -- so 19 of 34 parks could not be compiled from the repo
-    alone on 2026-11-16. A park states them in its header like this, inside
-    the comment:
+    reported only in the agent's hand-back message -- a transcript, not the
+    repo -- so 19 of 34 parks could not be compiled from the repo alone on
+    2026-11-16.
+
+    Preferred form, inside the header comment:
 
         DECLARATIONS
         extern u8 D_800E0979[];
         void func_80067E2C(void *, void *);
         END DECLARATIONS
+
+    A trailing description on the DECLARATIONS line is fine. Failing that,
+    every declaration-shaped line in the header comment is collected, so a
+    park that merely lists them in prose still works.
     """
     s = open(path, encoding="utf-8").read()
-    m = DECL_RE.search(s)
-    if not m:
-        return ""
-    # strip comment-continuation whitespace, keep the lines themselves
-    return "".join(l.strip() + "\n" for l in m.group(1).split("\n") if l.strip())
+    end = s.find("*/")
+    header = s[:end] if end > 0 else s
+    m = DECL_RE.search(header)
+    region = m.group(1) if m else header
+    out = []
+    for line in region.split("\n"):
+        line = line.strip()
+        if line.startswith("*"):
+            line = line[1:].strip()
+        if DECL_LINE.match(line) and line not in out:
+            out.append(line)
+    return "".join(l + "\n" for l in out)
 
 
 def body_of(path, func):

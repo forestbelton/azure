@@ -1,72 +1,103 @@
 /* PARK -- func_800C5FA8, agent j59, 2026-11-16.
-   target 706 words; best candidate 705 words, 61 aligned differences
-   (ovlverify reports a much larger masked word-diff: almost all of it is the
-   one-word shortfall sliding every later word by one, so read aligndiff).
+   TARGET 706 WORDS, CANDIDATE 706 WORDS, 49 ALIGNED DIFFERENCES.
+   (ovlverify's masked word count is much larger and misleading here; the
+   honest figure is aligndiff's 49.)
 
-   STRUCTURE IS BELIEVED CORRECT.  Everything from the state-1 marking loops
-   (listing offset 0x77C onward) to the epilogue is byte-identical, as are
-   the prologue, the whole gate chain, the three message arms and the
-   D_80013714/D_80010234 tail.
+   STRUCTURE IS CORRECT.  Words 0-155, 173-208, 234-339 and 475-705 are
+   byte-identical: the prologue, the whole D_80083460 gate chain, the three
+   message arms, BOTH state-0 marking-loop nests, the whole state-1 half and
+   the D_80013714 / D_80010234 tail all match exactly.
 
-   THE WHOLE RESIDUE IS ONE MISSING WORD AND ITS FALLOUT, in the random-room
-   search between 800C62E8 and 800C634C.  The target has TWO register COPY
-   insns in that preheader that no spelling tried here reproduces:
+   ALL 49 ROWS ARE REGISTER ASSIGNMENT IN ONE REGION -- the random-room
+   search at 800C62EC..800C6258 and the four %hi(D_800E3D7C) sites of the
+   node walk.  Nothing is mis-ordered and no instruction is wrong; the
+   candidate simply gives the same quantities different registers.  THIS IS
+   PERMUTER FOOD.
 
-       800C62F0  lh   $v1, 0x6($a0)
-       800C62F8  addu $s0, $v1, $zero      <-- MISSING: n gets its own pseudo
-       800C62FC  div  $zero, $v0, $s0
-       ...
+   THE ONE MECHANICAL FACT STILL MISSING is the register copy at 800C6310:
+
+       800C62EC  addiu $a0, $v1, %lo(D_80081468)   <- t
+       800C62F0  lh    $v1, 0x6($a0)
+       800C62F8  addu  $s0, $v1, $zero             <- n   (REPRODUCED, see below)
+       800C62FC  div   $zero, $v0, $s0
+       800C6300  mfhi  $s3                         <- k   (candidate: $a0)
+       800C6304  blez  $s0, .L800C6350
        800C630C  addiu $a2, $v0, %lo(D_800E2970)
-       800C6310  addu  $a1, $a0, $zero     <-- present only as the same reg
+       800C6310  addu  $a1, $a0, $zero             <- MISSING: loop.c hoists a
+                                                      SECOND pseudo holding t,
+                                                      used only by the in-loop
+                                                      `% *(s16 *)(t + 6)`
+       800C6314  sll   $v0, $s3, 2
 
-   The candidate instead emits `lh $s0, 0x6($a2)` straight into the counter
-   and reuses one register for the D_80081468 base inside and outside the
-   loop.  Because the candidate has one fewer live pseudo there, local-alloc
-   shifts the whole search loop down one register -- k lands in $a0 where the
-   target has $s3, the room pointer in $a1 where the target has $a0, the
-   D_800E2970 base in $a3 where the target has $a2 -- which is where ~27 of
-   the 61 aligned rows come from, plus 11 more from every `-> epilogue`
-   branch being one word short.  FIX THE COPY AND MOST OF THE REST GOES.
+   With that copy absent the candidate has one fewer live pseudo across the
+   loop, so local-alloc shifts everything: k -> $a0 (target $s3), the room
+   record pointer -> $v1 (target $a0), t -> $a1 (target $a0).  That is 25 of
+   the 49 rows (156-172 and 209-233).  A further 11 rows (342-474) are the
+   mirror-image swap in the node walk: the candidate puts kk in $s4 and the
+   shared %hi(D_800E3D7C) pseudo in $s3, the target the other way round, and
+   the candidate's first `lw D_800E3D7C` reads the raw `lui` result instead
+   of the shared pseudo.  The last 4 rows are at 800C6660..800C666C: the
+   target schedules `lbu $a0, 0x24($s1)` / `lbu $a1, 0x25($s1)` into the
+   load-delay slot before the 0x2000 test, the candidate leaves a `nop`
+   there and emits them after the branch.
 
-   REJECTED SPELLINGS, each measured on this body (words / aligned diffs):
+   SPELLINGS MEASURED AND REJECTED (words / aligned differences):
 
-     * `n = *(s16 *)(t + 0x6); k = u % n;`            705 / 61   (this body)
-     * `c = *(s16 *)(t+6); n = c; k = u % n;` with
-       `s32 c`                                        705 / 61   (copy folded)
-     * same with `s16 c`                              705 / 61   (copy folded)
-     * `k = (k+1) % *(s16 *)((u8 *)D_80081468 + 6)`
-       inline in the loop instead of `t + 6`          704 / 60   (hoists a
-       fresh `lui` into the preheader, not a copy)
-     * `t2 = t;` as the first statement of the loop
-       body, modulus read through `t2`                705 / 61   (regmove
-       folds the copy away)
+   For `addu $s0, $v1, $zero` (the `n` copy) -- SOLVED, keep this body's form:
+     * `n = *(s16 *)(t+6); k = u % n;`                     705 / 61  no copy
+     * `s32 c = *(s16 *)(t+6); n = c; k = u % n;`          705 / 61  folded
+     * same with `s16 c`                                   705 / 61  folded
+     * `k = u % *(s16 *)(t+6); n = *(s16 *)(t+6);`         706 / 49  <-- WINS
+       (cse commons the second read, so `n` gets a copy of the first read's
+       pseudo instead of being the `lh`'s own destination)
 
-   OTHER MEASURED LEVERS THAT ARE ALREADY IN THIS BODY (do not re-derive):
+   For `addu $a1, $a0, $zero` (the `t` copy) -- STILL OPEN:
+     * `k = (k+1) % *(s16 *)((u8 *)D_80081468 + 6)` inline
+       in the loop instead of `t + 6`                      705 / 60
+       (hoists a bare `lui`, not a copy)
+     * `t2 = t;` as the first statement of the LOOP BODY   705 / 61 (folded)
+     * `t2 = t;` just BEFORE the loop                      708 / 65
+     * `t2 = (u8 *)D_80081468;` as the first statement of
+       the loop body, modulus through t2                   707 / 61
+       (DOES produce the copy -- `move $a2,$a1` -- but costs a word
+       elsewhere and does not move k into $s3)
 
-     * The +0x6C reset fires when `*(s16 *)(p + 0x12) != 0`, not `== 0`
-       (800C6650 is `beqz` to the SKIP label).  Inverted it is 2 worse.
-     * `snd = 0x3000; q = *(u8 **)(r + 0x58) + 0x20; if (...) snd = 0x300;`
-       as three statements.  As the ternary
-       `snd = (...) ? 0x300 : 0x3000;` with `q` after it: 704 words /
-       78 differing -- 17 rows and a word, because the 0x3000 has to be
-       materialised after the two loads instead of before them.
-     * The random-room draw is its own statement AHEAD of the D_80081468
-       base: `u = func_800A6D30() & 0xFFFF; t = (u8 *)D_80081468;`.  With the
-       base first the `jal` loses `sh $v0, 0x4($s6)` from its delay slot.
-     * The +0x10 countdown needs an `s16` local (`tc`), as in func_800C5D80:
-       with an `s32` local and an explicit `(s16)` cast the `sh` sinks into
-       the `bgtz` delay slot and the function is a word shorter again.
+   For the 800C6660 lbu scheduling -- STILL OPEN:
+     * `snd` as a ternary in the call's argument list      705 / 54
+     * `ex = e[0x24]; ey = e[0x25];` hoisted before the
+       0x2000 test, call takes ex/ey                       705 / 54
+     * `snd = 0x3000; q = ...; if (...) snd = 0x300;`      706 / 49  <-- best
+
+   For the kk / %hi(D_800E3D7C) swap -- STILL OPEN:
+     * moving `f2 = (u8 *)&D_80083460;` after `q = D_800E3D7C;`  no change
+     * moving `s32 k;` to the head of the declaration list        no change
+
+   OTHER LEVERS ALREADY BAKED INTO THIS BODY (do not re-derive):
+     * The +0x6C reset fires when `*(s16 *)(p + 0x12) != 0`, NOT `== 0`:
+       800C6650 is a `beqz` to the SKIP label.  Inverted it is 2 rows worse.
+     * `snd = 0x3000;` then `q = *(u8 **)(r + 0x58) + 0x20;` then the
+       `if`.  As a ternary with `q` after it: 704 / 78 -- 17 rows and a word,
+       because the 0x3000 is then materialised after the two loads.
+     * The random draw is its own statement AHEAD of the D_80081468 base:
+       `u = func_800A6D30() & 0xFFFF; t = (u8 *)D_80081468;`.  With the base
+       first the `jal` loses `sh $v0, 0x4($s6)` from its delay slot.
+     * The +0x10 countdown needs an `s16` local (`tc`), exactly as in the
+       landed func_800C5D80.  With `s32` plus an explicit `(s16)` cast the
+       `sh` sinks into the `bgtz` delay slot and the function is a word short.
+     * The found block's two halfword temps are ONE short-lived `s32 u`, not
+       the `x`/`y` loop counters -- with x/y they take callee-saved registers
+       and cost 9 rows.
+     * Both marking-loop nests are written out TWICE, one per arm of the
+       `*(s16 *)(p + 0x6) >= 0` test, not shared.
      * The four `D_80013714 & 1` tests are the DECLARED SYMBOL (one shared
        `lui $s2`); the `(g + 0x8) & 0x800` gate is the RAW CONSTANT
        `*(u16 *)0x80013714`; the state>=2 arm uses `lo = (u8 *)0x80010000`
-       for both 0x3714 and 0x234.  All three already measured by the
-       2026-11-15 run -- see the four docs/matching-levers.md entries titled
-       against this function.
-     * The found-block's two halfword temps are ONE short-lived `s32 u`, not
-       the `x`/`y` loop counters: with x/y they take callee-saved registers
-       and cost 9 rows.
-     * Both marking-loop nests are written out TWICE (once per arm of the
-       `*(s16 *)(p + 0x6) >= 0` test), not shared.
+       for both 0x3714 and 0x234.  These three are the 2026-11-15 run's
+       measured levers -- see the four docs/matching-levers.md entries
+       titled against this function -- and all three are confirmed here.
+     * `g`, `m = *(u8 **)(g + 0x1DC)` and `h = g + 0x1DC` all three at the
+       top, the func_8009F13C template.  `g` stays in $s3 across the whole
+       function, so the 2026-11-15 "rematerialised base" problem is gone.
 
    New declarations this body needs:
        extern u8 D_800E0B65[];
@@ -217,12 +248,10 @@ void func_800C5FA8(u8 *p)
         *(s16 *)(p + 0x4) = *(u16 *)(p + 0x4) + 1;
         u = func_800A6D30() & 0xFFFF;
         t = (u8 *)D_80081468;
-        c = *(s16 *)(t + 0x6);
-        n = c;
-        k = u % n;
+        k = u % *(s16 *)(t + 0x6);
+        n = *(s16 *)(t + 0x6);
         while (n > 0)
         {
-            t2 = t;
             rm = &D_800E2970_s[k];
             if (rm->unk_0A != 0)
             {
@@ -236,7 +265,7 @@ void func_800C5FA8(u8 *p)
                 break;
             }
             n--;
-            k = (k + 1) % *(s16 *)(t2 + 0x6);
+            k = (k + 1) % *(s16 *)(t + 0x6);
         }
         if (n == 0)
         {
@@ -276,9 +305,9 @@ void func_800C5FA8(u8 *p)
             }
         }
         tbl = D_800DCED4;
-        f2 = (u8 *)&D_80083460;
         kk = *(s16 *)(p + 0x6);
         q = D_800E3D7C;
+        f2 = (u8 *)&D_80083460;
         *(s16 *)(p + 0x12) = 0;
         do
         {

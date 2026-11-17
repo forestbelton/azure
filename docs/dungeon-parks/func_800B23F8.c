@@ -1,62 +1,123 @@
-/* PARK: func_800B23F8, 81 of 81 words, 21 aligned differences.
-   ovl_dungeon.  Measured 2026-11-16.  A 0x112 spawner: allocates a node,
-   installs func_800B274C as its handler and func_800B2A60 as the payload's
-   +0x8C step, and returns the payload or NULL.
+/* PARK: func_800B23F8, 81 of 81 words, 13 aligned differences.
+   ovl_dungeon.  Measured 2026-11-16 (j42, 21 rows), re-measured and improved
+   to 13 by j57 the same day.  A 0x112 spawner: allocates a node, installs
+   func_800B274C as its handler and func_800B2A60 as the payload's +0x8C
+   step, and returns the payload or NULL.
 
    NEW DECLARATION NEEDED (func_800B274C is defined BELOW this function and
-   its address is taken, so an implicit declaration will not do -- the unit's
-   own comment at the func_800B2A60 block says as much):
+   its address is taken, so an implicit declaration will not do):
 
        void func_800B274C(u8 *, UnkVec *, u8 *);
 
    Everything else it touches is already declared: func_8003FD64,
    func_8004491C, func_800B22F0, func_800B2A60, D_80083498, D_80045340.
 
-   ------------------------------------------------------------------ residue
+   -------------------------------------- residue: 13 rows, ALL IN THE PROLOGUE
 
-   A SINGLE REGISTER PERMUTATION, at exactly the right word count.  The target
-   has `n` in $s0 and the payload pointer in $s1; this body has them the other
-   way round, and the same swap runs through `a` ($s4 against $s3) and `c`
-   ($s3 against $s4).  Nothing else differs: every opcode, immediate and
-   displacement matches, and the only other row is WHERE the second pointer is
-   created -- the target copies it into a callee-saved register at word 37,
-   before the branches, while this body recomputes it in the late block.
+   EVERY REGISTER IS NOW RIGHT and the whole body matches instruction for
+   instruction.  What is left is a PERMUTATION of the thirteen block-0
+   instructions -- the five (save, parameter-copy) pairs and the three call
+   setup words:
 
-   By the triage rule in docs/dungeon-sweep.md this is `.greg` work, not
-   permuter food: the word counts match and what is left is register numbers.
+       candidate   s4/a, s5/b, s3/c, s2/d, s1/p=NULL, li a0, la a1
+       target      s4/a, s1/p=NULL, li a0, s5/b, la a1, s2/d, s3/c
 
-   -------------------------------------------------------------- what paid
+   Same thirteen instructions, same registers, different order, so aligndiff
+   scores it 13.  It is a sched2 decision in basic block 0: `sched.py`
+   (--keep, block 0) shows every one of them at `priority = 1`, so the order
+   is `rank_for_schedule`'s dependence-class tie-break over INSN_LUID, and the
+   candidate's order is exactly ascending LUID (declaration order a,b,c,d then
+   the first statement).  The target needs `p = NULL` and `li a0` BETWEEN a's
+   copy and b's copy, and d's copy BEFORE c's -- i.e. LUIDs that no statement
+   order can produce, because `assign_parms` emits the four parameter copies
+   ahead of NOTE_INSN_FUNCTION_BEG and sched1's region starts after them
+   (confirmed in the .sched dump: block 0's region is insns 18..39 and the
+   copies are not in it).  So this is a sched2 ready-list problem and the
+   lever, if there is one, is the block's insn SET, not its source order.
 
-   79/49 -> 81/21, and the two words are both worth recording:
+   Measured and rejected at 13 (no change): `s32 d`; the local declaration
+   order with `p` first; `u8 *c` with the stores cast (byte-identical to the
+   `s32 c` body below).  Measured and worse: `s32 b` 17; `s32 b, s32 d` 17;
+   `p = NULL;` moved after the func_8003FD64 call 33.
+
+   ------------------------------------------ what took it from 21 to 13
+
+   TWO THINGS, and both were read out of `-da` dumps rather than guessed.
+   Method: concatenate csrc/ovl_dungeon.c's declaration block with the body
+   and compile it alone with `tools/cdkgcc -O2 -G8 -da -S`; `.lreg` gives
+   every pseudo's refs/live length and `.greg`'s `;; N regs to allocate:` IS
+   `allocno_compare`'s sort.  The target's map is
+   n=$s0 p=$s1 r/d=$s2 c=$s3 a=$s4 b=$s5 a_hi=$s6.
+
+   1. `c` AND THE SECOND PAYLOAD POINTER ARE THE SAME LOCAL.  The target's
+      `addu $s3, $s1, $zero` at word 37 re-uses the register the `u8 c`
+      parameter has just died in, and that is not first-fit luck: as a
+      separate `u8 *w` the copy is a 4-reference allocno that crosses one
+      call, scores `floor_log2(4)*4/L` with L about 20, outranks `r` (0.278)
+      and takes $s2 -- which is why j42's sweep of all ten placements of
+      `w = p;` could only reach 34.  Declaring the parameter `s32 c` and
+      writing `c = (s32)p;` after the +0x25 store merges the two into ONE
+      six-reference allocno, 0.194, which sorts below `r` and above `a`, and
+      $s3 falls out.  That alone fixes the a/c swap, the b and d registers
+      and the four `w` rows: 21 -> 34 -> (with 2.) 13.
+      Measured: `s32 b, c` without the merge 25; `w = (u8 *)n + 0x20;` in the
+      late block (the 21-row park) leaves w in $v1.
+
+   2. THE MERGE COSTS `n` ITS NINTH REFERENCE, AND n MUST OUTRANK p.
+      With `w = (u8 *)n + 0x20;` in the late block, `n` has 9 refs over 37
+      insns (0.730) against `p`'s 12 over 58 (0.621).  Merging replaces that
+      statement with `c = (s32)p;`, which moves the reference to `p`: n falls
+      to 8 (0.649) and p rises to 13 (0.672), they swap, and $s0/$s1 swap
+      with them -- 34 differing, every `n` and `p` row wrong.
+      `c = (s32)n + 0x20;` written before the `if` does NOT help: cse folds it
+      straight back to `c = p` (byte-identical output, same 34).  Written in
+      the join block cse cannot reach it, n gets its ninth reference and
+      $s0/$s1 come out right -- but `c`'s live range then starts after the
+      arms, 6 refs over 37 is 0.324, it outranks `r` and takes $s2: 24.
+      THE FIX IS THE ZERO-INSTRUCTION DEVICE func_800A17E8 already uses
+      (csrc/ovl_dungeon.c, "a zero-instruction reference"):
+
+          __asm__("" ::"r"(n));
+
+      one extra reference, no instruction, n back to 9 refs over the same 37
+      insns.  Placed before the func_800B22F0 call or straight after the null
+      test it gives the identical 13-row result; `;; Register dispositions`
+      is then the target's map exactly.
+      NOTE the device is NOT needed if an honest ninth reference to `n` can
+      be found.  Everything tried cost a row: `*((u8 *)n + 0x33) = 0x1E;` for
+      `p[0x13] = 0x1E;` does give n 9 and p 12, but it also drops p's live
+      length to 46 so p still wins, and the store comes out `0x33($s0)` -- 35.
+      The arithmetic to aim at, from `.lreg`: n is 8 refs/37 insns and p is
+      13/58; n wins at 9 refs, or at <= 35 insns, or if p reaches 61 insns or
+      drops to 12 refs WITHOUT shortening.  The same `__asm__("" ::"r"(c));`
+      trick on `c` costs 3 words (84), because `c` is a `u8` there.
+
+   The two 2026-11-16 catalogue entries this lands on are
+   "`floor_log2` IN `allocno_compare` IS A CLIFF AT EVERY POWER OF TWO" and
+   "A SHORT-LIVED VALUE REACHES A CALLEE-SAVED REGISTER ONLY BY SHARING A
+   LOCAL WITH SOMETHING THAT CROSSES CALLS" -- this is that second entry's
+   mechanism with a PARAMETER as the long-lived local.
+
+   -------------------------------------------------------- also still true
 
    * `*(s8 *)(p + 0x9C) = -1;` and NOT `p[0x9C] = -1;`.  Through a `u8 *`
-     lvalue gcc folds the -1 to 0xFF, which is the same constant the
-     neighbouring `p[0x9A] = 0xFF` already holds, so cse shares one register
-     and the `addiu $v0, $zero, -0x1` disappears.  The signed lvalue keeps the
-     two constants distinct.  Worth 1 word.
-   * A SECOND POINTER LOCAL, recomputed rather than copied.  The target keeps
-     two registers holding `n + 0x20`, one for the early stores and the return
-     and one for the +0x9A/+0x9C/+0x8C group.  Written `w = p;` the copy is
-     propagated away wherever it is placed -- I swept all ten statement
-     boundaries in the body and every one of them measured 81 words and 34
-     differing, with the single exception of the position after `k = a & 3;`
-     (47).  Written `w = (u8 *)n + 0x20;` INSIDE the late block, cse cannot
-     reach it across the if/else-if's labels, the address is rebuilt, and the
-     body is 81 words and 21 differing.  Worth 1 word and 13 differences.
+     lvalue gcc folds the -1 to 0xFF, cse shares it with the neighbouring
+     `p[0x9A] = 0xFF` and the `addiu $v0, $zero, -0x1` disappears.  1 word.
+   * `s32 a` with an explicit `(s16)a` at the func_800B22F0 call is 78 words
+     and 30 -- the `s16` parameter's two pseudos are load-bearing.
 
-   Also measured, no better: `s32 b, c` (25); `s8 b, c` (21, byte-identical to
-   the `u8` form); `s32 a` with an explicit `(s16)a` at the func_800B22F0 call
-   (78 words, 30 -- the `s16` parameter's two pseudos are load-bearing here,
-   as docs/matching-levers.md's entry on that says). */
+   Measured with
+     python3 tools/decomp/aligndiff.py <unit copy> func_800B23F8
+     python3 tools/decomp/ovlverify.py <unit copy> func_800B23F8
+   -> 81 of 81 words, 13 aligned differences. */
 
-u8 *func_800B23F8(s16 a, u8 b, u8 c, s16 d, s32 e)
+u8 *func_800B23F8(s16 a, u8 b, s32 c, s16 d, s32 e)
 {
     UnkNode *n;
     UnkVec *m;
     UnkSlot *r;
     u8 *p;
     s32 k;
-    u8 *w;
 
     p = NULL;
     n = func_8003FD64(0x112, D_80083498);
@@ -71,6 +132,7 @@ u8 *func_800B23F8(s16 a, u8 b, u8 c, s16 d, s32 e)
         r = (UnkSlot *)n->unk_0C;
         *((u8 *)r + 0x25) = c;
         *((u8 *)r + 0x24) = b;
+        c = (s32)p;
         k = a & 3;
         if (k == 1)
         {
@@ -82,11 +144,11 @@ u8 *func_800B23F8(s16 a, u8 b, u8 c, s16 d, s32 e)
             *(u32 *)(p + 0x14) |= 0x2000;
             *(u32 *)(p + 0x1C) |= 0x2000;
         }
+        __asm__("" ::"r"(n));
         func_800B22F0(n, m, r, a);
-        w = (u8 *)n + 0x20;
-        w[0x9A] = 0xFF;
-        *(s8 *)(w + 0x9C) = -1;
-        *(u32 *)(w + 0x8C) = (u32)func_800B2A60;
+        ((u8 *)c)[0x9A] = 0xFF;
+        *(s8 *)((u8 *)c + 0x9C) = -1;
+        *(u32 *)((u8 *)c + 0x8C) = (u32)func_800B2A60;
         *(s32 *)((u8 *)r + 0x8) = e;
     }
     return p;
