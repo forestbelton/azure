@@ -1,5 +1,37 @@
 /* PARK: func_800B8FC8, 95 of 95 words, 19 aligned differences.
 
+   ====================================== 2026-11-21: WHAT IS LEFT AT 5 ROWS,
+                                          AND A 2-ROW "WIN" THAT WAS A BUG IN
+                                          MY OWN SWEEP
+
+   The five rows are THREE INSTRUCTIONS THAT BOTH SIDES HAVE, EARLIER HERE:
+
+       candidate  9  lw v1,0(s4)        target 13  lw $v1, %lo(D_80083160)($s4)
+       candidate 14  sw s5,0x2C(sp)     target 16  sw $s5, 0x2C($sp)
+       candidate 15  lw s5,0x50(sp)     target 26  lw $s5, 0x50($sp)
+
+   `lw $s5, 0x50($sp)' is the load of the fifth parameter `e' out of the
+   caller's frame, so the obvious move is to delay `ee = e;'.  ALL SEVENTEEN
+   LEGAL PLACEMENTS IN THE HEAD BLOCK WERE MEASURED: one is the park's own 5
+   and the other sixteen are 15.  `ee' cannot be deleted either -- the park's
+   note below shows the copy survives (its source is a MEM a call
+   invalidates) and is what creates the allocno.
+
+   THE TRAP, because it cost a false result: an ad-hoc version of that sweep
+   inserted the statement at EVERY line index, including between `if (lean)'
+   and its `{'.  That is legal C and a different program -- the `if' then
+   governs `ee = e;' and `{ t -= 0xE0; }' becomes unconditional -- and it
+   measured TWO ROWS.  Three of the eighteen variants were that shape.
+   tools/decomp/stmtsweep.py does not have the bug: its `positions()` requires
+   the previous non-blank line to end in `;{}:', so a line ending in `)' is
+   never an insertion point, which is exactly why its negative on this park
+   stands and my hand-rolled sweep's positive did not.
+
+   The symbolic/pointer question is settled too: the tail's two `g->unk_00'
+   reads written as `D_80083160.unk_00' like the rest of the function are 96
+   words / 16 rows, and every read written through `g' instead is 95/7.  The
+   park's mixture is right.
+
    ====================================== 2026-11-21: 12 rows -> 5
 
    TWO DEVICES ON THE SAME STATEMENT, found by two different sweeps:

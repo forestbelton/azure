@@ -1129,3 +1129,17 @@ five-job search for nothing.
 The order that works: sweep first (minutes), apply, `permimport.py` again,
 then permute. `permimport.py` snapshots the park at import time and nothing
 later re-reads it.
+
+### A PLACEMENT SWEEP MUST KNOW WHERE A STATEMENT MAY GO
+
+An ad-hoc sweep of `ee = e;` over func_800B8FC8's head block reported TWO rows
+against the park's five. Three of its eighteen variants had inserted the
+statement between `if (lean)` and its `{`, which is legal C and a different
+program: the `if` governs the inserted statement and the block that followed
+becomes unconditional. The win was the semantic change.
+
+`tools/decomp/stmtsweep.py` is not affected -- `positions()` only offers a line
+whose previous non-blank line ends in `;{}:` -- and its negative on that park
+stands. The lesson is for the next hand-rolled sweep: generate candidates with
+the same guard, or measure the winner against what it is supposed to compute
+before believing it.
