@@ -1,4 +1,44 @@
-/* PARK: func_800B45E0 -- 203 of 203 words, **30 ALIGNED DIFFERENCES**.
+/* PARK: func_800B45E0 -- 203 of 203 words, **9 ALIGNED DIFFERENCES**.
+
+   ================= 2026-11-20, SECOND PASS: 30 rows -> 9, and (A) IS CLOSED
+
+   Two more devices, and the first came out of decomp-permuter (base 900 ->
+   290 over 141737 candidates):
+
+   1. **`i = t >> 1;` HOISTED INTO ITS OWN LOCAL, BEFORE the `>> 0x11`**, with
+      the store then reading `i`:
+
+          t = *(s32 *)(b + 0x14);
+          i = t >> 1;
+          v = t >> 0x11;
+          if (v < 0) { v = -v; }
+          *(s32 *)(b + 0x14) = i;
+
+      That is cluster (C) below, and it is exactly what the target's word
+      order says -- `sra $v1, $v0, 1` at 154 BEFORE `sra $v0, $v0, 17` at 155.
+      Written as `*(s32 *)(b + 0x14) = t >> 1;` at its natural place the shift
+      is emitted after the test and the store lands outside the `beqz`'s delay
+      slot.  Worth 14 rows on its own: 30 -> 16, at 202 words.
+      Note it REUSES `i`, the ramp's numerator, so `i` has two sets.  That is
+      the permuter's own choice and a fresh local measures the same.
+
+   2. **A `do { } while (0);` AROUND CASE 4's DECREMENT AS WELL**, which is
+      the other half of cluster (A) -- the counter store sinking past its own
+      sign extension -- and which this park had recorded as costing a word.
+      It does, and after device 1 that word is exactly the one missing: 202
+      -> 203, and 16 rows -> 9.
+      **So (A) is closed, and the lesson is that the two halves had to be
+      bought in the right order.** The park's own note said the barrier "fixes
+      the order and the problem is paying for it inside the word count"; the
+      answer was that something else had to give the word back first.
+
+   WHAT IS LEFT, 9 rows, ONE REGISTER: the loaded byte `j = c[0xE]` is in $a3
+   where the target has $v1, and the ramp's result is in $v0 where the target
+   reuses $v1 -- `lbu $v1, 0xE($s2)` / `negu $v0, $v1` / `addu $v1, $v1, $v0`
+   / `sb $v1, 0xE($s2)`.  Making the result share `j`'s variable does NOT do
+   it: `j = j + i / n;`, `j += i / n;` and `k = j; k += i / n;` are all 9 and
+   all leave `j` in $a3.  So it is `j`'s own allocation priority, not the
+   sharing, and that is the next thing to price off `.lreg`.
    2026-11-20.  The body below carries the two devices a beam search found:
    a `do { } while (0);` around case 1's counter decrement (37 -> 33) and a
    duplicated-arm `if (j)` around `*(u8 **)p = NULL;` (33 -> 30).  Neither is
@@ -145,7 +185,10 @@ void func_800B45E0(u8 *p, u8 *b, u8 *c)
         }
         break;
     case 4:
-        m = *(u16 *)(p + 0xA) - 1;
+        do
+        {
+            m = *(u16 *)(p + 0xA) - 1;
+        } while (0);
         *(u16 *)(p + 0xA) = m;
         n = (s16)m;
         if (n > 0)
@@ -168,12 +211,13 @@ void func_800B45E0(u8 *p, u8 *b, u8 *c)
     if ((*(u16 *)(p + 0xC) & 1) != 0)
     {
         t = *(s32 *)(b + 0x14);
+        i = t >> 1;
         v = t >> 0x11;
         if (v < 0)
         {
             v = -v;
         }
-        *(s32 *)(b + 0x14) = t >> 1;
+        *(s32 *)(b + 0x14) = i;
         if (v < 2)
         {
             t = -(*(s32 *)(p + 0x4) >> 1);
