@@ -33021,3 +33021,55 @@ a device the body already carries. On this park's 6-row body both
 `devsweep.py` (792 candidates a round) and `widthsweep.py` printed clean
 negatives while swapping the device that was already there was worth every
 remaining row.
+
+## A SHARED TAIL IN THE TARGET MAY BE TWO BLOCKS CROSS-JUMPED AFTER RELOAD -- WRITE IT TWICE, WITH ITS OWN LOCALS
+
+`func_800B45E0`, ovl_dungeon_800B45E0, 2026-11-21, landed at 203/203 words from
+a park that had sat at 2 rows for a day and at 6 before that. **This is the one
+lever in this file that a sweep cannot reach, because it is a control-flow
+change rather than a spelling.**
+
+The target's case 1 ends `j .L800B47D0`, jumping into case 4's block, and the
+park read that as a shared tail reached with a `goto`. It is not: it is
+**jump2's cross-jump of two identical tails**, and `jump_optimize (insns, 1, 1,
+0)` runs AFTER reload -- so the two copies had to be allocated identically
+first, and each copy is its own basic block while that happens.
+
+That difference decides who allocates the tail's quantities:
+
+* written **once behind a `goto`**, every quantity in the tail is referenced
+  from two blocks, so flow makes them global and `global_alloc` owns them.
+  15 rows, and the park's own analysis showed the target's assignment was
+  unreachable that way.
+* written **twice with its own locals per copy**, every quantity is referenced
+  in ONE block, so `local_alloc` owns them: `combine_regs` ties the numerator
+  (which dies at the division) to the quotient, giving the target's
+  `mflo $v0`, and ties `j` to `k` in `$v1`. The dead `REG_UNUSED` MOD of
+  `divmodsi4` is then allocated LAST (one reference, `qty_compare` priority 0),
+  finds `$v0` and `$v1` busy over its single slot and takes `$a0` -- which
+  costs nothing, because the divisor dies at the division and `global.c`
+  processes `REG_DEAD` before `note_stores`. **0 rows.**
+
+**Separate names per copy are the whole point.** The ramp written twice over
+one shared name set is 16 rows: a name used in both copies is multi-block and
+therefore global again, which is the same position as the `goto`.
+
+And the restructuring changed which device is right in the head block: the
+park's nested duplicated-arm `if (k) { if (w) ... }` around `*(u8 **)p = NULL;`
+becomes 207 words / 9 rows, because naming `k` and `w` on a path from entry
+makes them live-in globals again -- see "A DUPLICATED-ARM DEVICE'S CONDITION
+VARIABLE CAN CREATE THE RESIDUE IT IS BLAMED FOR" above. A plain statement, a
+`do { } while (0);` and `if (p) {...} else {...}` all measure 0.
+
+**What this cost before it was found**, on the `goto` shape: 128,048 permuter
+candidates and a second 40-minute run (both `found=none`), four clean sweeps, an
+11,316-candidate beam at depth 3, and roughly sixty hand spellings. The sibling
+`func_800B490C` had the shape right in its own landed comment -- "cases 1 and 4
+do NOT share a ramp here" -- while the park next door had it wrong, which is the
+cheapest place this could have been caught.
+
+**No sweep in this repo can find it**, including `devsweep.py`'s new
+device-respelling pass: they all vary spellings within a fixed control-flow
+shape. When a residue is an allocation the dumps say is unreachable, ask
+whether a `goto`, a shared tail or a merged arm in the candidate is TWO blocks
+in the target.

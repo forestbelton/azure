@@ -20,7 +20,184 @@ void func_800B1320(u8 *p, s16 a, s16 b);
 void func_800B13CC(u8 *p, u16 mask);
 u8 *func_800B1484(u8 *p);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800B45E0", func_800B45E0);
+/* func_800B45E0 -- 203/203 words, 0 differing.
+
+   THE COLOUR RAMP IS WRITTEN TWICE, NOT SHARED BY A `goto', AND EACH COPY
+   HAS ITS OWN LOCALS.  The target's case 1 ends `j .L800B47D0' INTO case 4's
+   block, which reads like a shared ramp -- but that is jump2's CROSS-JUMP of
+   two identical tails, and jump2 runs AFTER reload, so the two copies had to
+   get the same registers first.  Writing one ramp behind a `goto' instead
+   puts every quantity in it in two basic blocks, which makes them all global
+   pseudos, and global-alloc cannot reproduce the assignment: `goto ramp' is
+   15 rows, and one shared name set with the ramp written twice is 16.
+
+   With a copy per case, j1/k1/w1 and j4/k4/w4 are each referenced in ONE
+   block, so local-alloc owns them: it ties the numerator (dying at the div)
+   to the quotient, giving `mflo $v0', and ties `j' to `k' in `$v1'.  The
+   dead REG_UNUSED MOD output of `divmodsi4' is then allocated last (1 ref,
+   qty_compare priority 0) and finds $v0 and $v1 busy over its one slot, so
+   it takes $a0 -- which costs nothing, because the divisor `n' dies at the
+   div and global.c processes REG_DEAD before note_stores.  With the shared
+   ramp the MOD was the only local in the block, took $v0, and the quotient
+   could never have it (2 rows for a day: `mflo $a3').
+
+   SO THE HEAD'S DUPLICATED-ARM DEVICE HAD TO GO.  The park carried
+   `if (k) { *p = NULL; } else { ... }' nested under `if (w)'.  Naming k and
+   w on a path from entry made them live-in globals; with the ramp duplicated
+   that is 207 words / 9 rows.  A plain statement there is 0, and so are
+   `do { } while (0);' and `if (p) { } else { }' -- see docs/matching-levers.md,
+   "A DUPLICATED-ARM DEVICE'S CONDITION VARIABLE CAN CREATE THE RESIDUE IT IS
+   BLAMED FOR".
+
+   Still load-bearing, each measured on this body:
+     * `do { m = *(u16 *)(p + 0xA) - 1; } while (0);' in case 1 AND case 4 --
+       it keeps the counter store from sinking past its own sign extension.
+       Dropping case 1's is 6 rows, case 4's is 7 (202 words), both 13.
+     * `i = t >> 1;' hoisted into its own statement ahead of the `>> 0x11',
+       with the store reading `i': undoing it is 204 words / 14 rows.
+     * case 3 tests the SHIFTED value (`sll' then `bgtz', no `sra') while
+       cases 1 and 4 sign-extend first; that asymmetry is in the target.
+     * `abs()' is NOT the answer for the two absolute values -- the target's
+       `bgez'/`nop'/`negu' is abssi2's own output, but spelling it `abs()'
+       measured 2 rows worse.
+   Inert, measured: declaration order of the two ramp groups, `s16' vs `s32'
+   for k1/k4, and a separate numerator statement (`u1 = 0x80 - j1; w1 = u1/n;')
+   instead of the single expression.
+
+   It owns `jtbl_800892CC' at a 4-mod-8 rodata offset, which is why this unit
+   exists; seqcheck reports `HI16 .rodata' against the listing's
+   `HI16 jtbl_800892CC', exactly as the landed func_800B490C does. */
+void func_800B45E0(u8 *p, u8 *b, u8 *c)
+{
+    u8 *q;
+    s32 i;
+    s32 n;
+    s32 t;
+    s32 v;
+    u16 m;
+    s32 j1;
+    s32 k1;
+    s32 w1;
+    s32 j4;
+    s32 k4;
+    s32 w4;
+
+    q = *(u8 **)p;
+    if (q != NULL && (*(u16 *)(q + 0x1E) & 0x8000) != 0)
+    {
+        *(u8 **)p = NULL;
+        *(u8 **)(p + 0x14) = NULL;
+    }
+    if (*(u8 **)(p + 0x14) != NULL)
+    {
+        *(u16 *)(b + 0x2) -= *(u16 *)(p + 0x18) - *(u16 *)(*(u8 **)(p + 0x14) + 0x2);
+        *(u16 *)(p + 0x18) = *(u16 *)(*(u8 **)(p + 0x14) + 0x2);
+        *(u16 *)(b + 0x6) -= *(u16 *)(p + 0x1A) - *(u16 *)(*(u8 **)(p + 0x14) + 0x6);
+        *(u16 *)(p + 0x1A) = *(u16 *)(*(u8 **)(p + 0x14) + 0x6);
+        *(u16 *)(b + 0xA) -= *(u16 *)(p + 0x1C) - *(u16 *)(*(u8 **)(p + 0x14) + 0xA);
+        *(u16 *)(p + 0x1C) = *(u16 *)(*(u8 **)(p + 0x14) + 0xA);
+    }
+    switch (*(s16 *)(p + 0x8))
+    {
+    case 0:
+        *(s32 *)(b + 0x14) = 0x200000;
+        *(u16 *)(b + 0xA) -= 0x40;
+        *(s32 *)(p + 0x4) = 0x200000;
+        *(u16 *)(c + 0x1E) = 0x1000;
+        *(u16 *)(c + 0x1C) = 0x1000;
+        func_8004491C(p - 0x20, (u32)&D_80044C54);
+        *(u16 *)(p + 0xA) = 0x10;
+        *(u16 *)(p + 0x8) += 1;
+    case 1:
+        do
+        {
+            m = *(u16 *)(p + 0xA) - 1;
+        } while (0);
+        *(u16 *)(p + 0xA) = m;
+        n = (s16)m;
+        if (n > 0)
+        {
+            j1 = c[0xE];
+            w1 = (0x80 - j1) / n;
+            k1 = j1 + w1;
+            c[0xE] = k1;
+            c[0xD] = k1;
+            c[0xC] = k1;
+            break;
+        }
+        *(u16 *)(p + 0x8) += 1;
+        break;
+    case 2:
+        break;
+    case 3:
+        m = *(u16 *)(p + 0xA) - 1;
+        *(u16 *)(p + 0xA) = m;
+        if ((s32)(m << 16) <= 0)
+        {
+            *(u16 *)(p + 0xA) = 8;
+            *(u16 *)(p + 0x8) += 1;
+        }
+        break;
+    case 4:
+        do
+        {
+            m = *(u16 *)(p + 0xA) - 1;
+        } while (0);
+        *(u16 *)(p + 0xA) = m;
+        n = (s16)m;
+        if (n > 0)
+        {
+            j4 = c[0xE];
+            w4 = -j4 / n;
+            k4 = j4 + w4;
+            c[0xE] = k4;
+            c[0xD] = k4;
+            c[0xC] = k4;
+            break;
+        }
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+    *(s32 *)(b + 0x8) += *(s32 *)(b + 0x14);
+    *(u16 *)(p + 0xC) += 1;
+    if ((*(u16 *)(p + 0xC) & 1) != 0)
+    {
+        t = *(s32 *)(b + 0x14);
+        i = t >> 1;
+        v = t >> 0x11;
+        if (v < 0)
+        {
+            v = -v;
+        }
+        *(s32 *)(b + 0x14) = i;
+        if (v < 2)
+        {
+            t = -(*(s32 *)(p + 0x4) >> 1);
+            *(s32 *)(p + 0x4) = t;
+            *(s32 *)(b + 0x14) = t;
+            v = *(s16 *)(p + 0x6);
+            if (v < 0)
+            {
+                v = -v;
+            }
+            if (v < 2 && *(s16 *)(p + 0x8) < 3)
+            {
+                *(s16 *)(p + 0x8) = 3;
+                *(u16 *)(p + 0xA) = 8;
+            }
+        }
+    }
+    if (*(s16 *)(p + 0xE) != 0)
+    {
+        i = 0x2CF0F0F0;
+        if ((*(u16 *)(p + 0xC) & 3) != 0)
+        {
+            i = 0x2C404040;
+        }
+        *(s32 *)(c + 0xC) = i;
+    }
+}
 
 /* 220 words, 0 differing.  The sibling of func_800B45E0, and most of the body
    transferred from it, but three things differ: an extra early-out on the
