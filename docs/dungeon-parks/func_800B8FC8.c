@@ -1,4 +1,23 @@
 /* PARK: func_800B8FC8, 95 of 95 words, 19 aligned differences.
+
+   ====================================== 2026-11-21: 12 rows -> 5
+
+   TWO DEVICES ON THE SAME STATEMENT, found by two different sweeps:
+
+       do
+       {
+           g++;
+           g--;
+           func_800B9144((u8 *)w, p, r, (s16)ee);
+       } while (0);
+
+   tools/decomp/devsweep.py found the `do { } while (0);` (12 -> 7) and
+   tools/decomp/refsweep.py, re-run on THAT body, found the cancelled pair
+   inside it (7 -> 5).  On the park's own body the pair alone is worth 2
+   (12 -> 10) at a different statement entirely, and the two sweeps had to be
+   run in that order to compose: the wrapper changes which name is contested
+   at that point, and the pair then pays for it.  Neither sweep finds the pair
+   it wants without the other's result in hand.
    ovl_dungeon.  **95 of 95 words, 16 ALIGNED DIFFERENCES** (2026-11-20).
    Measured 2026-11-16 and called PROVED UNREACHABLE at 19 by j70; that
    verdict is corrected below and the body is now at 16.  The
@@ -265,7 +284,12 @@ void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
         t -= 0xE0;
     }
     w[1] = t;
-    func_800B9144((u8 *)w, p, r, (s16)ee);
+    do
+    {
+        g++;
+        g--;
+        func_800B9144((u8 *)w, p, r, (s16)ee);
+    } while (0);
     if (cw != 0)
     {
         u = *(u8 **)(D_80083160.unk_00 + 0x8D0);

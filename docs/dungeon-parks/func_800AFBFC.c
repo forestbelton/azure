@@ -1,4 +1,22 @@
 /* PARK: func_800AFBFC, 227 of 238 words, 149 aligned differences.
+
+   ====================================== 2026-11-21: 149 rows at 227/238 words
+                                          -> 123 AT 238/238
+
+   TWO duplicated-arm devices, found by tools/decomp/devsweep.py, and the
+   first one is the park's ELEVEN MISSING WORDS:
+
+     * `if (p)` around `q = func_800AFFB4(a, c, sp, p, 1);` -- 227 words and
+       149 rows -> 238 words and 138.  The eleven words come back because the
+       wrapper's free references keep the call's arguments live past the point
+       where this body had been letting gcc fold them away.
+     * `if (x)` around `sp->unk_70[1].vy = sp->unk_70[3].vy = y2;` -- 138 ->
+       123.
+
+   Two more were found and then superseded inside the same sweep (`if (y)`
+   around `t = *(u8 **)(c + 0x8);` at 136, a do-while around `m = ang;` at
+   135), so this body is not finished: re-running devsweep on it is the next
+   thing to do.
    ovl_dungeon.  Measured 2026-11-16.  The kind-0x12 panel's render handler,
    installed by func_800B0544's `func_8004491C(n, (u32)func_800AFBFC)`, so the
    signature is the engine's three-argument handler shape
@@ -168,7 +186,14 @@ s32 func_800AFBFC(u8 *a, void *b, u8 *c)
         x2 = func_80064584((s16)k) * 6 - cx;
         y2 = func_800644B8((s16)k) * 6 - cy;
         sp->unk_70[1].vx = sp->unk_70[3].vx = x2;
-        sp->unk_70[1].vy = sp->unk_70[3].vy = y2;
+        if (x)
+        {
+            sp->unk_70[1].vy = sp->unk_70[3].vy = y2;
+        }
+        else
+        {
+            sp->unk_70[1].vy = sp->unk_70[3].vy = y2;
+        }
         q = func_800AFFB4(a, c, sp, p, 0);
         if (q == NULL)
         {
@@ -201,7 +226,14 @@ s32 func_800AFBFC(u8 *a, void *b, u8 *c)
         y2 = func_800644B8((s16)k) * 6 - cy;
         sp->unk_70[0].vx = sp->unk_70[2].vx = x2;
         sp->unk_70[0].vy = sp->unk_70[2].vy = y2;
-        q = func_800AFFB4(a, c, sp, p, 1);
+        if (p)
+        {
+            q = func_800AFFB4(a, c, sp, p, 1);
+        }
+        else
+        {
+            q = func_800AFFB4(a, c, sp, p, 1);
+        }
         if (q == NULL)
         {
             break;

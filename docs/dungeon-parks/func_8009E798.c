@@ -1,5 +1,17 @@
 /* ============================== 2026-11-21: 71 rows -> 70
 
+   ====================================== 2026-11-21: 70 rows -> 60
+
+   A duplicated-arm `if (flag)` around the cursor write-back
+   `*(u32 *)(g->unk_00 + 0x8D0) = (u32)(r + 0x58);`, found by
+   tools/decomp/devsweep.py.  Ten rows on one wrapper, and `flag' is the right
+   condition because it is the one name in the function whose reference count
+   this residue is about -- the sweep tried all fourteen.
+
+   A `do { } while (0);` around `*(u32 *)(r + 0x2C) = 0x606060;` measures 68,
+   so there are two independent wrappers here and the sweep kept the better.
+   Worth re-running devsweep on this body for the second one.
+
    `u8 *dr = r + 0x4C;` computed between `ry = *(u16 *)(p + 0x6);` and
    `rc.y = ry;`, and passed to the final func_80067E2C instead of the inline
    `r + 0x4C`.  One row; the `addiu` moves up out of the call sequence.
@@ -272,6 +284,13 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     func_80067E2C((DR_AREA *)dr, &rc);
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r + 0x4C);
     PopMatrix();
-    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(r + 0x58);
+    if (flag)
+    {
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(r + 0x58);
+    }
+    else
+    {
+        *(u32 *)(g->unk_00 + 0x8D0) = (u32)(r + 0x58);
+    }
     return 0;
 }

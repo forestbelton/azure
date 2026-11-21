@@ -1,4 +1,9 @@
 /* PARK: func_8009F644 -- 136 words against a target of 137, 81 aligned
+
+   ====================================== 2026-11-21: 42 rows -> 41
+
+   A `do { } while (0);` around `v = q[1];`, found by
+   tools/decomp/devsweep.py.  One row.
    differences.  FIRST DRAFT, 2026-11-20.
 
    The last of the seven 4-mod-8 jump-table functions to get a body.  It owns
@@ -95,7 +100,10 @@ void func_8009F644(u8 *p, s32 f, s32 a, s32 e)
         qo = 0xC;
         q = *(u8 **)(g + qo) + *(u16 *)(g + 0x6) * 2;
         i = ((u16)*(u16 *)(p + 0x2A) >> 9) & 7;
-        v = q[1];
+        do
+        {
+            v = q[1];
+        } while (0);
         if (v != 0)
         {
             if ((v & 7) != i || (q[1] & 0xF8) != (s16)f || (s = f - 8, q[0] >= 0x7F))

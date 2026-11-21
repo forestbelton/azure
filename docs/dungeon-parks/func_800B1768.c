@@ -1,5 +1,13 @@
 /* func_800B1768 (ovl_dungeon) -- PARK, best candidate so far.
 
+   ====================================== 2026-11-21: 21 rows -> 16
+
+   Two more `do { } while (0);` wrappers, found by tools/decomp/devsweep.py:
+   around `w = func_80069E98(D_800DF03C[j]) * 8;` (21 -> 17) and around
+   `func_800B1320(u, 1, 1);` (17 -> 16).  This park had already been swept for
+   the two free-reference wrappers; it was swept before the width change, and
+   a sweep's negative is scoped to the body it was swept on.
+
    ================== 2026-11-20: 38 rows -> 22, a duplicated-arm `if (tmp)'
 
    One device, at the end of the body:
@@ -249,7 +257,10 @@ void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
         }
         *(s32 *)(q + i * 4 + 0x50) = (s32)func_8004E298(u, D_800DF03C[j], 0);
         i++;
-        w = func_80069E98(D_800DF03C[j]) * 8;
+        do
+        {
+            w = func_80069E98(D_800DF03C[j]) * 8;
+        } while (0);
         base = has * 10;
         func_800B1320(u, e != 0 ? (s16)(base + 0x76 - w) : (s16)(base + 0x80),
                       (s16)(-*(s8 *)(u + 0x3) - 0x9));
@@ -261,7 +272,10 @@ void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
         *(s32 *)(q + i * 4 + 0x50) = (s32)u;
         i++;
         tmp = func_800B1434(u, u - 0x60);
-        func_800B1320(u, 1, 1);
+        do
+        {
+            func_800B1320(u, 1, 1);
+        } while (0);
         u = tmp;
         *col = 0x80808;
         *(s32 *)(q + i * 4 + 0x50) = (s32)u;
