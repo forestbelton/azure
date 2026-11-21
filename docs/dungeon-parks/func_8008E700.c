@@ -55,6 +55,21 @@
       `u32 k = ~0x100000;` a no-op, and it is the one lever that does not go
       through QTY_CMP_PRI at all.
 
+      AND A PIN IS WHAT IT COSTS: the plain-C devices do not substitute for
+      it.  Measured on a `tools/decomp/onefunc.py` file with the pin removed
+      (so `u32 k;` plain, 13 rows): `do { stmt } while (0);` at every
+      statement in the body, best 13 -- no improvement -- and a
+      duplicated-arm `if (v) { s } else { s }` for each of k/m/s/d/c at every
+      statement, also 13, and a greedy second round over both devices finds
+      nothing.  So the 11 rows the pin buys have no ordinary-C equivalent
+      here, which is expected from the mechanism: every plain device works
+      through QTY_CMP_PRI's refs/length, and the park's own rejected list
+      already shows that cse2 merges the `(high (symbol_ref))` and
+      rematerialises the constant whatever you do at the source level.  The
+      pin is the one lever that does not go through that comparison at all.
+      docs/dungeon-parks/README.md records the preference for plain-C
+      devices; this is a case where none exists.
+
       Three further spellings reach the same 2 rows and are interchangeable:
       the mask made opaque with `__asm__("" : "+r"(k));` after `k =
       ~0x100000;` instead of the pin; the same with `k` assigned first; and
