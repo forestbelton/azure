@@ -913,3 +913,101 @@ Two smaller cautions, each of which cost a park real work: **"same score" is
 not "same stream"** (a park note claiming two spellings byte-identical hid a
 whole basin), and **a rejected spelling may have been only half applied** (a
 change that could go in two loops had been made in one).
+
+
+## 2026-11-20: SIX PARKS CLOSED, AND THE TOOL THAT MADE IT CHEAP
+
+**834 of 863 landed, 29 stubs, 22 parks.** Six closed in one session:
+`func_800AAF00`, `func_800CA1E0`, `func_800A1D4C`, `func_800A08A0`,
+`func_8009DAD8`, `func_8009A8C0`. Two more moved: `func_8008E700` 6 rows to
+2, `func_800B8FC8` 19 to 16 against a park that called 19 a PROVED floor.
+
+Every stub now either has a park or is one of the seven 4-mod-8 jump-table
+functions; `comm` over the two lists is clean in both directions.
+
+### THE TOOL: `tools/decomp/onefunc.py`, 0.09 s A CANDIDATE
+
+The unit is 37k lines and each candidate cost ~25 s. `onefunc.py` writes the
+unit's OWN declaration block plus one function definition into a
+subdirectory, keeping the basename `ovl_dungeon.c` -- and a candidate then
+measures in **0.09 s**. That is the single biggest change to how this block
+is worked on:
+
+* **sweeps become free.** 540 legal source orders of `func_8008E700`'s split
+  basin, 320 insertion points for a free reference on `func_800B8FC8`, every
+  line of `func_8009A8C0`'s body for two devices -- each of those is a minute,
+  and each one found something a hand sweep had missed.
+* **`tools/decomp/dump.sh` becomes usable.** Dumping the whole unit is
+  impractical; dumping this file is instant. `func_800A08A0`'s last six rows
+  were decided by ONE LINE of a `.sched` ready-list trace, and nobody was
+  going to find that by sweeping spellings.
+
+It checks the one way the file can lie -- a callee DEFINED EARLIER in the unit
+with no prototype is declared to the real compile and implicit here -- and
+prints those callees. The warning is a "check this", not a verdict: it fires
+on `func_8009DAD8`'s `func_8009DA70` and makes no difference, and it is worth
+two words on `func_8009FD40`. **Confirm the baseline against the unit, sweep
+on the standalone, re-measure the final body against the unit.**
+
+### THE LEVER THAT PAID FOUR TIMES: A FREE REFERENCE
+
+`flow_analysis` runs ONCE (`toplev.c:3463`) and BEFORE `combine` (`:3488`),
+and `flow.c:2128` weights each reference by `loop_depth`. So a reference that
+costs no instruction is free in `allocno_compare`'s arithmetic, and
+**`do { stmt } while (0);` around a statement that already mentions the
+variable is the plain-C way to spend one.**
+
+It closed `func_800A1D4C` (one reference on `lvl`, 16 -> 17, priority
+0.3168 -> 0.3366 against `p`'s 0.3188) and both halves of `func_8009A8C0`'s
+three-way rotation. **It is a dial, not a switch**, and it works from either
+end: on `func_8009A8C0` one reference LIFTS `wz` over `h`, and a second,
+placed deep in a later arm, LOWERS `k` by extending its live range past its
+last real use. Spending a reference is cheaper than saving one -- the
+alternative route on `func_800A1D4C`, taking a reference off `p` by gating a
+loop differently, gives the exact preheader and a callee-saved `c`: 16 rows.
+
+**Price the window, then sweep the position.** The park arithmetic tells you
+which way and how far; the position is a real choice (twelve statements
+mention `lvl` and only three wrappers score 0, 0 and 2 -- the rest run 29 to
+72), and sweeping it is one measurement per line.
+
+`__asm__("" ::"r"(x))` does the same thing and is a **last resort**: it is a
+scaffold where the do-while is ordinary C. Use it only when the plain sweep
+comes up short, and say so in the landed comment. On `func_8009A8C0` it does
+come up short -- the do-while's best is 16 against the asm pair's 0, because
+the loop NOTEs are a scheduling barrier on the insn carrying them.
+
+### THE OTHER NEW LEVER: `x + z0` WITH `z0` PINNED TO `$0`
+
+An `addsi3` whose second operand is literally `$zero` assembles to the same
+word as a `move`, and RTL has no knowledge that hard register 0 reads as
+zero, so nothing folds it. That makes it a copy no pass will delete:
+
+* `func_800CA1E0`, the one-opcode park. jump2 is
+  `jump_optimize (insns, 1, 1, 0)` and its block at `jump.c:476-525` only
+  considers an insn whose `SET_SRC` has `true_regnum >= 0`, so a PLUS escapes
+  the noop-move test one step before `find_equiv_reg` is reached. That is why
+  the park's work on fence placement could not have paid.
+* `func_8009A8C0`, which needed TWO surviving copies of one value. There the
+  pass eating them is cse -- `make_regs_eqv` puts a copy's destination into
+  the SOURCE's quantity and `canon_reg` rewrites the uses back -- and its one
+  escape covers at most one of two such copies.
+
+**Different passes, same spelling.** When the target keeps a copy your
+candidate loses, the question is only which pass is deleting it, and the
+answer does not change the fix.
+
+### AND A VERDICT THAT FELL AGAIN
+
+`func_800B8FC8`'s park said 19 rows was "the floor; this is PROVED, not
+exhausted", with a careful three-part argument from `sched.c:3250-3276` about
+which parameter copies are sinkable. The argument is sound about what SOURCE
+SPELLINGS can do to the two live lengths. It says nothing about a free
+reference, which the park never tried -- `grep -c __asm__` on it was 0 -- and
+one of those takes it to 16.
+
+**That is the third "permanent" verdict in this document to fall, and all
+three failed identically**: a correct account of why one route is closed, read
+as a proof that all routes are. The previous two were the `%lo`-load alias
+claim and the `|= 0x80000000` gate. If a park says PROVED, check which levers
+its rejected list actually contains before believing it.
