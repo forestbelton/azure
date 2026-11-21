@@ -32922,3 +32922,61 @@ Two corrections to that park, both of which had been true of an earlier body:
   **12** on the separate-global shape, where `if (k){if (w)}` is 2. A device's
   operand is not portable across a shape change, which is one more face of a
   sweep's negative being scoped to the body it was swept on.
+
+## A DUPLICATED-ARM DEVICE'S CONDITION VARIABLE CAN CREATE THE RESIDUE IT IS BLAMED FOR
+
+`func_800B490C`, ovl_dungeon_800B45E0, 2026-11-21. **Worth all six of the rows
+that landed it**, and the park had carried the offending device for a day.
+
+`if (v) { s } else { s }` and `do { s } while (0);` are the same
+free-reference lever from two directions, and this file has said so for weeks.
+They differ in one way that matters: **the duplicated arm NAMES a variable.**
+That adds a reference to `v` on every path that reaches the statement,
+including paths that never set it. If any of those paths comes from the
+function's entry, `v` is live-in, and `global.c`'s `record_one_conflict` puts
+the incoming argument registers `$a0`/`$a1`/`$a2` into `v`'s hard-conflict set.
+
+On `func_800B490C` the device was `if (n) { i = t >> 1; } else { i = t >> 1; }`
+in the tail after a `switch`. Case 2, case 3 and the jump table's default
+reach that tail without ever setting `n`, so `n` became live at entry. It
+already conflicted with both outputs of `divmodsi4` -- the quotient in `$v0`
+and the dead `REG_UNUSED` MOD in `$a0` (see the divmod entry above) -- because
+it is live across the division. With `$a0`/`$a1`/`$a2` added, `$a3` was the
+lowest register left, and the target has that divisor in `$a0`. Six rows, in
+both ramps, and **in the diff it looks like an ordinary allocation
+permutation** with nothing pointing at the device.
+
+`do { } while (0);` weights the same statement without naming anything, so `n`
+never leaves cases 1 and 4. Measured at that one statement, final body:
+
+```
+do-while                                   220 words /  0 rows
+no device at all                           219 / 8
+if (p), if (b), if (c), if (t < 0)         220 / 0
+if (n)                                     220 / 6
+if (t)                                     222 / 3
+if (i) 222/8   if (q) 222/9   if (j) 222/11
+if (k) 222/21  if (v) 221/29  if (u) 221/38
+```
+
+Three rules out of that table:
+
+* **Prefer the do-while when a free reference is all you want.** It cannot do
+  this.
+* **If you use the duplicated arm, pick a condition that is a PARAMETER or
+  already live-in** (`p`, `b`, `c` above), so the device cannot lengthen
+  anything. A parameter is live at entry whatever you do.
+* **Never use one of the wrapped statement's own operands.** `if (t)` around
+  `i = t >> 1;` costs two words every time: gcc uses the branch condition to
+  prove `t == 0` in the else arm, folds `t >> 1` there to `move $v1, $zero`,
+  and the arms no longer cross-jump.
+
+It also removes an indeterminate read: the `if (n)` version read `n`
+uninitialised on those three switch paths.
+
+**`devsweep.py` CANNOT FIND THIS, AND THAT IS THE TOOL'S ONE REAL GAP.** It
+only ADDS a wrapper to the body it is given; it never removes or re-conditions
+a device the body already carries. On this park's 6-row body both
+`devsweep.py` (792 candidates a round) and `widthsweep.py` printed clean
+negatives while swapping the device that was already there was worth every
+remaining row.
