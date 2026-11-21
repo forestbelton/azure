@@ -55,6 +55,26 @@
 
    Measured with
      python3 tools/decomp/parkresidue.py func_8009F644
+   ====================================== 2026-11-21: 136/137 words, 81 rows
+                                          -> 137/137, 42 rows
+
+   A PERMUTER FIND, two changes, and the park's own diagnosis was looking in
+   the wrong place for both:
+
+     * `s32 m' became `u8 m'.  `m' is the value stored by `q[0] = m;', and
+       every arm computes it from bytes -- `q[0] + 1', `a | 0x80',
+       `(a & 1) << 5 | ~0x7F | (e & 0x1F)'.  Declaring it the width it is
+       stored at is worth most of the 39 rows.
+     * `qo = 0xC;' and `*(u8 **)(g + qo)' in place of `*(u8 **)(g + 0xC)'.
+       That is THE MISSING WORD.  With the literal, gcc folds 0xC into the
+       `lw' displacement off `g'; through a local it has to emit the `addu',
+       which is what the target does.
+
+   The park header had said the residue was "ONE REGISTER and ONE WORD" --
+   `g' in $s2 against the target's $s1 -- and that was a true description of
+   the symptom and a useless guide to the cause.  Both bodies use all eight
+   callee-saved registers, so there was no free register to move `g' into and
+   the $s2/$s1 difference was downstream of `m''s width, not a cause.
 */
 void func_8009F644(u8 *p, s32 f, s32 a, s32 e)
 {
@@ -62,16 +82,18 @@ void func_8009F644(u8 *p, s32 f, s32 a, s32 e)
     u8 *r;
     s32 i;
     s32 c;
-    s32 m;
+    u8 m;
     s16 s;
     u8 v;
     u8 *g;
+    s16 qo;
 
     g = (u8 *)0x80013710;
     if ((D_800E296C & 0x10000000) == 0 && (*(u16 *)(g + 0x4) & 1) == 0 &&
         *(u16 *)(g + 0x6) < 0xF01)
     {
-        q = *(u8 **)(g + 0xC) + *(u16 *)(g + 0x6) * 2;
+        qo = 0xC;
+        q = *(u8 **)(g + qo) + *(u16 *)(g + 0x6) * 2;
         i = ((u16)*(u16 *)(p + 0x2A) >> 9) & 7;
         v = q[1];
         if (v != 0)
