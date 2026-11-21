@@ -46,6 +46,18 @@ implicit `int f()` and changes codegen. The carved units each carry a
 generated block of those, and `onefunc.py` synthesises the same thing for a
 standalone file.
 
+**A WRONG MEASUREMENT FROM PARALLELISM IS INDISTINGUISHABLE FROM A NEGATIVE.**
+On 2026-11-21 an agent's already-verified byte-exact body scored 183 words / 66
+rows inside a parallel batch and 181/0 three times serially. The cause was
+`tools/cdkgcc` rebuilding the shared LF copy of the PSY-Q headers with an
+`rm -rf` followed by a repopulate, so a concurrent compile could read a
+half-deleted include tree. That is fixed -- the tree is now built aside and
+renamed into place, with a stamp file for the staleness test -- but the lesson
+stands for anything else you run in parallel: **warm a shared cache with one
+serial run before a parallel burst, and re-measure any surprising result
+serially before you believe it.** Several of this block's stale negatives may
+have this shape.
+
 **AND SET `AZURE_SCRATCH`.** `asmlib.compile_asm` derives its intermediate
 `.s`/`.o` path from the source file's BASENAME inside `$AZURE_SCRATCH`
 (default `/tmp/azure-decomp`). Because the basename has to be `ovl_dungeon.c`

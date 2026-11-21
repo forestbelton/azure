@@ -39,12 +39,41 @@ if [ ! -x "$CDK/gcc" ]; then
 fi
 
 # Regenerate the LF include tree whenever it is missing or stale.
-if [ ! -d "$INC" ] || [ -n "$(find "$PROJ/psyq/include" -newer "$INC" -print -quit 2>/dev/null)" ]; then
-    rm -rf "$INC"
-    (cd "$PROJ/psyq/include" && find . -type d -exec mkdir -p "$INC/{}" \;)
+#
+# BUILD IT ASIDE AND RENAME IT INTO PLACE, never in place. The first version
+# did `rm -rf "$INC"' and then repopulated, which is a race every parallel
+# sweep in this repo can lose: a concurrent compile reads a half-deleted
+# include tree and FAILS OR MEASURES WRONG rather than erroring out. It cost a
+# real false result on 2026-11-21 -- an already-verified byte-exact body scored
+# 183 words / 66 rows inside a parallel batch and 181/0 three times serially --
+# and a wrong measurement from this cause is indistinguishable from a park's
+# negative.
+#
+# The staleness test had the same flaw: `find -newer "$INC"' compares against a
+# directory whose mtime the repopulate itself churns, so a burst of parallel
+# compiles could all decide it was stale at once and all start deleting. The
+# test now reads a STAMP FILE written last, so it flips exactly once per
+# psyq/include change.
+#
+# The rename is atomic, so a concurrent compile sees either the old complete
+# tree or the new one. Losers of the race build a private copy, find the
+# directory already current, and discard theirs.
+if [ ! -f "$INC/.stamp" ] || [ -n "$(find "$PROJ/psyq/include" -newer "$INC/.stamp" -print -quit 2>/dev/null)" ]; then
+    TMPINC="$INC.new.$$"
+    rm -rf "$TMPINC"
+    (cd "$PROJ/psyq/include" && find . -type d -exec mkdir -p "$TMPINC/{}" \;)
     (cd "$PROJ/psyq/include" && find . -type f | while read -r f; do
-        tr -d '\r' < "$f" > "$INC/$f"
+        tr -d '\r' < "$f" > "$TMPINC/$f"
     done)
+    : > "$TMPINC/.stamp"
+    if [ ! -f "$INC/.stamp" ] || [ -n "$(find "$PROJ/psyq/include" -newer "$INC/.stamp" -print -quit 2>/dev/null)" ]; then
+        rm -rf "$INC.old.$$"
+        [ -d "$INC" ] && mv "$INC" "$INC.old.$$" 2>/dev/null || true
+        mv "$TMPINC" "$INC" 2>/dev/null || rm -rf "$TMPINC"
+        rm -rf "$INC.old.$$"
+    else
+        rm -rf "$TMPINC"
+    fi
 fi
 
 args=""
