@@ -92,6 +92,8 @@ CONTAINER = {
     # The carved second unit, 2026-11-20. WITHOUT THIS ENTRY the basename
     # falls through to town.bin.elf and the tool reports plausible nonsense
     # rather than failing -- the trap the module docstring opens with.
+    "ovl_dungeon_800B45E0": "dungeon.bin",
+    "ovl_dungeon_800B6AC4": "dungeon.bin",
     "ovl_dungeon_800C2824": "dungeon.bin",
     "ovl_dungeon_800CABA8": "dungeon.bin",
     "ovl_dungeon_800D50FC": "dungeon.bin",
