@@ -182,8 +182,29 @@ def main():
     with open(dst, "w") as f:
         f.write(pre + "\n\n" + body + "\n")
 
+    # The unit's declaration block now lives in a HEADER (csrc/ovl_dungeon.c
+    # was carved on 2026-11-20, so both units share it). gcc resolves a
+    # quoted include against the INCLUDING FILE'S directory first, and the
+    # standalone file is not in csrc/ -- so copy every header the preamble
+    # includes by quoted name next to it, or the file compiles with no
+    # declarations at all and every measurement is nonsense.
+    copied = []
+    for h in re.findall(r'(?m)^\s*#\s*include\s+"([^"]+)"', pre):
+        cand = os.path.join(os.path.dirname(os.path.abspath(src)), h)
+        if not os.path.exists(cand):
+            cand = os.path.join(PROJ, "csrc", h)
+        if os.path.exists(cand) and os.path.abspath(cand) != os.path.abspath(
+                os.path.join(out_dir, h)):
+            tgt = os.path.join(out_dir, h)
+            os.makedirs(os.path.dirname(tgt) or ".", exist_ok=True)
+            with open(cand) as fh, open(tgt, "w") as fo:
+                fo.write(fh.read())
+            copied.append(h)
+
     print("onefunc: %s -> %s (%d preamble lines + %d body lines)"
           % (func, dst, pre.count("\n") + 1, body.count("\n") + 1))
+    if copied:
+        print("onefunc: copied alongside it: %s" % " ".join(copied))
     if synth:
         print("onefunc: synthesised %d prototype(s) for callees defined earlier in the"
               % len(synth))
