@@ -8802,6 +8802,47 @@ the truncation that breaks the run, and it appears in the priority list where
 the pinned ones do not. The three narrowings then land after the lui/lhu/li
 group in the order `a`, `c`, `d`: MATCH.
 
+**CORRECTION, 2026-11-21, and the mechanism is different from what this entry
+says.** `func_800B23F8` landed on this lever (81/81 words, 34 rows -> 0) and
+its dumps do NOT support "for the first such parameter the emitted insn is a
+TRUNCATION whose source is a SUBREG OF A PSEUDO, and that is what the prefix
+loop's test rejects". It cannot be: `function.c:4093` flushes the whole
+conversion sequence AFTER every parameter has left its hard register, so a
+truncation never appears inside the pinned run at all.
+
+What actually breaks the run is a DELETED raw copy. On func_800B23F8 the
+post-expand chain is `4:(reg 81)<-a0`, `8:(reg 83)<-a1`, `12:(reg 85)<-a2`,
+`16:(reg 87)<-a3`, `20:(reg 88)<-mem(sp+16)`, then the truncations 6, 10, 14,
+18. With `b` and `c` declared WIDER THAN THE STORE THAT CONSUMES THEM (`u16`
+against an `sb`), cse cannot substitute the raw SImode pseudo at a byte store
+of a HImode pseudo, so truncations 10 and 14 survive; combine then folds the
+raw copies into them -- `(set (reg:HI 82) (reg:HI 5 a1))` -- and **insns 8 and
+12 become `NOTE_INSN_DELETED`**. The prefix loop requires
+`GET_CODE (head) == INSN`, so it breaks at the note, pinning only insn 4.
+
+So the rule is sharper than "sub-word": **declare the parameter exactly ONE
+STEP WIDER than the store that consumes it.** Measured on func_800B23F8 for
+the parameter stored with `sb`:
+
+```
+u8  (same width as the store)   34 rows   raw copy survives, stays pinned
+u16 (one step wider)             0 rows   raw copy deleted, run breaks
+u32                             29 rows   no truncation emitted at all
+```
+
+and the two parameters together: `u16 b, u8 c` 5, `u8 b, u16 c` 25,
+`u16 b, u32 c` 11. Signedness is free -- all four s16/u16 combinations are 0.
+A parameter whose use is the SAME width as its declared type keeps its raw copy
+and loses its truncation, which is why `d` (declared `s16`, stored with `sh`)
+stays pinned and comes out before `c` in the listing's order.
+
+**Where to look for it:** a park whose residue is "some `move $sN,$aN` copies
+are later than a body insn and no statement order reaches it", on a function
+with four register parameters, where a parameter's only use is a BYTE or
+HALFWORD store. `widthsweep.py` does not reach this -- it sweeps local
+declarations only -- so the combination has to be tried by hand or the tool
+extended.
+
 **The declaration STYLE is irrelevant -- do not repeat this mistake.** The
 first write-up of this lever credited an OLD-STYLE (K&R) parameter list,
 because the two changes were made in one step. Measured afterwards: prototyped

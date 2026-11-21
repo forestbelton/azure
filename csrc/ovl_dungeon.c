@@ -24006,7 +24006,90 @@ void func_800B22F0(UnkNode *n, UnkVec *m, UnkSlot *r, s16 d)
     func_800BC26C(n, 0, (s32)((u8 *)r + 0x2C), (s32)((u8 *)n + 0x4A));
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B23F8);
+/* The 0x112 spawner: allocate a node, install func_800B274C as its handler
+   and func_800B2A60 as the payload's +0x8C step, return the payload or NULL.
+   81 words, 0 differing.
+
+   THE PARAMETER WIDTHS ARE THE WHOLE FUNCTION.  `b' and `c' are stored with
+   `sb' but must be DECLARED ONE STEP WIDER, as u16.  A sub-word declared type
+   makes assign_parms emit a raw SImode copy plus a separate truncation (and
+   function.c:4093 flushes every truncation after every parameter has left its
+   hard register); when the only use is NARROWER than the declared type, cse
+   cannot fold the truncation away, so it survives, combine folds the raw copy
+   into it, and the raw copy at the parameter's declaration position becomes a
+   NOTE_INSN_DELETED.  sched1's parameter-pinning prefix loop (sched.c:3247)
+   requires GET_CODE (head) == INSN, so it BREAKS AT THAT NOTE and pins only
+   the first parameter -- `b', `c' and `d' are then schedulable and sched1's
+   birthing-insn rule sinks them into the entry block's call setup, which is
+   the listing's interleaved `move $sN,$aN' order.  Measured on this body:
+   `u8 b, u8 c' 34 rows, `u16 b, u8 c' 5, `u8 b, u16 c' 25, `u32 b' 29,
+   `u32 c' 11.  Signedness is free (all four s16/u16 combinations are 0) and
+   the width is exact: same-width keeps the raw copy pinned, and u32/s32 emits
+   no truncation at all and also keeps it pinned.  See
+   docs/matching-levers.md, "A SUB-WORD parameter type is how a parameter copy
+   becomes schedulable".
+
+   DO NOT PUT THIS PROTOTYPE IN csrc/ovl_dungeon_decls.h.  Nothing calls this
+   function from C today, and a narrow prototype in scope rewrites a future
+   caller's `sll'/`sra' into a truncation.  The definition's own parameter list
+   is all the landing needs.
+
+   `w' is a SECOND payload pointer and it is load-bearing: the late stores go
+   through $s3, the register `c' dies in.  Writing them through `p' is 80 words
+   and 31 rows.  `w = p;' and `w = (u8 *)n + 0x20;' are byte-identical.
+
+   `*(s8 *)(w + 0x9C) = -1;' and NOT `w[0x9C] = 0xFF;' -- through a u8 lvalue
+   gcc folds -1 to 0xFF, cse shares it with the neighbouring 0x9A store and the
+   `addiu $v0, $zero, -0x1' disappears: 80 words, 22 rows.
+
+   NO DEVICES.  The park carried two -- an `__asm__("" ::"r"(n));' and a
+   `c = (s32)p;' merge that made the parameter double as the second payload
+   pointer -- and both are unnecessary once the widths are right. */
+/* func_800B274C is defined below this use and its address is taken, so it
+   needs a declaration here; across the parameter list it is not implicit. */
+void func_800B274C(u8 *, UnkVec *, u8 *);
+u8 *func_800B23F8(s16 a, u16 b, u16 c, s16 d, s32 e)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *p;
+    u8 *w;
+    s32 k;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        w = p;
+        n->unk_10 = (u32)func_800B274C;
+        p[0x13] = 0x1E;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = d;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x25) = c;
+        *((u8 *)r + 0x24) = b;
+        k = a & 3;
+        if (k == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x6000;
+            *(u32 *)(p + 0x1C) |= 0x6000;
+        }
+        else if (k >= 2)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        func_800B22F0(n, m, r, a);
+        w[0x9A] = 0xFF;
+        *(s8 *)(w + 0x9C) = -1;
+        *(u32 *)(w + 0x8C) = (u32)func_800B2A60;
+        *(s32 *)((u8 *)r + 0x8) = e;
+    }
+    return p;
+}
 
 /* The +0x8C handler's wake-up gate: if the record is flagged busy or
    queued, and the actor is not in state 0x13/0x14, hand it to one of two
