@@ -6,15 +6,16 @@ in your OWN PRIVATE COPY of the unit.
 
     cd /home/case/projects/azure
     mkdir -p /tmp/claude-1000/agent-@ID@
-    # THE BLOCK IS FOUR TRANSLATION UNITS NOW -- resolve yours, do not assume:
+    # THE BLOCK IS SIX TRANSLATION UNITS NOW -- resolve yours, do not assume:
     UNIT=$(python3 -c 'import sys; sys.path.insert(0, "tools/decomp");
                        import parkresidue as pr; print(pr.unit_of("func_XXXXXXXX")[0])')
     cp "$UNIT" /tmp/claude-1000/agent-@ID@/$(basename "$UNIT")
 
 **csrc/ovl_dungeon.c IS NO LONGER THE ONLY UNIT, AND THE WRONG ONE FAILS
-QUIETLY.** On 2026-11-20 the block was CARVED into four translation units --
-`ovl_dungeon`, `ovl_dungeon_800C2824`, `ovl_dungeon_800CABA8` and
-`ovl_dungeon_800D50FC` -- because four of its jump tables sit at a 4-mod-8
+QUIETLY.** On 2026-11-20 and 2026-11-21 the block was CARVED into SIX
+translation units -- `ovl_dungeon`, `ovl_dungeon_800B45E0`,
+`ovl_dungeon_800B6AC4`, `ovl_dungeon_800C2824`, `ovl_dungeon_800CABA8` and
+`ovl_dungeon_800D50FC` -- because several of its jump tables sit at a 4-mod-8
 rodata offset and `cc1psx` writes `.align 3` before every table it compiles,
 so landing one of their functions inside a single unit padded the table and
 the container came out eight bytes long. splat/dungeon.bin.yaml carries the
@@ -23,7 +24,7 @@ offsets and the reasoning.
 Three things follow, and every one of them is a silent failure if you get it
 wrong:
 
-* **Your function lives in exactly one of the four.** `pr.unit_of(FUNC)`
+* **Your function lives in exactly one of the six.** `pr.unit_of(FUNC)`
   above returns its path and name. `parkresidue.py`, `parksplice.py`,
   `onefunc.py` and the beam driver all resolve it themselves; a hand-written
   `csrc/ovl_dungeon.c` does not.
@@ -32,12 +33,12 @@ wrong:
   `asm/nonmatchings/ovl_dungeon/FUNC.s`. Likewise the `INCLUDE_ASM` path in
   the stub you are replacing.
 * **Keep your copy's BASENAME equal to the unit's.** `ovlverify.py` picks the
-  container ELF from the basename and knows all four names; anything else
+  container ELF from the basename and knows all six names; anything else
   falls through to `build/town.bin.elf` and prints plausible nonsense rather
   than failing.
 
 The shared declaration block lives in `csrc/ovl_dungeon_decls.h`, included by
-all four. A new extern or prototype that more than one unit needs goes THERE;
+all six. A new extern or prototype that more than one unit needs goes THERE;
 one only your unit needs goes in your unit's own prototype block at the top.
 **And expect cross-unit prototypes:** a callee defined ABOVE its caller used
 to be a declared function for free, and across a unit boundary it becomes an
@@ -495,6 +496,91 @@ reporting it**, but do the search in the small file.
 
 Do this BEFORE sweeping spellings. Nearly every result on this unit came from
 reading a dump, and nearly every wasted budget came from guessing instead.
+
+## RUN THE FOUR SWEEPS FIRST -- THEY ARE MINUTES AND THEY ARE WHERE THE ROWS CAME FROM
+
+All four splice the park into its own unit, measure that as the baseline,
+build an `onefunc.py` standalone when the unit is over 8000 lines (after
+confirming it reproduces the unit's residue), sweep there at 0.09 s a
+candidate, keep the best single change and repeat. All four take `--body PATH`
+to sweep a candidate that is not the park:
+
+    python3 tools/decomp/widthsweep.py FUNC    # every declared width, every local
+    python3 tools/decomp/refsweep.py   FUNC    # `v++; v--;` per name per position
+    python3 tools/decomp/devsweep.py   FUNC    # do-while(0) and duplicated-arm if
+    python3 tools/decomp/stmtsweep.py  FUNC    # each simple assignment moved in its block
+
+On 2026-11-21 those four moved seventeen parks and landed one, against the
+permuter's four finds, and they cost minutes where a permuter run costs 45.
+
+**A SWEEP'S NEGATIVE IS SCOPED TO THE BODY IT WAS SWEPT ON.** Your park's
+"measured and rejected" list is only valid for the body it was measured on,
+and almost every park has changed since. Six parks in one day had a row or
+more hiding behind a stale negative. Re-run all four after landing ANY change,
+including one of your own.
+
+**AND THEY COMPOSE IN ONE ORDER AND NOT THE OTHER.** func_800B8FC8 went 12 ->
+7 on devsweep's do-while, and refsweep re-run on THAT body found a cancelled
+pair inside the same wrapper, 7 -> 5. On the park's own body the pair alone was
+worth 2, at a different statement. Neither sweep finds what it wants without
+the other's result in hand, so cycle them until all four come back empty.
+
+**THE TWO DEVICES ARE NOT THE SAME LEVER.** `do { } while (0);` weights every
+reference INSIDE it by loop_depth (flow.c:2128); a cancelled `v++; v--;` adds
+references to ONE NAMED LOCAL at a point of your choosing and compiles to
+nothing (combine folds the two addiu). On func_800A94A0 the pair after a call
+is worth 18 rows and the do-while around that same call is SEVEN WORSE than no
+device. And the duplicated arm's free reference lands on the CONDITION's
+variable, not on the wrapped statement -- which is why `if (cc)` around
+`cc = c;` beats `if (c)`, `if (q)`, `if (a)` and `if (n)` there by a row.
+
+**A CANCELLED PAIR ALSO BUYS A SECOND SET, AND THAT IS WHAT LANDS FUNCTIONS.**
+update_equiv_regs (local-alloc.c:1094) DOUBLES a pseudo's reg_live_length when
+it carries a REG_EQUIV, gated at :1043 on `reg_n_sets[regno] != 1`. A
+parameter or local set exactly once therefore prices at half its real live
+length, loses its callee-saved register and takes three or four others with it.
+func_8009A3D0 landed on exactly that: its park had priced every way of giving
+`f` a second set with a real statement, each costing words, and `f++; f--;`
+buys it for no instructions -- so the tail could be the read-modify-write the
+target plainly has. 92/92 words, 0 differing.
+
+**SWEEP PARAMETERS AND INNER-BLOCK DECLARATIONS.** refsweep's first version
+read only the top declaration block and reported a clean negative on
+func_8009A3D0 because `f`, the one name its whole residue was about, is a
+parameter. The current version does both; if you hand-roll a sweep, do the
+same.
+
+## IF YOU RUN THE PERMUTER, THREE GATES BEFORE YOU BELIEVE A FIND
+
+    python3 tools/decomp/permimport.py FUNC      # snapshots the park NOW
+    python3 tools/decomp/permrun.py FUNC --minutes 40 --jobs 5
+    python3 tools/decomp/measure_finds.py FUNC 6
+
+1. **MEASURE IT.** `best=NNN` in the permuter's log is its own object diff, not
+   a row count, and the two disagree most where it matters. Below ~10 rows they
+   point in opposite directions: func_8009A3D0 had six finds that scored better
+   than a 2-row park and measured 10, 10, 12, 13, 13 and 14.
+2. **READ WHAT IT MEANS.** Five finds were rejected on 2026-11-21 for being
+   wrong rather than for scoring badly, and the permuter cannot see any of it
+   because its object diff does not care what the program computes: a local
+   read uninitialised because its assignment sits after a `return;`
+   (func_800C2824); a conditional volatile read made unconditional
+   (func_800AD6FC); `r[0x2C] >>= 1;` and then `r[0x2D] >>= 1;` moved ahead of
+   the store that initialises that word, in two INDEPENDENT runs
+   (func_8009E798); and a halfword store rewritten as store / read back / store
+   again, twice, where the target's listing has one `sh` and no `lhu`
+   (func_80089588, func_800B51C8).
+3. **SPLIT IT.** Measure each individual change alone. Two of four finds in one
+   batch carried a second change worth exactly nothing, and on func_800B51C8
+   the SAFE HALF ALONE measured 255 rows against the whole find's 260 -- so
+   splitting is not only a correctness gate, sometimes it is the better score.
+
+**DO NOT RUN A SWEEP AND A PERMUTER ON THE SAME PARK AT ONCE.** `permimport.py`
+snapshots the park at import time and nothing re-reads it. Three of four runs
+in one batch produced nothing usable because devsweep improved those same parks
+while their permuters ran on the older bodies -- one went word-exact under its
+own permuter's feet, so every find came back word-short. Sweep, apply,
+re-import, then permute.
 
 Two tools that matter here specifically:
 
