@@ -699,6 +699,10 @@ extern u8 D_800E0EE1[];
 extern u8 D_800E0F07[];
 void func_800997FC(u8 *);
 s32 func_800A2424(u8 *, s16);
+/* Defined below func_8009DAD8, which calls it; without this prototype the
+   call rides an implicit `int f()' and loses the `sll 16'/`sra 16' pair in
+   front of its `slti' -- two words. */
+s16 func_8009FD40(u8 *, u8 *);
 s32 func_800647A0(s32);
 extern u8 D_800E0953[];
 extern u8 D_800E095F[];
@@ -1024,6 +1028,11 @@ extern s16 D_8008146E;
 extern u8 D_800DD0E8[];
 /* func_800B1E80's 0x7340 strip; indexed by a halfword, four bytes a row. */
 extern u32 D_800DF068[];
+/* func_800A08A0's spawn table and its counter: the table is a POINTER
+   global read into a local, the counter a halfword. */
+extern s16 D_8008347C;
+extern u8 *D_80083478;
+extern u32 D_800835E4[];
 void func_800A08A0(s32);
 /* Five arguments, the fifth on the stack at 0x10($sp). */
 s32 func_800A19E4(s32, u8 *, s16, s16, u8 *);
@@ -14418,7 +14427,264 @@ void func_8009DA70(s32 x, s32 y, s32 *src, s32 tag)
     AddPrim(tag, q);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009DAD8);
+/* The dungeon minimap/radar draw.  269 words, 0 differing.
+
+   Walks the actor ring plus three static tables and calls func_8009DA70 once
+   per blip with a four-byte colour in `col'.
+
+   FIVE THINGS GOT IT HERE, and the last one is a scaffold.
+
+   1. THE `s16 func_8009FD40(u8 *, u8 *);' PROTOTYPE, added to the unit's
+      declaration block above.  func_8009FD40 is defined BELOW this function,
+      so without it the call rides an implicit `int f()' and loses the
+      `sll 16' / `sra 16' pair in front of the `slti'.  Exactly two words
+      (265 -> 267).
+
+   2. `mode = 0;' IMMEDIATELY ABOVE `k = 0;' -- a DEAD earlier set, and it
+      costs no word because flow deletes it.  +1 word, -9 rows.
+      cse.c's make_regs_eqv promotes the NEW reg of `(set mode k)' to
+      qty_first_reg only when
+
+          (uid_cuid[regno_last_uid[new]]  > cse_basic_block_end
+        || uid_cuid[regno_first_uid[new]] < cse_basic_block_start)
+        && uid_cuid[regno_last_uid[new]]  > uid_cuid[regno_last_uid[firstr]]
+
+      With `mode' first touched inside the same cse2 block as the copy, both
+      clauses of the first test fail, `k' stays canonical, every use of
+      `mode' is rewritten to `k', the copy goes dead and flow deletes it --
+      traced: `(set (reg/v:SI 91) (reg/v:SI 90))' present in .cse2 and .bp,
+      gone in .flow.  A dead `mode = 0;' in an EARLIER cse2 block drags
+      regno_first_uid[mode] below cse_basic_block_start, the second clause
+      fires, `mode' becomes canonical and the copy survives.  It brings in
+      BOTH 0x8009DCE0 (reorg's duplicate of the copy into the delay slot)
+      and 0x8009DCE8.  Four placements are byte-identical: above `k = 0;',
+      first statement in the loop body, before the `for', and above
+      `q = *(u8 **)(p - 0x14);'.
+
+   3. THE COMMA EXPRESSION in the 0x26 test:
+
+          if (*(s8 *)(q + 0x26) < 0
+              || (m = D_80082E80, *(s8 *)(q + 0x26) != *(s8 *)(m + 0x26)))
+
+      +1 word, -16 rows.  The target keeps TWO pseudos for &D_80082E80 --
+      $s2 before the loop, which dies so $s2 is reused for `q', and $fp
+      across the loop body for the single `lb $v0, 0x26($fp)' -- and the
+      preheader copy `addu $fp, $s2, $zero' is loop.c hoisting the in-loop
+      materialisation, which cse2 then collapses from lui+addiu to one copy.
+      Three conditions have to hold at once: loop.c scan_loop's gate
+      (loop.c:794) needs the set to be `m''s FIRST uid with its last use in
+      the SAME basic block, since `m' is a user variable so the
+      `! REG_USERVAR_P' arm never applies; move_movables' desirability
+      (loop.c:1727) needs a lifetime bigger than 1, which an address
+      materialised at its point of use does not have (`move-insn savings 1
+      not desirable'); and cse1 must not substitute the hoisted value into
+      func_8009FD40's second argument -- it will, because -fcse-skip-blocks
+      makes cse_end_of_basic_block follow the `||''s `bltz' over the skipped
+      block, and invalidate_skipped_block only kills regs SET in the SKIPPED
+      block.  A set INSIDE that skipped block -- which is exactly the `||''s
+      right operand -- satisfies all three.
+
+   4. THE RING WALK IS A `for' WITH THE ADVANCE IN THE THIRD CLAUSE, `g' is a
+      local of its own assigned FIRST, `head = D_800E3D7C;' is read into a
+      local BEFORE the five flag gates, and `col[1] = 0;' sits AFTER
+      `p = *(u8 **)(head + 0x5C) + 0x20;'.  All four measured; `while' and
+      `for(;;)' each cost 2 rows in the `continue' branch targets, swapping
+      `g' and `head' costs 9, and moving `head' later costs 18-21.
+
+   5. THE LAST NINE ROWS WERE AN ALLOCATION PRIORITY AND THE CURE IS A
+      DUPLICATED-ARM `if (p)' AROUND THE SECOND `col' RESET.  Found by
+      decomp-permuter in one minute after thirty-odd hand spellings had left
+      the park at nine rows; the search's own answer also carried a
+      `do { } while (0);' in the third flag gate, which re-measures as
+      unnecessary (that one alone is still 9 rows).
+
+      The residue it removes was `head' in $s6 where the target has $s5 and
+      the hoisted D_800E296C base in $s5 where the target has $s6 -- nine
+      rows, every opcode, immediate and displacement already identical.
+      global.c's allocno_compare sorts by
+      floor_log2(n_refs) * n_refs / live_length, and off this body's .lreg:
+
+          head                 refs 5, live_length 112, pri 893
+          D_800E296C base copy refs 5, live_length 108, pri 926
+          the constant 2       refs 5, live_length 102, pri 980
+          &D_80082E80 high     refs 3, live_length  32, pri 937
+
+      which allocates 195, 156, 165, 87 -> $s4, $s4, $s5, $s6 where the
+      target needs 195, 156, 87, 165.  Both counts are depth-weighted
+      (flow.c:2128), and the base copy's live range is a strict SUBSET of
+      head's, so with equal ref counts it always wins -- which is why no
+      statement order could move it.  `if (p)' with identical arms does.
+
+      THIS IS A SCAFFOLD, not a reconstruction of the original source: the
+      arms are the same two stores and jump2 merges them.  `if (q)' in its
+      place measures identically at 0.  A plausible-looking natural shape --
+      the call duplicated into both arms of `if (mode == 2)' -- is 267 words
+      / 66 rows, and a `goto skip' past the two stores is 269 / 9.
+
+      DO NOT "simplify" the duplicated arms away.
+
+   Established and not to be re-derived: the second parameter is UNUSED, $a1
+   is never read, but func_8009DF0C (just below) calls `func_8009DAD8(r, p)'
+   with two arguments, so the definition must take two. */
+void func_8009DAD8(u8 *ot, u8 *unused)
+{
+    u8 col[4];
+    u8 *g;
+    u8 *n;
+    u8 *m;
+    u8 *p;
+    u8 *q;
+    u8 *head;
+    s32 c;
+    s32 i;
+    s32 t;
+    s32 k;
+    s32 mode;
+
+    g = (u8 *)&D_80083160;
+    head = D_800E3D7C;
+    if ((D_800E296C & 0x1000) != 0)
+    {
+        D_800E296C &= ~0x1000;
+        func_8009F13C();
+    }
+    if ((D_800E296C & 0x400) != 0)
+    {
+        D_800E296C &= ~0x400;
+        func_8009F0B4();
+    }
+    if ((D_800E296C & 0x200) != 0)
+    {
+        D_800E296C &= ~0x200;
+        func_8009F020();
+    }
+    if ((D_800E296C & 0x800) != 0)
+    {
+        D_800E296C &= ~0x800;
+        func_8009EF78();
+    }
+    if ((D_800E296C & 0x100) != 0)
+    {
+        D_800E296C &= ~0x100;
+        func_8009EF04();
+    }
+    c = (func_800644B8(*(u16 *)(g + 0x4) << 8) >> 6) + 0x80;
+    if (c >= 0x100)
+    {
+        c = 0xFF;
+    }
+    n = D_80082E80;
+    col[3] = 0x68;
+    col[2] = 0;
+    col[1] = c;
+    col[0] = c;
+    func_8009DA70(n[0x24], n[0x25], (s32 *)col, (s32)ot);
+    p = *(u8 **)(head + 0x5C) + 0x20;
+    col[1] = 0;
+    for (; p != head; p = *(u8 **)(p + 0x5C) + 0x20)
+    {
+        if (*(s8 *)(p + 0x13) > 0)
+        {
+            q = *(u8 **)(p - 0x14);
+            if ((D_800E296C & 4) == 0)
+            {
+                if (*(s8 *)(q + 0x26) < 0 || (m = D_80082E80, *(s8 *)(q + 0x26) != *(s8 *)(m + 0x26)))
+                {
+                    if (func_8009FD40(q, D_80082E80) >= 4)
+                    {
+                        continue;
+                    }
+                }
+            }
+            mode = 0;
+            k = 0;
+            t = p[0x13];
+            if (t == 0x1E)
+            {
+                if (p[0xAD] != 0)
+                {
+                    k = 2;
+                }
+                else
+                {
+                    k = 1;
+                }
+            }
+            else if (t != 0x23 || *(s16 *)(p + 0xA6) == 0 || (D_800E296C & 4) != 0)
+            {
+                k = 1;
+            }
+            mode = k;
+            if (mode == 0)
+            {
+                continue;
+            }
+            if (mode == 2)
+            {
+                col[2] = c;
+                col[0] = 0;
+            }
+            func_8009DA70(q[0x24], q[0x25], (s32 *)col, (s32)ot);
+            if (mode == 2)
+            {
+                if (p)
+                {
+                    col[2] = 0;
+                    col[0] = c;
+                }
+                else
+                {
+                    col[2] = 0;
+                    col[0] = c;
+                }
+            }
+        }
+    }
+    col[2] = c;
+    col[0] = 0;
+    for (i = 0; i < 0x40; i++)
+    {
+        if (D_800E3548_s[i].unk_01 != 0)
+        {
+            if ((D_800E296C & 2) != 0 ||
+                func_8009EE4C(D_800E36C8[i].unk_00, D_800E36C8[i].unk_01) != 0)
+            {
+                func_8009DA70(D_800E36C8[i].unk_00, D_800E36C8[i].unk_01, (s32 *)col, (s32)ot);
+            }
+        }
+    }
+    col[2] = 0;
+    col[1] = c;
+    for (i = 0; i < 4; i++)
+    {
+        if (D_800E3CD8[i].unk_00 != 2)
+        {
+            break;
+        }
+        if ((D_800E296C & 1) != 0 ||
+            func_8009EE4C(D_800E3CD8[i].unk_02, D_800E3CD8[i].unk_04) != 0)
+        {
+            func_8009DA70((u16)D_800E3CD8[i].unk_02, (u16)D_800E3CD8[i].unk_04, (s32 *)col,
+                          (s32)ot);
+        }
+    }
+    col[1] = 0x20;
+    col[2] = c;
+    col[0] = c;
+    for (i = 0; i < 0x20; i++)
+    {
+        if (D_800E3648_s[i].unk_01 != 0 && *(u8 *)&D_800E3648_s[i] != 0 &&
+            (D_800E3648_s[i].unk_03 & 0x40) == 0)
+        {
+            if ((D_800E296C & 8) != 0 ||
+                ((D_800E3648_s[i].unk_03 & 0x80) == 0 &&
+                 func_8009EE4C(D_800E39C8[i].unk_06, D_800E39C8[i].unk_07) != 0))
+            {
+                func_8009DA70(D_800E39C8[i].unk_06, D_800E39C8[i].unk_07, (s32 *)col, (s32)ot);
+            }
+        }
+    }
+}
 
 /* Two primitives off D_80083160.unk_00's +0x8D0 cursor, hung on the +0x8B0
    OT row either side of func_8009DAD8's own output. The cursor is read
@@ -15771,7 +16037,223 @@ s32 func_800A0818(s16 a, s16 b, s16 c, s16 d, u16 *f)
     return r & 0xE00;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A08A0);
+/* Up to 16 attempts to place a spawn.  189 words, 0 differing.
+
+   Each attempt asks func_800A4E2C for a tile and rejects it if func_8009FB34
+   says no; when the argument is 0 it also rejects any tile within a
+   Chebyshev-ish 0x20 of D_80082E80+0x24/+0x25 (for a nonzero argument the
+   distance stays at its initial 0x100 and the test always passes).  It then
+   picks a row of the D_80083478 table -- the argument's own row for n >= 2, a
+   random one for n < 2 -- publishes its second byte in D_800E2968, loads the
+   resource with func_800A1618, and builds the entity by CALLING
+   func_800A0B94's RESULT, the same idiom the landed func_80095A10 uses.
+   n >= 2 then re-centres the camera; n < 2 paces the spawn against
+   D_800835E4 with func_800A1D4C.
+
+   ====================== THE LAST SIX ROWS WERE ONE FOUR-INSN WINDOW, AND THE
+   ====================== CAUSE IS `birthing_insn_p`, NOT A SPELLING
+
+   The park sat at 189/189 words with six rows, all in 800A0990..800A09B0:
+   the target interleaves the table load with the sign extension of `off`
+
+       lui  $v0, %hi(D_80083478)
+       sll  $v1, $v1, 16        <- the sign extension's first half
+       lw   $v0, %lo(D_80083478)($v0)
+       sra  $v1, $v1, 16
+       addu $v1, $v1, $v0
+
+   and `t = D_80083478; t += (s16)off;` always emitted the `lw` before the
+   `sll`.  Read out of the .sched dump rather than guessed: in that block
+   every insn has INSN_PRIORITY 1 except the `addu` at 2, and the ready list
+   at the deciding step prints `171 (7f000001) 177 (1)` -- the sign
+   extension's `sll` carries `max_priority` and the `lw` does not.  That is
+   `adjust_priority` (sched.c:2551): REG_DEAD notes are gone by then so
+   n_deaths is always 0, and case 0 sets INSN_PRIORITY to max_priority when
+   `birthing_insn_p` holds -- dest is a REG, live before the insn, and
+   **reg_n_sets == 1**.  The `sll`'s destination is a fresh temp, so it is
+   boosted; `t` is written TWICE (`t = ...` then `t += ...`), so the `lw` is
+   not.  sched1 runs backward, and a boosted insn is taken earlier in the
+   backward pass, i.e. placed LATER -- hence `lw` then `sll`.
+
+   THREE EDITS CLOSE IT, and all three are needed:
+
+   1. **A SEPARATE BASE LOCAL** `tz`, so the `lw`'s destination has ONE set
+      and is boosted too.  Both then carry max_priority, the class test ties
+      (the `sll` feeds the `sra` at cost 1; the `lw` has no link to it), and
+      rank_for_schedule falls through to INSN_LUID -- which prefers the
+      HIGHER LUID, so the `lw` must come SECOND in the source.  Hence `tz`
+      is assigned BEFORE the use of `off`, not after.
+   2. **`tz` IS PINNED TO `$v0`** -- `register u8 *tz __asm__("$2");`.
+      Without it `off` lands in $v0, reorg may not steal the else arm's
+      `move` into a branch delay slot that reads $v0, and the arm costs a
+      `nop`, a `j` and a duplicated `sll`: 191 words / 14-18 rows.  That is
+      the same tension park lever 7 recorded for the one-expression form.
+   3. **THE OFFSET IS THE FIRST ADDEND, AND THE ADD IS AN INTEGER ADD:**
+      `t = (u8 *)((s16)off + (s32)tz);`.  This is the whole last five rows.
+      With `t = tz + (s16)off;` block_alloc gives the destination a copy
+      suggestion for the FIRST operand's register, so `t` takes $v0 (the
+      dying pinned base) and the %hi base of the D_800E2968 store takes $v1;
+      the target has them the other way round.  Writing the offset first --
+      and casting both sides so it is an integer add rather than pointer
+      arithmetic, which gcc canonicalises back to `tz + off` -- suggests
+      $v1, the register `off` is dying in, and all five rows go.
+      The pointer-arithmetic spelling `t = (s16)off + tz;` measures 189/5.
+
+   Also measured on the pinned base: keeping `tz` alive past the add with
+   `__asm__("" ::"r"(tz))` 189/7 (it moves the `sll` back); a free `t`
+   reference in the `h == 0` arm to push `t` out of local-alloc 191/13, in
+   the `e == 0` arm 192/42; `t` pinned to $v1 as well, no change (the
+   suggestion already decides it).  And without the pinned base: the sign
+   extension hoisted into its own local `so`, 189/6 byte-identical to the
+   unsplit form; `so` or the sign extension routed through the existing `e`
+   189/7 or `v` 191/44 (both are live across calls, so the shared allocno
+   goes callee-saved); the extension spelled `(u16)off << 16` then `>> 16`
+   191/18 (the cast is its own sll/sra pair).
+
+   ========================================= THE EARLIER LEVERS, ALL STILL IN
+
+   5. `c` IS A `u8` LOCAL THE STORE GOES THROUGH, NOT A SECOND `t[1]`:
+      `cb = t[1]; D_800E2968 = cb; c = cb;` with `u8 cb` keeps the loaded
+      byte in a QImode pseudo, so the store is `sb $a0` and the widening to
+      `c` is zero_extendqisi2 on that register -- the target's
+      `andi $s3, $a0, 0xFF`.  `D_800E2968 = t[1]; c = (u8)t[1];` reloads
+      instead: cse does not forward the second read across the store to the
+      global.  2 rows.
+   6. `off` IS `s16`, WHICH IS WHAT MAKES loop.c HOIST THE WHOLE `(n - 2)*2`.
+      With `s32 off` the shift writes `off` directly, `off` has two sets, and
+      only `addiu $v0, $s2, -0x2` hoists.  With `s16 off` the assignment
+      expands as `temp = (n-2)*2; off = (HI)temp`, `temp` is a non-user
+      pseudo with ONE set, and force_movables (loop.c:1320) hands the
+      movable that is the LAST USE of `(s32)n` the free move at loop.c:1731
+      -- it is NOT the desirability test, which prints `not desirable` here.
+   7. THE TABLE POINTER IS LOADED BEFORE THE INDEX IS ADDED -- two
+      statements, never `t = D_80083478 + (s16)off;` (191 words / 14 rows).
+   8. THE PACING BLOCK INDEXES THE ARRAY DIRECTLY AND STARTS THE POINTER AT
+      [1], AND THE DO-WHILE TEST IS WRITTEN WITH THE TABLE ON THE LEFT.
+      Fifteen rows, and two separate facts: reading the first element off the
+      ARRAY and giving the variable the +1 address makes the base a
+      block-local temp so `g` loses the local-alloc tie and takes $a0 while
+      `tb` gets $v1; and `while (tp[q[0x11]] <= *(u32 *)(q + 0x18))` puts the
+      TABLE load first in the RTL, where the `q + 0x18` reload then writes
+      $v0 and sched2 cannot float it into the `lbu`'s load-delay slot.
+   1. THE DISTANCE IS `abs()`, NOT `if (d < 0) d = -d;`.  `abssi2` emits its
+      OWN delay slot, so it expands to `bgez / nop / negu` and the two
+      `nop`s at 800A0958 and 800A0968 are part of the pattern.
+   2. THE PACING LOOP NEEDS ITS OWN POINTER LOCAL FOR THE INNER TEST, and
+      `tp = tb;` must stay INSIDE the guarded arm: moved above the `if` it is
+      in the same basic block as its source, optimize_reg_copy_1
+      (local-alloc.c:704) rewrites the guard's `tb` to `tp` and the copy
+      evaporates.  187 words. */
+void func_800A08A0(s32 a)
+{
+    u8 x;
+    u8 y;
+    u8 *t;
+    u8 *q;
+    u8 *w;
+    u32 *tb;
+    u32 *tp;
+    u32 g;
+    s32 e;
+    s32 v;
+    s32 d1;
+    s32 d2;
+    s16 dist;
+    s16 n;
+    s16 k;
+    s16 off;
+    s16 h;
+    s16 c;
+    u8 cb;
+    register u8 *tz __asm__("$2");
+
+    dist = 0x100;
+    if ((D_800E296C & 0x10000000) != 0)
+    {
+        return;
+    }
+    if (D_8008347C >= 0x20)
+    {
+        return;
+    }
+    n = a;
+    for (k = 0; k < 0x10; k++)
+    {
+        func_800A4E2C(&x, &y);
+        if (func_8009FB34(x, y) < 0)
+        {
+            continue;
+        }
+        if (n == 0)
+        {
+            dist = abs(D_80082E80[0x24] - x) + abs(D_80082E80[0x25] - y);
+        }
+        if (dist < 0x21)
+        {
+            continue;
+        }
+        if (n < 2)
+        {
+            off = (func_800A6D30() & 0xF) * 2;
+        }
+        else
+        {
+            off = (n - 2) * 2;
+        }
+        tz = D_80083478;
+        t = (u8 *)((s16)off + (s32)tz);
+        cb = t[1];
+        D_800E2968 = cb;
+        c = cb;
+        h = t[0];
+        if (h == 0)
+        {
+            return;
+        }
+        e = (s32)func_800A1618(h, 1);
+        if (e == 0)
+        {
+            continue;
+        }
+        v = func_800BCB04((x << 6) | 0x20, (y << 6) | 0x20, -0x400);
+        q = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94(h, (u8 *)e, 1))(0, x, y, (s16)v);
+        if (q == NULL)
+        {
+            return;
+        }
+        func_800A152C(h, 1);
+        func_80042640((Unk42710 *)q, h);
+        q[0x43] = func_800A6D30();
+        q[0x12] = 0;
+        if (n >= 2)
+        {
+            w = *(u8 **)(q - 0x14);
+            func_8009A3D0(w[0x24], w[0x25], 0x3000);
+            func_800A32A4(q);
+            func_8009A028(q);
+            *(u16 *)(q - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+            return;
+        }
+        g = D_800835E4[c];
+        *(u32 *)(q + 0x18) = g;
+        tb = &D_800835E4[1];
+        if (g >= tb[q[0x11]])
+        {
+            tp = tb;
+            do
+            {
+                func_800A1D4C(q, 0);
+            } while (tp[q[0x11]] <= *(u32 *)(q + 0x18));
+        }
+        if (q[0x49] != 0)
+        {
+            return;
+        }
+        *(s32 *)(q + 0x48) = func_800A9230(q);
+        return;
+    }
+}
 
 /* Upload one of three HUD image buffers for kind `a` and report the word the
    buffer starts with: slot 0x38 and 0x31 have fixed buffers and fixed
