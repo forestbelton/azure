@@ -1,4 +1,16 @@
 /* PARK -- func_800C5FA8, agent j59, 2026-11-16.
+
+   ====================================== 2026-11-20: 239 rows at 701/706 words -> 175 at 706/706
+
+   The body below carries one device: a duplicated-arm `if (u)` around `x++;` -- which is also the missing FIVE words.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same free-reference lever from two directions -- flow.c:2128 weights
+   each reference by `loop_depth`, jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  Found by sweeping every
+   statement position times both devices over every local on a
+   `tools/decomp/onefunc.py` file, where a candidate is 0.09 s.  Nothing in
+   this park's own diagnosis points at the winning statement.
    TARGET 706 WORDS, CANDIDATE 706 WORDS, 49 ALIGNED DIFFERENCES.
    (ovlverify's masked word count is much larger and misleading here; the
    honest figure is aligndiff's 49.)
@@ -384,7 +396,14 @@ void func_800C5FA8(u8 *p)
                     *(u16 *)((x + (y << *(s16 *)(h + 0x14))) * 6 + m + 0x4) &= 0xFF73;
                     *(u16 *)((x + (y << *(s16 *)(h + 0x14))) * 6 + m + 0x4) |= 0x8000;
                 }
-                x++;
+                if (u)
+                {
+                    x++;
+                }
+                else
+                {
+                    x++;
+                }
                 if (x >= x1)
                 {
                     break;
