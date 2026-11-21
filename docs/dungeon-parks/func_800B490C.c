@@ -14,10 +14,13 @@
    differences.  FIRST DRAFT, 2026-11-20.
 
    The last of the seven 4-mod-8 jump-table functions to get a body.  It owns
-   `jtbl_800892E4' at rodata offset 0xb84, which is still in the HEAD unit --
-   so unlike func_800C2824/func_800C4F20 this one needs ANOTHER CARVE before
-   it can land, a split at rodata 0xb6c taking func_800B45E0 and func_800B490C
-   into their own unit.  See splat/dungeon.bin.yaml and j96.
+   `jtbl_800892E4' at rodata offset 0xb84.
+
+   THE CARVE THIS NOTE USED TO ASK FOR HAS HAPPENED.  splat/dungeon.bin.yaml
+   splits .rodata at 0xa3b6c and .text at 0xcee80 into ovl_dungeon_800B45E0,
+   which holds this function and its sibling, so the `.align 3' cc1psx emits
+   before the table is a no-op and NOTHING BLOCKS THIS LANDING but the rows.
+   The only park still waiting on a carve is func_8009F644 (rodata 0x61c).
 
    IT IS func_800B45E0's SIBLING and most of the body transferred directly,
    but NOT all of it -- the three differences are worth stating because the
