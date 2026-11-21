@@ -22,6 +22,49 @@ So: **a candidate goes here the moment it is the best one, not at the end of a
 run.** One file per function means concurrent agents never collide on a path.
 Agents write the file; the dispatcher stages and commits it.
 
+## Measure on a ONE-FUNCTION FILE, not on the unit
+
+    python3 tools/decomp/parksplice.py FUNC /tmp/<yours>/ovl_dungeon.c
+    python3 tools/decomp/onefunc.py FUNC --src /tmp/<yours>/ovl_dungeon.c \
+            --out /tmp/<yours>/one
+    python3 tools/decomp/aligndiff.py /tmp/<yours>/one/ovl_dungeon.c FUNC
+
+**0.09 s a candidate instead of ~25 s.** That is the difference between
+sweeping a park's whole source-order space and guessing at it: on 2026-11-20
+it took `func_8008E700` through all 540 legal orders of its basin in a minute,
+and `func_800B8FC8` through 320 insertion points for one device. It also makes
+`tools/decomp/dump.sh` usable, so the `.lreg` refs/length numbers and the
+`.sched` ready-list trace that most park arithmetic rests on are one command
+away instead of impractical.
+
+`onefunc.py` prints the one way the file can disagree with the unit -- a
+callee DEFINED EARLIER in the unit with no prototype, which the real compile
+sees declared and this file sees as an implicit `int f()`. Confirm the park's
+stated residue on the standalone before sweeping, and re-measure the final
+body against the real unit (and with `ovlverify` THERE, not on the standalone,
+where its masked count includes the unresolved `jal` targets of everything
+not in the file).
+
+## PREFER A PLAIN-C DEVICE TO AN `asm` ONE
+
+A residue that is an allocation or reference-count problem has two kinds of
+cure, and they are not equally welcome in a landed body. `flow.c:2128` weights
+each reference by `loop_depth`, so
+
+    do
+    {
+        lvl = p[0x11];
+    } while (0);
+
+buys one more reference for no instruction -- and so does
+`__asm__("" ::"r"(lvl))`, which is a scaffold. **Sweep the do-while first**,
+along with a duplicated-arm `if (v) { s } else { s }` (its references are
+counted by flow and merged by jump2's cross-jumping) and a surviving body
+copy. Reach for the asm only when the plain sweep comes up short -- which
+happens: `func_8009A8C0`'s best do-while is 16 rows against an asm pair's 0 --
+and when it does, say so in the landed comment and give the plain scores you
+rejected, so the next reader can see it was not laziness.
+
 ## Measuring one
 
     cp csrc/ovl_dungeon.c /tmp/<yours>/ovl_dungeon.c
