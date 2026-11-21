@@ -6,7 +6,44 @@ in your OWN PRIVATE COPY of the unit.
 
     cd /home/case/projects/azure
     mkdir -p /tmp/claude-1000/agent-@ID@
-    cp csrc/ovl_dungeon.c /tmp/claude-1000/agent-@ID@/ovl_dungeon.c
+    # THE BLOCK IS FOUR TRANSLATION UNITS NOW -- resolve yours, do not assume:
+    UNIT=$(python3 -c 'import sys; sys.path.insert(0, "tools/decomp");
+                       import parkresidue as pr; print(pr.unit_of("func_XXXXXXXX")[0])')
+    cp "$UNIT" /tmp/claude-1000/agent-@ID@/$(basename "$UNIT")
+
+**csrc/ovl_dungeon.c IS NO LONGER THE ONLY UNIT, AND THE WRONG ONE FAILS
+QUIETLY.** On 2026-11-20 the block was CARVED into four translation units --
+`ovl_dungeon`, `ovl_dungeon_800C2824`, `ovl_dungeon_800CABA8` and
+`ovl_dungeon_800D50FC` -- because four of its jump tables sit at a 4-mod-8
+rodata offset and `cc1psx` writes `.align 3` before every table it compiles,
+so landing one of their functions inside a single unit padded the table and
+the container came out eight bytes long. splat/dungeon.bin.yaml carries the
+offsets and the reasoning.
+
+Three things follow, and every one of them is a silent failure if you get it
+wrong:
+
+* **Your function lives in exactly one of the four.** `pr.unit_of(FUNC)`
+  above returns its path and name. `parkresidue.py`, `parksplice.py`,
+  `onefunc.py` and the beam driver all resolve it themselves; a hand-written
+  `csrc/ovl_dungeon.c` does not.
+* **The listing directory is named after the unit**, so it is
+  `asm/nonmatchings/<unit>/FUNC.s` and NOT always
+  `asm/nonmatchings/ovl_dungeon/FUNC.s`. Likewise the `INCLUDE_ASM` path in
+  the stub you are replacing.
+* **Keep your copy's BASENAME equal to the unit's.** `ovlverify.py` picks the
+  container ELF from the basename and knows all four names; anything else
+  falls through to `build/town.bin.elf` and prints plausible nonsense rather
+  than failing.
+
+The shared declaration block lives in `csrc/ovl_dungeon_decls.h`, included by
+all four. A new extern or prototype that more than one unit needs goes THERE;
+one only your unit needs goes in your unit's own prototype block at the top.
+**And expect cross-unit prototypes:** a callee defined ABOVE its caller used
+to be a declared function for free, and across a unit boundary it becomes an
+implicit `int f()` and changes codegen. The carved units each carry a
+generated block of those, and `onefunc.py` synthesises the same thing for a
+standalone file.
 
 **AND SET `AZURE_SCRATCH`.** `asmlib.compile_asm` derives its intermediate
 `.s`/`.o` path from the source file's BASENAME inside `$AZURE_SCRATCH`
@@ -56,7 +93,7 @@ your declarations may collide at merge time. If you notice the drift
 mid-run, re-copy and re-apply your bodies rather than reasoning about it.
 
 From here on, @SRC@ is `/tmp/claude-1000/agent-@ID@/ovl_dungeon.c`. Every edit you make goes
-there. **NEVER touch csrc/ovl_dungeon.c** -- other agents are editing their own
+there. **NEVER touch any csrc/ovl_dungeon*.c** -- other agents are editing their own
 copies of it concurrently and I merge all of you at the end.
 
 **NEVER run `make`, `make splat`, `make containers` or any build.** `make`
@@ -67,7 +104,7 @@ yourself. The verifier compiles your file itself; you do not need a build.
 
 ## The verifier is the only thing that counts
 
-    python3 tools/decomp/ovlverify.py /tmp/claude-1000/agent-@ID@/ovl_dungeon.c func_XXXXXXXX
+    python3 tools/decomp/ovlverify.py /tmp/claude-1000/agent-@ID@/<your unit>.c func_XXXXXXXX
 
 It prints `target N words, candidate M words, K differing`. **A function is
 landed only at `0 differing` with candidate words == target words.** It takes
@@ -77,9 +114,10 @@ really a relocation and not a constant address).
 
 The ground truth for each function is its listing:
 
-    asm/nonmatchings/ovl_dungeon/func_XXXXXXXX.s
+    asm/nonmatchings/<your unit>/func_XXXXXXXX.s
 
-Read it before writing anything. The header line `nonmatching func_X, 0xNN`
+Read it before writing anything.  The directory is named after the UNIT, not
+after the block -- see the carve note above. The header line `nonmatching func_X, 0xNN`
 gives the byte length; /4 is the word count.
 
 **ON ANYTHING OVER ~200 WORDS, SIZE THE RESIDUE WITH `aligndiff.py`, NOT WITH

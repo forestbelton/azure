@@ -147,10 +147,26 @@ def main():
     # Any mention, not just a call: an address-taken handler like
     # `n->unk_10 = (u32)func_800B14FC;` is an undeclared identifier too, and
     # catching only `func_X(` left the standalone failing to compile at all.
+    #
+    # "The preamble" means the preamble PLUS the headers it includes by quoted
+    # name: after the 2026-11-20 carve the unit's declaration block is
+    # csrc/ovl_dungeon_decls.h, so searching `pre` alone finds almost nothing
+    # and this would synthesise a prototype for a callee the header already
+    # declares. A repeated IDENTICAL declaration is harmless C, but one that
+    # disagrees with the header's -- say the header has `void f();` and the
+    # definition is `s32 f(u8 *)` -- is a hard "conflicting types" failure.
+    declared = pre
+    for _h in re.findall(r'(?m)^\s*#\s*include\s+"([^"]+)"', pre):
+        for _cand in (os.path.join(os.path.dirname(os.path.abspath(src)), _h),
+                      os.path.join(PROJ, "csrc", _h)):
+            if os.path.exists(_cand):
+                with open(_cand) as _fh:
+                    declared += "\n" + _fh.read()
+                break
     called = sorted(set(re.findall(r"\b(func_[0-9A-Fa-f]{8})\b", body)) - {func})
     undeclared_earlier, undeclared_other = [], []
     for c in called:
-        if re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + c + r"\s*\([^;]*;", pre):
+        if re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + c + r"\s*\([^;]*;", declared):
             continue
         d = find_definition(text, c)
         (undeclared_earlier if d and d[0] < start else undeclared_other).append(c)
