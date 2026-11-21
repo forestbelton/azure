@@ -1,5 +1,11 @@
-/* PARK: func_800B45E0 -- 203 of 203 words, 37 aligned differences
-   (33 with the one device noted below).  2026-11-20, FIRST DRAFT.
+/* PARK: func_800B45E0 -- 203 of 203 words, **30 ALIGNED DIFFERENCES**.
+   2026-11-20.  The body below carries the two devices a beam search found:
+   a `do { } while (0);` around case 1's counter decrement (37 -> 33) and a
+   duplicated-arm `if (j)` around `*(u8 **)p = NULL;` (33 -> 30).  Neither is
+   guessable and the ladder went 37 -> 36 -> 34 -> 33 -> 32 -> 30 over 2904
+   measurements; the sweep is every statement position times {do-while,
+   duplicated-arm `if` for each of 10 locals}, two deep, on a
+   `tools/decomp/onefunc.py` file.
 
    One of the seven 4-mod-8 jump-table functions: it owns `jtbl_800892CC` at
    rodata offset 0xB6C.  **It cannot be landed until the unit is carved**
@@ -45,10 +51,11 @@
        load-then-decrement 41; a second local between them; `s16` for the
        temp; `(s32)(m << 16) >> 16` for the extension.
        A `do { } while (0);` around case 1's decrement IS worth 4 rows (33)
-       and keeps 203 words; around case 4's it costs a word (204/31), and
-       around BOTH it costs a word (204/27 for the store, 204/23 for the
-       extension).  So the barrier fixes the order and the problem is paying
-       for it inside the word count.
+       and keeps 203 words -- it is in the body below.  Around case 4's it
+       costs a word (204/31), and around BOTH it costs a word (204/27 for the
+       store, 204/23 for the extension).  So the barrier fixes the order and
+       the problem is paying for it inside the word count; case 4's half of
+       (A) is still open and is the next thing to attack.
    (B) `abs()` IS NOT THE ANSWER HERE, which is worth recording because the
        target LOOKS like it: both absolute values come out as
        `bgez` / `nop` / `negu` with an empty delay slot, which is exactly
@@ -81,7 +88,14 @@ void func_800B45E0(u8 *p, u8 *b, u8 *c)
     q = *(u8 **)p;
     if (q != NULL && (*(u16 *)(q + 0x1E) & 0x8000) != 0)
     {
-        *(u8 **)p = NULL;
+        if (j)
+        {
+            *(u8 **)p = NULL;
+        }
+        else
+        {
+            *(u8 **)p = NULL;
+        }
         *(u8 **)(p + 0x14) = NULL;
     }
     if (*(u8 **)(p + 0x14) != NULL)
@@ -105,7 +119,10 @@ void func_800B45E0(u8 *p, u8 *b, u8 *c)
         *(u16 *)(p + 0xA) = 0x10;
         *(u16 *)(p + 0x8) += 1;
     case 1:
-        m = *(u16 *)(p + 0xA) - 1;
+        do
+        {
+            m = *(u16 *)(p + 0xA) - 1;
+        } while (0);
         *(u16 *)(p + 0xA) = m;
         n = (s16)m;
         if (n > 0)
