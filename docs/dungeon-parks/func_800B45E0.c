@@ -1,5 +1,17 @@
 /* PARK: func_800B45E0 -- 203 of 203 words, **9 ALIGNED DIFFERENCES**.
 
+   ====================================== 2026-11-20: 9 rows -> 6 at 203/203
+
+   The body below carries one device: a duplicated-arm `if (k)` around `*(u8 **)p = NULL;`, on top of the hoist and the barrier.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same free-reference lever from two directions -- flow.c:2128 weights
+   each reference by `loop_depth`, jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  Found by sweeping every
+   statement position times both devices over every local on a
+   `tools/decomp/onefunc.py` file, where a candidate is 0.09 s.  Nothing in
+   this park's own diagnosis points at the winning statement.
+
    ================= 2026-11-20, SECOND PASS: 30 rows -> 9, and (A) IS CLOSED
 
    Two more devices, and the first came out of decomp-permuter (base 900 ->
@@ -106,6 +118,38 @@
        outside the `beqz`'s delay slot, where the target has it at word 154
        and the store in the slot at 161.
 
+
+   THE LAST SIX ROWS ARE ONE ALLOCATION SHIFT, AND IT IS NOT A PRIORITY
+   PROBLEM.  All six are the ramp:
+
+     mine    lbu a3,14(s2)   subu v1,v0,a3   negu v1,a3   div zero,v1,a0   addu v1,a3,v0
+     target  lbu $v1,0xE($s2) subu $v0,$v0,$v1 negu $v0,$v1 div $zero,$v0,$a0 addu $v1,$v1,$v0
+
+   so `i' (the numerator) wants $v0 and has $v1, and `j' wants $v1 and has
+   $a3.  Three things are RULED OUT by measurement, and they are the three
+   things that look obvious:
+
+     * THE RAMP ARITHMETIC.  `i = i / n; k = j + i;', `i /= n;',
+       `k = i / n; k += j;', `k = i / n + j;' and `n = i / n;' all measure 6,
+       7, 6, 6 and 20.  `i = i / n' DOES make the quotient reuse the
+       numerator's register, which is the target's structure -- `mflo v1'
+       against `mflo $v0' -- and it still costs a row elsewhere.
+     * SPLITTING `i'.  `i' carries both the ramp numerator and the later
+       `i = t >> 1', and giving either use its own variable is 12 and 32 rows.
+       THE SHARING IS CORRECT; do not "clean it up".
+     * RAISING `j''S PRIORITY.  A `do { j = c[0xE]; } while (0);' in both arms
+       takes reg 88 from 6 refs to 8 across the same 14 insns -- CONFIRMED in
+       the .lreg dump -- which by allocno_compare puts it third of eleven
+       globals, above `i'.  The row count does not move.  So the register is
+       not chosen by the priority order alone: mips.h in 2.7.2.3 defines NO
+       REG_ALLOC_ORDER, so find_reg walks hard regs in numeric order and takes
+       the first that does not conflict, and what is left is a CONFLICT
+       difference, not an ordering one.
+
+   A beam over single- and multi-statement devices (11,316 candidates, depth
+   3, four wide) plateaued at 6 with `if (k)' around `*(u8 **)p = NULL;'.
+   This is a permuter target now, not a hand-sweep target.
+
    DECLARATIONS
    extern u8 D_80044C54[];
    END DECLARATIONS
@@ -130,7 +174,14 @@ void func_800B45E0(u8 *p, u8 *b, u8 *c)
     {
         if (j)
         {
-            *(u8 **)p = NULL;
+            if (k)
+            {
+                *(u8 **)p = NULL;
+            }
+            else
+            {
+                *(u8 **)p = NULL;
+            }
         }
         else
         {
