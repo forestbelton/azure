@@ -100,7 +100,24 @@
      pointer-local hoist does elsewhere in this unit.
 
    TRIAGE: one word short, in one identified block, with the structure either
-   side of it proved -- permuter food by docs/dungeon-sweep.md's rule. */
+   side of it proved -- permuter food by docs/dungeon-sweep.md's rule.    ====================================== 2026-11-21: 56 rows -> 52 at 344/344
+
+   A `do { return; } while (0);' around ONE of this function's eight `return;'
+   statements -- the one inside
+
+       if (i == 0 && *(u16 *)(D_80082E80 + 0x24) != *(u16 *)(c + 0x24))
+           if ((s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+
+   WHICH return MATTERS.  All eight were measured: seven of them are 57 rows
+   (one row WORSE than the park) or 63, and this one is 52.  A device on the
+   wrong statement here costs a row; there is no "harmless place to try one".
+
+   The permuter proposed this together with `*(&D_800E2970_s[j].unk_0C) & 2'
+   -- an address-of/dereference round trip -- and that half is REJECTED: on
+   its own it is 57 rows, and on top of the do-while it turns 52 into 53. The
+   permuter's score could not tell the two apart because it scores the pair.
+   Measuring the halves separately is the only way this came out clean.
+*/
 void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d)
 {
     u8 *g;
@@ -240,7 +257,10 @@ void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d)
         {
             if ((s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
             {
-                return;
+                do
+                {
+                    return;
+                } while (0);
             }
         }
         i++;
