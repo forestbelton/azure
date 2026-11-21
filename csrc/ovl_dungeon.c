@@ -9750,7 +9750,109 @@ s16 func_8009A350(s16 x, s16 y, s32 d, u16 *out)
     return *(s16 *)r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009A3D0);
+/* DEVICES, both load-bearing and neither with a reason in the source:
+
+   `f++; f--;` gives `f` a SECOND SET for free.  Without it update_equiv_regs
+   (local-alloc.c:1094) doubles f's reg_live_length -- the doubling is gated at
+   :1043 on `reg_n_sets[regno] != 1' -- f then loses the callee-saved register
+   it needs and four of them rotate.  The park spent two days paying for that
+   second set with a real statement (`f = cell | m; cell = f;'), which costs
+   the two words of an `or'/`sh' pair in $s0 where the target has $v0.  The
+   cancelled increment pair compiles to NOTHING (combine folds the two addiu)
+   and buys the same second set, so the tail can be the read-modify-write the
+   target plainly has.  Found by tools/decomp/refsweep.py.
+
+   `m = n + z0;` with `register s32 z0 __asm__("$0")` is a plain `m = n;` copy
+   that local-alloc's optimize_reg_copy_1 cannot eat: local-alloc.c:1025-1028
+   requires SET_SRC to be a REG, and a PLUS is not, while `addu $a2, $a0,
+   $zero' is the word the target has. See docs/matching-levers.md, "A
+   REDUNDANT REGISTER COPY SURVIVES jump2 IF YOU SPELL IT `x + z0'". */
+
+/* WHAT IT IS: (x, y, flags) over the 6-byte map cells at `&D_80083160 +
+   0x1DC', row shift at +0x14 of that header.  `flags & 0x8832' non-zero
+   CLEARS flags out of the cell's +0x04 halfword -- and when `flags & 0x800'
+   only if func_800A6E10(x, y) < 2.  Otherwise it clears them AND ors back the
+   saturated `(cell & flags) - (flags & 0x1100)'.
+
+   FOUR MORE SPELLINGS HERE ARE LOAD-BEARING, each measured against its
+   alternatives when this was a park:
+   * the row shift through UnkDungeonMapHdr, not a `u8 *' -- 13 words, and the
+     reason is on the typedef in csrc/ovl_dungeon_decls.h.
+   * `r = func_800A6E10(a, b);` into an s32 and then `(s16)r >= 2` -- 2 words.
+     The callee is landed as `s16`, so testing the call directly emits NO sign
+     extension at all; gcc trusts the SImode-promoted return.
+   * the one-armed clamp with the copy FIRST (`m = n + z0;` then
+     `if ((s16)n < 0) m = 0;`).  The two-armed `if ((s16)n < 0) m = 0; else
+     m = n;` is 22 rows and the other one-arming (`m = 0;` then
+     `if ((s16)n >= 0) m = n;`) is 22 as well.
+   * `i = index * 6` joined between the two inner arms with `c = (u8 *)(i + t)`
+     computed ONCE after the join.  `i = index` with the `* 6` outside is ONE
+     WORD SHORT: both arms then start with the same `sll $v0, $a0, 16` into the
+     same hard register, and reorg.c fills the `beq`'s delay slot from both
+     threads at once and deletes the copy at the branch target.  The target
+     keeps two slls precisely because their destinations differ.  The else-arm
+     must write all three cell accesses inline, with no pointer local, for the
+     same reason. */
+void func_8009A3D0(s32 x, s32 y, s32 f)
+{
+    u8 *v;
+    UnkDungeonMapHdr *w;
+    s32 t;
+
+    f++;
+    f--;
+    v = (u8 *)&D_80083160;
+    w = (UnkDungeonMapHdr *)(v + 0x1DC);
+    t = *(s32 *)(v + 0x1DC);
+    if (f & 0x8832)
+    {
+        s32 i;
+        u8 *c;
+
+        if (f & 0x800)
+        {
+            s32 a;
+            s32 b;
+            s32 r;
+
+            a = (s16)x;
+            b = (s16)y;
+            r = func_800A6E10(a, b);
+            if ((s16)r >= 2)
+            {
+                return;
+            }
+            i = (a + (b << w->unk_14)) * 6;
+        }
+        else
+        {
+            i = ((s16)x + ((s16)y << w->unk_14)) * 6;
+        }
+        c = (u8 *)(i + t);
+        *(u16 *)(c + 0x4) &= ~f;
+    }
+    else
+    {
+        s32 px;
+        s32 py;
+        u16 o;
+        s32 n;
+        s32 m;
+        register s32 z0 __asm__("$0");
+
+        px = (s16)x;
+        py = (s16)y;
+        o = *(u16 *)((px + (py << w->unk_14)) * 6 + t + 4);
+        n = (o & f) - (f & 0x1100);
+        *(u16 *)((px + (py << w->unk_14)) * 6 + t + 4) = o & ~f;
+        m = n + z0;
+        if ((s16)n < 0)
+        {
+            m = 0;
+        }
+        *(u16 *)((px + (py << w->unk_14)) * 6 + t + 4) |= m;
+    }
+}
 
 s16 func_8009A540(s32 a, s32 x, s32 y, s16 z)
 {

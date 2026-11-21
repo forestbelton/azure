@@ -39,6 +39,20 @@
    follows: 0x800DCE60 and up is dungeon-private, and every edit to
    include/structs.h rebuilds every engine unit. */
 
+/* The map header at `&D_80083160 + 0x1DC': the cell array's base pointer and,
+   at +0x14, the row shift.  WHY IT IS A STRUCT AND NOT A `u8 *': cse.c's
+   invalidate_memory drops an entry only on `all || (nonscalar &&
+   p->in_struct) || cse_rtx_addr_varies_p (p->exp)'.  Read through a `u8 *'
+   the row shift's cse entry does not survive the halfword store next to it
+   and gets reloaded; read through this struct it does.  Worth 13 words on
+   func_8009A3D0 and the same lever landed func_8008DBE8. */
+typedef struct UnkDungeonMapHdr
+{
+    u8 *unk_00;
+    u8 pad_04[0x10];
+    s16 unk_14;
+} UnkDungeonMapHdr;
+
 /* The dungeon's cast scratchpad. func_800BCE7C is func_8008CE08 of
    csrc/ovl_town.c word for word with every field displacement 0xE8 higher --
    27 of the 80 words differ and all 27 by exactly +0xE8 -- so this is town's

@@ -32759,3 +32759,68 @@ anything of this shape: `itertools.permutations` varies the LAST positions
 first, and the first 401 lexicographic orders of these ten locals never moved
 anything out of positions 0 through 6, which looks exactly like a confirmed
 negative while actually testing nothing.
+
+## A CANCELLED INCREMENT PAIR BUYS REFERENCES, AND A SECOND SET, FOR NOTHING
+
+```c
+f++;
+f--;
+```
+
+compiles to **no instructions at all** -- combine folds the two `addiu` into
+each other -- while giving `f` two more references and, decisively, a SECOND
+SET. `f += 1; f -= 1;` and, for a pointer, `n = &n[1]; n = &n[-1];` are the
+same thing spelled three ways and measure identically.
+
+It is a different lever from `do { } while (0);`, which this block had been
+sweeping for weeks, and the two are not substitutes:
+
+* the do-while weights by `loop_depth` **every reference inside it**
+  (flow.c:2128), so you choose a STATEMENT and take what its operands give;
+* the pair adds references to **one named local at a point of your choosing**,
+  wrapping nothing.
+
+On `func_800A94A0` the pair after `n = func_8003FD64(...)` is worth 18 of 59
+rows, and the do-while around that same call is 66 -- SEVEN WORSE than no
+device, because the only reference it weights is the assignment.
+
+### The second set is the part that lands functions
+
+`update_equiv_regs` (local-alloc.c:1094) **doubles** a pseudo's
+`reg_live_length` when it carries a `REG_EQUIV`, gated at :1043 on
+`reg_n_sets[regno] != 1`. A parameter or local set exactly once therefore
+prices at half the live length it really has, loses its callee-saved register
+and takes three or four others with it in the rotation. The fix has always
+been a second set -- and until now a second set meant a real statement, which
+costs real words.
+
+`func_8009A3D0` is the case in point and it is the one that landed. Two days
+of park notes had priced every way of giving `f` a second set, and the cheapest
+was writing the final read-modify-write through `f`:
+
+```c
+f = *(u16 *)(cell) | m;      /* the second set, and two wrong words */
+*(u16 *)(cell) = f;
+```
+
+which costs exactly the `or`/`sh` pair -- they come out of `$s0`, f's own
+register, where the target has `$v0`. The park had the target's shape written
+down (`*(u16 *)(cell) |= m;`, no variable on the left) and had measured it at
+**20 rows**, because written that way `f` has one set again. With `f++; f--;`
+at the top of the function and the read-modify-write in the tail: **92 of 92
+words, 0 differing.**
+
+The two levers together are the general recipe: *the target's natural shape,
+plus a cancelled pair to pay for whatever reference count that shape costs.*
+
+### Sweep it, do not reason about it
+
+`tools/decomp/refsweep.py` tries the pair for every name at every legal
+statement position. Nothing in `func_8009A3D0`'s diagnosis points at the first
+statement of the function as the place to put it, and nothing in
+`func_800A94A0`'s points at `n`.
+
+Sweep **parameters and inner-block declarations too**. The first version of
+that tool read only the function's top declaration block, swept 3 of
+func_8009A3D0's 16 names, and reported a clean negative -- `f`, the one name
+the entire residue is about, is a parameter.
