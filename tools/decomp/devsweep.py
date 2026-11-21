@@ -121,6 +121,74 @@ def positions(lines, first, last=None):
     return out
 
 
+def existing_devices(lines):
+    """[(lo, hi, kind, cond, stmts, indent)] for devices ALREADY in the body.
+
+    WHY THIS EXISTS: on 2026-11-21 func_800B490C sat at 6 rows carrying
+    `if (n) { i = t >> 1; } else { i = t >> 1; }`, and all six rows were the
+    device's CONDITION -- naming `n' kept it live from function entry, which
+    put $a0/$a1/$a2 in its conflict set and pushed a divisor to $a3. Swapping
+    that one device for a `do { } while (0);` landed the function. This tool
+    reported "no wrapper helps" on that body, because it only ever ADDED a
+    wrapper to what it was given. Replacing a device is a different move from
+    adding one and has to be swept separately.
+    """
+    out = []
+    i = 0
+    while i < len(lines):
+        s = lines[i].strip()
+        ind = re.match(r"\s*", lines[i]).group(0)
+        if s == "do" and i + 1 < len(lines) and lines[i + 1].strip() == "{":
+            j = i + 2
+            stmts = []
+            while j < len(lines) and lines[j].strip() not in ("} while (0);", "}while(0);"):
+                stmts.append(lines[j])
+                j += 1
+            if j < len(lines) and stmts:
+                out.append((i, j, "do", None, stmts, ind))
+                i = j + 1
+                continue
+        m = re.match(r"^(\s*)if \((.+)\)$", lines[i])
+        if m and i + 1 < len(lines) and lines[i + 1].strip() == "{":
+            j, depth, arm1 = i + 2, 1, []
+            while j < len(lines) and depth:
+                d = lines[j].strip().count("{") - lines[j].strip().count("}")
+                if depth + d == 0:
+                    break
+                arm1.append(lines[j]); depth += d; j += 1
+            if j + 2 < len(lines) and lines[j].strip() == "}" \
+                    and lines[j + 1].strip() == "else" and lines[j + 2].strip() == "{":
+                k, depth, arm2 = j + 3, 1, []
+                while k < len(lines) and depth:
+                    d = lines[k].strip().count("{") - lines[k].strip().count("}")
+                    if depth + d == 0:
+                        break
+                    arm2.append(lines[k]); depth += d; k += 1
+                if k < len(lines) and lines[k].strip() == "}" and arm1 == arm2 and arm1:
+                    out.append((i, k, "arm", m.group(2), arm1, m.group(1)))
+                    i = k + 1
+                    continue
+        i += 1
+    return out
+
+
+def device_forms(kind, cond, stmts, ind, names):
+    """Every OTHER spelling of one device, as (lines, label)."""
+    body = [l[4:] if l.startswith(ind + "    ") else l for l in stmts]
+    forms = []
+    if kind != "do":
+        forms.append(([ind + "do", ind + "{"] + stmts + [ind + "} while (0);"],
+                      "-> do-while"))
+    for v in names:
+        if kind == "arm" and v == cond:
+            continue
+        forms.append(([ind + "if (" + v + ")", ind + "{"] + stmts + [ind + "}",
+                       ind + "else", ind + "{"] + stmts + [ind + "}"],
+                      "-> if (%s) arms" % v))
+    forms.append((body, "-> no device"))
+    return forms
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not args:
@@ -203,6 +271,30 @@ def main():
         cands = candidates(cur)
         if not cands:
             print("devsweep: no locals found for the duplicated-arm device")
+        # PASS 0: re-spell every device the body ALREADY carries. A device's
+        # condition is not inert -- it names a variable and so lengthens its
+        # live range -- so swapping one is a different move from adding one.
+        found = None
+        devs = existing_devices(lines)
+        if rnd == 0:
+            print("%s: %d device(s) already in the body" % (func, len(devs)))
+        for lo, hi, kind, cond, stmts, ind in devs:
+            for repl, label in device_forms(kind, cond, stmts, ind,
+                                            [c[0] for c in cands]):
+                cand = lines[:lo] + repl + lines[hi + 1:]
+                body = "\n".join(cand)
+                rr, ww, _ = measure(body)
+                if ww == tw and (rr, ww) < best:
+                    best = (rr, ww)
+                    what = "%s %s" % (
+                        ("do-while" if kind == "do" else "if (%s) arms" % cond), label)
+                    found = (body, what + " at `%s'" % stmts[0].strip()[:34])
+                    print("  round %d: %d rows, %d words  %s" % (rnd, rr, ww, found[1]))
+        if found:
+            cur = found[0]
+            applied.append(found[1])
+            continue
+
         # Every SINGLE-LINE statement is wrappable; a multi-line one would
         # need brace matching and the sweep has never needed it.
         stmts = [i for i in positions(lines, 0)
@@ -212,7 +304,6 @@ def main():
         if rnd == 0:
             print("%s: %d statement(s), %d name(s) -> %d candidates per round"
                   % (func, len(stmts), len(cands), len(stmts) * (1 + len(cands))))
-        found = None
         for i in stmts:
             ind = re.match(r"\s*", lines[i]).group(0)
             tries = [([ind + "do", ind + "{", "    " + lines[i], ind + "} while (0);"],
