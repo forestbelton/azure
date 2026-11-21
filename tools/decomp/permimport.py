@@ -162,13 +162,58 @@ def main():
     else:
         park = os.path.join(PROJ, "docs/near-misses", func + ".c")
         if not os.path.exists(park):
-            print("permimport: no park source at %s -- pass --source FILE to "
-                  "permute a candidate that has never been parked"
-                  % os.path.relpath(park, PROJ))
-            return 1
+            alt = os.path.join(PROJ, "docs/dungeon-parks", func + ".c")
+            if os.path.exists(alt):
+                park = alt
+            else:
+                print("permimport: no park source at %s and none at %s -- pass "
+                      "--source FILE to permute a candidate that has never been "
+                      "parked" % (os.path.relpath(park, PROJ),
+                                  os.path.relpath(alt, PROJ)))
+                return 1
+
 
     d = os.path.join(PROJ, "nonmatchings", func)
     os.makedirs(d, exist_ok=True)
+
+    # A DUNGEON PARK IS NOT A COMPILABLE FILE, and the symptom of handing one
+    # to the permuter anyway is `base=?' with zero iterations -- which looks
+    # exactly like a dead permuter rather than a parse failure. Two things are
+    # missing from a docs/dungeon-parks/ file that docs/near-misses/ files have:
+    #
+    #   * THE INCLUDES. A dungeon park is a comment header plus a bare
+    #     function, because parksplice.py drops it into a unit that already
+    #     has them. Without `#include "common.h"' the first `u8 *q;' is a
+    #     syntax error.
+    #   * THE PARK'S OWN DECLARATIONS BLOCK, which parksplice.py splices into
+    #     the unit as a separate step. func_800B45E0 needs
+    #     `extern u8 D_80044C54[];' and NOTHING in csrc/ declares it, so
+    #     leaving it out fails on a symbol that looks like it should be there.
+    #
+    # compile.sh already passes -Icsrc, so the carved units' shared
+    # declaration header resolves by name. Synthesise the preamble here rather
+    # than making every caller remember to do it by hand.
+    if "/dungeon-parks/" in park.replace(os.sep, "/"):
+        raw = io.open(park, encoding="utf-8", errors="replace").read()
+        decls, inside = [], False
+        for line in raw.split("\n"):
+            if line.strip() == "DECLARATIONS":
+                inside = True
+            elif line.strip() == "END DECLARATIONS":
+                inside = False
+            elif inside and line.strip():
+                decls.append(line.strip())
+        m = re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + re.escape(func) + r"\s*\(", raw)
+        if not m:
+            print("permimport: no definition of %s in %s" % (func, park))
+            return 1
+        pre = ['#include "common.h"']
+        if os.path.exists(os.path.join(PROJ, "csrc", "ovl_dungeon_decls.h")):
+            pre.append('#include "ovl_dungeon_decls.h"')
+        synth = os.path.join(d, "permsrc.c")
+        with io.open(synth, "w", encoding="utf-8") as f:
+            f.write("\n".join(pre + [""] + decls + ["", raw[m.start():]]))
+        park = synth
 
     # ALWAYS run the source through permsafe first.  decomp-permuter parses
     # base.c with pycparser, which cannot parse an `__asm__` operand holding a
