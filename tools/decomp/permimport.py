@@ -207,6 +207,14 @@ def main():
         if not m:
             print("permimport: no definition of %s in %s" % (func, park))
             return 1
+        # TAKE EVERYTHING AFTER THE HEADER COMMENT, not just the definition. A
+        # park may put a typedef or a file-scope declaration BETWEEN its header
+        # and its body -- func_8009A3D0 carries `typedef struct
+        # UnkDungeonMapHdr' there, and it has been lost once already by a
+        # rewrite that rebuilt the park from header plus body. Slicing at the
+        # definition drops it and the base fails on an undeclared type.
+        close = raw.rfind("*/", 0, m.start())
+        cut = raw.index("\n", close) + 1 if close >= 0 else m.start()
         pre = ['#include "common.h"']
         if os.path.exists(os.path.join(PROJ, "csrc", "ovl_dungeon_decls.h")):
             pre.append('#include "ovl_dungeon_decls.h"')
@@ -226,7 +234,7 @@ def main():
                 if ('"%s"' % h) in declared and os.path.exists(hp):
                     declared += "\n" + io.open(
                         hp, encoding="utf-8", errors="replace").read()
-            body_txt = raw[m.start():]
+            body_txt = raw[cut:]
             for c in sorted(set(re.findall(r"\b(func_[0-9A-Fa-f]{8})\b", body_txt))):
                 if c == func:
                     continue
@@ -238,7 +246,7 @@ def main():
                     decls.append(" ".join(dm.group(1).split()) + ";")
         synth = os.path.join(d, "permsrc.c")
         with io.open(synth, "w", encoding="utf-8") as f:
-            f.write("\n".join(pre + [""] + decls + ["", raw[m.start():]]))
+            f.write("\n".join(pre + [""] + decls + ["", raw[cut:]]))
         park = synth
 
     # ALWAYS run the source through permsafe first.  decomp-permuter parses
