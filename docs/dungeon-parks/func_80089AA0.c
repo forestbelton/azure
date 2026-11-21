@@ -1,5 +1,17 @@
 /* RECONSTRUCTION of func_80089AA0 (1165 words), batch j76, 2026-11-16.
 
+   ====================================== 2026-11-21: 75 rows -> 69
+
+   Two duplicated-arm devices from tools/decomp/devsweep.py, out of 12265
+   candidates a round (223 statements x 54 names -- the largest sweep this
+   block has run):
+     * `if (r1)` around `r1 = (s16)func_80042900((s8 *)...);`, 75 -> 71.  The
+       condition reads r1 before the call that sets it, which is the same
+       indeterminate-condition question func_800A94A0's park raises: the
+       device's free reference lands on the CONDITION's name, and here the
+       name wanted is the one the statement assigns.
+     * `if (ta)` around the `fn1(q3, ...)` call, 71 -> 69.
+
    ============================== 2026-11-20: 87 rows -> 81
 
    The body below carries one device: a duplicated-arm `if (f13)` around `s3 = D_800E3DE8;`.
@@ -313,7 +325,14 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
         {
             *(u16 *)(f2 + 2) = (*(u16 *)(f2 + 2) & 0xFFFD) | 0x20;
             func_800A0DD8();
-            r1 = (s16)func_80042900((s8 *)e, 7);
+            if (r1)
+            {
+                r1 = (s16)func_80042900((s8 *)e, 7);
+            }
+            else
+            {
+                r1 = (s16)func_80042900((s8 *)e, 7);
+            }
             n1 = 0x80;
             if (r1 <= 0)
             {
@@ -668,7 +687,14 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
                     if (*(s32 *)(s1 + 0x10) > 0)
                     {
                         fn1 = (void (*)(u8 *, s32, s32))(*(u32 *)(s1 + 0x10) | 0x80000000);
-                        fn1(q3, *(s32 *)(s1 + 8), *(s32 *)(s1 + 0xC));
+                        if (ta)
+                        {
+                            fn1(q3, *(s32 *)(s1 + 8), *(s32 *)(s1 + 0xC));
+                        }
+                        else
+                        {
+                            fn1(q3, *(s32 *)(s1 + 8), *(s32 *)(s1 + 0xC));
+                        }
                     }
                     q3 = D_800E3DE8 + 0x20;
                 }

@@ -1115,3 +1115,17 @@ channel shifted before the store that initialises it (func_8009E798). Measure
 every find with `measure_finds.py`, then read what it MEANS, then split it into
 its individual changes and measure each -- two of four finds in this session's
 batch carried a second change worth exactly nothing.
+
+### DO NOT RUN A PERMUTER AND A SWEEP ON THE SAME PARK AT ONCE
+
+Three of four runs in the 2026-11-21 second batch were wasted exactly that
+way. `devsweep.py` improved func_800AFBFC (149 at 227/238 words -> 123 at
+238/238), func_800CEA44 and func_80094988 while their permuters were running
+on the bodies imported BEFORE those devices, so every find came back
+word-short against a park that was by then word-exact, and `measure_finds.py`
+correctly reported "no find beats the park" for all three. 120 minutes of
+five-job search for nothing.
+
+The order that works: sweep first (minutes), apply, `permimport.py` again,
+then permute. `permimport.py` snapshots the park at import time and nothing
+later re-reads it.
