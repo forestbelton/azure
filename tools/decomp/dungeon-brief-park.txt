@@ -332,6 +332,32 @@ unrelated functions -- exactly the misleading class this brief warns about
 above, and nothing like a defect in the body. If you ever do splice by hand,
 anchor on the parameter list and assert the match length.
 
+## BUILD A STANDALONE ONE-FUNCTION FILE FIRST. IT IS 300x FASTER.
+
+    python3 tools/decomp/onefunc.py FUNC --src @SRC@ --out /tmp/claude-1000/agent-@ID@/one
+    python3 tools/decomp/aligndiff.py /tmp/claude-1000/agent-@ID@/one/ovl_dungeon.c FUNC
+
+That writes the unit's own top declaration block plus the ONE function, and
+nothing else. A candidate then measures in **0.09 s instead of ~25 s**. On
+2026-11-20 that is what made func_800A08A0 land: twenty spellings in a minute
+instead of an afternoon, and `tools/decomp/dump.sh` -- impractical on 37k
+lines -- becomes instant, so the `.sched` and `.lreg` dumps are readable and
+you can derive the answer instead of sweeping for it.
+
+**CONFIRM THE BASELINE BEFORE YOU SWEEP ON IT, AND RE-MEASURE THE FINAL BODY
+AGAINST THE REAL UNIT BEFORE REPORTING.** The standalone file can disagree
+with the unit in exactly one way, and `onefunc.py` prints the list to check:
+a callee DEFINED EARLIER in the unit with no prototype is a declared function
+to the real compile and an implicit `int f()` to this file. That is worth two
+words on func_8009DAD8's call to func_8009FD40 (a lost `sll 16`/`sra 16` pair
+in front of a `slti`), and nothing at all on its call to func_8009DA70 -- so
+the warning is a "check this", not a verdict. If the standalone reproduces
+the park's stated residue, sweep on it.
+
+Use `aligndiff`'s ROW COUNT on the standalone, not `ovlverify`'s masked word
+count: on a file that does not contain the other functions, ovlverify counts
+every unresolved `jal` target. Run `ovlverify` against the real unit.
+
 ## START HERE: THE MECHANISMS THAT PAID ON 2026-11-16
 
 Nine functions landed that day and every one of them turned on reading
