@@ -22,11 +22,23 @@ WHAT IT MOVES, AND WHY ONLY THAT.  A statement is a candidate only when it is
 `name = <expr>;` with `name` a local scalar or pointer, and `<expr>` built
 from locals, parameters and constants -- no call, no dereference, no `[`, no
 `->`.  It is moved only within its own block, and only across statements that
-MENTION NEITHER the target nor any name in the expression.  Those rules make
-every move this tool proposes semantics-preserving by inspection: nothing
-aliases a local whose address is never taken (a local with `&name` anywhere in
-the body is excluded), and a crossed statement that does not mention a name
-can neither read nor write it.
+MENTION NEITHER the target nor any name in the expression.  Those rules make a move over
+LOCALS semantics-preserving by inspection: nothing aliases a local whose
+address is never taken (a local with `&name` anywhere in the body is
+excluded), and a crossed statement that does not mention a name can neither
+read nor write it.
+
+A GLOBAL IN THE EXPRESSION IS DIFFERENT and the tool says so instead of
+pretending otherwise.  `b = D_800E3648;` on an `extern u8 D_800E3648[]` is an
+address constant -- array-to-pointer decay, no memory read -- and moves freely.
+`f = D_800814A0 | 0x8000;` on an `extern u32 D_800814A0` is a real load, and
+moving it across a call or a store through a pointer is only safe if neither
+can reach that address.  Textual non-mention does not prove that: a call can
+write any global, and gcc 2.7.2 has no type-based alias analysis, so it
+reloads.  Such a move is printed with `CHECK ALIASING' and is yours to
+justify.  Usually the target itself justifies it -- if the target's own
+instruction order has the load before the store, that IS the order the
+original source had.
 
 So it will not find the reorderings that are only *probably* safe -- hoisting
 a load out of a short-circuit, sinking a store past a call.  decomp-permuter
@@ -49,6 +61,24 @@ DECL = re.compile(r"^(\s*)((?:const\s+)?[A-Za-z_][A-Za-z0-9_]*)\s+(\**)"
                   r"([A-Za-z_][A-Za-z0-9_]*)\s*(\[[^\]]*\])?\s*(=[^;]*)?;$")
 ASSIGN = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^=][^;]*);$")
 TOOL = "stmtsweep"
+_ARRAYS = None
+
+
+def ARRAY_RE(name):
+    """True when `name' is declared as an array anywhere in csrc/, so that
+    using it is an address constant and not a load."""
+    global _ARRAYS
+    if _ARRAYS is None:
+        _ARRAYS = set()
+        d = os.path.join(os.path.dirname(os.path.dirname(HERE)), "csrc")
+        for fn in os.listdir(d) if os.path.isdir(d) else []:
+            if not fn.endswith((".c", ".h")):
+                continue
+            with open(os.path.join(d, fn), errors="ignore") as fh:
+                for m in re.finditer(r"\bextern\s+[A-Za-z_][A-Za-z0-9_]*\s*\**\s*"
+                                     r"([A-Za-z_][A-Za-z0-9_]*)\s*\[", fh.read()):
+                    _ARRAYS.add(m.group(1))
+    return name in _ARRAYS
 NAME = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
 BAD_IN_EXPR = ("(", "[", "*", "->", ".")
 
@@ -170,11 +200,15 @@ def main():
             ops = set(NAME.findall(expr))
             if ops & addr_taken:
                 continue
-            cands.append((i, tgt, ops | {tgt}))
+            # An operand that is neither a local nor an array name (an address
+            # constant) is a real load from a global, and crossing a call or a
+            # store is then an aliasing question rather than a free move.
+            globs = set(o for o in ops if o not in names and not ARRAY_RE(o))
+            cands.append((i, tgt, ops | {tgt}, globs))
         if rnd == 0:
             print("%s: %d movable assignment(s)" % (func, len(cands)))
         found = None
-        for i, tgt, touched in cands:
+        for i, tgt, touched, globs in cands:
             # How far can it travel without crossing a statement that mentions
             # any name it touches?  That bound is what makes the move safe.
             lo = i
@@ -199,8 +233,14 @@ def main():
                 rr, ww, _ = measure(body)
                 if ww == tw and (rr, ww) < best:
                     best = (rr, ww)
-                    found = (body, "`%s' moved %+d line(s)"
-                             % (lines[i].strip()[:40], j - i))
+                    crossed = lines[min(i, j):max(i, j) + 1]
+                    risky = globs and any("(" in c or "=" in c for c in crossed
+                                          if c is not lines[i])
+                    found = (body, "`%s' moved %+d line(s)%s"
+                             % (lines[i].strip()[:40], j - i,
+                                "   *** CHECK ALIASING: crosses a call or store"
+                                " and reads %s" % ", ".join(sorted(globs))
+                                if risky else ""))
                     print("  round %d: %d rows, %d words  %s" % (rnd, rr, ww, found[1]))
         if not found:
             break

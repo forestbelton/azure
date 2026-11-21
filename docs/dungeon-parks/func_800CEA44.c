@@ -1,5 +1,13 @@
 /* PARK: func_800CEA44, 240 of 242 words, 128 aligned differences.
 
+   ====================================== 2026-11-21: 127 rows -> 126
+
+   `b = D_800E3648;` moved above the `func_8004437C(0, 1);` /
+   `func_80053DA8(0x200);` pair.  SAFE WITHOUT AN ARGUMENT, unlike the move in
+   func_800C2824's park: `extern u8 D_800E3648[]` is an ARRAY, so `b =
+   D_800E3648;` is array-to-pointer decay -- an address constant, not a load --
+   and no call can change it.  Found by tools/decomp/stmtsweep.py.
+
    ====== 2026-11-20: 135 rows at 239/242 words -> 127 at 242/242, ONE DEVICE
 
    A duplicated-arm `if (q)` around `a = func_800A6DA4(0, (u16)...);`.  jump2's
@@ -249,9 +257,9 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
         *(u16 *)(p + 0x4) -= 1;
         if (*(s16 *)(p + 0x4) < 0)
         {
+            b = D_800E3648;
             func_8004437C(0, 1);
             func_80053DA8(0x200);
-            b = D_800E3648;
             e = b + *(s16 *)(p + 0xC) * 4;
             g = (u8 *)&D_80083460;
             *(u32 *)e = 0;

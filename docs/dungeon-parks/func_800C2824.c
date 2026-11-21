@@ -1,4 +1,36 @@
 /* PARK: func_800C2824 -- 285 words against a target of 278, 84 aligned
+
+   ====================================== 2026-11-21: 80 rows at 281/278 words
+                                          -> 78 AT 278/278, AND THE WORD COUNT
+                                          IS FINALLY RIGHT
+
+   `f = D_800814A0 | 0x8000;` moved ABOVE `q = *(u8 **)p;` and the
+   `*(u16 *)(q - 0x2) |= 0x8000;` store in case 3.  That is exactly the three
+   words this park had attributed to %hi re-materialisation: with the load
+   early, `%hi(D_800814A0)' is live across the `j' the way the target's is,
+   and the three re-materialised halves go away.
+
+   IT IS A DEVICE, NOT THE ORIGINAL ORDER, AND THE DIFFERENCE MATTERS.  The
+   target's own stream (asm/nonmatchings/ovl_dungeon_800C2824/func_800C2824.s
+   at 800C2B18) has the `lw %lo(D_800814A0)' AFTER the `sh $v0, -0x2($v1)' --
+   only the `lui %hi' is early, hoisted into the `beqz' delay slot at
+   800C2AFC.  So the original source read the global after the store, and this
+   body reads it before.  The two differ in behaviour if and only if
+   `*(u8 **)p - 2' can be `&D_800814A0', which is implausible (p's +0 is the
+   actor's primitive-buffer pointer) but is NOT PROVEN HERE.  Resolve it
+   before landing: either show the addresses cannot meet, or find a spelling
+   that gets the `lui' early without moving the load.
+
+   WHAT DOES NOT WORK, measured: a `u32 *fa = &D_800814A0;` pointer local with
+   the three sites written `*fa'.  At the top of the function 283 words / 87
+   rows, at the top of case 3 only 284/83, with case 17 through it as well
+   285/87 -- every one of them WORSE than the park, and the park's own note
+   about a pointer local being "the right idea" was about D_80082E80.  The
+   `lui' has to be early because the LOAD is early; there is no spelling that
+   materialises the half on its own.
+
+   Found by tools/decomp/stmtsweep.py, which flags this move with
+   `*** CHECK ALIASING' precisely because it crosses a store.
    differences.  2026-11-20.
 
    One of the seven 4-mod-8 jump-table functions, and since j96's carve it is
@@ -230,9 +262,13 @@ void func_800C2824(u8 *p, u8 *b, u8 *c)
         if (func_800BBA40(D_80082E80[0x24], D_80082E80[0x25], *(u16 *)(D_800E3D7C + 0x88),
                           &D_800DF45C, 0x2800, 0x208020, (u32)func_800C0180) != 0)
         {
+            /* THIS STATEMENT IS ABOVE THE SPRITE STORE ON PURPOSE, and it
+               is the park's three missing words: see the 2026-11-21 note at
+               the top.  It is a DEVICE and the aliasing question it raises is
+               not settled. */
+            f = D_800814A0 | 0x8000;
             q = *(u8 **)p;
             *(u16 *)(q - 0x2) |= 0x8000;
-            f = D_800814A0 | 0x8000;
             D_800814A0 = f;
             goto shared;
         }
