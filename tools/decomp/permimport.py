@@ -240,6 +240,16 @@ def main():
                     continue
                 if re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + c + r"\s*\([^;]*;", declared):
                     continue
+                # A PROTOTYPE IN THE UNIT counts, and has to be looked for
+                # FIRST: func_800B69DC is defined in a DIFFERENT carved unit
+                # and only declared in this one, so searching for a definition
+                # alone finds nothing and the base fails on a symbol the unit
+                # compiles fine.
+                pm = re.search(r"(?m)^([A-Za-z_][^\n{};]*\b" + c
+                               + r"\s*\([^)]*\))\s*;", utxt)
+                if pm:
+                    decls.append(" ".join(pm.group(1).split()) + ";")
+                    continue
                 dm = re.search(r"(?m)^([A-Za-z_][^\n;]*\b" + c + r"\s*\([^)]*\))\s*\n?\s*\{",
                                utxt)
                 if dm:
