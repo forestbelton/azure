@@ -135,6 +135,20 @@
    Shapes read off asm/nonmatchings/ovl_dungeon/func_800B6AC4.s: the six
    arrays are lui/addiu address pairs, D_800E2968 is lui + `sb %lo(..)` and
    so is a scalar byte, not an array.
+   ====================================== 2026-11-20: 46 rows at 811/812 words
+                                          -> 39 at 812/812
+
+   ONE DECLARATION: `s32 k' became `s16 k'.  That is the whole change -- it
+   supplies the missing word AND seven rows.  A permuter find, and the kind
+   that is worth running the permuter for: nothing in the park's diagnosis
+   pointed at `k''s width, and no amount of reading the residue would have.
+
+   The park could not be measured AT ALL until today, for two reasons that had
+   nothing to do with the body: csrc/ovl_dungeon_decls.h declared this
+   function `void' while it returns s32 (so no parksplice placement compiled),
+   and func_800B69DC -- defined in the PREVIOUS carved unit and called only
+   from here -- had no prototype in this unit, because the carve generated
+   cross-unit prototypes only for callees that LANDED code mentions.
 */
 void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
@@ -156,7 +170,7 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     u8 *base10;
     u8 *w;
     void *s;
-    s32 k;
+    s16 k;
     s32 x;
     u32 y;
     s32 v;
