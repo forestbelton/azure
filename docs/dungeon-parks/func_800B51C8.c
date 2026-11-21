@@ -1,4 +1,25 @@
 /* PARK -- func_800B51C8, agent j59, 2026-11-16.  FRESH DECODE, no prior art
+
+   ====================================== 2026-11-21: 262 rows at 830/834 words
+                                          -> 255 AT 833/834
+
+   `Unk80083160 *gg = &D_80083160;` as the first statement, with the two
+   `*(u16 *)((u8 *)&D_80083160 + 0xB8)` reads written through it.  Seven rows
+   and three of the four missing words.  This park's FIRST permuter run.
+
+   AND THE FIND ITSELF IS NOT WHAT LANDED.  The permuter's best (834/834
+   words, 260 rows -- word-exact, which is how measure_finds.py ranks it
+   first) carries a SECOND change: `*(u16 *)(q + 0x20) = p->unk_FC +
+   p->unk_B8;` rewritten as a store of `p->unk_B8` followed by a read-back and
+   a second store.  That buys the fourth word and costs five rows, and the
+   target does not do it -- 800B58C4 is `lhu unk_FC' / `lhu unk_B8' / `addu' /
+   `sh 0x20($s0)', one store from a register sum, with no `lhu 0x20' anywhere
+   near it.  Same rejection as func_80089588's find on the same day; the
+   permuter likes this rewrite because an extra store shortens a live range
+   and its object diff cannot tell that the target never stores twice.
+
+   So the half that is right is better than the whole: 255 against 260.  SPLIT
+   EVERY FIND.
    (leverindex and a direct grep of docs/matching-levers.md both return
    nothing for this function).
 
@@ -133,7 +154,9 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
     s32 i;
     s16 a;
     s16 b;
+    Unk80083160 *gg;
 
+    gg = &D_80083160;
     p->unk_20 = D_80083160.unk_00 + 0xB0;
     p->unk_8C = 0;
     p->unk_84 = 0;
@@ -270,7 +293,7 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
             p->unk_B8 = p->unk_B8 - 0xA0;
             p->unk_BA = p->unk_BA - 0x78;
             p->unk_100 = s->unk_16 + ((s16)cv[0] >> 1);
-            p->unk_104 = *(u16 *)((u8 *)&D_80083160 + 0xB8) + (s->unk_1A - cv[1]);
+            p->unk_104 = *(u16 *)((u8 *)gg + 0xB8) + (s->unk_1A - cv[1]);
             c = e + 4;
             p->unk_102 = s->unk_18;
             func_80065820(&p->unk_100, md);
@@ -372,7 +395,7 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                             sv.vx = sv.vz;
                             sv.vy = sv.vz / 2;
                             p->unk_100 = -(s16)cv[0];
-                            p->unk_104 = *(u16 *)((u8 *)&D_80083160 + 0xB8) - cv[1];
+                            p->unk_104 = *(u16 *)((u8 *)gg + 0xB8) - cv[1];
                             func_80065820(&p->unk_100, md);
                             func_80064840(&D_8006CD30, md, ms);
                             func_80064BC0(ms, &sv);
