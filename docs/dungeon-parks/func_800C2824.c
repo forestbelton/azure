@@ -72,6 +72,33 @@
    The seven extra words are not yet accounted for and should be found
    before any device sweep -- a sweep would chase the knock-on rows.
 
+   ====================================== 2026-11-20: 285/278 -> 281/278 words
+
+   FOUR OF THE SEVEN EXTRA WORDS WERE CASE 3 INLINING THE SHARED TAIL.  The
+   park header already said "cases 3 and 17 SHARE the `|= 0x8000' tail (m2c's
+   block_26)" and the body then wrote it out twice anyway.  The target's case 3
+   ends `j .L800C2C48' and .L800C2C48 is INSIDE case 17 -- so case 3 now does
+   `goto shared;' and case 17 carries the label.  285 -> 281 words, 84 -> 80
+   rows.
+
+   THE DOUBLED `D_800814A0 = f;' IS REAL, not a transcription slip.  The
+   target stores the same $v1 twice: once at 800C2C3C before the label and
+   once at 800C2C58 after it, and case 3 reaches the second store through the
+   jump without recomputing the value.  Four `|= 0x8000' stores in two tails
+   looked wrong and is right.
+
+   THE THREE WORDS LEFT ARE %hi RE-MATERIALISATION, not shape.  The target
+   puts `%hi(D_800814A0)' in $a0 ONCE and reaches it from both paths --
+   `lw $v1, %lo(D_800814A0)($a0)' in case 3 at 800C2B18, `sw' at 800C2C3C and
+   `sw' again in the shared tail at 800C2C58 -- so the high half is live
+   across the `j'.  This body re-materialises it in the tail (`lui v0,0x0' at
+   word 271, `lui a1,0x0' at 65, `addiu a0,a0,0' at 125, and a load-delay
+   `nop' at 264).  Both bodies make exactly THREE references to D_800814A0,
+   so it is the allocation of the %hi pseudo and not the reference count.
+   The target also spends a word this body does not -- `addu $t0, $v0, $zero'
+   at 800C2B40, a surviving copy of `*(u8 **)p' that it then addresses
+   `-0x14($t0)' and `0x88($t0)' through.
+
    DECLARATIONS
    void func_800C27F0();
    void func_800C0180();
@@ -187,8 +214,7 @@ void func_800C2824(u8 *p, u8 *b, u8 *c)
             *(u16 *)(q - 0x2) |= 0x8000;
             f = D_800814A0 | 0x8000;
             D_800814A0 = f;
-            *(u16 *)(p - 0x2) |= 0x8000;
-            D_800814A0 = f;
+            goto shared;
         }
         break;
     case 16:
@@ -226,6 +252,7 @@ void func_800C2824(u8 *p, u8 *b, u8 *c)
             f = D_800814A0 | 0x8000;
             D_800814A0 = f;
             *(u16 *)(D_800DF560 + 0x1E) |= 0x8000;
+        shared:
             *(u16 *)(p - 0x2) |= 0x8000;
             D_800814A0 = f;
         }
