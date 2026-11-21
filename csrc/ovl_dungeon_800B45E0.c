@@ -9,6 +9,11 @@
  * definition lines, so they say exactly what the single-unit compile said.
  */
 
+/* Only this unit needs it: the symbol is in
+   splat/dungeon.bin_undefined_syms_auto.txt and nothing in csrc/ or include/
+   declares it. func_800B45E0's park asks for the same line. */
+extern u8 D_80044C54[];
+
 s16 func_800A48F0(s8 *p, s8 kind, s8 c);
 void func_800A7030(s16 x, s16 y);
 void func_800B1320(u8 *p, s16 a, s16 b);
@@ -17,7 +22,198 @@ u8 *func_800B1484(u8 *p);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800B45E0", func_800B45E0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800B45E0", func_800B490C);
+/* 220 words, 0 differing.  The sibling of func_800B45E0, and most of the body
+   transferred from it, but three things differ: an extra early-out on the
+   +0x10 counter before the +0x14 block, `*(u16 *)(b + 0xA) -= 0x80' in case 0
+   where the sibling has 0x40, and cases 1 and 4 do NOT share a ramp here --
+   case 1 ramps the bytes c[0xC..0xE] toward 0x80 and case 4 the halfwords
+   c+0x1C/0x1E toward zero, so each is written out and case 4's `else' carries
+   the `|= 0x8000' tail that in the sibling sits after the switch.
+
+   THIS FUNCTION OWNS jtbl_800892E4 AT 0x800892E4, and the carve is what
+   unblocked it: ovl_dungeon_800B45E0's .rodata starts at 0xa3b6c, the table
+   sits at 0xa3b84, so inside this unit it is at offset 0x18 -- 0 mod 8 -- and
+   cc1psx's `.align 3' is a no-op.  `seqcheck' reports raw == relocdump ==
+   masked_words == 13, on_function 0, arith OK, and exactly two sequence
+   entries differ: `HI16/LO16 jtbl_800892E4' against `HI16/LO16 .rodata', the
+   documented benign class for a compiled jump table.  Every intra-function
+   `j' offset, the `jal func_8004491C' and both D_ symbols match in order.
+
+   THREE DEVICES, AND EVERY ONE IS A FREE REFERENCE RATHER THAN A SHAPE.  A
+   `do { } while (0);' weights every reference inside it by loop_depth
+   (flow.c:2128) and compiles to nothing.
+
+   * one around EACH of the two counter decrements, which stops the
+     `sh 0xA($s0)' sinking past its own sign extension.  Re-measured on THIS
+     body: both 220 words / 0 rows, case 1's alone 219/7, case 4's alone
+     219/6, neither 218/12.
+   * one around `i = t >> 1;' in the tail.  That is the last word and the last
+     six rows, and WHICH device it is matters far more than that there is one.
+     The duplicated-arm `if (n) { i = t >> 1; } else { i = t >> 1; }' this
+     function carried for a day measures 220 words / 6 rows, and all six rows
+     are ONE REGISTER: the divisor `n' comes out `$a3' where the target has
+     `$a0', in BOTH ramps.  THE CAUSE IS THE CONDITION, NOT THE DEVICE.
+     Reading `n' in the tail keeps it live on the switch paths that never set
+     it -- case 2, case 3 and the jump table's default -- so `n' is live at
+     function ENTRY, and global.c's record_one_conflict adds $a0/$a1/$a2, the
+     incoming argument registers, to its hard-conflict set.  It already
+     conflicts with both outputs of `divmodsi4' because it is live across the
+     division: the quotient in $v0, and the dead REG_UNUSED MOD, which
+     local-alloc puts in $a0 because $v0 and $v1 are already the quotient and
+     the `u'/`k' pseudo.  $a3 is the lowest register left.  The do-while
+     weights the same statement without NAMING anything, so `n' never leaves
+     cases 1 and 4 and lands in $a0.  Measured at that one statement:
+     do-while 220/0; no device at all 219/8; `if (p)', `if (b)', `if (c)' and
+     `if (t < 0)' also 220/0; `if (n)' 220/6; `if (t)' 222/3, because the
+     condition proves `t == 0' in the else arm and gcc folds `t >> 1' there to
+     `move $v1, $zero' instead of cross-jumping the arms together; `if (i)'
+     222/8, `if (q)' 222/9, `if (j)' 222/11, `if (k)' 222/21, `if (v)' 221/29,
+     `if (u)' 221/38.
+
+   TWO MORE SPELLINGS THAT ARE LOAD-BEARING, both re-measured here:
+   `if (p[0xE] != 0)' in the last block is a SIGNED HALFWORD -- the target
+   opens it `lh $v0, 0xE($s0)' -- and as a byte it is 220/1.  And case 1's
+   ramp keeps its self-assignment, `k = u; k = u + (0x80 - k) / n;', which
+   gives the dividend the result variable's register; `k = u + (0x80 - u) / n'
+   is 220/19.
+
+   widthsweep and devsweep both come back empty on this body. */
+void func_800B490C(u8 *p, u8 *b, u8 *c)
+{
+    u8 *q;
+    s32 i;
+    s32 n;
+    s32 t;
+    s32 v;
+    s32 j;
+    s16 k;
+    u16 u;
+
+    q = *(u8 **)p;
+    if (q != NULL && (*(u16 *)(q + 0x1E) & 0x8000) != 0)
+    {
+        *(u8 **)p = NULL;
+        *(u8 **)(p + 0x14) = NULL;
+    }
+    if (*(s16 *)(p + 0x10) != 0)
+    {
+        *(u16 *)(p + 0x10) -= 1;
+        return;
+    }
+    if (*(u8 **)(p + 0x14) != NULL)
+    {
+        *(u16 *)(b + 0x2) -= *(u16 *)(p + 0x18) - *(u16 *)(*(u8 **)(p + 0x14) + 0x2);
+        *(u16 *)(p + 0x18) = *(u16 *)(*(u8 **)(p + 0x14) + 0x2);
+        *(u16 *)(b + 0x6) -= *(u16 *)(p + 0x1A) - *(u16 *)(*(u8 **)(p + 0x14) + 0x6);
+        *(u16 *)(p + 0x1A) = *(u16 *)(*(u8 **)(p + 0x14) + 0x6);
+        *(u16 *)(b + 0xA) -= *(u16 *)(p + 0x1C) - *(u16 *)(*(u8 **)(p + 0x14) + 0xA);
+        *(u16 *)(p + 0x1C) = *(u16 *)(*(u8 **)(p + 0x14) + 0xA);
+    }
+    switch (*(s16 *)(p + 0x8))
+    {
+    case 0:
+        *(s32 *)(b + 0x14) = 0x200000;
+        *(u16 *)(b + 0xA) -= 0x80;
+        *(s32 *)(p + 0x4) = 0x200000;
+        *(u16 *)(c + 0x1E) = 0x1000;
+        *(u16 *)(c + 0x1C) = 0x1000;
+        func_8004491C(p - 0x20, (u32)&D_80044C54);
+        *(u16 *)(p + 0xA) = 0x10;
+        *(u16 *)(p + 0x8) += 1;
+    case 1:
+        do
+        {
+            k = *(u16 *)(p + 0xA) - 1;
+        } while (0);
+        *(u16 *)(p + 0xA) = k;
+        n = (s16)k;
+        if (n > 0)
+        {
+            u = c[0xE];
+            k = u;
+            k = u + (0x80 - k) / n;
+            c[0xE] = k;
+            c[0xD] = k;
+            c[0xC] = k;
+            break;
+        }
+        *(u16 *)(p + 0x8) += 1;
+        break;
+    case 2:
+        break;
+    case 3:
+        k = *(u16 *)(p + 0xA) - 1;
+        *(u16 *)(p + 0xA) = k;
+        if ((s32)(k << 16) <= 0)
+        {
+            *(u16 *)(p + 0xA) = 8;
+            *(u16 *)(p + 0x8) += 1;
+        }
+        break;
+    case 4:
+        do
+        {
+            k = *(u16 *)(p + 0xA) - 1;
+        } while (0);
+        *(u16 *)(p + 0xA) = k;
+        n = (s16)k;
+        if (n > 0)
+        {
+            u = *(u16 *)(c + 0x1E);
+            k = u + -(s32)u / n;
+            *(u16 *)(c + 0x1E) = k;
+            *(u16 *)(c + 0x1C) = k;
+            *(u16 *)(b + 0xA) += 6;
+        }
+        else
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+    *(s32 *)(b + 0x8) += *(s32 *)(b + 0x14);
+    *(u16 *)(p + 0xC) += 1;
+    if ((*(u16 *)(p + 0xC) & 1) != 0)
+    {
+        t = *(s32 *)(b + 0x14);
+        do
+        {
+            i = t >> 1;
+        } while (0);
+        v = t >> 0x11;
+        if (v < 0)
+        {
+            v = -v;
+        }
+        *(s32 *)(b + 0x14) = i;
+        if (v < 2)
+        {
+            t = -(*(s32 *)(p + 0x4) >> 1);
+            *(s32 *)(p + 0x4) = t;
+            *(s32 *)(b + 0x14) = t;
+            v = *(s16 *)(p + 0x6);
+            if (v < 0)
+            {
+                v = -v;
+            }
+            if (v < 2 && *(s16 *)(p + 0x8) < 3)
+            {
+                *(s16 *)(p + 0x8) = 3;
+                *(u16 *)(p + 0xA) = 8;
+            }
+        }
+    }
+    if (*(s16 *)(p + 0xE) != 0)
+    {
+        j = 0x2CF0F0F0;
+        if ((*(u16 *)(p + 0xC) & 3) != 0)
+        {
+            j = 0x2C404040;
+        }
+        *(s32 *)(c + 0xC) = j;
+    }
+}
 
 /* The dungeon's floating damage/EXP/G number: a 0x212 node whose +0x10 step
    is func_800B490C or func_800B45E0, with the caller's record parked at
