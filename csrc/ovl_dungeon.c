@@ -17127,12 +17127,21 @@ s16 func_800A1C58(u8 *p)
       Hoisted and unpaid-for the whole register file rotates: 437 words,
       62 rows.
 
-      THE CURE IS A SINGLE `__asm__("" ::"r"(lvl));' AS THE FIRST STATEMENT
-      OF THE `if (p[0x13] != 0)' ARM.  It emits nothing, and because it has
-      no outputs it is implicitly volatile and survives flow -- so lvl gets
-      a 17th reference and the priority becomes 4*17/202 = 0.3366, well clear
-      of p.  The margin is wide, not marginal: 17 references stay ahead of p
-      until lvl's live length reaches 213.
+      THE CURE IS TO WRAP `lvl = p[0x11];' IN `do { } while (0);'.  That
+      buys lvl a 17th reference for nothing: flow.c:2128 weights each
+      reference by `loop_depth', and the inner loop's NOTEs raise the depth
+      over the statement without emitting an instruction.  The priority
+      becomes 4*17/202 = 0.3366, well clear of p, and the margin is wide
+      rather than marginal -- 17 references stay ahead of p until lvl's live
+      length reaches 213 against the 202 it has.
+
+      `__asm__("" ::"r"(lvl));' as the first statement of the arm does the
+      same thing and is how this first landed, but it is a scaffold where the
+      do-while is ordinary C, so the do-while is what is in the tree.  Of the
+      twelve statements mentioning `lvl', exactly three wrappers reach 0 or
+      near it -- `lvl = p[0x11];' 0 rows, the `hp = ...' line 0 rows,
+      `p[0x11] = lvl + 1;' 2 rows -- and the rest run 29 to 72, so the
+      position is a real choice and not a formality.
 
       That is the general shape of this fix -- `flow_analysis' runs ONCE
       (toplev.c:3463) and BEFORE combine (:3488), so a reference that costs
@@ -17181,7 +17190,10 @@ void func_800A1D4C(u8 *p, s16 f)
 
     if (p[0x11] < 0x63)
     {
-        lvl = p[0x11];
+        do
+        {
+            lvl = p[0x11];
+        } while (0);
         c = p[0x13];
         p[0x11] = lvl + 1;
         t = D_800DDCBC[c];
@@ -17269,7 +17281,6 @@ void func_800A1D4C(u8 *p, s16 f)
         *(u16 *)(p + 6) = hp;
         if (p[0x13] != 0)
         {
-            __asm__("" ::"r"(lvl));
             for (i = 2; i >= 0; i--)
             {
                 e[i] = 0;
