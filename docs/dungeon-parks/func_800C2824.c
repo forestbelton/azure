@@ -1,5 +1,5 @@
-/* PARK: func_800C2824 -- 280 words against a target of 278, 105 aligned
-   differences.  FIRST DRAFT, 2026-11-20.
+/* PARK: func_800C2824 -- 285 words against a target of 278, 84 aligned
+   differences.  2026-11-20.
 
    One of the seven 4-mod-8 jump-table functions, and since j96's carve it is
    the only thing standing between csrc/ovl_dungeon_800C2824.c and a complete
@@ -26,28 +26,51 @@
      * the 0x3000/0x300 pick for func_8009A3D0's third argument is a plain
        `if' on `*(u32 *)(q + 0x1C) & 0x2000', in both case 2 and case 17.
 
-   THE RESIDUE STARTS AT THE FRAME, AND THAT IS THE THING TO ATTACK FIRST.
-   The target's prologue is `addiu $sp, $sp, -0x48' and saves s0..s3 and ra at
-   0x30..0x40; this body's is -0x40 with the saves at 0x28..0x38.  So the
-   target reserves EIGHT MORE BYTES than the locals and the call area need:
-   five arguments to func_800B8FC8 make the outgoing area 0x00..0x17, the four
-   stack locals are 12 bytes at 0x20..0x2B, and 0x18..0x1F is unaccounted for.
-   That is docs/matching-levers.md's "A FRAME LARGER THAN THE FUNCTION'S CALLS
-   NEED IS AN UNREFERENCED STACK LOCAL, AND THE ARITHMETIC NAMES ITS SIZE",
-   and every row below the prologue follows from the save slots being wrong.
+   THE STACK PAIRS MUST BE ARRAYS, AND THE REASON IS A DEAD-STORE DELETION
+   RATHER THAN A FRAME SIZE.  Written as four scalars --
+   `s32 sp20, sp24; s16 sp28, sp2A;' with `&sp20' and `&sp28' handed to
+   func_800B8FC8 -- NOTHING IN THIS FUNCTION EVER READS sp24 OR sp2A: only
+   the callee does, through `&sp20 + 4' and `&sp28 + 2'.  gcc cannot know
+   they have to be adjacent, so it allocates only the two addressable
+   scalars (8 bytes at 0x20..0x27), keeps the other two in registers and
+   then DELETES both stores as dead.  The visible symptoms are a 0x40
+   prologue where the target has 0x48, saves at 0x28..0x38 instead of
+   0x30..0x40, and the `lui/ori 0x400040' and `sh 0x1B8' pairs simply
+   missing: 280 words / 105 rows.
 
-   MEASURED SO FAR (all on a `tools/decomp/onefunc.py` file, which reproduces
-   the unit exactly for this function):
-     four scalars `s32 sp20, sp24; s16 sp28, sp2A;' .... 280 words / 105 rows
-     `s32 w2[2]; s16 v2[2];' passed as arrays ........... 285 / 84
-     the same plus an unreferenced `s32 pad2[2];' ....... 285 / 103
-     `s32 w2[4]; s16 v2[2];' ............................ 285 / 106
-     `s32 w2[2]; s16 v2[6];' ............................ 285 / 103
-   So the ARRAY form is worth 21 rows and costs 5 words, and padding it out
-   does not recover the frame -- the eight bytes have to come from somewhere
-   that does not also add spill slots.  **Do not sweep devices on this body
-   until the frame is 0x48**; the device sweep is cheap and will chase the
-   knock-on rows instead of the cause.
+   **That is a case where the frame-size lever points the wrong way.** The
+   arithmetic looked like "an unreferenced stack local, 8 bytes" -- the
+   catalogued diagnosis for a frame larger than the calls need -- and
+   `s32 unused[2];` does indeed take the prologue to 0x48 and the residue to
+   88.  It is still wrong: it buys the frame and leaves the two stores
+   deleted, and the locals then sit at 0x28/0x2C where the target has
+   0x20/0x28.  Declaration position makes no difference (all nine positions
+   measure 88), which is the tell that the aggregate is not what the target
+   has.
+
+   As arrays -- `s32 rc[2]; s16 wh[2];' with `rc` and `(s32 *)wh' passed --
+   the four stores are all live, the frame comes out 0x48 by itself
+   (0x20 outgoing for func_800BBA40's seven arguments + 0x10 of locals +
+   0x18 of saves) and the residue is 285 words / 84 rows.  Measured:
+     four scalars ....................................... 280 / 105
+     four scalars + unreferenced `s32 unused[2];` ........ 280 /  88
+     `s32 rc[2]; s16 wh[2];` ............................. 285 /  84
+     arrays + an unreferenced `s32 pad2[2];` ............. 285 / 103
+     `s32 rc[4]; s16 wh[2];` ............................. 285 / 106
+     `s32 rc[2]; s16 wh[6];` ............................. 285 / 103
+
+   WHAT IS LEFT, 84 rows and SEVEN WORDS OVER:
+     * the two constants are materialised in the wrong ORDER -- the target
+       puts `lui $v1, 0x1800340 >> 16' in the `bnez' delay slot at word 27
+       and this body puts `lui $v0, 0x400040 >> 16' there, even though the
+       four STORES are already in the target's order (rc[1], wh[0], wh[1],
+       rc[0]).  So it is reorg's choice of which constant to hoist, not the
+       statement order;
+     * word 57 is a `nop' here and `addiu $a0, $s1, -0x20' in the target --
+       func_8004491C's argument, which the target fills the slot with;
+     * the `%hi(func_800CEF54)' pair is one slot late.
+   The seven extra words are not yet accounted for and should be found
+   before any device sweep -- a sweep would chase the knock-on rows.
 
    DECLARATIONS
    void func_800C27F0();
@@ -71,10 +94,8 @@ void func_800C2824(u8 *p, u8 *b, u8 *c)
     u8 *r;
     s32 i;
     s32 j;
-    s32 sp20;
-    s32 sp24;
-    s16 sp28;
-    s16 sp2A;
+    s32 rc[2];
+    s16 wh[2];
     s32 a;
     u32 f;
     u8 v;
@@ -88,11 +109,11 @@ void func_800C2824(u8 *p, u8 *b, u8 *c)
             *(s16 *)(p + 0x4) = 0x10;
             return;
         }
-        sp24 = 0x400040;
-        sp28 = 0x360;
-        sp2A = 0x1B8;
-        sp20 = 0x1800340;
-        func_800B8FC8(*(u8 **)p, &sp20, (s32 *)&sp28, 1, 2);
+        rc[1] = 0x400040;
+        wh[0] = 0x360;
+        wh[1] = 0x1B8;
+        rc[0] = 0x1800340;
+        func_800B8FC8(*(u8 **)p, rc, (s32 *)wh, 1, 2);
         q = *(u8 **)p - 0x20;
         func_80044A50(q);
         func_800BC318(q);
