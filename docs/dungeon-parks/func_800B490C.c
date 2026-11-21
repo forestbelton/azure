@@ -54,6 +54,29 @@
 
    Measured with
      python3 tools/decomp/parkresidue.py func_800B490C
+   ====================================== 2026-11-20: 18 rows -> 7 at 220/220
+
+   A PERMUTER FIND, and both halves of it are the same idea:
+
+     * `u16 m' and `s16 k' MERGED into the one `s16 k'.  They never overlap --
+       `m' holds the decremented 0xA counter and `k' the ramp result -- and
+       merging them is worth most of the 11 rows.  The type that survives is
+       `s16', not the counter's `u16'.
+     * the ramp split through a self-assignment:
+
+           k = u;
+           k = u + (0x80 - k) / n;
+
+       instead of `k = u + (0x80 - u) / n;'.  That gives the DIVIDEND the
+       result variable's register, which is what the target does -- its `subu'
+       writes the same register the `mflo' later reuses.
+
+   THE SIBLING func_800B45E0 HAS THE SAME RAMP and this does NOT transfer to
+   it, because there the two arms compute DIFFERENT numerators (0x80 - j and
+   -j) and jump into a SHARED div, so the numerator has to be a variable and
+   cannot be an inline sub-expression of the result.  That is the structural
+   difference between the two parks and it is why one is at 7 and the other
+   at 6 by completely different routes.
 */
 void func_800B490C(u8 *p, u8 *b, u8 *c)
 {
@@ -64,7 +87,6 @@ void func_800B490C(u8 *p, u8 *b, u8 *c)
     s32 v;
     s32 j;
     s16 k;
-    u16 m;
     u16 u;
 
     q = *(u8 **)p;
@@ -101,14 +123,15 @@ void func_800B490C(u8 *p, u8 *b, u8 *c)
     case 1:
         do
         {
-            m = *(u16 *)(p + 0xA) - 1;
+            k = *(u16 *)(p + 0xA) - 1;
         } while (0);
-        *(u16 *)(p + 0xA) = m;
-        n = (s16)m;
+        *(u16 *)(p + 0xA) = k;
+        n = (s16)k;
         if (n > 0)
         {
             u = c[0xE];
-            k = u + (0x80 - u) / n;
+            k = u;
+            k = u + (0x80 - k) / n;
             c[0xE] = k;
             c[0xD] = k;
             c[0xC] = k;
@@ -119,9 +142,9 @@ void func_800B490C(u8 *p, u8 *b, u8 *c)
     case 2:
         break;
     case 3:
-        m = *(u16 *)(p + 0xA) - 1;
-        *(u16 *)(p + 0xA) = m;
-        if ((s32)(m << 16) <= 0)
+        k = *(u16 *)(p + 0xA) - 1;
+        *(u16 *)(p + 0xA) = k;
+        if ((s32)(k << 16) <= 0)
         {
             *(u16 *)(p + 0xA) = 8;
             *(u16 *)(p + 0x8) += 1;
@@ -130,16 +153,16 @@ void func_800B490C(u8 *p, u8 *b, u8 *c)
     case 4:
         do
         {
-            m = *(u16 *)(p + 0xA) - 1;
+            k = *(u16 *)(p + 0xA) - 1;
         } while (0);
-        *(u16 *)(p + 0xA) = m;
-        n = (s16)m;
+        *(u16 *)(p + 0xA) = k;
+        n = (s16)k;
         if (n > 0)
         {
             u = *(u16 *)(c + 0x1E);
-            m = u + -(s32)u / n;
-            *(u16 *)(c + 0x1E) = m;
-            *(u16 *)(c + 0x1C) = m;
+            k = u + -(s32)u / n;
+            *(u16 *)(c + 0x1E) = k;
+            *(u16 *)(c + 0x1C) = k;
             *(u16 *)(b + 0xA) += 6;
         }
         else
