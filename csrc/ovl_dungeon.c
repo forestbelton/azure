@@ -1,6 +1,12 @@
 #include "common.h"
 #include "ovl_dungeon_decls.h"
 
+extern u8 *D_80073618[];
+extern u8 *D_800DF03C[];
+s32 func_80069E98(u8 *);
+s8 *func_8004E298(u8 *, u8 *, s32);
+void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f);
+
 void func_800894A0(void)
 {
     u8 *g;
@@ -23811,7 +23817,190 @@ void func_800B14FC(u8 *p, UnkVec *b, UnkSlot *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800B1768);
+/* The dungeon panel's three-chain cursor: a kind-0x12 node whose +0x20 view
+   takes the x/y pair, the func_800B14FC step and the func_800B06F0 tag, and
+   whose +0x50 array collects the func_800B12F4 chains -- `k' picks a
+   D_80073618 prologue chain, `d''s low byte the D_800DF03C label, `e' the
+   narrow layout and `f' the +0x26 tag.  234 words, 0 differing.
+
+   NO DEVICES.  The park this closes carried three -- two `do { } while (0);'
+   wrappers and a duplicated-arm `if (tmp)' -- and none of them survives: the
+   duplicated arm COSTS 7 rows on this body (235/7) and the two wrappers are
+   inert (0 rows either way).  Four spellings carry it instead.
+
+   (1) THE SECOND CHAIN'S OLD CURSOR GOES IN THE TEMP, NOT ITS RESULT:
+           tmp = u;
+           u = func_800B1434(u, u - 0x60);
+           func_800B1320(tmp, 1, 1);
+       The park had it the other way round -- `tmp = func_800B1434(u, u -
+       0x60); func_800B1320(u, 1, 1); u = tmp;' -- and that is 235 words /
+       25 rows here and was the whole of its residue for two sessions.  It is
+       unreachable, not merely worse.  expand_call emits the return copy
+       IMMEDIATELY after the call, so with the RESULT in the temp the order is
+       `(set tmp v0)' then `(set a0 u)', both priority 1; `rank_for_schedule'
+       breaks that tie on INSN_LUID and schedules the HIGHER LUID first, which
+       (sched runs backwards) puts the LOWER-LUID copy FIRST in the program.
+       `u' is then still live when `tmp' is born, the two conflict, `tmp'
+       takes a callee-saved register and `u = tmp' is the extra word the park
+       could never lose.  Putting the OLD cursor in the temp makes that insn
+       `(set tmp u)', ahead of the call, which sched1 sinks BELOW the call to
+       the target's `addu $a0, $s1, $zero' at word 148, and the result copy is
+       then a plain `(set u v0)' -- word 149 -- sharing $s1 with `u'.
+       `u = func_800B1434(tmp = u, u - 0x60);' is the same insns and also 0.
+   (2) THE TERNARY'S ELSE ARM IS A LOCAL ASSIGNED BEFORE THE TEST:
+           arg = base + 0x80;
+           func_800B1320(u, e != 0 ? (s16)(base + 0x76 - w) : arg, ...);
+       The target computes `base + 0x80' unconditionally and reorg fills the
+       branch's delay slot from the insn PRECEDING it (`addiu $a1, $v1, 0x80',
+       word 107), so the then arm falls through into the join with no `j' and
+       the load delay after `lhu 0x10($sp)' costs the `nop' at 104.  Inline in
+       the ternary (`: (s16)(base + 0x80)') is 236 words / 6 rows.  A full
+       `if (e != 0) arg = ...;' STATEMENT is 234 / 19 -- it narrows through
+       func_800B1320's `s16' prototype after the join, and its own test keeps
+       the `sra' that cse then shares with the three later `e != 0' tests,
+       deleting the target's second `lhu'/`nop'/`sll' reload group at 121-123.
+       Free: `arg' as `s16' or `u32' (both 0), `: (s16)arg' (0), and
+       `e == 0 ? arg : (s16)(...)' (0).  Not free: dropping the THEN arm's
+       `(s16)' (2 rows) and `base - w + 0x76' for `base + 0x76 - w' (3).
+   (3) FIVE SEPARATE TAIL LOCALS -- base, v, v2, z, z2 -- WITH NO SHARING.
+       The park's "one local, two roles" rule is refuted on this body:
+       `base' reused as `z' is 233 / 14 and as `v' 234 / 7.  Each
+       `x2 = x; if (e != 0) x2 = x - 2;' pair is the target's copy-then-add
+       (`addu $v1, $a0, $zero' / `addiu $v1, $v1, -0x2', words 166/167);
+       folding it to an in-place `v -= 2' is 233 / 9, and `z -= 2' 233 / 6.
+   (4) `u32 w' -- `s32' 234/2, `u16' 235/15, `s16' 236/16, `u8' 233/17 -- and
+       `s16 j', not `s32' (230 / 50): `s16 j' is what puts the
+       `andi $s7, $s6, 0xFF' at word 52.
+
+   Also measured and inert: `has = i' for `has = 1' (cse folds it back),
+   `u32 has', `u32 base' (`s16 base' is 4 rows), and both do-while wrappers. */
+void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *q;
+    u8 *r;
+    u8 *u;
+    u8 *tmp;
+    u32 *col;
+    s32 i;
+    s16 j;
+    s32 has;
+    u32 w;
+    s32 base;
+    s32 v2;
+    s32 z2;
+    s32 z;
+    s32 v;
+    s32 arg;
+
+    i = 0;
+    n = func_8003FD64(0x12, D_80083498);
+    if (n == NULL)
+    {
+        return;
+    }
+    q = (u8 *)n + 0x20;
+    r = (u8 *)n->unk_0C;
+    m = n->unk_08;
+    if (e != 0)
+    {
+        *(u16 *)(r + 0x14) |= 1;
+    }
+    *(s16 *)((u8 *)m + 0x2) = x;
+    *(s16 *)(q + 0xA) = x;
+    *(s16 *)((u8 *)m + 0x6) = y;
+    *(s16 *)(q + 0xC) = y;
+    *(s16 *)((u8 *)m + 0xA) = 0;
+    *(s16 *)(q + 0x8) = 1;
+    *(s16 *)(r + 0x1C) = 0x1000;
+    *(s32 *)(r + 0xC) = 0;
+    n->unk_10 = (u32)func_800B14FC;
+    func_8004491C(n, (u32)func_800B06F0);
+    j = d & 0xFF;
+    *(s16 *)(q + 0x24) = d >> 8;
+    *(u32 *)q = (u32)((u8 *)n + 0x70);
+    *(u32 *)(q + 0x4) = (u32)((u8 *)n + 0x58);
+    col = (u32 *)((u8 *)n + 0x58);
+    u = func_800B12F4();
+    *(u8 **)(q + 0x28) = u;
+    if (u != NULL)
+    {
+        if (k != 0)
+        {
+            i = 1;
+            col = (u32 *)((u8 *)n + 0x5C);
+            *(u32 *)((u8 *)n + 0x70) = (u32)u;
+            u = func_800B1434(u, D_80073618[k]);
+            has = 1;
+            *(u32 *)((u8 *)n + 0x58) = 0x808080;
+        }
+        else
+        {
+            has = 0;
+        }
+        *(s32 *)(q + i * 4 + 0x50) = (s32)func_8004E298(u, D_800DF03C[j], 0);
+        i++;
+        w = func_80069E98(D_800DF03C[j]) * 8;
+        base = has * 10;
+        arg = base + 0x80;
+        func_800B1320(u, e != 0 ? (s16)(base + 0x76 - w) : arg, (s16)(-*(s8 *)(u + 0x3) - 0x9));
+        func_800B135C(u, e != 0 ? 4 : 8);
+        func_800B13CC(u, 0x20);
+        func_800B1400(u, 2);
+        *col++ = 0x808080;
+        u += 0x60;
+        *(s32 *)(q + i * 4 + 0x50) = (s32)u;
+        i++;
+        tmp = u;
+        u = func_800B1434(u, u - 0x60);
+        func_800B1320(tmp, 1, 1);
+        *col = 0x80808;
+        *(s32 *)(q + i * 4 + 0x50) = (s32)u;
+        i++;
+        u[0x1] = 0x38;
+        v = has == 0 ? -0x2 : -0xA;
+        v2 = v;
+        if (e != 0)
+        {
+            v2 = v - 2;
+        }
+        *(s8 *)(u + 0x2) = v2;
+        *(s8 *)(u + 0x3) = -0xE;
+        u[0x9] = 0;
+        u[0x8] = 0;
+        z = w + has * 24;
+        if (has == 0)
+        {
+            z += 4;
+        }
+        z2 = z;
+        if (e != 0)
+        {
+            z2 = z - 2;
+        }
+        u[0xA] = z2;
+        u[0xB] = 0x10;
+        u[0x0] = 0xC0;
+        *(s32 *)(q + 0x10) = 0;
+        *(s32 *)(q + 0x14) = 0;
+        *(s32 *)(q + 0x18) = 0x84008;
+        *(s32 *)(q + 0x1C) = 0x84008;
+        *(s32 *)(u + 0x4) = *(s32 *)(q + 0x10);
+        *(s32 *)(u + 0xC) = *(s32 *)(q + 0x14);
+        *(s32 *)(u + 0x10) = *(s32 *)(q + 0x18);
+        *(s32 *)(u + 0x14) = *(s32 *)(q + 0x1C);
+        u[0x1] |= 2;
+        u += 0x18;
+        *(s32 *)(q + i * 4 + 0x50) = (s32)u;
+        u[0x1] = 0x81;
+        *(s16 *)(u + 0x4) = 0x20;
+        *(s16 *)(u + 0x6) = 0;
+        u[0x0] = 0xC0;
+    }
+    *(s16 *)(q + 0x22) = 4;
+    *(s16 *)(q + 0x26) = f;
+}
 
 /* The dungeon's message panel: a 0x12-kind node whose +0x10 step is
    func_800B14FC, three func_800B12F4 sprite chains (the frame, the

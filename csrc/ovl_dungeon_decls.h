@@ -2132,10 +2132,15 @@ void func_80098614(u8 *, u8 *);
 extern u8 D_800DCF58;
 extern u8 D_8014A000[];
 UnkNode *func_8003FE78(s32, UnkNode *, s16);
-/* csrc/ovl_town.c's declaration.  func_8004E298 and func_8004E5A0 are left on
-   the implicit declaration this unit already gives them at func_800B1B10's
-   call sites -- prototyping them is 0 differing for func_800B4C7C either way,
-   and a prototype would retype those landed calls. */
+/* csrc/ovl_town.c's declaration.  func_8004E5A0 is left on the implicit
+   declaration this unit already gives it at func_800B1B10's call sites.
+   2026-11-21: the warning that used to be here -- that prototyping
+   func_8004E298 "would retype those landed calls" -- is NOT TRUE. Landing
+   func_800B1768 put `s8 *func_8004E298(u8 *, u8 *, s32);' at the top of
+   csrc/ovl_dungeon.c, above every call site in the unit, and func_800B1B10
+   re-measures 220/220 and all four containers come out byte-identical. The
+   prototype lives in that unit's own block rather than here because only it
+   needs the type. */
 u8 *func_8004E634(u32, u8 *);
 /* The two +0x10 steps func_800B4C7C parks; an address-take needs a
    declaration above them, and both are still INCLUDE_ASM below. */

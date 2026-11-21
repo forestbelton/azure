@@ -33073,3 +33073,81 @@ device-respelling pass: they all vary spellings within a fixed control-flow
 shape. When a residue is an allocation the dumps say is unreachable, ask
 whether a `goto`, a shared tail or a merged arm in the candidate is TWO blocks
 in the target.
+
+## `do { } while (0);` IS A FULL SCHEDULING BARRIER, NOT ONLY A loop_depth WEIGHT
+
+This block has used `do { } while (0);` as a free-reference device for weeks on
+the strength of flow.c:2128 weighting each reference by `loop_depth`. It has a
+**second, independent effect that is often the one doing the work**, and
+missing it has made two parks misdiagnose their own residue.
+
+`sched_analyze_insn`'s `loop_notes` block runs for the first insn after a
+mid-block `NOTE_INSN_LOOP_BEG`/`LOOP_END`:
+
+```c
+for (i = 0; i < max_reg; i++) {
+    for (u = reg_last_uses[i]; u; u = XEXP (u, 1))
+        add_dependence (insn, XEXP (u, 0), REG_DEP_ANTI);
+    reg_last_uses[i] = 0;
+    if (reg_last_sets[i]) add_dependence (insn, reg_last_sets[i], 0);
+}
+reg_pending_sets_all = 1;
+flush_pending_lists (insn, 0);
+```
+
+A dependence on **the last set of every register**, plus an anti-dependence on
+every pending use, plus a memory-list flush. The wrapped statement cannot move
+above anything that precedes it.
+
+`func_800B1768`'s park had spent two sessions diagnosing its residue as a sched1
+LUID tie on an argument copy. It was not a tie: the park's own do-while around
+that call made `(set a0 u)` the barrier insn, so it depended on the preceding
+return copy and **was not in the ready list at all** until that copy was
+scheduled. The `.sched` dump shows it at priority 0, one cycle late.
+
+**How to tell the two apart in a dump:** in a `;; ready list at T-N:` line the
+hex values are `INSN_PRIORITY`. `7f000001` is `LAUNCH_PRIORITY` -- a *birthing*
+insn, one whose destination pseudo has `reg_n_sets == 1`, which
+`adjust_priority` (sched.c:2546) bumps so it wins every tie the cycle it becomes
+ready. (Its `n_deaths` path is dead code: it reads REG_DEAD notes that its own
+comment says are already gone, so every newly-ready insn falls through to the
+birthing test.) A small integer means the insn loses until nothing else is
+ready; an insn that is **absent** from the list means a dependence, not a tie.
+A tie is fixed by statement order or a free reference; a dependence is fixed by
+changing the shape, and no amount of sweeping will find it.
+
+So when a do-while helps, ask WHICH effect you are buying. If it is the
+barrier, the device is standing in for a dependence the target gets from its own
+shape, and there may be a shape that needs no device: `func_8008FA7C`'s do-while
+was worth 18 rows while an access was spelled as a cast and cost 17 once it was
+spelled as an array ref.
+
+## WHEN A CALL'S OLD ARGUMENT VALUE IS WHAT THE NEXT CALL NEEDS, PUT THE OLD VALUE IN THE TEMP -- NOT THE RESULT
+
+`func_800B1768`, ovl_dungeon, 2026-11-21. Worth the last 5 rows and the park's
+one extra word, and the park had been looking for a scheduling lever for
+something **no schedule can reach**.
+
+These compute the same thing:
+
+```c
+tmp = f(u, ...);  g(u, 1, 1);  u = tmp;      /* 235 words, 25 rows */
+tmp = u;  u = f(u, ...);  g(tmp, 1, 1);      /*  234 words,  0 rows */
+```
+
+`expand_call` emits the return copy IMMEDIATELY after the call, so in the first
+form the order is `(set tmp v0)` then `(set a0 u)`, both priority 1.
+`rank_for_schedule` breaks that tie on `INSN_LUID` and schedules the higher LUID
+first -- and sched runs backwards, so the LOWER-LUID copy comes out FIRST in the
+program. `u` is therefore still live when `tmp` is born, the two conflict, `tmp`
+takes a callee-saved register and `u = tmp` is an extra word that cannot be
+removed.
+
+Put the OLD value in the temp and that insn is `(set tmp u)` AHEAD of the call,
+which sched1 sinks below it to the target's `addu $a0, $s1, $zero`, and the
+result copy is a plain `(set u v0)` sharing `u`'s register.
+`u = f(tmp = u, ...)` is the same insns and also 0.
+
+**The park's stated goal -- "a lever that moves the copy exactly ONE slot closes
+this park" -- was unreachable.** The LUID order is fixed at expand time by which
+value goes in the temp, so the statement had to change, not the schedule.
