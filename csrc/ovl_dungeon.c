@@ -12396,6 +12396,29 @@ s32 func_8009A66C(u32 f, u8 *c, u8 *d, s16 y)
       (`do { wz = pz + 0x20; } while (0);` gives 3 refs but length 25, so
       1200).  Price the window, then sweep the position.
 
+      THESE TWO `asm`s ARE A LAST RESORT AND THE PLAIN-C ALTERNATIVES WERE
+      SWEPT FIRST.  A `do { stmt } while (0);` wrapper buys the same
+      loop_depth-weighted reference in ordinary C (flow.c:2128) and is what
+      landed func_800A1D4C, so it was tried here exhaustively and it does
+      not reach 0 on this function:
+
+        * every single-statement wrapper, all 40 positions ....... best 16
+          (and every one of them is WORSE than the 12-row base, which the
+           asm pair improves on, so there is no greedy path either)
+        * every PAIR of wrappers, 1024 combinations .............. best 16
+          (`n = func_8009FB34(...)` plus `t = func_800BCB04(...)`)
+        * a duplicated-arm `if (v) { s } else { s }` -- the device that
+          landed func_8009DAD8, whose references flow counts twice and
+          jump2's cross-jumping then merges -- for each of
+          wz/k/wx/h/k2/t at every statement ..................... best 25
+
+      The reason is in the mechanism: the loop NOTEs are a full scheduling
+      barrier on the insn that CARRIES them (sched.c:2088), so a do-while
+      can only be placed where a statement already is, while the asm can go
+      between two statements.  On this function the reference `k` needs is
+      in the middle of the `(s8)c[0x26] < 0` arm and there is no statement
+      boundary there that also keeps the schedule.
+
    ================================= THE FIVE LEVERS UNDER ALL OF THAT (j87)
 
    1. `u8 *d` PLAIN -- no `volatile`, no `(void)&d;`.  The target's
