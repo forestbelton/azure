@@ -22217,7 +22217,130 @@ void func_800AACA4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     c[0x25] += D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7];
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AAF00);
+/* 176 words, 0 differing.  Parked at 4 for a day as "the proved-unreachable
+   `|= 0x80000000` gate" and closed by the cure in docs/matching-levers.md,
+   "THE `|= 0x80000000` GATE IS A LOCALITY PROBLEM, NOT UNREACHABLE": assign
+   the constant to `cc2` ONE BLOCK EARLIER -- in the block holding the
+   `& 0x400` test -- and keep one input-only `__asm__("" ::"r"(cc2))` after
+   the store so a single-use REG_EQUIV constant is not rematerialised back
+   into the body block.  Multi-block, the constant leaves local_alloc,
+   `block_alloc` can no longer tie the `ior`'s destination to it, and
+   global_alloc hands the loaded value $v0 and the constant $v1 -- the
+   target's `lw $v0` / `lui $v1` / `or $v0, $v0, $v1`.  Nothing else in the
+   parked body changed; the four rows went to 0 on the first compile.
+
+   The other four levers, all still load-bearing (see the park record in
+   git history, docs/dungeon-parks/func_800AAF00.c before this landing):
+   `*(volatile u16 *)` on the FIRST read of (p + 0x46) -- the 0x4000 test,
+   not the re-read, because that is where the target has an unfilled delay
+   slot; the table as a pointer local `tbl = (UnkDungeonName10 *)D_8006DE24`
+   with `e = &tbl[i]`, which splits `lui %hi` / `addiu %lo` around the
+   stride-0x14 multiply; `i` REUSED for the table index it loads, so a
+   second set takes it out of local-alloc and global_alloc hands it $a0
+   (worth ten of the twelve table rows); and `gp = p + i * 3` as its own
+   pointer local, which is the only one of seven spellings that emits
+   `addu $v0, $s0, $v0` in the source operand order.  The first gate is
+   `(*(s16 *)(p + 0x46) & 0x3FFF) >= 5` through s16, not u16: through u16
+   combine proves the masked value non-negative and the compare becomes
+   `sltiu` where the target has `slti`. */
+void func_800AAF00(UnkDungeonActor *a, UnkVec *b, u8 *c, s32 t, void (*h)())
+{
+    u8 *p;
+    u8 *g;
+    u8 *g2;
+    u8 *q;
+    u8 *gp;
+    UnkDungeonName10 *e;
+    UnkDungeonName10 *tbl;
+    u16 f;
+    s32 k;
+    s32 i;
+    s32 cc2;
+
+    p = (u8 *)a;
+    k = 0;
+    p[0x71] &= 0x7F;
+    g = (u8 *)&D_80083460;
+    f = *(u16 *)(g + 0x2);
+    if ((f & 0x2008) != 0)
+    {
+        return;
+    }
+    if ((*(u32 *)(p + 0x1C) & 0x2000) != 0 && (*(s16 *)(p + 0x46) & 0x3FFF) >= 5)
+    {
+        q = D_800E3D7C;
+        k = 1;
+        if ((*(u32 *)(q + 0x98) & 0x3000) == 0x2000)
+        {
+            if (*(u16 *)(q + 0xA6) == 0)
+            {
+                *(u16 *)(q + 0x98) |= 0x1000;
+                *(u16 *)(q + 0xA6) += 1;
+                *(u16 *)(g + 0xA) += 1;
+                goto join;
+            }
+        }
+        func_800A4ACC(p);
+        p[0x6D] -= 1;
+        a->unk_8C = h;
+        return;
+    }
+    if ((f & 8) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(p) != 0)
+    {
+        return;
+    }
+    func_800C77D0(p - 0x20, b, 8, 0x300);
+    if ((s16)func_800A2B5C(p) != 0)
+    {
+        return;
+    }
+join:
+    if (k == 0)
+    {
+        if ((*(u32 *)(p + 0x1C) & 0x400) != 0)
+        {
+            cc2 = 0x80000000;
+            if (*(s32 *)(p + 0x14) >= 0)
+            {
+                *(u32 *)(p + 0x14) |= cc2;
+                __asm__("" ::"r"(cc2));
+                *(u16 *)(p + 0x2A) += (func_800A6D30() & 7) << 9;
+            }
+        }
+        if ((*(volatile u16 *)(p + 0x46) & 0x4000) == 0)
+        {
+            i = (*(u16 *)(p + 0x46) & 0x3FFF) - 1;
+            gp = p + i * 3;
+            i = gp[8];
+            tbl = (UnkDungeonName10 *)D_8006DE24;
+            e = &tbl[i];
+            if (e->unk_12 == 2 && *(s32 *)(p + 0x60) == 0)
+            {
+                *(s32 *)(p + 0x60) =
+                    func_800A05A4(p, c[0x24], c[0x25], *(s16 *)(p + 0x2A), e->unk_13);
+            }
+        }
+    }
+    else
+    {
+        *(u8 **)(D_800E3D7C + 0x11C) = p;
+    }
+    a->unk_9A = 0x12;
+    a->unk_9B = 0;
+    a->unk_8C = NULL;
+    if (t != 0)
+    {
+        *(s32 *)(c + 0x2C) = t;
+        func_80047784(c, ((u8 *)t)[((D_80083228 + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7], 0);
+    }
+    *(u16 *)(c + 0x14) |= 0x800;
+    g2 = (u8 *)&D_80083460;
+    *(u16 *)(g2 + 0xA) += 1;
+}
 
 /* Ease the mover onto the tile at c[0x24]/c[0x25] over the +0x96 countdown,
    and on the last frame re-place it, bleed the engine's +0x08 counter, clear
@@ -37388,7 +37511,133 @@ void func_800CA0DC(u8 *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800CA1E0);
+/* 153 words, 0 differing.  func_8009A66C's twin with a map-bounds pre-check in
+   front and a 1/-1 tail; returns -1 blocked, 0 cannot, 1 ok.
+
+   PARKED FOR A DAY AT ONE OPCODE and closed by ONE SPELLING: the argument
+   copy is `ka = kg + z0` with `register s32 z0 __asm__("$0")`, i.e. an
+   addsi3 whose second operand is literally $zero.
+
+   WHY THAT IS THE WHOLE LANDING.  The target's word 22 is a REDUNDANT
+   `addu $a0, $s5, $zero` -- $a0 already holds the index from word 4 and
+   nothing writes $a0 before the call.  Every spelling that makes word 22 a
+   reg-reg move loses it, because jump2 is `jump_optimize (insns, 1, 1, 0)`
+   (toplev.c:3690, noop_moves == 1) and its block at jump.c:476-525 takes
+   every `(set (reg hard) (reg hard))` whose two `true_regnum`s are both >= 0
+   and calls `find_equiv_reg` (reload.c:5554), which scans BACKWARD over the
+   linear insn stream -- stopping only at a CODE_LABEL -- for an insn copying
+   into or out of $a0 whose other end is $s5.  The word-6 copy
+   `addu $s5, $a0, $zero` is exactly that insn, same block, both SImode, so
+   the move at 22 is deleted: 152 words.  Spelling word 22 as a PLUS escapes
+   the test one step earlier -- `true_regnum (SET_SRC (pat))` is -1 for a
+   PLUS, so jump2 never considers the insn at all -- and `addu $a0,$s5,$zero`
+   is the same 0x02A02021 the target has.  Nothing else changed from the
+   153-word / 1-row park; it went to 0 on the first compile.
+
+   Routes measured and rejected for that one word (all on this body): the
+   `& 7` on a fenced, pinned `kg` (`kz2 = (u16)kg; ka = kz2 & 7;`) gives
+   `andi $a0,$s5,0x7` -- 153 words, right slot, right registers, wrong
+   opcode, and an andi survives only because it is not a reg-reg SET;
+   reading the UNFENCED `kk` instead folds the mask into a real move and
+   jump2 deletes it, 152/1; plain `ka = kk;` or the argument inline 152/8;
+   a second masked RECOMPUTATION from the parameter (`kz2 = (u16)(f >> 9);
+   ka = kz2 & 7;`) does produce the target's move but keeps the srl result
+   live and pushes the temp off $a0, 153/5.  Putting the PLUS at word 6
+   instead (`kk = k + z0`) destroys combine's significant_bits proof for the
+   later mask and costs a copy: 154/15.
+
+   THE THREE FRONT DEVICES, all load-bearing, all from the park record:
+     (a) `kz = (u16)k; kk = kz & 7;` in TWO STATEMENTS is the word-6 copy --
+         combine folds `(and (zero_extend (subreg:HI k)) 7)` to `(reg k)` via
+         significant_bits(k) == 7, so the insn is a bare move.  As one
+         statement, `kk = (u16)k & 7;`, it is 152/10.
+     (b) `__asm__("" ::"r"(k));` is k's SECOND USE.  With one use combine
+         substitutes k's own `andi` into the widening and (a) collapses back
+         to a single `andi` writing $s5.  No outputs, so it is implicitly
+         volatile and survives flow; it emits nothing.
+     (c) `__asm__("" : "=r"(kg) : "0"(kk));` with **kg pinned to $21** keeps
+         the register file right, and the PIN is the load-bearing half:
+         without it the fence's extra allocno pushes the index to $s0 and `c`
+         to $s3, 153/36.  The fence must NOT be volatile.
+
+   And three structural facts that must not be disturbed: the bounds check
+   and the step target are the SAME two locals (`ax`/`az`, not fresh
+   `tx`/`tz` -- that is 81 rows, reusing them 26, and it is what puts the two
+   sums in $s1/$s0 and spills `s16 y` to `sh $a3, 0x18($sp)`); the tail is
+   `if (t >= 0x201) return -1; return 1;` in that order (with `return -1`
+   last, cross-jumping merges all five `return -1` bodies and the target's
+   shared .L800CA2B4 block disappears, 150/26); and `m` is a LOCAL
+   `u8 *m = (u8 *)D_8008333C;` -- folding the displacement into the
+   relocation costs the shared base, 152/24. */
+s32 func_800CA1E0(u32 f, u8 *c, u8 *d, s16 y)
+{
+    u16 w;
+    u16 ax;
+    u16 az;
+    u32 px;
+    u32 pz;
+    s32 wx;
+    s32 wz;
+    s32 k;
+    s32 kk;
+    register s32 kg __asm__("$21");
+    s32 ka;
+    s32 kz;
+    s32 kz2;
+    s32 h;
+    s32 t;
+    s16 n;
+    u8 *m;
+    register s32 z0 __asm__("$0");
+
+    k = (f >> 9) & 7;
+    __asm__("" ::"r"(k));
+    m = (u8 *)D_8008333C;
+    kz = (u16)k;
+    kk = kz & 7;
+    __asm__("" : "=r"(kg) : "0"(kk));
+    ka = kg + z0;
+    ax = c[0x24] + (u16)D_8006CCD8[kg];
+    if (ax == 0 || (1 << *(s16 *)(m + 0x14)) - 1 < ax)
+    {
+        return -1;
+    }
+    az = c[0x25] + (u16)D_8006CCE8[kg];
+    if (az == 0 || (1 << *(s16 *)(m + 0x16)) - 1 < az)
+    {
+        return -1;
+    }
+    h = *(u16 *)(d + 0x88);
+    px = c[0x24] << 6;
+    pz = c[0x25] << 6;
+    wx = px + 0x20;
+    wz = pz + 0x20;
+    if (func_8009A540(ka, px >> 6, pz >> 6, h - y) == 0)
+    {
+        return 0;
+    }
+    ax = D_800DCEAC[kg] + wx;
+    az = D_800DCEBC[kg] + wz;
+    func_8009A350(c[0x24], c[0x25], kg, &w);
+    if ((w & 0x8002) != 0)
+    {
+        return 0;
+    }
+    if ((s8)c[0x26] < 0)
+    {
+        n = func_8009FB34(c[0x24] + (u16)D_8006CCD8[kg], c[0x25] + (u16)D_8006CCE8[kg]);
+        if (n >= 0 && (D_800E2970_s[n].unk_0C & 2) != 0 && (*(s32 *)(d + 0x1C) & 0x2000) == 0)
+        {
+            return 0;
+        }
+    }
+    t = func_800BCB04(ax, az, h - y);
+    if ((s16)t >= 0x201)
+    {
+        return -1;
+    }
+    return 1;
+}
 
 void func_800CA444(u8 *p, void *a1, u8 *b, u8 *c)
 {
