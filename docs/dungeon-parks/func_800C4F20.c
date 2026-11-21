@@ -1,4 +1,16 @@
 /* PARK: func_800C4F20 -- **323 of 323 words**, 207 aligned differences.
+
+   ====================================== 2026-11-20: 207 rows -> 202
+
+   The body below carries one device: a duplicated-arm `if (i)` around `q = *(u8 **)(p + 0x1C);`.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same free-reference lever from two directions -- flow.c:2128 weights
+   each reference by `loop_depth`, jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  Found by sweeping every
+   statement position times both devices over every local on a
+   `tools/decomp/onefunc.py` file, where a candidate is 0.09 s.  Nothing in
+   this park's own diagnosis points at the winning statement.
    FIRST DRAFT, 2026-11-20.
 
    The sixth of the seven 4-mod-8 jump-table functions, and since j96's carve
@@ -129,7 +141,14 @@ void func_800C4F20(u8 *p, u8 *b, u8 *c)
     join:
         if ((*(u32 *)(*(u8 **)(p + 0x24) + 0x14) & 0x100000) != 0)
         {
-            q = *(u8 **)(p + 0x1C);
+            if (i)
+            {
+                q = *(u8 **)(p + 0x1C);
+            }
+            else
+            {
+                q = *(u8 **)(p + 0x1C);
+            }
             *(u16 *)(q + 0x2) = *(u16 *)(b + 0x2);
             *(u16 *)(q + 0x6) = *(u16 *)(b + 0x6);
             *(u16 *)(q + 0xA) = *(u16 *)(b + 0xA);

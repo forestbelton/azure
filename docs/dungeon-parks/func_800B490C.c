@@ -1,4 +1,16 @@
 /* PARK: func_800B490C -- 219 words against a target of 220, 28 aligned
+
+   ====================================== 2026-11-20: 28 rows at 219/220 words -> 18 at 220/220
+
+   The body below carries one device: a duplicated-arm `if (n)` around `i = t >> 1;` -- which is also the missing word, exactly as the sibling predicted.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same free-reference lever from two directions -- flow.c:2128 weights
+   each reference by `loop_depth`, jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  Found by sweeping every
+   statement position times both devices over every local on a
+   `tools/decomp/onefunc.py` file, where a candidate is 0.09 s.  Nothing in
+   this park's own diagnosis points at the winning statement.
    differences.  FIRST DRAFT, 2026-11-20.
 
    The last of the seven 4-mod-8 jump-table functions to get a body.  It owns
@@ -142,7 +154,14 @@ void func_800B490C(u8 *p, u8 *b, u8 *c)
     if ((*(u16 *)(p + 0xC) & 1) != 0)
     {
         t = *(s32 *)(b + 0x14);
-        i = t >> 1;
+        if (n)
+        {
+            i = t >> 1;
+        }
+        else
+        {
+            i = t >> 1;
+        }
         v = t >> 0x11;
         if (v < 0)
         {
