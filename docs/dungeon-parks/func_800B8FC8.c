@@ -1,6 +1,7 @@
 /* PARK: func_800B8FC8, 95 of 95 words, 19 aligned differences.
-   ovl_dungeon.  Measured 2026-11-16, re-measured and PROVED UNREACHABLE
-   2026-11-16 by j70 (residue unchanged at 19; diagnosis replaced).  The
+   ovl_dungeon.  **95 of 95 words, 16 ALIGNED DIFFERENCES** (2026-11-20).
+   Measured 2026-11-16 and called PROVED UNREACHABLE at 19 by j70; that
+   verdict is corrected below and the body is now at 16.  The
    five-argument sibling of func_800B835C -- `nearsibs.py` scores the pair at
    0.891 and that is an understatement: the two are the same function with a
    different middle callee and one more parameter.  **Read
@@ -115,9 +116,44 @@
        entirely the copy survives to sched1 and c is still 64 (`sched.py
        --sched1` lists no priority for insn 10).
 
-   (1) and (2) are therefore mutually exclusive on this 95-instruction shape.
-   19 rows is the floor; this is PROVED, not exhausted.  If a run is spent
-   here, the permuter is the only remaining route, and
+   (1) and (2) are therefore mutually exclusive on this 95-instruction shape
+   FOR THE SPELLINGS ABOVE.
+
+   ============================== THE "PROVED" VERDICT WAS WRONG -- 2026-11-20
+
+   **This park said "19 rows is the floor; this is PROVED, not exhausted".
+   The live body below is at 16.**  The argument above is sound about what
+   source spellings can do to the two live lengths; it says nothing about a
+   FREE REFERENCE, and `grep -c __asm__` on this park was 0.
+
+   One reference on `b2` -- `__asm__("" ::"r"(b2));` immediately after
+   `ee = e;` -- is 95 words / 16 rows.  flow_analysis runs ONCE
+   (toplev.c:3463) and BEFORE combine (:3488), and flow.c:2128 weights each
+   reference by loop_depth, so a reference that costs no instruction still
+   moves `allocno_compare`.  Seven positions in the first block all reach 16
+   (`ee = e;`, `bb = b;`, `g = ...`, `lean = ...`, `q = ...`, `r = ...`, and
+   the `*(u32 *)(... + 0x8D0) = ...` store); from `SetDrawArea` onward it is
+   19 again.  Swept: 10 variables x 32 insertion points = 320 measurements,
+   then a greedy second round with both the input-only and the
+   matched-operand asm forms over 10 variables -- no second device improves
+   on 16.
+
+   The residue at 16 is still the same family -- the `%hi(D_80083160)`
+   pseudo, `b` and `e` rotating through $s4/$s5/$s6 -- but three fewer rows
+   of it, and the allocno table moves accordingly: 94 (the %hi) goes
+   5/76 = 1315 and 92 (`b`) 5/50 = 2000, with `;; 12 regs to allocate` still
+   printing the same order.
+
+   **THE ASM IS A LAST RESORT AND THE PLAIN-C ALTERNATIVES DO NOT REACH 16
+   HERE.**  Swept on the same file: `do { stmt } while (0);` at every
+   statement, best 32; a duplicated-arm `if (v) { s } else { s }` for each of
+   p/b/bb/c/ee/g/lean/b2/q/r at every statement, best 19 (i.e. no
+   improvement on the base); and a greedy second round on the best of those,
+   no improvement.  So 16 currently costs one asm device, and **a plain-C
+   route to 16 or below is the thing to look for before this lands.**
+   docs/dungeon-parks/README.md records the preference and why.
+
+   If a run is spent here, the permuter is a route, and
    docs/matching-levers.md's "THE PERMUTER DOES NOT CRACK A SMALL PURE-
    ALLOCATION RESIDUE" says what to expect.  Quote `ovlverify`'s 95/95 rather
    than aligndiff's 19: this is a pure permutation, and the LCS charges every
@@ -180,7 +216,6 @@
    Measured and byte-identical, so free to spell either way: `lean` and `g`
    in either order after `ee`/`bb`, and `bb` as a `u8 *` with byte offsets
    instead of an `s32 *`. */
-
 void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
 {
     Unk80083160 *g;
@@ -195,6 +230,7 @@ void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
     s32 t2;
 
     ee = e;
+    __asm__("" ::"r"(b2));
     bb = b;
     g = &D_80083160;
     lean = D_80083160.unk_00 != D_801C9E40;
