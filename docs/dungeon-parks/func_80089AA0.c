@@ -1,5 +1,12 @@
 /* RECONSTRUCTION of func_80089AA0 (1165 words), batch j76, 2026-11-16.
 
+   ====================================== 2026-11-21: 69 rows -> 62
+
+   Cancelled increment pairs from tools/decomp/refsweep.py, run on the
+   body the devsweep round before it produced.  The two sweeps alternate:
+   each one changes which name is contested, so the other finds something
+   new on the result.  devsweep re-run after this found nothing further.
+
    ====================================== 2026-11-21: 75 rows -> 69
 
    Two duplicated-arm devices from tools/decomp/devsweep.py, out of 12265
@@ -567,6 +574,8 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
                 *(s16 *)(e + 0x8A) = r5;
                 r6 = (s16)func_800BCB04((d[0x24] << 6) | 0x20, (d[0x25] << 6) | 0x20,
                                         (s16)(r5 - 0x20));
+                e++;
+                e--;
                 *(s16 *)(p + 0x92) = *(u16 *)(p + 0x92) + (*(u16 *)(e + 0x88) - r6);
                 *(s16 *)(e + 0x88) = r6;
                 if ((D_80083462 & 0x80) != 0)
@@ -749,6 +758,8 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
                 goto next;
             }
             r7 = (s16)func_800A2C34(NULL);
+            r7++;
+            r7--;
             if (*(s16 *)(f13 + 0x14) != 0)
             {
                 if (r7 == 0)

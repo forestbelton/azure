@@ -1,5 +1,12 @@
 /* PARK: func_800AFBFC, 227 of 238 words, 149 aligned differences.
 
+   ====================================== 2026-11-21: 117 rows -> 116
+
+   Cancelled increment pairs from tools/decomp/refsweep.py, run on the
+   body the devsweep round before it produced.  The two sweeps alternate:
+   each one changes which name is contested, so the other finds something
+   new on the result.  devsweep re-run after this found nothing further.
+
    ====================================== 2026-11-21: 123 rows -> 117
 
    Two more do-while wrappers from tools/decomp/devsweep.py, around
@@ -258,6 +265,8 @@ s32 func_800AFBFC(u8 *a, void *b, u8 *c)
         sp->unk_70[1].vx = sp->unk_70[3].vx = x2;
         sp->unk_70[1].vy = sp->unk_70[3].vy = y2;
         x = func_80064584((s16)k) * 6 - cx;
+        m++;
+        m--;
         y = func_800644B8((s16)k) * 6 - cy;
         sp->unk_70[0].vx = sp->unk_70[2].vx = x;
         sp->unk_70[0].vy = sp->unk_70[2].vy = y;

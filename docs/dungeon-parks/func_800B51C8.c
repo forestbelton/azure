@@ -1,5 +1,12 @@
 /* PARK -- func_800B51C8, agent j59, 2026-11-16.  FRESH DECODE, no prior art
 
+   ====================================== 2026-11-21: 237 rows -> 228
+
+   Cancelled increment pairs from tools/decomp/refsweep.py, run on the
+   body the devsweep round before it produced.  The two sweeps alternate:
+   each one changes which name is contested, so the other finds something
+   new on the result.  devsweep re-run after this found nothing further.
+
    ====================================== 2026-11-21: 255 rows -> 237
 
    Four duplicated-arm devices from tools/decomp/devsweep.py, which also
@@ -242,6 +249,8 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                     }
                     a = (s8)c[-2];
                     p->unk_80 = a;
+                    a++;
+                    a--;
                     p->unk_70 = a;
                     a = a + p->unk_10.h;
                     p->unk_88 = a;
@@ -329,6 +338,8 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                     p->unk_14.w = c[7];
                     a = (s8)c[-2];
                     p->unk_80 = a;
+                    a++;
+                    a--;
                     p->unk_70 = a;
                     a = a + p->unk_10.h;
                     p->unk_88 = a;

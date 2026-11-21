@@ -1,5 +1,12 @@
 /* PARK: func_800C4F20 -- **323 of 323 words**, 207 aligned differences.
 
+   ====================================== 2026-11-21: 183 rows -> 173
+
+   Cancelled increment pairs from tools/decomp/refsweep.py, run on the
+   body the devsweep round before it produced.  The two sweeps alternate:
+   each one changes which name is contested, so the other finds something
+   new on the result.  devsweep re-run after this found nothing further.
+
    ====================================== 2026-11-21: 186 rows -> 183
 
    A device from tools/decomp/devsweep.py: 186 rows -> 183.  refsweep in the
@@ -240,6 +247,8 @@ void func_800C4F20(u8 *p, u8 *b, u8 *c)
         if (n != 0)
         {
             w = *(u16 *)(c + 0x1E);
+            w++;
+            w--;
             w = w - (s32)w / n;
             *(u16 *)(c + 0x1E) = w;
             *(u16 *)(c + 0x1C) = w;
@@ -247,6 +256,8 @@ void func_800C4F20(u8 *p, u8 *b, u8 *c)
             *(u16 *)(c + 0x20) = v + (0x2000 - v) / *(s16 *)(p + 0x2A);
             q = *(u8 **)(p + 0x20);
             w = *(u16 *)(q + 0x1E);
+            w++;
+            w--;
             w = w + (0x1000 - w) / *(s16 *)(p + 0x2A);
             *(u16 *)(q + 0x1E) = w;
             *(u16 *)(q + 0x1C) = w;

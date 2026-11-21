@@ -1,5 +1,12 @@
 /* PARK: func_800CEA44, 240 of 242 words, 128 aligned differences.
 
+   ====================================== 2026-11-21: 114 rows -> 112
+
+   Cancelled increment pairs from tools/decomp/refsweep.py, run on the
+   body the devsweep round before it produced.  The two sweeps alternate:
+   each one changes which name is contested, so the other finds something
+   new on the result.  devsweep re-run after this found nothing further.
+
    ====================================== 2026-11-21: 121 rows -> 114
 
    Two more duplicated-arm devices from tools/decomp/devsweep.py, `if (s)`
@@ -176,6 +183,8 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
         k = D_80082EA6;
         if ((s16)k >= 0)
         {
+            k++;
+            k--;
             b = D_800E3648;
             e = b + *(s16 *)(p + 0xC) * 4;
             n = *(s8 *)(e + 2);
@@ -250,6 +259,8 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                             tb = D_800835E4;
                             o[0x12] = 0;
                             u = tb[y];
+                            u++;
+                            u--;
                             *(u32 *)(o + 0x18) = u;
                             tb1 = tb + 1;
                             if (tb[y] >= tb1[o[0x11]])
