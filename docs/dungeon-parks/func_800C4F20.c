@@ -1,5 +1,15 @@
 /* PARK: func_800C4F20 -- **323 of 323 words**, 207 aligned differences.
 
+   ====================================== 2026-11-21: 202 rows -> 186
+
+   `cs = func_800644B8(*(s16 *)(p + 0x2E)) >> 6;` hoisted to between the two
+   statements it used to sit after, with `j = *(s16 *)(D_80083780 + 0x6) + cs;`
+   reading it.  That is the whole of decomp-permuter's best find here, and it
+   is SAFE: func_80064584/func_800644B8 are the rcos/rsin table lookups, so
+   moving one call ahead of `i -= *(s16 *)(b + 0x2);` crosses nothing it can
+   write.  This park's FIRST permuter run, and sixteen rows.
+   target 323 words, candidate 323 words, 186 aligned differences
+
    ====================================== 2026-11-20: 207 rows -> 202
 
    The body below carries one device: a duplicated-arm `if (i)` around `q = *(u8 **)(p + 0x1C);`.
@@ -99,6 +109,7 @@ void func_800C4F20(u8 *p, u8 *b, u8 *c)
     u8 *r;
     s32 i;
     s32 j;
+    s32 cs;
     s16 n;
     s16 m;
     u16 w;
@@ -158,8 +169,9 @@ void func_800C4F20(u8 *p, u8 *b, u8 *c)
         return;
     case 1:
         i = *(s16 *)(D_80083780 + 0x2) + (func_80064584(*(s16 *)(p + 0x2E)) >> 6);
+        cs = func_800644B8(*(s16 *)(p + 0x2E)) >> 6;
         i -= *(s16 *)(b + 0x2);
-        j = *(s16 *)(D_80083780 + 0x6) + (func_800644B8(*(s16 *)(p + 0x2E)) >> 6);
+        j = *(s16 *)(D_80083780 + 0x6) + cs;
         if (i < 0)
         {
             i += 3;

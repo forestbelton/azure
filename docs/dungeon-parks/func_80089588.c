@@ -1,5 +1,26 @@
 /* PARK func_80089588 -- 148 of 151 words, 80 aligned differences (j40, 2026-11-16).
 
+   ====================================== 2026-11-21: A SECOND PERMUTER FIND
+                                          REJECTED -- IT STORES TWICE WHERE
+                                          THE TARGET STORES ONCE
+
+   The run from this body found 70 rows at 151 words, two better.  Its gain is
+   entirely this rewrite, at both of the two POLY_F4 blocks:
+
+       *(s16 *)(q + 0x12) = h;
+       *(s16 *)(q + 0x12) = *(s16 *)(q + 0x12) + 0xE;
+
+   i.e. the halfword is written, read back and written again.  The final value
+   is the same, so it is not wrong in the way func_8009E798's find is wrong --
+   but it is not what the target does.  The target has ONE `sh $v0, 0x12($s2)'
+   at 80089674 and one at 800896D8, each immediately after the `sh' to 0x16
+   from the SAME register.  There is no `lhu' of 0x12 anywhere in the listing.
+
+   The find's two SAFE changes were split out and measured alone: a `u8 *`
+   local for `g->unk_00' used in the else arm of the `if (q)` device, and a
+   `u8 *` local for `q + 0x16'.  Both measure 72, i.e. nothing, separately and
+   together.  So the whole find is the double store.
+
    ============================== 2026-11-21: 75 rows -> 72
 
    A SECOND device: `do { } while (0);` around the five-store header of the

@@ -1,5 +1,33 @@
 /* func_800A94A0 (ovl_dungeon) -- PARK, best candidate so far.
 
+   ====================================== 2026-11-21: 39 rows -> 26
+
+   THE `void *r' LOCAL IS GONE AND THE PARAMETER `q' CARRIES BOTH CALL
+   RESULTS:
+
+       q = (u8 *)func_80069EF8();
+       ...
+       q = (u8 *)func_800990FC();
+       h = func_80099734(a, q);
+       ...
+       func_800A5720(q);
+
+   `q' is read for `q0 = q[0];' and `q1 = q[1];' at the top of the function and
+   never again, so reusing it is safe, and it is worth ELEVEN ROWS.  Found by
+   decomp-permuter, which reached it because reusing an existing name is one of
+   its mutations and no sweep in this repo proposes it.
+
+   THIS PARK HAD MEASURED SIX PLACES TO PUT func_80069EF8's RESULT -- r, h,
+   src, a dedicated unused s32, a bare call, with and without a cast -- and
+   recorded that all six produce identical bytes.  The parameter was not among
+   them, and it is the one that matters: the point is not where the dead copy
+   goes, it is that `r' was a SEVENTEENTH live quantity competing for the
+   callee-saved file.  Deleting it is what moves the rotation.
+
+   `e', the other pointer parameter, in the same role measures 38 -- so it is
+   `q' specifically, whose live range ends earliest.
+   target 227 words, candidate 227 words, 26 aligned differences
+
    ====================================== 2026-11-21: 41 rows -> 39, AND THE
                                           DEVICE SWEEPS WERE STALE
 
@@ -152,7 +180,6 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
     u8 *g;
     u8 *src;
     u8 *o;
-    void *r;
     void *h;
     u8 *nm;
     s16 q0;
@@ -200,7 +227,7 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
             *(s16 *)((u8 *)m + 0x2) = *(u16 *)(src + 0x2);
             *(s16 *)((u8 *)m + 0x6) = *(u16 *)(src + 0x6);
             *(s16 *)((u8 *)m + 0xA) = *(u16 *)(src + 0xA);
-            r = (void *)func_80069EF8();
+            q = (u8 *)func_80069EF8();
             if ((D_80013714 & 1) == 0)
             {
                 o = *(u8 **)(a + 0x60);
@@ -238,13 +265,13 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
         {
             if (q)
             {
-                r = func_800990FC();
+                q = (u8 *)func_800990FC();
             }
             else
             {
-                r = func_800990FC();
+                q = (u8 *)func_800990FC();
             }
-            h = func_80099734(a, r);
+            h = func_80099734(a, q);
             h = func_80099194(D_800E1C58, h);
             if ((s16)cc != 0)
             {
@@ -265,7 +292,7 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
                 }
             }
             func_80099290(func_80099194(D_80089080, h));
-            func_800A5720(r);
+            func_800A5720(q);
         }
     }
     return (s32)n;

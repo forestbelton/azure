@@ -1,5 +1,18 @@
 /* func_80094988, ovl_dungeon, agent j47, 2026-11-16.
 
+   ====================================== 2026-11-21: 81 rows at 297/299 words
+                                          -> 76 AT 299/299
+
+   Two devices from tools/decomp/devsweep.py, and the first is the park's two
+   missing words: a duplicated-arm `if (slot)` around `idx = j + 1;` (81 rows
+   at 297 words -> 77 at 299), then a `do { } while (0);` around the
+   `D_800E3E48[i] = *(Unk800E3E48 *)(b + 0x2260 ...)` structure copy (77 ->
+   76).
+
+   This park's own note had the two words down as a permuter target.  They
+   were a free-reference device, and the sweep is minutes against the
+   permuter's 45.
+
    296 of 299 words, 81 aligned differences (aligndiff). The STRUCTURE is
    settled -- every block, every branch, every loop bound and every callee
    argument matches; what is left is three missing words and a register
@@ -151,7 +164,10 @@ void func_80094988(u8 *p, u8 *q, s16 x, s16 y)
         {
             *(u32 *)(b + 0x29C + i * 4) = 0;
         }
-        D_800E3E48[i] = *(Unk800E3E48 *)(b + 0x2260 + i * 0x8C);
+        do
+        {
+            D_800E3E48[i] = *(Unk800E3E48 *)(b + 0x2260 + i * 0x8C);
+        } while (0);
         v = *(u8 *)(b + 0x224C + i);
         if (v != 0xFF)
         {
@@ -187,7 +203,14 @@ void func_80094988(u8 *p, u8 *q, s16 x, s16 y)
             {
                 if (*(u32 *)(p + j * 4 + 0xD0) == (u32)slot)
                 {
-                    idx = j + 1;
+                    if (slot)
+                    {
+                        idx = j + 1;
+                    }
+                    else
+                    {
+                        idx = j + 1;
+                    }
                 }
             }
             if (idx != 0)

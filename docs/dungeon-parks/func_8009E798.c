@@ -1,5 +1,19 @@
 /* ============================== 2026-11-21: 71 rows -> 70
 
+   ====================================== 2026-11-21: THE SAME REJECTION
+                                          TWICE, ON A DIFFERENT BYTE
+
+   The second run (base 6375, best 2530) found 63 rows, and its change is
+   `r[0x2D] >>= 1;` moved ahead of `*(u32 *)(r + 0x2C) = 0x606060;` -- the
+   same defect as the first run's `r[0x2C] >>= 1;`, one byte over.  The shift
+   reads the previous frame's packet buffer and the store then overwrites the
+   word, so the POLY_F4's green channel ends 0x60 where the target's is 0x30.
+
+   TWO INDEPENDENT RUNS CONVERGED ON THE SAME ILLEGAL MOVE, which is what to
+   expect: the permuter scores the object, the object does not care which value
+   reaches the GPU, and the move happens to shorten a live range.  Any find
+   here that touches the three `>>= 1' shifts needs reading before measuring.
+
    ====================================== 2026-11-21: 70 rows -> 60
 
    A duplicated-arm `if (flag)` around the cursor write-back
