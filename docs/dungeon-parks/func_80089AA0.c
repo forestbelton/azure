@@ -183,10 +183,28 @@
    PROTOTYPE CHANGE ON LANDING: none. func_80096100 is declared in the unit
    with ONE parameter and func_8009FB34 with an s16 return; both call sites
    go through the `__asm__` aliases above, so neither landed definition is
-   touched. */
+   touched.    ====================================== 2026-11-21: 81 rows -> 75 at
+                                          1165/1165
+
+   A PERMUTER FIND: the literal `1' at TWELVE sites now goes through one
+   `s32 one', set `one = 1;' immediately before `*(s16 *)(k - 8) = n1;'.
+   Nothing else changed.
+
+   The placement is load-bearing to within one statement.  Putting the
+   assignment inside the `if (r1 < 0)' block just above it -- which is where
+   a careless transcription of the permuter's output lands it -- measures 79
+   rows, not 75.  It has to sit after that block closes.
+
+   WHAT IT IS DOING: `1' is wanted in a register twelve times across a
+   1165-word function, and the target plainly keeps it in one.  With the
+   literal, each site re-materialises it.  This is the same lever as
+   func_8009F644's `qo = 0xC', which was worth that park's missing word --
+   a constant through a local escapes being folded into an instruction.
+*/
 extern u16 D_800DD25A __asm__("D_800DD258 + 2");
 void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
 {
+    s32 one;
     u8 *e;
     u8 *g;
     u8 *h;
@@ -260,7 +278,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
         v1 = D_800DCE60;
         *(s16 *)(v1 + 4) = *(s16 *)(v1 + 4) + (((D_80081468[0] & 1) != 0) ? 8 : -8);
         D_800832B4 = 0;
-        func_8004D7A8(1);
+        func_8004D7A8(one);
         func_8004D294(NULL, D_800DCE60, 2);
     }
     *(s16 *)(p + 0x9E) = (*(u16 *)(h + 0xB0) >> 9) & 7;
@@ -305,6 +323,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
                     n1 = 0x200;
                 }
             }
+            one = 1;
             *(s16 *)(k - 8) = n1;
             if ((*(u16 *)0x80013714 & 8) == 0)
             {
@@ -345,20 +364,20 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
             if ((*(s32 *)(e + 0x1C) & 0x800) != 0)
             {
                 r2 = *(u16 *)(p + 0xF8);
-                *(s16 *)(p + 0xF8) = r2 + 1;
+                *(s16 *)(p + 0xF8) = r2 + one;
                 n3 = (func_800644B8((s16)r2) >> 8) + 0x30;
             }
             else
             {
                 r2 = *(u16 *)(p + 0xF8);
-                *(s16 *)(p + 0xF8) = r2 + 1;
+                *(s16 *)(p + 0xF8) = r2 + one;
                 n3 = (func_800644B8((s16)r2) >> 7) + 0x40;
             }
             e[3] = n3;
             *(s32 *)(p + 0x128) = func_800A6D30() & 0xFFFF;
             if ((*(u16 *)0x80013714 & 8) == 0)
             {
-                *(s16 *)(p + 0x118) = *(u16 *)(p + 0x118) + 1;
+                *(s16 *)(p + 0x118) = *(u16 *)(p + 0x118) + one;
             }
             func_800A4ACC(e);
             if (*(s32 *)(p + 0x8C) == (s32)func_80096384)
@@ -436,7 +455,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
         }
         else
         {
-            func_80048AC8(d, 1);
+            func_80048AC8(d, one);
         }
     }
     else
@@ -457,12 +476,12 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
         }
         else
         {
-            func_800489F4(d, *(*(u8 **)(d + 0x2C) + fi), *(s8 *)(d + 4), 1);
+            func_800489F4(d, *(*(u8 **)(d + 0x2C) + fi), *(s8 *)(d + 4), one);
         }
         *(s16 *)(p + 0x94) = fi;
         if (p[0x9A] != 0x22 && D_8006CCF8[fi] != 0)
         {
-            *(u16 *)(d + 0x14) |= 1;
+            *(u16 *)(d + 0x14) |= one;
         }
         else
         {
@@ -474,7 +493,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
     mm = (s8)r3;
     if (mm >= 0)
     {
-        D_800E2970_s[mm].unk_0C |= 1;
+        D_800E2970_s[mm].unk_0C |= one;
     }
     func_800A020C(*(s32 *)(e + 0x1C), d + 0xC);
     if ((*(s32 *)(e + 0x14) & 0x100000) == 0)
@@ -484,7 +503,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
         if ((*(u16 *)(p + 0x98) & 8) == 0)
         {
             c->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
-            p[0x9D] = p[0x9D] + 1;
+            p[0x9D] = p[0x9D] + one;
         }
         *(s32 *)(p + 0x90) += c->unk_14;
         r6 = (s16)func_800BCB04(*(u16 *)((u8 *)c + 2), *(u16 *)((u8 *)c + 6),
@@ -666,7 +685,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
     }
     flagB[0] = 0;
     f13 = fA;
-    *(u16 *)(f13 + 2) |= 1;
+    *(u16 *)(f13 + 2) |= one;
     for (;;)
     {
         if ((D_800E296C & 0x100000) != 0 && (s16)func_800A2C34(NULL) == 0)
@@ -752,7 +771,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
                 *(u16 *)(f13 + 2) = (t1 & 0xEFF7) | 0x4000;
                 if (cnt2 != 0)
                 {
-                    flagB[0] = 1;
+                    flagB[0] = one;
                     continue;
                 }
             }
@@ -764,7 +783,7 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
             {
                 if (i == 0)
                 {
-                    i = 1;
+                    i = one;
                     continue;
                 }
                 t2 = *(u16 *)(f13 + 2);
