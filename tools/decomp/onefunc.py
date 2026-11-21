@@ -143,15 +143,11 @@ def main():
     body = text[start:end]
     pre = "\n".join(text.split("\n")[:preamble_end(text)])
 
-    if out_dir is None:
-        out_dir = os.path.join(os.path.dirname(os.path.abspath(src)), "one")
-    os.makedirs(out_dir, exist_ok=True)
-    dst = os.path.join(out_dir, os.path.basename(src))
-    with open(dst, "w") as f:
-        f.write(pre + "\n\n" + body + "\n")
-
     # Which callees does the preamble NOT declare?
-    called = sorted(set(re.findall(r"\b(func_[0-9A-Fa-f]{8})\s*\(", body)) - {func})
+    # Any mention, not just a call: an address-taken handler like
+    # `n->unk_10 = (u32)func_800B14FC;` is an undeclared identifier too, and
+    # catching only `func_X(` left the standalone failing to compile at all.
+    called = sorted(set(re.findall(r"\b(func_[0-9A-Fa-f]{8})\b", body)) - {func})
     undeclared_earlier, undeclared_other = [], []
     for c in called:
         if re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + c + r"\s*\([^;]*;", pre):
@@ -159,8 +155,41 @@ def main():
         d = find_definition(text, c)
         (undeclared_earlier if d and d[0] < start else undeclared_other).append(c)
 
+    # A callee DEFINED EARLIER with no prototype is a DECLARED function to the
+    # real compile and an implicit `int f()' to this file, and that difference
+    # is worth two words when it bites. Reproduce the unit's view by
+    # synthesising a prototype from the callee's own definition line -- which
+    # is exactly what the unit's compile sees, so it ADDS no divergence.
+    # Without this the standalone is unusable for any function whose callees
+    # sit above it, which on ovl_dungeon.c is most of the back half.
+    synth = []
+    for c in list(undeclared_earlier):
+        d = find_definition(text, c)
+        head = text[d[0]:text.index("{", d[0])].strip().rstrip()
+        head = " ".join(head.split())
+        if head.endswith(")"):
+            synth.append(head + ";")
+            undeclared_earlier.remove(c)
+    if synth:
+        pre = pre + "\n\n/* onefunc.py: prototypes for callees DEFINED EARLIER in the unit with no\n" \
+                    "   declaration of their own -- the real compile sees these, so the\n" \
+                    "   standalone file has to as well. */\n" + "\n".join(synth) + "\n"
+
+    if out_dir is None:
+        out_dir = os.path.join(os.path.dirname(os.path.abspath(src)), "one")
+    os.makedirs(out_dir, exist_ok=True)
+    dst = os.path.join(out_dir, os.path.basename(src))
+    with open(dst, "w") as f:
+        f.write(pre + "\n\n" + body + "\n")
+
     print("onefunc: %s -> %s (%d preamble lines + %d body lines)"
           % (func, dst, pre.count("\n") + 1, body.count("\n") + 1))
+    if synth:
+        print("onefunc: synthesised %d prototype(s) for callees defined earlier in the"
+              % len(synth))
+        print("onefunc: unit with no declaration, so this file sees what the unit sees:")
+        for h in synth:
+            print("onefunc:       %s" % h)
     if undeclared_earlier:
         print("onefunc: *** MAY DISAGREE WITH THE UNIT *** these callees are DEFINED")
         print("onefunc: *** EARLIER in %s with no prototype, so the unit sees a" % os.path.basename(src))

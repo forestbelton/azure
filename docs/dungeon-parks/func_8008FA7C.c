@@ -1,4 +1,40 @@
 /* PARK: func_8008FA7C, 180 words against a target of 181, 31 aligned
+
+   ===================== 2026-11-20: 180 words / 31 rows -> 181 / 13, ONE LINE
+
+   The word count is now EXACT and the residue is less than half.  The whole
+   change is wrapping ONE statement in a degenerate loop:
+
+       do
+       {
+           *(s16 *)(g + 0xA) += 1;
+       } while (0);
+
+   That is the missing 181st word and eighteen of the thirty-one rows.  The
+   park had the diagnosis exactly right and could not spend it: "the fix
+   wanted is ONE more occupied cycle in sched1's T-4..T-20 window, or
+   anything that drains `a0 = c` before the g `lo_sum` becomes ready at
+   T-21".  An inner `do { } while (0)`'s loop notes are a FULL SCHEDULING
+   BARRIER on the insn that carries them (sched.c:2088 -- a dependence on
+   every register's last use and last set, kind 0, then
+   `flush_pending_lists`), so it is exactly an occupied cycle, placed where
+   you choose.
+
+   FOUND BY SWEEPING, NOT BY REASONING, and the sweep is the point: every
+   statement position x {`do { } while (0)` wrapper, duplicated-arm
+   `if (v) { s } else { s }` for each of 20 locals} is 516 measurements, which
+   is under a minute on a `tools/decomp/onefunc.py` file.  The ladder it
+   climbed was 31 -> 29 -> 26 -> 23 -> 16 -> 13, and the winning position is
+   not one a reader would have guessed -- `*(s16 *)(g + 0xA) += 1;` is three
+   statements away from anything the diagnosis mentions.  A second device on
+   top (1572 further measurements, beam 3) finds nothing better than 13.
+
+   The remaining 13 rows still start at the same place: word 63 is
+   `lui $a0, %hi(D_80083460)` where the target has `addu $a0, $s2, $zero`,
+   i.e. `&D_80083460`'s pair is still at the TOP of state 1's block instead
+   of words 73/77.  The causal chain below is unchanged and still the thing
+   to attack -- `g` has TWO sets, so `birthing_insn_p` never bumps its
+   `lo_sum`.
    differences.  ovl_dungeon, 2026-11-16, agent j80 (after j41).
 
    j80's result in one line: THE BODY BELOW PRODUCES THE TARGET'S EXACT
@@ -205,7 +241,10 @@ void func_8008FA7C(u8 *p, UnkVec *b, u8 *c, u8 *d)
             s = *(void **)D_80081484;
             *(void **)D_80081484 = NULL;
             g = (u8 *)&D_80083460;
-            *(s16 *)(g + 0xA) += 1;
+            do
+            {
+                *(s16 *)(g + 0xA) += 1;
+            } while (0);
             t1 = D_800DCFD0;
             *(u8 **)(c + 0x2C) = t1;
             D_800E3540 = s;
