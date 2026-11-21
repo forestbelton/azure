@@ -1,5 +1,10 @@
 /* func_800D92C0 (ovl_dungeon) -- 343 of 344 words, 62 ALIGNED DIFFERENCES.
 
+   ====================================== 2026-11-21: 52 rows -> 51
+
+   `y++; y--;` before `if (c[0x24] == (u16)x && c[0x25] == (u16)y)`, from
+   tools/decomp/refsweep.py.  One row.
+
    ============================== 2026-11-20: 62 rows at 343/344 words -> 56 at 344/344
 
    The body below carries one device: a duplicated-arm `if (c)` around the `k = ((d[0x45] + ...` line -- which is also the missing word.
@@ -186,6 +191,8 @@ void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d)
                 }
                 x = t80[0x24] + *(u16 *)(k + (s32)D_8006CCD8);
                 y = t80[0x25] + *(u16 *)(k + (s32)D_8006CCE8);
+                y++;
+                y--;
                 if (c[0x24] == (u16)x && c[0x25] == (u16)y)
                 {
                     d[0x71] &= 0x7F;

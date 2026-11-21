@@ -1,5 +1,13 @@
 /* PARK: func_800CEA44, 240 of 242 words, 128 aligned differences.
 
+   ====================================== 2026-11-21: 126 rows -> 121
+
+   Three cancelled increment pairs from tools/decomp/refsweep.py:
+   `g++; g--;` before `r = *(u8 **)(g + 0x18) + j;` (126 -> 125), `c++; c--;`
+   before the func_8009A350 test (125 -> 122), and the first one again at the
+   same statement in the second round (122 -> 121).  Each is four more
+   references to one name and not one instruction.
+
    ====================================== 2026-11-21: 127 rows -> 126
 
    `b = D_800E3648;` moved above the `func_8004437C(0, 1);` /
@@ -176,6 +184,8 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                 }
                 j = func_800A6D30() & 0x1E;
                 g = (u8 *)&D_80083460;
+                g++;
+                g--;
                 r = *(u8 **)(g + 0x18) + j;
                 x = r[0];
                 y = r[1];
@@ -195,6 +205,8 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                             a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1)) + t[0];
                         }
                         c = func_800A6DA4(0, (u16)(*(u16 *)(t + 6) - 1)) + t[2];
+                        c++;
+                        c--;
                         if (func_8009A350((u8)a - 1, (u8)c, 0, &w) != 0 && (w & 0xB700) == 0)
                         {
                             break;
