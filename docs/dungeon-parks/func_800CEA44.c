@@ -1,4 +1,17 @@
 /* PARK: func_800CEA44, 240 of 242 words, 128 aligned differences.
+
+   ====== 2026-11-20: 135 rows at 239/242 words -> 127 at 242/242, ONE DEVICE
+
+   A duplicated-arm `if (q)` around `a = func_800A6DA4(0, (u16)...);`.  jump2's
+   cross-jumping merges the arms so it costs nothing, flow has already counted
+   `q` twice, and it is also THE MISSING THREE WORDS -- so this park's
+   "3 words short" was not a length problem at all.
+
+   Swept rather than reasoned: every statement position times
+   {`do { } while (0)`, duplicated-arm `if (v)` over every local}, 381
+   measurements on a `tools/decomp/onefunc.py` file.  This function lives in
+   csrc/ovl_dungeon_800CABA8.c since the carve, which is why the park tooling
+   now finds its unit rather than assuming csrc/ovl_dungeon.c.
    ovl_dungeon.  Measured 2026-11-16.  The kind-2 node's per-frame handler,
    parked at the node's +0x10 by the landed func_800CEE0C
    (`*(u32 *)(n + 0x10) = (u32)func_800CEA44;`, csrc/ovl_dungeon.c:35836), so
@@ -165,7 +178,14 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                     t = D_800E2970 + (s16)k * 0x14;
                     while (1)
                     {
-                        a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1)) + t[0];
+                        if (q)
+                        {
+                            a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1)) + t[0];
+                        }
+                        else
+                        {
+                            a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1)) + t[0];
+                        }
                         c = func_800A6DA4(0, (u16)(*(u16 *)(t + 6) - 1)) + t[2];
                         if (func_8009A350((u8)a - 1, (u8)c, 0, &w) != 0 && (w & 0xB700) == 0)
                         {
