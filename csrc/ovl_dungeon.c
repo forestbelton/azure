@@ -3033,7 +3033,145 @@ void func_8008FA14(u8 *p, void *b, void *c, u8 *d)
     func_8009F644(d, 0x30, *(s16 *)(p + 0x96), 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008FA7C);
+/* State machine for the stairs/warp confirm's second half, off the actor's
+   +0x9B: state 0 skins from D_800DD0C8, state 1 runs the +0x96 countdown down
+   and on a non-zero func_8009AF18 result raises the renderable's 0x200000,
+   writes its +0x8A/+0x84/+0x85 trio, drops d's +0x100000, parks D_80081484's
+   record in D_800E3540, bumps D_80083460's +0xA counter and re-skins from
+   D_800DCFD0; state 2 re-skins from D_800DD060 and state 3 hands the actor to
+   func_8008EAC8 or func_8008ACDC.  181 words, 0 differing.
+
+   STATE 1's +0xA BUMP NEEDS ITS OWN LOCAL *AND* AN ARRAY REF, and those are
+   two INDEPENDENT requirements worth 13 rows between them.  Both +0xA accesses
+   are the same halfword, but state 1's must be `((s16 *)g1)[5]' on a local
+   that only state 1 writes:
+
+   * ITS OWN LOCAL.  Sharing state 3's `g' gives the pseudo TWO sets, so
+     `adjust_priority' (sched.c:2583) never sees `birthing_insn_p' -- which
+     gates on `reg_n_sets == 1' -- and the `lo_sum' keeps priority 1 instead of
+     being bumped to LAUNCH_PRIORITY the cycle it becomes ready.  Shared, with
+     no device: 180 words / 31 rows.
+   * AN ARRAY REF, so MEM_IN_STRUCT_P is set on the `lhu'/`sh' pair.  Only then
+     does true_dependence's escape clause (sched.c:880) fire against
+     `%lo(D_80081484)' and `0x1C(d)', and only then is the whole D_80081484
+     group free to float BELOW the `and' that kills the 0xFFEFFFFF mask.  That
+     is what lets `lui %hi(D_80081484)' reuse $a1 at word 75 instead of taking
+     $a0 at word 63 -- and $a0 staying free is the target's
+     `addu $a0, $s2, $zero' at word 63 and its load-delay `nop' at 67.  On its
+     own local but through a cast, `*(s16 *)(g1 + 0xA) += 1;' is 182 / 32.
+
+   NEITHER HALF MOVES ANYTHING ALONE, and the park had a measured NEGATIVE on
+   each of them separately -- "separate local 182/32" and "array ref 180/31" --
+   each true of the body it was measured on.  Two correct halves of one answer,
+   filed as two independent failures.
+
+   The signedness and the struct type are irrelevant: `((u16 *)g1)[5]',
+   `((s16 *)g1)[5]' and a `UnkDungeonGlobal *' local's `gs->unk_0A' are all
+   181/0, while `*(u16 *)((u8 *)g1 + 0xA)' is 182/32.  It is the ARRAY REF, not
+   the width and not the typedef.
+
+   DO NOT ADD A `do { } while (0)' AROUND THE BUMP.  It was worth 18 rows while
+   the increment was a cast on the shared `g' (31 -> 13), because it forced the
+   occupied cycle the missing dependence edge would have supplied; on this body
+   it re-breaks what the array ref fixes, 183 / 30.
+
+   STILL LOAD-BEARING, with what the cast costs here:
+   * the call's angle must be `((s16 *)d)[0x15]', not `*(s16 *)(d + 0x2A)':
+     184 / 36;
+   * `((u32 *)d)[7] &= ~0x100000' must be the array ref: 181 / 2;
+   * the `s16'-returning alias below is required -- the real definition's `u16'
+     first parameter gives `lhu' where the target has `lh'.
+   NO LONGER load-bearing: `((u32 *)q)[7] |= 0x200000' may be written
+   `*(u32 *)(q + 0x1C) |=' (181/0).  State 1's statement order is the best of
+   all 60 orderings of its five groups; the next best is 15 rows. */
+/* func_8009AF18 is defined below with a `u16' first parameter, which gives
+   `lhu' where this call site needs `lh'.  The alias declares the same symbol
+   with the parameter type this caller needs; the other caller keeps the
+   implicit int it has today, and the definition re-measures 147/0. */
+s16 func_8009AF18_s(s16, UnkVec *, u8 *, s16) __asm__("func_8009AF18");
+void func_8008FA7C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *g1;
+    u8 *q;
+    u8 *t0;
+    u8 *t1;
+    u8 *t2;
+    void *s;
+    s16 r;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        b->unk_14 = (s32)0xFFEA0000;
+        t0 = D_800DD0C8;
+        *(u8 **)(c + 0x2C) = t0;
+        func_80048A44(c, t0[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        p[0x9B]++;
+        break;
+    case 1:
+        if (--*(s16 *)(p + 0x96) > 0)
+        {
+            break;
+        }
+        r = func_8009AF18_s(*(s16 *)(d + 0x2A), b, c, 8);
+        if (r != 0)
+        {
+            q = *(u8 **)(p + 0x124);
+            ((u32 *)q)[7] |= 0x200000;
+            *(s16 *)(*(u8 **)(p + 0x124) + 0x8A) = r;
+            (*(u8 **)(p + 0x124))[0x84] = 0x78;
+            (*(u8 **)(p + 0x124))[0x85] = 2;
+            ((u32 *)d)[7] &= ~0x100000;
+            s = *(void **)D_80081484;
+            *(void **)D_80081484 = NULL;
+            g1 = (u8 *)&D_80083460;
+            ((s16 *)g1)[5] += 1;
+            t1 = D_800DCFD0;
+            *(u8 **)(c + 0x2C) = t1;
+            D_800E3540 = s;
+            func_80048A44(c, t1[((D_80083228 + ((s16 *)d)[0x15] + 0x100) >> 9) & 7], 5, 1);
+        }
+        p[0x9B]++;
+        break;
+    case 2:
+        if ((*(u16 *)(p + 0xA2) & 0x10) == 0)
+        {
+            break;
+        }
+        b->unk_14 = 0;
+        if ((*(u32 *)(d + 0x1C) & 0x100000) == 0)
+        {
+            t2 = D_800DD060;
+            *(u8 **)(c + 0x2C) = t2;
+            func_80048A44(c, t2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        }
+        p[0x9B]++;
+        break;
+    case 3:
+        g = (u8 *)&D_80083460;
+        if (*(s16 *)(g + 0xA) != 0)
+        {
+            break;
+        }
+        *(u16 *)(g + 0x2) |= 0x412;
+        func_80099F70(*(u8 **)(d + 0x5C));
+        func_80099F04(*(u8 **)(d + 0x5C));
+        if ((*(u32 *)(d + 0x1C) & 0x100000) != 0)
+        {
+            *(u32 *)(p + 0x8C) = (u32)func_8008EAC8;
+            *(u8 **)(c + 0x2C) = D_800DD0B8;
+        }
+        else
+        {
+            *(u32 *)(p + 0x8C) = (u32)func_8008ACDC;
+            *(u8 **)(c + 0x2C) = D_800DCFB0;
+        }
+        func_80048A44(c, (*(u8 **)(c + 0x2C))[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+        p[0x9B]++;
+        break;
+    }
+}
 
 /* The state-0x22 glide: ease the mover onto the tile at c[0x24]/c[0x25] over
    the engine's shared countdown at D_80083460 + 4, re-skin from D_800DD0E0
