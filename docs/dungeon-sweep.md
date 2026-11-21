@@ -1011,3 +1011,60 @@ three failed identically**: a correct account of why one route is closed, read
 as a proof that all routes are. The previous two were the `%lo`-load alias
 claim and the `|= 0x80000000` gate. If a park says PROVED, check which levers
 its rejected list actually contains before believing it.
+
+### THE FRONTIER AFTER THIS SESSION
+
+Every number below reproduces from the repo alone:
+`python3 tools/decomp/parkresidue.py` ranks them all, and
+`python3 tools/decomp/parksplice.py FUNC <copy>` prints one.
+
+| rows | words | function | the state of it |
+|---|---|---|---|
+| **2** | 208/208 | `func_8008E700` | **one instruction, one slot** -- `addu $a0, $s2, $zero` at 138 where the target has 137. All 540 legal source orders of the split basin swept with the mask pinned; the pin controls that insn's slot but 137 is not among the slots it offers. Imported for the permuter |
+| **2** | 92/92 | `func_8009A3D0` | lever 5's two words -- `f` needs a second set or it cannot win $s0, and the cheapest one is the tail, which puts the `or`/`sh` in $s0 where the target has $v0. Six alternatives measured, 7 to 20 rows |
+| 16 | 95/95 | `func_800B8FC8` | was a "proved" 19. One free reference on `b2`; no second device improves it |
+| 13 | 81/81 | `func_800B23F8` | **genuinely blocked, and the argument is sound**: `emit_insns (conversion_insns)` is inside `assign_parms` (function.c:4093), so every parameter insn precedes every body insn, and the target needs three parameter copies AFTER the call's own argument setup. Do not spend the permuter -- it rewrites C, and no C reaches this order |
+| 31 | 180/181 | `func_8008FA7C` | needs ONE more occupied cycle in sched1's T-4..T-20 window, or anything that drains `a0 = c` before the `g` `lo_sum` is ready at T-21 |
+| 31 | — | `func_800AD6FC` | `p` must lose 21% of its priority and has NINE real uses in the target's own assembly. The free-reference dial caps out: 11 refs over the longest reachable range is `3*11/116 = 0.284` against the `< 0.2667` needed, and 8 refs is 0.2697. The remaining idea is to raise `c` and `mode` over `p` instead -- `c`'s `.lreg` length of 240 is TWO SUMMED RANGES and a matched-operand device halves it to 122 |
+| 38 | 234/234 | `func_800B1768` | two adjacent moves in the wrong order: the target sets up the next call's `$a0` BEFORE copying the previous call's return value, so `u` dies and shares a register with `t`. A pre-sched RTL order fact, not a tie |
+
+Then `func_800B6AC4` 46, `func_800C5FA8` 49, `func_800A05A4` 59,
+`func_800D92C0` 62, `func_800D13B8` 66, `func_8009E798` 71, `func_800A94A0`
+76, `func_80089588` 80, `func_80094988` 81, `func_80089AA0` 87,
+`func_800A0E6C` 93, `func_800CEA44` 128, `func_800AFBFC` 149, `func_800ADE74`
+256, `func_800B51C8` 262.
+
+Still blocked and only these: the **seven 4-mod-8 jump-table functions**
+(`func_8009F644`, `func_800B45E0`, `func_800B490C`, `func_800C2824`,
+`func_800C4F20`, `func_800D50FC`, `func_800D81D4`), which need the unit carved
+in the same change, and **`func_800B23F8`**. `func_800AD6FC` is no longer on
+the blocked list -- it has a priced route, just not a cheap one.
+
+### WHAT WAS NOT VERIFIED, AND WHY
+
+**The container was NOT rebuilt this session.** All 822 defined functions
+measure `0 differing` with `ovlverify`, which is the per-function authority,
+but `ovlverify` is blind to a jump table landing at the wrong address and to
+rodata order -- only `make containers` plus a `cmp` against `data/` settles
+that.
+
+It was not run because **another session has `splat/slus_006.14.yaml` modified
+in the working tree** (210 lines removed) and that file is NEWER than
+`build/slus_006.14.ld`, so `make containers` would re-run `splat split` with
+another session's in-flight configuration -- re-splitting the 26 MB container,
+clobbering the shared listings every measurement in this document depends on,
+and doing it from a half-finished yaml. See "Concurrent sessions in the azure
+repo".
+
+**So the first thing to do when the tree is yours alone: `make containers`
+and `cmp` all four against `data/`.** Nothing landed this session touches a
+jump table or rodata, so the expectation is byte-identical, but it is an
+expectation and not a measurement.
+
+### ONE PROCESS NOTE THAT COST A SHELL
+
+`pkill -f permrun.py` matches the command line of the shell running it and
+kills that shell. `docs/landing-a-function.md` already records this for
+`pgrep -f` ("a pattern like `pgrep -f "permrun.py $FUNC"` matches the command
+line of the very shell running it"); it applies to `pkill` with teeth. Stop a
+search by PID, or let it expire.
