@@ -1,4 +1,21 @@
-/* PARKED 2026-11-16, j50.  target 358 words, candidate 358 words,
+/* ============================== 2026-11-21: 71 rows -> 70
+
+   `u8 *dr = r + 0x4C;` computed between `ry = *(u16 *)(p + 0x6);` and
+   `rc.y = ry;`, and passed to the final func_80067E2C instead of the inline
+   `r + 0x4C`.  One row; the `addiu` moves up out of the call sequence.
+
+   REJECTED FROM THE SAME PERMUTER RUN -- and this one is a correctness
+   rejection, not a score one.  Its best find (64 rows, 7 better) moves
+   `r[0x2C] >>= 1;` to BEFORE `*(u32 *)(r + 0x2C) = 0x606060;`.  The shift
+   then reads whatever the previous frame left in the packet buffer and the
+   store overwrites it, so the first colour channel ends at 0x60 where the
+   target's is 0x30: the POLY_F4's red is wrong and the whole 7 rows is that
+   dead statement.  The permuter cannot see it because the object it diffs
+   does not care which value reaches the GPU.  Checking what a find MEANS, not
+   just what it scores, is the second gate after measuring it.
+   target 358 words, candidate 358 words, 70 aligned differences
+
+   PARKED 2026-11-16, j50.  target 358 words, candidate 358 words,
    87 differing (ovlverify masked); aligndiff 71 aligned differences, EVERY
    instruction positionally aligned and most rows register-name-only.
 
@@ -143,6 +160,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     s16 a;
     s16 bb;
     RECT rc;
+    u8 *dr;
 
     q = *(u8 **)(base + 0x8D0);
     sp->unk_20 = base + 0xB0;
@@ -243,6 +261,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r + 0x40);
     rc.x = *(u16 *)(p + 0x4);
     ry = *(u16 *)(p + 0x6);
+    dr = r + 0x4C;
     rc.y = ry;
     rc.w = *(u16 *)(p + 0x8);
     rc.h = *(u16 *)(p + 0xA);
@@ -250,7 +269,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     {
         rc.y = ry + 0xE0;
     }
-    func_80067E2C((DR_AREA *)(r + 0x4C), &rc);
+    func_80067E2C((DR_AREA *)dr, &rc);
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r + 0x4C);
     PopMatrix();
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(r + 0x58);

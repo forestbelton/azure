@@ -1,5 +1,17 @@
 /* PARK func_80089588 -- 148 of 151 words, 80 aligned differences (j40, 2026-11-16).
 
+   ============================== 2026-11-21: 75 rows -> 72
+
+   A SECOND device: `do { } while (0);` around the five-store header of the
+   SECOND POLY_F4 block (the `0x2A000000` / `1` / `1` / `0x100` / `0x100`
+   group that follows `q += 0x18;`).  The same wrapper around the FIRST block,
+   whose five statements are textually identical, is worth NOTHING -- 75 rows.
+   The device is not about the statements it wraps; it is about which pseudo's
+   references get the loop_depth weight at that point in the function, and the
+   two blocks live on opposite sides of the `lean` test that decides the
+   register the second block competes for.
+   target 151 words, candidate 151 words, 72 aligned differences
+
    ============================== 2026-11-20: 80 rows at 148/151 words -> 75 at 151/151
 
    The body below carries one device: a duplicated-arm `if (q)` around `SetDrawArea(q, g->unk_00);` -- which is also the missing three words.
@@ -120,11 +132,14 @@ void func_80089588(void)
     *(s16 *)(q + 0x12) = h + 0xE;
     AddPrim(g->unk_00 + 0x830, q);
     q += 0x18;
-    *(u32 *)(q + 0x4) = 0x2A000000;
-    *(s16 *)(q + 0x10) = 1;
-    *(s16 *)(q + 0x8) = 1;
-    *(s16 *)(q + 0x14) = 0x100;
-    *(s16 *)(q + 0xC) = 0x100;
+    do
+    {
+        *(u32 *)(q + 0x4) = 0x2A000000;
+        *(s16 *)(q + 0x10) = 1;
+        *(s16 *)(q + 0x8) = 1;
+        *(s16 *)(q + 0x14) = 0x100;
+        *(s16 *)(q + 0xC) = 0x100;
+    } while (0);
     if (lean == 0)
     {
         y = 0x1C0;

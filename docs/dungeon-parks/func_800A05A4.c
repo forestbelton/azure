@@ -1,5 +1,26 @@
 /* PARK: func_800A05A4, 139 of 139 words, 59 aligned differences (`ovlverify'
 
+   ============================== 2026-11-21: 47 rows -> 45
+
+   `r = NULL;` moved from the middle of the head block to the FIRST statement
+   of the function, ahead of `g = ((u32)dir >> 9) & 7;`.  Nothing else; the
+   permuter's find carried no other change.  r's pseudo is created by its
+   first use (DECL_RTL is lazy, see docs/matching-levers.md), so moving the
+   initialisation moves r's number ahead of g's and the two swap places in
+   local-alloc's queue.  Statement ORDER inside a straight-line block is a
+   lever even where declaration order is not.
+
+   AND IT CONTRADICTS THIS PARK'S OWN "the entry block is exhausted".  The
+   210-order sweep below measured every interleaving of the entry block and
+   concluded order "cannot get below 59".  It was swept on the body AS IT THEN
+   WAS -- before the `do { } while (0);` device.  The device changed which
+   pseudo wins the contested register, and that changed which order is best:
+   one of the orders the sweep had scored 59 is now 45.  A SWEEP'S NEGATIVE IS
+   SCOPED TO THE BODY IT WAS SWEPT ON.  After landing any device, the earlier
+   sweeps are stale and worth re-running -- which is cheap, and is why the
+   permuter found this in minutes.
+   target 139 words, candidate 139 words, 45 aligned differences
+
    ============================== 2026-11-20: 59 rows -> 47
 
    The body below carries one device: a `do { } while (0);` around `r = func_8009B4B0(p, xx, y...);`.
@@ -201,11 +222,11 @@ s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n)
     s32 d;
     s32 ii;
 
+    r = NULL;
     g = ((u32)dir >> 9) & 7;
     thr = 0x20;
     lim = n;
     i = g;
-    r = NULL;
     xx = (D_8006CCD8[g] & 0xFFFF) + x;
     yy = (D_8006CCE8[g] & 0xFFFF) + y;
     if (func_800A0548(xx, yy) != 0)

@@ -1,5 +1,39 @@
 /* func_800A94A0 (ovl_dungeon) -- PARK, best candidate so far.
 
+   ============================== 2026-11-21: 59 rows -> 41
+
+   `n++; n--;` immediately after `n = func_8003FD64(...)`.  The pair compiles
+   to NOTHING -- combine cancels the `addiu $x, 0x58` / `addiu $x, -0x58` --
+   but it is four more references to n in flow.c's count, and that is worth
+   18 rows of the register rotation this park spent a day failing to move.
+
+   THIS PARK SAID THE RESIDUE WAS NOT PERMUTER FOOD.  It was wrong, and the
+   reasoning is the interesting part: the residue IS the alloc class (equal
+   word counts, every difference a register number), docs/dungeon-sweep.md
+   does say that class is `.greg` work, and 210 declaration permutations had
+   already come back flat.  What that argument misses is that a free-reference
+   device changes the alloc ORDER without changing a single instruction, so an
+   alloc-class residue is exactly what a reference-count device can move.  The
+   permuter found it in 45 minutes; the `.greg` reading had me reading dumps.
+
+   `n += 1; n -= 1;` and `n = &n[1]; n = &n[-1];` are the same 41 rows -- the
+   same cancelled pair, three spellings.  Measured and WORSE:
+   * `do { n = func_8003FD64(...); } while (0);` -- 66 rows.  The do-while
+     weights the references inside it, and the only reference inside is the
+     ASSIGNMENT, which is not where the extra weight is wanted.
+   * a duplicated-arm `if (D_80083498)` around the call -- 231 words.  Two
+     calls that jump2 does not merge, because the arms differ in the
+     condition's own evaluation.
+   * inverting to an early `if (n == NULL) { return 0; }` (equivalent, since
+     the function returns `(s32)n` and that is 0 on the NULL path): 229 words,
+     61 rows -- the inversion costs two words on its own, and 44 rows with the
+     device.  The park's `if (n != NULL)` + `return (s32)n` tail is right.
+   * hoisting `g[0x24]` into a `u8` local, which the permuter's find also
+     carried: 59 rows, i.e. nothing.  The find's whole 18 rows is the
+     free-reference pair; the hoist rode along.  (Splitting a find into its
+     individual changes and measuring each half, every time.)
+   target 227 words, candidate 227 words, 41 aligned differences
+
    ============================== 2026-11-20: 76 rows -> 59
 
    The body below carries one device: a duplicated-arm `if (q)` around `r = func_800990FC();`.
@@ -103,6 +137,8 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
 
     s = *(u8 **)(a - 0x14);
     n = func_8003FD64(0x12, D_80083498);
+    n++;
+    n--;
     if (n != NULL)
     {
         cc = c;
