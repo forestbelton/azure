@@ -89,6 +89,12 @@ CONTAINER = {
     "ovl_main_8008A288": "main.bin",
     "ovl_town": "town.bin",
     "ovl_dungeon": "dungeon.bin",
+    # The carved second unit, 2026-11-20. WITHOUT THIS ENTRY the basename
+    # falls through to town.bin.elf and the tool reports plausible nonsense
+    # rather than failing -- the trap the module docstring opens with.
+    "ovl_dungeon_800C2824": "dungeon.bin",
+    "ovl_dungeon_800CABA8": "dungeon.bin",
+    "ovl_dungeon_800D50FC": "dungeon.bin",
 }
 ROW = re.compile(r"\s*/\* \w+ (\w+) ([0-9A-F]{8}) \*/\s+(.*)")
 

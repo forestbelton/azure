@@ -133,6 +133,49 @@ segments:
     vram: 0x80088760
     subsegments:
       - [0xa3000, .rodata, ovl_dungeon]
+      # THE CARVE, 2026-11-20. Four of this block's jump tables sit at a
+      # 4-mod-8 rodata offset -- jtbl_8008938C (0xc2c), jtbl_800893E4
+      # (0xc84), jtbl_80089454 (0xcf4) and jtbl_80089474 (0xd14) -- and
+      # cc1psx writes `.align 3` before every table it compiles, so the
+      # first of their functions to be landed inside one big ovl_dungeon.c
+      # gains four bytes of pad the reference does not have, .rodata grows
+      # and the container comes out eight bytes long.
+      #
+      # 0xa3c2c is rodata offset 0xc2c, which is jtbl_8008938C itself. With
+      # this unit's rodata starting there, all four tables are 0 mod 8
+      # relative to the unit and the directive is a no-op. `subalign: 4`
+      # above (plus SUBALIGN(4) in the generated linker script) is what
+      # lets the section land at 4 mod 8 at all -- without it ld would
+      # bump it to 8 and the pad comes back.
+      #
+      # 0xdd0c4 is func_800C2824, the first function whose rodata is at or
+      # after 0xc2c, and the two boundaries have to name the SAME function:
+      # cc1psx emits a unit's rodata in function order, so a code split
+      # anywhere else puts a table on the wrong side of the rodata split
+      # and the link fails with an undefined reference.
+      #
+      # The THREE remaining 4-mod-8 tables -- jtbl_80088D7C (0x61c),
+      # jtbl_800892CC (0xb6c) and jtbl_800892E4 (0xb84) -- stay in the head
+      # unit and cost nothing there, because func_8009F644, func_800B45E0
+      # and func_800B490C are still INCLUDE_ASM and splat emits their
+      # tables verbatim with no `.align` at all. Landing those three needs
+      # two more splits, at 0x61c and 0xb6c. Their bodies are parked in
+      # docs/dungeon-parks/.
+      - [0xa3c2c, .rodata, ovl_dungeon_800C2824]
+      # AND THE MIDDLE ONE, which is the part that is easy to get wrong.
+      # Splitting at a 4-mod-8 offset INVERTS the alignment class for every
+      # other table in the new unit: the compiled table at 0xce0 (vram
+      # 0x80089440, five entries, owned by the LANDED func_800CABA8) is 0 mod
+      # 8 absolutely and was fine inside one unit, but 4 mod 8 relative to
+      # 0xc2c -- so a single split at 0xc2c pads IT instead and the container
+      # still comes out eight bytes long. That is what the first attempt did.
+      # splat says so itself, in the "File split suggestions" it prints on
+      # every run; read them.
+      - [0xa3ce0, .rodata, ovl_dungeon_800CABA8]
+      - [0xa3cf4, .rodata, ovl_dungeon_800D50FC]
       - [0xa3d40, c, ovl_dungeon]
+      - [0xdd0c4, c, ovl_dungeon_800C2824]
+      - [0xe5448, c, ovl_dungeon_800CABA8]
+      - [0xef99c, c, ovl_dungeon_800D50FC]
   - [0xf7700, bin]
   - [0x1a86800]
