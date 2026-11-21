@@ -1022,9 +1022,9 @@ then read only the section you need.
 - `lw $t0` MEANS A SPILLED PSEUDO; `lw $v0`/`$v1` MEANS AN ADDRESSABLE VARIABLE  `:32370`
 - JOINING TWO EARLY-RETURN TESTS WITH `||` CHANGES WHICH BLOCK reorg CAN OWN  `:32389`
 - A REDUNDANT REGISTER COPY SURVIVES jump2 IF YOU SPELL IT `x + z0` WITH `z0` PINNED TO `$0`  `:32403`
-- A FREE REFERENCE WINS AN `allocno_compare` RACE, AND `do { } while (0)` IS THE SPELLING TO REACH FOR FIRST  `:32489`
-- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:32582`
-- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:32652`
+- A FREE REFERENCE WINS AN `allocno_compare` RACE, AND `do { } while (0)` IS THE SPELLING TO REACH FOR FIRST  `:32515`
+- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:32608`
+- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:32678`
 
 <!-- END INDEX -->
 
@@ -32454,7 +32454,33 @@ unreachable, check whether an earlier copy between the same two hard registers
 exists in the final insn stream -- if it does, jump2 is deleting yours, and the
 PLUS spelling is the escape.
 
-**AND IT IS NOT ONLY jump2.** `func_8009A8C0` (2026-11-20) needed TWO
+**AND IT IS NOT ONLY jump2 -- IT HAS NOW BEATEN THREE PASSES.** The question
+is only which pass is eating the copy; the spelling does not change.
+
+`local-alloc`'s `optimize_reg_copy_1` is the third. On `func_8009A3D0`
+(2026-11-20, worth **15 rows to 2**) the residue was six caller-saved
+registers rotated, and the cause was that pass rewriting a `m = n` copy:
+sched1 had already placed the copy ahead of the sign-test `sll`, so the
+forward scan from the copy reached that `sll`, found `REG_DEAD n` on it and
+made it read `m` instead -- which shortens `n`'s quantity, lifts its
+`QTY_CMP_PRI` and cascades. The park's cure was to BLOCK the scan with a
+third set of `m`, which works and displaces a `nor` by nine words. The better
+cure is never to enter the pass at all, because `local-alloc.c:1025-1028`
+gates it on
+
+    flag_expensive_optimizations && GET_CODE (dest) == REG
+    && GET_CODE (SET_SRC (set)) == REG
+    && ! find_reg_note (insn, REG_DEAD, SET_SRC (set))
+
+and a PLUS is not a REG. **That is the same shape as the jump2 case: the test
+is escaped one step before the pass's own logic is reached.** Note the second
+half of that landing, though -- the PLUS alone was 22 rows, and it is 2 only
+with the clamp written one-armed (`m = n + z0;` then
+`if ((s16)n < 0) m = 0;`), which is what the target's inverted `bgez` and its
+word-64 copy slot were saying all along. A device that defeats the right pass
+still has to be put in the right statement.
+
+`func_8009A8C0` (2026-11-20) needed TWO
 surviving copies of one value -- `(f >> 9) & 7` into $a0, copied to $s5, then
 copied back to $a0 twenty words later -- and there the pass eating them is
 cse: `make_regs_eqv` puts the destination of a reg-to-reg copy into the
