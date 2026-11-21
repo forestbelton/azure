@@ -289,7 +289,46 @@
    named pass (`optimize_reg_copy_1`) whose trigger is a statement position.
    That is the shape docs/dungeon-sweep.md says the permuter wins.
 
-   NEEDS the typedef below in the declaration block. */
+   NEEDS the typedef below in the declaration block.    ====================================== 2026-11-20: THE 2 ROWS ARE THE PRICE
+                                          OF LEVER 5, AND EIGHT WAYS OUT FAIL
+
+   The two rows are `or s0,v0,a2' / `sh s0,4(v1)' against the target's
+   `or $v0,$v0,$a2' / `sh $v0,0x4($v1)' -- so the final OR lands in `f''s
+   callee-saved register here and in a temp there.  The target's shape for
+   that statement is plainly a read-modify-write, `*(u16 *)(...) |= m;', with
+   no variable on the left.
+
+   WRITING IT THAT WAY COSTS 18 ROWS, and the 20 that result are ONE CYCLIC
+   ROTATION of four callee-saved registers:
+
+       clean   py=$s0  px=$s1  t=$s2  f=$s3
+       target  f =$s0  py=$s1  px=$s2  t=$s3
+
+   so `f' goes from first allocated to last.  Everything else matches.  Eight
+   ways to keep f first WITHOUT making it the OR's destination, all measured
+   at 92/92 words:
+
+       f = *(...) | m; *(...) = f;      2   <- this park
+       f carries m, then *(...) |= f;  10
+       f = m; *(...) |= f;             12
+       f = o & ~f; *(...) = f; |= m;   13
+       f = ~f & o; *(...) = f; |= m;   13
+       f = o & ~f; store f; f=...|m;   14
+       o = *(...) | m; store o; f = o; 20
+       *(...) |= m;                    20
+       m = *(...) | m; store m; f = m; 22
+
+   FREE REFERENCES ON `f' DO NOT HELP EITHER, and here they COST A WORD.  All
+   six positions in the clean body that mention `f', times a do-while and a
+   duplicated-arm `if', measure 24 to 49 rows at 93/92 or worse -- the
+   opposite of this block's usual result.  The reason is visible in the body:
+   every statement mentioning f is already a read-modify-write, so a
+   duplicated arm cannot cross-jump and the device pays twice and earns
+   nothing.
+
+   So the second set of `f' is load-bearing and these two rows are its price.
+   This is a permuter target, not a hand-sweep target.
+*/
 
 typedef struct UnkDungeonMapHdr
 {
