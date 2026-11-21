@@ -133,9 +133,25 @@ def overlay_for(func):
     # wrong OVERLAYS range still surfaces instead of being papered over.
     if SRC_UNIT in cands:
         return SRC_UNIT
+    # A CARVED UNIT'S NAME IS NOT AN OVERLAY NAME. `csrc/ovl_dungeon_800B45E0.c'
+    # is one of six translation units making up ovl_dungeon, so SRC_UNIT is
+    # never in `cands' for it and signal 1 goes silently unused -- which is how
+    # func_800B51C8 came to be measured against build/town.bin.elf after its
+    # pre-carve listing was deleted. Accept a SRC_UNIT that is a carved sibling
+    # of a candidate: the prefix is the overlay, and the suffix is the address
+    # the unit starts at.
+    for n in cands:
+        if SRC_UNIT and SRC_UNIT.startswith(n + "_"):
+            return n
     if len(cands) > 1:
-        have = [n for n in cands if os.path.exists(
-            os.path.join(PROJ, "asm", "nonmatchings", n, func + ".s"))]
+        import glob as _glob
+        have = [n for n in cands
+                if os.path.exists(os.path.join(PROJ, "asm", "nonmatchings",
+                                               n, func + ".s"))
+                # ...or under one of that overlay's carved units, which is
+                # where splat puts it once the overlay is split.
+                or _glob.glob(os.path.join(PROJ, "asm", "nonmatchings",
+                                           n + "_*", func + ".s"))]
         if len(have) == 1:
             return have[0]
     return cands[0]

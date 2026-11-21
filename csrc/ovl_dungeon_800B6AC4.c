@@ -9,6 +9,12 @@
  * definition lines, so they say exactly what the single-unit compile said.
  */
 
+/* func_800B69DC is defined in csrc/ovl_dungeon_800B45E0.c, the unit
+   immediately before this one. The carve generated cross-unit prototypes
+   only for callees that LANDED code mentions, and the sole caller here is
+   func_800B6AC4, still INCLUDE_ASM -- so its park could not be measured at
+   all until this line existed. */
+void func_800B69DC(u8 *p, UnkVec *b, u8 *c, u8 *d);
 void func_8008D330(UnkDungeonActor *p, void *b, void *c, void *d);
 void func_80091934(UnkDungeonActor *p, void *b, void *c, void *d);
 void func_80091A38(u8 *p, void *b, void *c, u8 *d);
