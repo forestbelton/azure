@@ -1022,9 +1022,9 @@ then read only the section you need.
 - `lw $t0` MEANS A SPILLED PSEUDO; `lw $v0`/`$v1` MEANS AN ADDRESSABLE VARIABLE  `:32370`
 - JOINING TWO EARLY-RETURN TESTS WITH `||` CHANGES WHICH BLOCK reorg CAN OWN  `:32389`
 - A REDUNDANT REGISTER COPY SURVIVES jump2 IF YOU SPELL IT `x + z0` WITH `z0` PINNED TO `$0`  `:32403`
-- A FREE REFERENCE WINS AN `allocno_compare` RACE: `__asm__("" ::"r"(x))` COSTS NO INSTRUCTION AND flow COUNTS IT  `:32489`
-- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:32556`
-- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:32626`
+- A FREE REFERENCE WINS AN `allocno_compare` RACE, AND `do { } while (0)` IS THE SPELLING TO REACH FOR FIRST  `:32489`
+- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:32582`
+- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:32652`
 
 <!-- END INDEX -->
 
@@ -32486,7 +32486,7 @@ destroys combine's `significant_bits` proof for the later mask, costs a copy,
 and measures 154 words / 15 rows. The PLUS belongs on the insn you are trying
 to keep, not on the one that convicts it.
 
-## A FREE REFERENCE WINS AN `allocno_compare` RACE: `__asm__("" ::"r"(x))` COSTS NO INSTRUCTION AND flow COUNTS IT
+## A FREE REFERENCE WINS AN `allocno_compare` RACE, AND `do { } while (0)` IS THE SPELLING TO REACH FOR FIRST
 
 ovl_dungeon, 2026-11-20, `func_800A1D4C`, worth **the last 4 rows** of a park
 that had the arithmetic written out and no spelling to pay for it.
@@ -32497,16 +32497,38 @@ global.c's `allocno_compare` priority is
 
 and `flow_analysis` runs ONCE, at `toplev.c:3463`, BEFORE `combine` at
 `:3488`. So **any reference that exists at flow time is counted whether or not
-it survives to the assembly**, and the cheapest such reference is an asm with
-one input and an empty template:
+it survives to the assembly**, and there are two ways to spend one for
+nothing.
+
+**PREFER THE PLAIN-C ONE.** `flow.c:2128` weights each reference by
+`loop_depth`, so wrapping a statement that already mentions the variable in a
+degenerate loop buys it one more reference and emits no instruction:
+
+    do
+    {
+        lvl = p[0x11];
+    } while (0);
+
+**The asm form is a scaffold and should be a last resort:**
 
     __asm__("" ::"r"(lvl));
 
 It has no outputs, so it is implicitly volatile and flow will not delete it,
-and it emits nothing. On `func_800A1D4C` that took `lvl` from 16 references to
-17 and its priority from `4*16/202 = 0.3168` -- just under `p`'s `5*38/596 =
-0.3188` -- to `4*17/202 = 0.3366`, and the function landed on the first
-compile.
+and it emits nothing either. Both land `func_800A1D4C` at 438 words,
+0 differing -- `lvl` goes from 16 references to 17 and its priority from
+`4*16/202 = 0.3168`, just under `p`'s `5*38/596 = 0.3188`, to
+`4*17/202 = 0.3366`. **Sweep the do-while first and use the asm only if
+nothing plain reaches 0**, which does happen: on `func_8009A8C0` the
+do-while's best position is 16 rows against the asm pair's 0, because the loop
+NOTEs are a scheduling barrier on the insn that carries them and the
+statement's own placement is then forced.
+
+Two other plain-C devices in the same family, measured on `func_8009A8C0` and
+worse there but worth a sweep elsewhere: a duplicated-arm
+`if (v) { s } else { s }`, whose references flow counts twice and jump2's
+cross-jumping then merges (that is what landed `func_8009DAD8`); and a
+surviving body copy, which only survives when its uses are out of cse's
+reach.
 
 **The margin is usually wide, not marginal.** One extra reference multiplies
 the numerator by `(n+1)/n` while the denominator grows by at most the one
@@ -32524,10 +32546,14 @@ saving one**, because spending costs an insn you can place and saving changes
 what the code does.
 
 Where to put it: inside the variable's existing live range, and in a block
-whose schedule you are not fighting. It IS a full scheduling barrier
-(`sched.c:2088` -- a dependence on every register's last use and last set,
-then `flush_pending_lists`), so the first statement of an `if` arm is a good
-site and the middle of a block the target schedules tightly is a bad one. On
+whose schedule you are not fighting. BOTH forms are a full scheduling barrier
+on the insn that carries them (`sched.c:2088` -- a dependence on every
+register's last use and last set, then `flush_pending_lists`), so the first
+statement of an `if` arm is a good site and the middle of a block the target
+schedules tightly is a bad one. On `func_800A1D4C` twelve statements mention
+`lvl` and only three wrappers score at or near 0 (0, 0 and 2 rows) while the
+other nine run 29 to 72 -- so the position is a real choice, and the sweep is
+the cheap way to make it. On
 `func_8009DAD8` the same device applied to `head` overshot -- six references
 put it ahead of two allocnos it must follow, 11 rows against 9 -- so price the
 window, not just the direction.
