@@ -25,6 +25,30 @@ import tempfile
 PROJ = os.environ.get("AZURE_ROOT", "/home/case/projects/azure")
 UNIT = os.path.join(PROJ, "csrc/ovl_dungeon.c")
 
+# ovl_dungeon.c was CARVED on 2026-11-20: the block is four translation units
+# now, because four of its jump tables sit at a 4-mod-8 rodata offset and
+# cc1psx writes `.align 3` before every table it compiles. A park's stub
+# therefore lives in whichever unit owns its function, and its INCLUDE_ASM
+# path NAMES that unit -- so neither the unit path nor the stub string can be
+# hardcoded any more. Without this every park in a carved unit reports SKIP,
+# which looks like a malformed park rather than a stale tool.
+UNIT_GLOB = os.path.join(PROJ, "csrc/ovl_dungeon*.c")
+
+
+def unit_paths():
+    import glob
+    return sorted(glob.glob(UNIT_GLOB))
+
+
+def unit_of(func):
+    """(path, unit-name) of the unit whose INCLUDE_ASM carries FUNC."""
+    for path in unit_paths():
+        stem = os.path.splitext(os.path.basename(path))[0]
+        with open(path, encoding="utf-8") as f:
+            if 'INCLUDE_ASM("asm/nonmatchings/%s", %s);' % (stem, func) in f.read():
+                return path, stem
+    return None, None
+
 
 DECL_RE = re.compile(
     r"^\s*DECLARATIONS\b[^\n]*\n(.*?)^\s*END DECLARATIONS\s*$",
@@ -322,6 +346,17 @@ def splices(unit, stub, body, decls):
     if not decls:
         yield spliced
         return
+    # AFTER THE CARVE (2026-11-20) the unit's top block is one `#include` of
+    # csrc/ovl_dungeon_decls.h, so the old `extern u8 D_80082E80[];` anchor is
+    # in the HEADER and not in the unit at all. With it gone the only
+    # placement left was just-above-the-body, which is too late for a callee
+    # PROTOTYPE -- gcc then reports "type mismatch with previous implicit
+    # declaration" against a call hundreds of lines above, and three parks
+    # went from measuring to SKIP for that reason alone. The include line is
+    # the new top block; try it first.
+    inc = '#include "ovl_dungeon_decls.h"\n'
+    if inc in spliced:
+        yield spliced.replace(inc, inc + "\n" + decls, 1)
     anchor = "extern u8 D_80082E80[];\n"
     if anchor in spliced:
         yield spliced.replace(anchor, anchor + decls, 1)
@@ -333,12 +368,15 @@ def measure(func):
     body = body_of(park, func)
     if body is None:
         return func, None, "no definition line in park"
-    unit = open(UNIT, encoding="utf-8").read()
-    stub = 'INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", %s);' % func
+    upath, uname = unit_of(func)
+    if upath is None:
+        return func, None, "no unit carries a stub (landed already?)"
+    unit = open(upath, encoding="utf-8").read()
+    stub = 'INCLUDE_ASM("asm/nonmatchings/%s", %s);' % (uname, func)
     if unit.count(stub) != 1:
         return func, None, "not a stub in the unit (landed already?)"
     d = tempfile.mkdtemp(prefix="parkres-")
-    src = os.path.join(d, "ovl_dungeon.c")
+    src = os.path.join(d, os.path.basename(upath))
     decls = decls_of(park) + preamble_of(park, func)
     env = dict(os.environ, AZURE_SCRATCH=os.path.join(d, "sp"))
     os.makedirs(env["AZURE_SCRATCH"], exist_ok=True)

@@ -36,9 +36,11 @@ def main():
         return 2
     func, out = sys.argv[1], sys.argv[2]
     alt = "--alt" in sys.argv
-    if os.path.basename(out) != "ovl_dungeon.c":
-        print("%s: the output basename must be ovl_dungeon.c (ovlverify picks "
-              "the container ELF from it); got %r" % (out, os.path.basename(out)))
+    want = os.path.basename(pr.unit_of(func)[0] or "ovl_dungeon.c")
+    if os.path.basename(out) != want:
+        print("%s: the output basename must be %s (ovlverify picks "
+              "the container ELF from it); got %r"
+              % (out, want, os.path.basename(out)))
         return 2
     park = os.path.join(pr.PROJ, "docs/dungeon-parks/%s.c" % func)
     if not os.path.exists(park):
@@ -48,8 +50,8 @@ def main():
     if body is None:
         print("%s: no definition line in the park" % func)
         return 1
-    unit = open(pr.UNIT, encoding="utf-8").read()
-    stub = 'INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", %s);' % func
+    unit = open(pr.unit_of(func)[0], encoding="utf-8").read()
+    stub = 'INCLUDE_ASM("asm/nonmatchings/%s", %s);' % (pr.unit_of(func)[1], func)
     if unit.count(stub) != 1:
         print("%s: not a stub in the unit (landed already?)" % func)
         return 1
