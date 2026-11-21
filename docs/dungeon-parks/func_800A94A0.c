@@ -1,5 +1,31 @@
 /* func_800A94A0 (ovl_dungeon) -- PARK, best candidate so far.
 
+   ====================================== 2026-11-21: 41 rows -> 39, AND THE
+                                          DEVICE SWEEPS WERE STALE
+
+   Two more duplicated-arm devices, found by tools/decomp/devsweep.py:
+   `if (cc)` around `cc = c;` and `if (q0)` around the else-arm's
+   `h = func_80099194(*(u8 **)nm, h);`.
+
+   THE POINT IS NOT THE DEVICES, IT IS THAT THIS PARK HAD ALREADY BEEN SWEPT
+   FOR EXACTLY THESE TWO DEVICES AND THE SWEEP CAME BACK EMPTY.  It was swept
+   on the body before the cancelled pair; with `n++; n--;` in place the
+   contested register changed hands and two wrappers that had been worth
+   nothing are worth a row each.  Re-run the sweeps after landing anything --
+   that is now three parks where a stale negative was hiding a row.
+
+   THE CONDITION IS THE REFERENCE, AND `cc` IS INDETERMINATE THERE.  `if (cc)`
+   reads cc before it is set.  Both arms assign `cc = c;`, so nothing the
+   function computes depends on the branch, and gcc 2.7.2 does not exploit the
+   UB -- but it is worth knowing WHY the spelling matters: the device's value
+   is a free reference on the CONDITION's variable, not on the wrapped
+   statement.  `if (c)`, `if (q)`, `if (a)` and `if (n)` -- all defined there
+   -- measure 40, one row worse, because the reference lands on the wrong
+   name.  A cancelled pair on cc instead (`cc = c; cc++; cc--;`) costs two
+   WORDS (229), unlike the one on the pointer `n`, so there is no way to buy
+   cc's reference from a defined value yet.  Resolve that before landing.
+   target 227 words, candidate 227 words, 39 aligned differences
+
    ============================== 2026-11-21: 59 rows -> 41
 
    `n++; n--;` immediately after `n = func_8003FD64(...)`.  The pair compiles
@@ -141,7 +167,14 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
     n--;
     if (n != NULL)
     {
-        cc = c;
+        if (cc)
+        {
+            cc = c;
+        }
+        else
+        {
+            cc = c;
+        }
         q0 = q[0];
         D_800E3D68 = q[1];
         t = func_800A982C(q0, (s16)c, a[0x13]);
@@ -222,7 +255,14 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
             else
             {
                 nm = (u8 *)&D_8006DE24_n[q0];
-                h = func_80099194(*(u8 **)nm, h);
+                if (q0)
+                {
+                    h = func_80099194(*(u8 **)nm, h);
+                }
+                else
+                {
+                    h = func_80099194(*(u8 **)nm, h);
+                }
             }
             func_80099290(func_80099194(D_80089080, h));
             func_800A5720(r);
