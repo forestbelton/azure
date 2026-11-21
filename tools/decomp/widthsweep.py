@@ -1,0 +1,163 @@
+"""widthsweep.py FUNC [--rounds N] [--unit-copy PATH] -- try every DECLARED
+WIDTH for every local of a parked function, greedily, and report what improves.
+
+    python3 tools/decomp/widthsweep.py func_800A94A0
+
+WHY THIS EXISTS. On 2026-11-21 two dungeon parks were closed most of the way
+by changing ONE declaration's width, and in both cases the park's own residue
+diagnosis pointed somewhere else:
+
+    func_800B6AC4   s32 k -> s16 k    811/812 words and 46 rows -> 812/812, 39
+    func_8009F644   s32 m -> u8  m    136/137 words and 81 rows -> 137/137, 42
+
+Both were found by decomp-permuter, which reaches them only because it mutates
+types among its other mutations -- half an hour of 5 jobs for a change this
+tool tries in a few seconds. A park whose residue reads as a REGISTER
+PERMUTATION is the strong case: a local declared wider than the target's
+costs a `sll'/`sra' pair at some uses and changes a quantity's size and live
+length, which moves it in `allocno_compare' and permutes everything below it.
+The symptom is a shuffled callee-saved file; the cause is one declaration.
+
+It sweeps a local at a time, keeps the best single change, and repeats, so it
+finds combinations without paying for the product. A change that costs words
+is rejected outright -- the word count must stay equal to the target's.
+
+It will not propose a width that changes the function's behaviour: only the
+declaration text is edited, so a narrower type that truncates a value the body
+relies on shows up as MORE differences, not as a silent wrong match. Still
+read what it suggests before landing it: `u8 m' is right because every arm
+computes `m' from bytes and `q[0] = m' stores a byte, and that is a claim
+about the function, not about the compiler.
+"""
+import os
+import re
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from onefunc import find_definition
+import parkresidue as pr
+
+WIDTHS = ["s32", "u32", "s16", "u16", "s8", "u8"]
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if not args:
+        raise SystemExit((__doc__ or "").strip().split("\n\n")[0])
+    func = args[0]
+    rounds = 4
+    for i, a in enumerate(sys.argv):
+        if a == "--rounds":
+            rounds = int(sys.argv[i + 1])
+
+    scratch = os.environ.get("AZURE_SCRATCH") or "/tmp"
+    sp = os.path.join(scratch, "widthsweep", func)
+    os.makedirs(sp, exist_ok=True)
+    unit_path, unit = pr.unit_of(func)
+    dst = os.path.join(sp, os.path.basename(unit_path))
+    subprocess.run(["cp", unit_path, dst], check=True)
+    r = subprocess.run([sys.executable, os.path.join(HERE, "parksplice.py"),
+                        func, dst], capture_output=True, text=True)
+    if "spliced" not in r.stdout:
+        raise SystemExit("widthsweep: parksplice failed:\n" + r.stdout + r.stderr)
+
+    base_txt = open(dst).read()
+    st, en = find_definition(base_txt, func)
+    head, fn, tail = base_txt[:st], base_txt[st:en], base_txt[en:]
+
+    def measure_on(path, pre, post):
+        def go(body):
+            open(path, "w").write(pre + body + post)
+            rr = subprocess.run([sys.executable, os.path.join(HERE, "aligndiff.py"),
+                                 path, func], capture_output=True, text=True)
+            m = re.match(r"built (\d+) words, target (\d+) words, (\d+)",
+                         (rr.stdout.strip() or "").split("\n")[0])
+            return (int(m.group(3)), int(m.group(1)), int(m.group(2))) if m else (999, 0, 1)
+        return go
+
+    measure_unit = measure_on(dst, head, tail)
+    rows, w, tw = measure_unit(fn)
+
+    # A SWEEP ON THE 25000-LINE UNIT IS 25 SECONDS A CANDIDATE and this tool
+    # measures sixty of them per round. Build onefunc.py's standalone and
+    # sweep THERE -- but only after confirming it reproduces the unit's own
+    # residue exactly, which is the protocol onefunc's docstring insists on
+    # and the reason the check is not optional: a standalone that declares one
+    # symbol differently measures a different function.
+    measure = measure_unit
+    if len(base_txt.split("\n")) > 8000:
+        r1 = subprocess.run([sys.executable, os.path.join(HERE, "onefunc.py"),
+                             func, "--src", dst, "--out", os.path.join(sp, "one")],
+                            capture_output=True, text=True)
+        one = os.path.join(sp, "one", os.path.basename(unit_path))
+        if os.path.exists(one):
+            otxt = open(one).read()
+            ost, oen = find_definition(otxt, func)
+            m1 = measure_on(one, otxt[:ost], otxt[oen:])
+            orows, ow, _ = m1(fn)
+            if (orows, ow) == (rows, w):
+                print("%s: standalone agrees (%d rows, %d words) -- sweeping there"
+                      % (func, orows, ow))
+                measure = m1
+            else:
+                print("%s: standalone measures %d rows / %d words against the unit's"
+                      " %d / %d -- NOT using it" % (func, orows, ow, rows, w))
+                print(r1.stdout.strip()[-400:])
+    print("%s: base %d rows, %d/%d words" % (func, rows, w, tw))
+    if w != tw:
+        print("widthsweep: the word count already differs from the target; a width")
+        print("widthsweep: change may fix that, so candidates matching %d are kept too." % tw)
+
+    cur, best = fn, (rows, w)
+    applied = []
+    for rnd in range(rounds):
+        # Every local declaration, as (line index, type, rest-of-line).
+        lines = cur.split("\n")
+        decls = []
+        for i, l in enumerate(lines):
+            m = re.match(r"^(\s*)(s8|u8|s16|u16|s32|u32)(\s+\**[A-Za-z_]"
+                         r"[A-Za-z0-9_]*(?:\[[^\]]*\])?;)$", l)
+            if m:
+                decls.append((i, m.group(1), m.group(2), m.group(3)))
+        if not decls:
+            print("widthsweep: no plain scalar declarations found")
+            return
+        found = None
+        for i, ind, ty, rest in decls:
+            for nt in WIDTHS:
+                if nt == ty:
+                    continue
+                cand = lines[:]
+                cand[i] = ind + nt + rest
+                body = "\n".join(cand)
+                rr, ww, _ = measure(body)
+                if ww == tw and (rr, ww) < best:
+                    best, found = (rr, ww), (body, "%s ->%s%s" % (ty, nt, rest))
+                    print("  round %d: %d rows, %d words  %s"
+                          % (rnd, rr, ww, found[1]))
+        if not found:
+            break
+        cur = found[0]
+        applied.append(found[1])
+
+    if applied and measure is not measure_unit:
+        vr, vw, _ = measure_unit(cur)
+        print("verified against the real unit: %d rows, %d/%d words" % (vr, vw, tw))
+        if (vr, vw) != (best[0], best[1]):
+            print("widthsweep: *** THE STANDALONE AND THE UNIT DISAGREE on the")
+            print("widthsweep: *** result (%d/%d vs %d/%d). Trust the unit." % (vr, vw, best[0], best[1]))
+            best = (vr, vw)
+    print("final %d rows, %d/%d words" % (best[0], best[1], tw))
+    if applied:
+        out = os.path.join(sp, "best.c")
+        open(out, "w").write(cur)
+        print("changes: " + " | ".join(applied))
+        print("saved: " + out)
+    else:
+        print("no width change helps")
+
+
+if __name__ == "__main__":
+    main()

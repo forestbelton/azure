@@ -97,6 +97,14 @@
    END DECLARATIONS
    PROTOTYPE NOTE ON LANDING: the second parameter is s16. Its only call
    site, in the landed func_800CA444, re-measures at 209/209, 0 differing.
+   ====================================== 2026-11-21: 57 rows -> 56, on one
+                                          DECLARED WIDTH
+
+   `u8 m;' became `s16 m;', found by tools/decomp/widthsweep.py, which tries every
+   width for every local greedily.  The word count is unchanged at the
+   target's.  Two parks today were closed most of the way by exactly this kind
+   of change (func_800B6AC4 s32->s16, 46 rows -> 39 and a word;
+   func_8009F644 s32->u8, 81 -> 42 and a word), which is why the sweep exists.
 */
 
 s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d)
@@ -112,7 +120,7 @@ s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d)
     s32 v;
     s32 q;
     s32 w;
-    u8 m;
+    s16 m;
 
     if (*(s8 *)(b + 0x26) >= 0)
     {

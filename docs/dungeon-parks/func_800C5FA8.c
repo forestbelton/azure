@@ -115,6 +115,14 @@
        extern u8 D_800E0B65[];
        extern u8 D_800E0B73[];
        extern u8 D_800E0BA1[];
+   ====================================== 2026-11-21: 175 rows -> 172, on one
+                                          DECLARED WIDTH
+
+   `s32 y;' became `u32 y;', found by tools/decomp/widthsweep.py, which tries every
+   width for every local greedily.  The word count is unchanged at the
+   target's.  Two parks today were closed most of the way by exactly this kind
+   of change (func_800B6AC4 s32->s16, 46 rows -> 39 and a word;
+   func_8009F644 s32->u8, 81 -> 42 and a word), which is why the sweep exists.
 */
 void func_800C5FA8(u8 *p)
 {
@@ -140,7 +148,7 @@ void func_800C5FA8(u8 *p)
     s32 k;
     s32 kk;
     s32 x;
-    s32 y;
+    u32 y;
     s32 x1;
     s32 y1;
     s32 snd;

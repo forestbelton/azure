@@ -175,7 +175,15 @@
      the argument as a statement 230/75, `base - w + 0x76` 234/57,
      a `b2 = base + 0x76` local 234/57, `j = d & 0xFF` at five source
      positions identical at four and 236/61 hoisted above func_8003FD64.
-     The `__asm__("" : "+r"(base))` device is superseded by (3) above. */
+     The `__asm__("" : "+r"(base))` device is superseded by (3) above.    ====================================== 2026-11-21: 22 rows -> 21, on one
+                                          DECLARED WIDTH
+
+   `s32 w;' became `u32 w;', found by tools/decomp/widthsweep.py, which tries every
+   width for every local greedily.  The word count is unchanged at the
+   target's.  Two parks today were closed most of the way by exactly this kind
+   of change (func_800B6AC4 s32->s16, 46 rows -> 39 and a word;
+   func_8009F644 s32->u8, 81 -> 42 and a word), which is why the sweep exists.
+*/
 void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
 {
     UnkNode *n;
@@ -188,7 +196,7 @@ void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
     s32 i;
     s16 j;
     s32 has;
-    s32 w;
+    u32 w;
     s32 v;
     s32 base;
     s32 v2;
