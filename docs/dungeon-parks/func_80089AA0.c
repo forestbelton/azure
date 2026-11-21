@@ -1,4 +1,17 @@
 /* RECONSTRUCTION of func_80089AA0 (1165 words), batch j76, 2026-11-16.
+
+   ============================== 2026-11-20: 87 rows -> 81
+
+   The body below carries one device: a duplicated-arm `if (f13)` around `s3 = D_800E3DE8;`.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same lever from two directions -- flow.c:2128 weights each
+   reference by `loop_depth`, and jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  SWEPT, NOT REASONED:
+   every statement position times both devices over every local, on a
+   `tools/decomp/onefunc.py` file where a candidate is 0.09 s.  Nothing in
+   this park's diagnosis points at the winning statement, and that is the
+   normal case rather than the exception.
    The 2026-11-15 body that reached 95 aligned rows died in the /tmp cleanup;
    this is a fresh reconstruction from the listing plus the four catalogue
    entries written against this function, and it is now BETTER than that
@@ -717,7 +730,14 @@ void func_80089AA0(u8 *p, UnkVec *c, u8 *d)
                 break;
             }
         next:
-            s3 = D_800E3DE8;
+            if (f13)
+            {
+                s3 = D_800E3DE8;
+            }
+            else
+            {
+                s3 = D_800E3DE8;
+            }
             q8 = s3 + 0x20;
         }
         t1 = *(u16 *)(f13 + 2);

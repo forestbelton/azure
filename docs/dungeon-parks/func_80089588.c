@@ -1,5 +1,18 @@
 /* PARK func_80089588 -- 148 of 151 words, 80 aligned differences (j40, 2026-11-16).
 
+   ============================== 2026-11-20: 80 rows at 148/151 words -> 75 at 151/151
+
+   The body below carries one device: a duplicated-arm `if (q)` around `SetDrawArea(q, g->unk_00);` -- which is also the missing three words.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same lever from two directions -- flow.c:2128 weights each
+   reference by `loop_depth`, and jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  SWEPT, NOT REASONED:
+   every statement position times both devices over every local, on a
+   `tools/decomp/onefunc.py` file where a candidate is 0.09 s.  Nothing in
+   this park's diagnosis points at the winning statement, and that is the
+   normal case rather than the exception.
+
    Shape: the overlay's HUD/letterbox frame builder.  `D_80083160.unk_00` is
    the live draw buffer; `lean = unk_00 != D_801C9E40` picks between y=0xE0
    and y=0x1C0 for the two semi-transparent POLY_F4 bars; everything else is
@@ -71,7 +84,14 @@ void func_80089588(void)
 
     lean = g->unk_00 != D_801C9E40;
     q = *(u8 **)(g->unk_00 + 0x8D0);
-    SetDrawArea(q, g->unk_00);
+    if (q)
+    {
+        SetDrawArea(q, g->unk_00);
+    }
+    else
+    {
+        SetDrawArea(q, g->unk_00);
+    }
     AddPrim(g->unk_00 + 0x7B0, q);
     q += 0xC;
     SetDrawArea(q, g->unk_00);

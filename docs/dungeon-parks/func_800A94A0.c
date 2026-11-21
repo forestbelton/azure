@@ -1,4 +1,17 @@
 /* func_800A94A0 (ovl_dungeon) -- PARK, best candidate so far.
+
+   ============================== 2026-11-20: 76 rows -> 59
+
+   The body below carries one device: a duplicated-arm `if (q)` around `r = func_800990FC();`.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same lever from two directions -- flow.c:2128 weights each
+   reference by `loop_depth`, and jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  SWEPT, NOT REASONED:
+   every statement position times both devices over every local, on a
+   `tools/decomp/onefunc.py` file where a candidate is 0.09 s.  Nothing in
+   this park's diagnosis points at the winning statement, and that is the
+   normal case rather than the exception.
    target 227 words, candidate 227 words, 76 aligned differences
    (ovlverify masked: 76 differing).
 
@@ -154,7 +167,14 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
         }
         if (n != NULL && *(s8 *)(a + 0x13) > 0)
         {
-            r = func_800990FC();
+            if (q)
+            {
+                r = func_800990FC();
+            }
+            else
+            {
+                r = func_800990FC();
+            }
             h = func_80099734(a, r);
             h = func_80099194(D_800E1C58, h);
             if ((s16)cc != 0)

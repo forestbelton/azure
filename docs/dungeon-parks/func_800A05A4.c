@@ -1,4 +1,17 @@
 /* PARK: func_800A05A4, 139 of 139 words, 59 aligned differences (`ovlverify'
+
+   ============================== 2026-11-20: 59 rows -> 47
+
+   The body below carries one device: a `do { } while (0);` around `r = func_8009B4B0(p, xx, y...);`.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same lever from two directions -- flow.c:2128 weights each
+   reference by `loop_depth`, and jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  SWEPT, NOT REASONED:
+   every statement position times both devices over every local, on a
+   `tools/decomp/onefunc.py` file where a candidate is 0.09 s.  Nothing in
+   this park's diagnosis points at the winning statement, and that is the
+   normal case rather than the exception.
    reports 64 differing masked).  ovl_dungeon.  Measured 2026-11-16, batch j48,
    over the 2026-11-16 138-word park.
 
@@ -205,7 +218,10 @@ s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n)
     while (k < lim)
     {
         i = g;
-        r = func_8009B4B0(p, xx, yy);
+        do
+        {
+            r = func_8009B4B0(p, xx, yy);
+        } while (0);
         if (r != NULL)
         {
             d = *(s16 *)(r + 0x88) - *(s16 *)(p + 0x88);

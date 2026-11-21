@@ -1,4 +1,17 @@
 /* func_800D92C0 (ovl_dungeon) -- 343 of 344 words, 62 ALIGNED DIFFERENCES.
+
+   ============================== 2026-11-20: 62 rows at 343/344 words -> 56 at 344/344
+
+   The body below carries one device: a duplicated-arm `if (c)` around the `k = ((d[0x45] + ...` line -- which is also the missing word.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same lever from two directions -- flow.c:2128 weights each
+   reference by `loop_depth`, and jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  SWEPT, NOT REASONED:
+   every statement position times both devices over every local, on a
+   `tools/decomp/onefunc.py` file where a candidate is 0.09 s.  Nothing in
+   this park's diagnosis points at the winning statement, and that is the
+   normal case rather than the exception.
    Agent j49, 2026-11-16.  Written cold; the 2026-11-15 candidate that reached
    15 was lost with /tmp and nothing of it survived but the three
    docs/matching-levers.md entries, all three of which are applied below.
@@ -146,7 +159,14 @@ void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d)
             if ((v & 0x20000) != 0)
             {
                 t80 = D_80082E80;
-                k = ((d[0x45] + ((s16)(*(u16 *)(D_800814A8 + 0x2A)) >> 9)) & 7) * 2;
+                if (c)
+                {
+                    k = ((d[0x45] + ((s16)(*(u16 *)(D_800814A8 + 0x2A)) >> 9)) & 7) * 2;
+                }
+                else
+                {
+                    k = ((d[0x45] + ((s16)(*(u16 *)(D_800814A8 + 0x2A)) >> 9)) & 7) * 2;
+                }
                 x = t80[0x24] + *(u16 *)(k + (s32)D_8006CCD8);
                 y = t80[0x25] + *(u16 *)(k + (s32)D_8006CCE8);
                 if (c[0x24] == (u16)x && c[0x25] == (u16)y)
