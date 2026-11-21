@@ -98,7 +98,23 @@
    wins. Queue it.
 
    The body below needs the ~1500 lines of declarations at the top of
-   csrc/ovl_dungeon.c plus the one new extern above. */
+   csrc/ovl_dungeon.c plus the one new extern above.    ====================================== 2026-11-21: 296/299 words -> 297/299
+                                          at the same 81 rows
+
+   `for (i = 0; i + 1 <= 0x14; i++)' in place of `for (i = 0; i < 0x14; i++)'.
+   One of the three missing words, and it costs nothing.  Three other
+   spellings of the same loop were measured: `i <= 0x13' is 296 words (no
+   change) and `i != 0x14' is 295 and 85 rows.  So it is not "any equivalent
+   test" -- it is specifically the `i + 1' form, which makes the increment
+   feed the comparison.
+
+   REJECTED, and worth recording because the permuter keeps proposing it:
+   hoisting `b' into a `u8 *bb' inside the loop.  With one, two or three of
+   the six `b' uses converted it is 297 words / 81 rows -- no change -- and
+   with all six it reaches 298 words but 93 rows.  The permuter scored that
+   as its best find here; measured, it trades two rows for one word and then
+   twelve more rows.
+*/
 
 void func_80094988(u8 *p, u8 *q, s16 x, s16 y)
 {
@@ -123,7 +139,7 @@ void func_80094988(u8 *p, u8 *q, s16 x, s16 y)
     func_80041E28(q, (u8 *)0x80012194);
     *(u16 *)(p + 0xF8) = *(u16 *)(b + 0x2D50);
     *(u32 *)(p + 0xFC) = *(u32 *)(b + 0x2D58);
-    for (i = 0; i < 0x14; i++)
+    for (i = 0; i + 1 <= 0x14; i++)
     {
         *(UnkDungeonName4 *)(b + 0x248 + i * 4) = *(UnkDungeonName4 *)(b + 0x21E8 + i * 4);
         v = *(u8 *)(b + 0x2238 + i);

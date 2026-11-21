@@ -48,7 +48,25 @@ m = re.search(r'(\d+) aligned differences', r.stdout)
 cur = int(m.group(1)) if m else 999
 outs = sorted(glob.glob('nonmatchings/%s/output-*/source.c' % func),
               key=lambda p: int(p.split('output-')[1].split('-')[0]))[:topn]
-best = (cur, None, '')
+# A FIND IS AN IMPROVEMENT IF IT IS NO WORSE ON WORDS AND BETTER ON ROWS.
+# Demanding words == target throws away progress whenever the PARK itself does
+# not match the word count yet, which is the normal state of a park that still
+# has a shape error: func_800C2824 sat at 281 words against a target of 278,
+# and a find at the same 281 words with 74 rows instead of 80 was reported as
+# "no find beats the park" until this was fixed.
+# Measure the PARK itself with aligndiff rather than parsing parksplice's
+# output: parksplice prints "NOTE: target is 278 words; this body is 281",
+# which is not the same wording, and a regex that half-matches it silently
+# reports the park as already on target.
+r0 = subprocess.run(['python3', 'tools/decomp/aligndiff.py', dst, func],
+                    capture_output=True, text=True)
+m0 = re.match(r'built (\d+) words, target (\d+) words, (\d+)',
+              (r0.stdout.strip() or '').split('\n')[0])
+if not m0:
+    sys.exit('measure_finds: could not measure the park:\n' + r0.stdout + r0.stderr)
+park_w, tw, cur = int(m0.group(1)), int(m0.group(2)), int(m0.group(3))
+print('park: %d rows, %d/%d words' % (cur, park_w, tw))
+best = (abs(park_w - tw), cur, None, '')
 for o in outs:
     cand = open(o).read()
     sp = find_definition(cand, func)
@@ -60,12 +78,17 @@ for o in outs:
     line = (rr.stdout.strip() or 'ERR').split('\n')[0]
     mm = re.match(r'built (\d+) words, target (\d+) words, (\d+)', line)
     tag = ''
-    if mm and mm.group(1) == mm.group(2) and int(mm.group(3)) < best[0]:
-        best = (int(mm.group(3)), cand[sp[0]:sp[1]], o); tag = '   <<<'
+    if mm:
+        gap, rows = abs(int(mm.group(1)) - int(mm.group(2))), int(mm.group(3))
+        if (gap, rows) < (best[0], best[1]):
+            best = (gap, rows, cand[sp[0]:sp[1]], o)
+            tag = '   <<<'
     print('  %-18s %s%s' % (o.split('/')[-2], line, tag))
-if best[1]:
-    open(os.path.join(SP, 'best.c'), 'w').write(best[1])
-    print('BEST %d rows (was %d) from %s' % (best[0], cur, best[2]))
+if best[2]:
+    open(os.path.join(SP, 'best.c'), 'w').write(best[2])
+    print('BEST %d rows, %d words off target (park: %d rows, %d off) from %s'
+          % (best[1], best[0], cur, abs(park_w - tw), best[3]))
     print('saved: %s' % os.path.join(SP, 'best.c'))
 else:
-    print('no find beats the park (%d rows)' % cur)
+    print('no find beats the park (%d rows, %d words off target)'
+          % (cur, abs(park_w - tw)))

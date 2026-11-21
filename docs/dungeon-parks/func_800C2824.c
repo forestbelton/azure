@@ -114,6 +114,26 @@
 
    Measured with
      python3 tools/decomp/parkresidue.py func_800C2824
+   ====================================== 2026-11-21: A 75-ROW PERMUTER FIND
+                                          REJECTED -- IT READS AN
+                                          UNINITIALISED VARIABLE
+
+   decomp-permuter's best find here measures 75 rows at 279 words, against
+   this park's 80 at 281, so it is better on both counts and it is still
+   wrong: it hoists `D_80082E80' into a `u8 *' local and puts the assignment
+   AFTER THE `return;' AT THE END OF CASE 2 AND BEFORE `case 3:'.  That
+   statement is unreachable, so the local is read uninitialised on every path
+   that uses it, and the match depends on whatever the allocator happened to
+   leave in the register.
+
+   THE SAME HOIST IN THE REACHABLE POSITION -- `ba = D_80082E80;' as the first
+   statement of case 3, with `ba[0x24]' and `ba[0x25]' -- measures 281 words
+   and 80 rows, i.e. no change at all.  So the find's gain comes entirely from
+   the unreachable placement.
+
+   That matters for the three words still missing here, which the park already
+   attributes to %hi re-materialisation of D_800814A0: a pointer local is the
+   right IDEA and the straightforward version of it does nothing.
 */
 void func_800C2824(u8 *p, u8 *b, u8 *c)
 {
