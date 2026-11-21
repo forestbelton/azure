@@ -32857,3 +32857,68 @@ Sweep **parameters and inner-block declarations too**. The first version of
 that tool read only the function's top declaration block, swept 3 of
 func_8009A3D0's 16 names, and reported a clean negative -- `f`, the one name
 the entire residue is about, is a parameter.
+
+## `divmodsi4`'S DEAD MOD OUTPUT HOLDS A HARD REGISTER, AND WHETHER THE QUOTIENT IS LOCAL OR GLOBAL DECIDES WHICH ONE
+
+`func_800B45E0`, ovl_dungeon_800B45E0, 2026-11-21. Worth **4 of 6 rows** on a
+park that had spent two sessions on devices and a 128,048-candidate permuter
+run (`found=none`) trying to raise a priority, when the thing in the way was a
+CONFLICT.
+
+**There is always a MOD pseudo.** `u / n` at -O2 expands to `divmodsi4`
+(mips.md:1505) -- `divsi3` (mips.md:1605) is gated `!optimize`, so genopinit
+leaves `sdiv_optab` as `CODE_FOR_nothing` and expmed.c:3671 takes the twoval
+path. The modulo output is created, marked `REG_UNUSED`, never emitted (no
+`mfhi` in either stream) and **still allocated a hard register**, which then
+conflicts with everything live across the division.
+
+**Which register it takes depends on where the quotient goes**, because that
+decides whether the MOD is local- or global-allocated:
+
+| quotient written into | MOD lands in | residue |
+| --- | --- | --- |
+| a block-local temp (`k = j + i / n;`) | `$v1` | 6 rows |
+| the global that is also the numerator (`u = u / n;`) | `$v0` | 5 rows |
+| a **separate** global (`w = u / n; k = j + w;`) | `$v0` | **2 rows** |
+
+With the block-local spelling, `j` -- the byte the ramp adds to -- is blocked
+out of both `$v0` and `$v1` and ends in `$a3`, which is the entire residue.
+Removing an unrelated device shrinks `j`'s range and hard 4/5/6 leave its
+conflict list while **hard 3 survives**, which is how the MOD was isolated as
+the source; writing the quotient into a global drops hard 3 and `j` lands in
+`$v1`.
+
+The chain, each line verified in `scratch/gcc-src`:
+
+* flow.c:2156 gives a `REG_UNUSED` set `reg_n_deaths == 1`. One reference in
+  one block then satisfies local-alloc.c:472, so the MOD is **local**-allocated.
+* `qty_compare` (local-alloc.c:1698) scores it 0 (`floor_log2(1) == 0`), so it
+  is ordered last, and `find_free_reg` (:2181) ORs `regs_live_at[]` over its
+  single slot and takes the LOWEST free hard register.
+* global.c processes REG_DEAD **before** `note_stores` (:724 then :731), so the
+  numerator and divisor -- which die at the division -- do not conflict with
+  the outputs. Anything live ACROSS it does: `mark_reg_store` ->
+  `record_one_conflict` (:1246) sets that hard bit in every live allocno.
+* `note_stores` walks a PARALLEL **backwards**, so the MOD's set is recorded
+  before the quotient's, and by then the MOD's register is in
+  `hard_regs_live`. **A global quotient can therefore never share the MOD's
+  register, in either order.**
+
+This is the same local-alloc.c:472 gate as "A DEAD SET IN AN ASM TAKES A
+REGISTER FOR THE TIE" further up, reached from the other side: there an asm's
+`REG_UNUSED` second death pushes a quantity OUT of local allocation; here the
+MOD's single death keeps it IN. Giving the MOD a second death is the obvious
+next attack and **a dead `%` does not do it** -- 7 destinations x 3 positions x
+7 device pairs are all byte-identical, because the dead modulo is deleted
+before it can add a reference.
+
+Two corrections to that park, both of which had been true of an earlier body:
+
+* "splitting `i` is 12 and 32 rows, the sharing is correct, do not clean it
+  up" is **wrong now**. Splitting the numerator off `i` is exactly what buys
+  `$v0`.
+* the duplicated-arm device's CONDITION VARIABLE changes with the ramp
+  spelling: `if (j){if (k)}` is best on the block-local shape (6) and measures
+  **12** on the separate-global shape, where `if (k){if (w)}` is 2. A device's
+  operand is not portable across a shape change, which is one more face of a
+  sweep's negative being scoped to the body it was swept on.
