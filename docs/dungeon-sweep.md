@@ -1143,3 +1143,55 @@ whose previous non-blank line ends in `;{}:` -- and its negative on that park
 stands. The lesson is for the next hand-rolled sweep: generate candidates with
 the same guard, or measure the winner against what it is supposed to compute
 before believing it.
+
+## 2026-11-21, END OF SESSION: THE FRONTIER, MEASURED
+
+838 of 863 landed, 25 stubs, 25 parks, all four containers byte-identical.
+`python3 tools/decomp/parkresidue.py` over every park, 0 skipped:
+
+```
+func_800B8FC8    5   95/95        func_8009E798    60  358/358
+func_800B45E0    6  203/203       func_800D13B8    66  161/164   -3 words
+func_800B490C    7  220/220       func_80089AA0    69  1165/1165
+func_800B23F8   13   81/81        func_80089588    72  151/151
+func_8008FA7C   13  181/181       func_80094988    76  299/299
+func_800B1768   16  234/234       func_800C2824    78  278/278
+func_800A94A0   26  227/227       func_800CEA44   121  242/242
+func_800AD6FC   31  174/174       func_800AFBFC   123  238/238
+func_800B6AC4   39  812/812       func_800C5FA8   172  706/706
+func_8009F644   41  137/137       func_800C4F20   186  323/323
+func_800A05A4   45  139/139       func_800B51C8   255  833/834   -1 word
+func_800D92C0   51  344/344       func_800ADE74   256  1826/1817 +9 words
+func_800A0E6C   56  432/432
+```
+
+TWENTY-TWO OF THE TWENTY-FIVE ARE WORD-EXACT, which is the state to notice:
+every one of those is a register assignment or an instruction order, and the
+levers that move those are the four sweeps plus the permuter. Six parks got
+their missing words back today and every one of them came from a FREE
+REFERENCE device, not from a shape fix -- func_800AFBFC's eleven,
+func_800C2824's three, func_80094988's two, func_800B51C8's three of four, and
+two earlier ones.
+
+What moved today, for the next session's sense of what pays:
+
+```
+func_800A94A0  59 -> 26    pair, two wrappers, then `void *r' deleted and the
+                           parameter q reused for both call results
+func_800C5FA8 175 -> 172   width
+func_800B51C8 262 -> 255   a pointer local for the global base
+func_800C4F20 202 -> 186   one rcos hoist (first permuter run)
+func_800AFBFC 149 -> 123   two duplicated arms, one of them the 11 words
+func_800CEA44 127 -> 121   three cancelled pairs and one statement move
+func_80089AA0  81 ->  69   the literal 1 through a local, then two arms
+func_80094988  81 ->  76   a duplicated arm (= the 2 words) and a do-while
+func_800C2824  84 ->  78   a statement move (= the 3 words)
+func_8009E798  87 ->  60   a hoist and a duplicated arm
+func_800D92C0  56 ->  51   a do-while and a cancelled pair
+func_800A05A4  59 ->  45   a do-while and a statement move
+func_800B1768  22 ->  16   a width and two do-whiles
+func_800B8FC8  16 ->   5   a do-while and a cancelled pair inside it
+func_800B490C  18 ->   7   permuter
+func_800B45E0  30 ->   6   a hoist, a barrier and a duplicated arm
+func_8009A3D0   2 ->   0   LANDED -- cancelled pair, read-modify-write tail
+```
