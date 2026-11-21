@@ -703,6 +703,10 @@ s32 func_800A2424(u8 *, s16);
    call rides an implicit `int f()' and loses the `sll 16'/`sra 16' pair in
    front of its `slti' -- two words. */
 s16 func_8009FD40(u8 *, u8 *);
+/* func_8008E700's three animation tables. */
+extern u8 D_800DD048[];
+extern u8 D_800DD060[];
+extern u8 D_800DCFD0[];
 s32 func_800647A0(s32);
 extern u8 D_800E0953[];
 extern u8 D_800E095F[];
@@ -4868,7 +4872,179 @@ void func_8008E504(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8008E700);
+/* 208 words, 0 differing.
+
+   THE SHAPE IS FORCED, AND THE PROOF IS WORTH KEEPING.  The target emits the
+   `+0x1C` flag READ before the `*D_80081484 = NULL` store and the `+0x1C`
+   WRITE after it:
+
+       H = lw  $v0, 0x1C($s0)      (139)
+       G = sw  $zero, %lo(D_80081484)($a1)  (142)
+       I = sw  $v0, 0x1C($s0)      (147)
+
+   `*(u32 *)(d + 0x1C)` is `(mem (plus (reg) 28))` -- non-struct, varying --
+   and `*(void **)D_80081484` is `(mem (lo_sum (reg) (symbol_ref)))`, which
+   `rtx_varies_p` calls NON-varying and which is also non-struct.  Neither
+   side gets the `MEM_IN_STRUCT_P && rtx_addr_varies_p` escape in
+   `true_dependence`/`anti_dependence`/`output_dependence`
+   (sched.c:846-911), and `memrefs_conflict_p` cannot prove two non-constant
+   addresses apart, so BOTH edges exist.  A single
+   `*(u32 *)(d + 0x1C) &= ~0x100000;` statement therefore puts H and I on the
+   same side of the store and one edge always points the wrong way: written
+   AFTER the store, true_dependence pins H after G and H can never reach 139;
+   written BEFORE it, output_dependence pins I before G and G can never reach
+   142.  **So the read-modify-write has to be SPLIT ACROSS the store**, which
+   is the `m = ...; s = ...; store NULL; ... = m & k;` below.
+
+   `((u32 *)d)[7] &= ~0x100000;` DOES set MEM_IN_STRUCT_P (expr.c:5343-5351 --
+   the operand is a PLUS_EXPR, which `*(u32 *)(d + 0x1C)` is not) and so
+   deletes both edges, and it does not help: with no edge every placement
+   collapses to the same bad schedule with the +0x1C load still AFTER the
+   store, 19-23 rows.  The registers agree -- the landed sibling
+   func_8008E504, which the array-ref rule was written against, puts its two
+   masks in $a2/$a3, every array-ref spelling here puts the mask in $a3, and
+   THIS target has it in $v1, which is what the cast spelling gives.
+
+   TWO DEVICES CLOSE THE REST, and both are register placement.
+
+   1. `register u32 k __asm__("$3");` for the 0xFFEFFFFF mask -- worth
+      ELEVEN rows.  local_alloc sorts quantities by
+      `QTY_CMP_PRI = floor_log2(n_refs) * n_refs * size / (death - birth)`
+      (local-alloc.c:1693) and hands each the lowest-numbered free register,
+      and off this body's `.lreg` the `%hi(D_80081484)` pseudo is 3 refs over
+      10 insns (0.30) against the mask's 2 over 8 (0.25) -- so the `%hi` is
+      priced first and takes $v1 while the mask gets $a1.  The target has
+      them the other way round.  Winning that comparison from the source
+      needs the mask at 3 references, or its range at 6 insns, or the `%hi`'s
+      at 13, and none is reachable: cse2 merges the `(high (symbol_ref))`
+      however the pair is written and rematerialises a bare `~0x100000`
+      whatever local you bind it to.  So do not fight the priority -- name
+      the register.  Re-checked with the pin removed (13 rows): a
+      `do { } while (0);` wrapper at every statement is 13, a duplicated-arm
+      `if (v) { s } else { s }` for each of k/m/s/d/c at every statement is
+      13, and a greedy second round over both finds nothing.  No plain-C
+      equivalent exists here.
+   2. `g2 = c;` -- a copy of the `c` parameter, with the `+0x2C` store made
+      through it.  This is the last TWO rows and decomp-permuter found it
+      after 143000 candidates; every one of the 540 legal source orders of
+      the split basin had measured 2, and the pin could only put the
+      offending `addu $a0, $s2, $zero` at word 135 or 138 and never at the
+      target's 137.  `g2` already exists as a local for case 2, so the copy
+      costs no declaration -- and because its uses are in two different
+      blocks it survives cse rather than being propagated away.
+
+   ORDERING, measured over ALL 540 legal source orders of this basin (L
+   before or after P, the mask and write-back in each slot after the NULL
+   store, times the 30 legal permutations of the five tail statements with
+   g before the 0xA bump and t2 before its store): the floor is 2 before
+   device 2 and eight orders reach it, the worst is 36.  The one below is
+   `L P Q K M X G Y W V E`.
+
+   Also measured and rejected: the comma trick that would split the RMW
+   without a temp -- `*(u32 *)(d + 0x1C) &= (*(void **)D_80081484 = NULL,
+   ~0x100000);` -- is byte-identical to the unsplit body, because expand_expr
+   evaluates the side-effecting operand of a commutative binop FIRST; mixed
+   forms that put the MEM_IN_STRUCT escape on ONE HALF of the clear only
+   (worth knowing: it is the only way to break one edge without the other)
+   best 14 over all 180 of their legal orders; the temp's TYPE makes no
+   difference at all (u32/s32/int/unsigned long); and reusing an existing
+   local for it instead of a fresh `m` is 13-20. */
+void func_8008E700(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *g2;
+    u8 *t;
+    u8 *t2;
+    void *s;
+    s16 n;
+    s32 r;
+    s32 v;
+    u32 m;
+    register u32 k __asm__("$3");
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+        {
+            b->unk_14 = -0x160000;
+            if ((*(u32 *)(d + 0x1C) & 0x100000) != 0)
+            {
+                *(u8 **)(c + 0x2C) = D_800DD0C8;
+            }
+            else
+            {
+                *(u8 **)(c + 0x2C) = D_800DD048;
+            }
+            func_80048A44(
+                c, (*(u8 **)(c + 0x2C))[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            p[0x9B]++;
+        }
+        break;
+    case 1:
+        n = ++*(u16 *)(p + 0x96);
+        if ((*(u16 *)(p + 0xA2) & 0x10) != 0 && n >= 4)
+        {
+            b->unk_14 = 0;
+            if ((*(u32 *)(d + 0x1C) & 0x100000) != 0)
+            {
+                *(u32 *)(p + 0x8C) = (u32)func_8008EAC8;
+            }
+            else
+            {
+                t = D_800DD060;
+                *(u8 **)(c + 0x2C) = t;
+                func_80048A44(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0, 1);
+            }
+            p[0x9B]++;
+        }
+        else if ((*(u32 *)(d + 0x1C) & 0x300000) == 0x100000 && (*(u16 *)0x80013714 & 1) == 0)
+        {
+            r = func_8009AF18(*(s16 *)(d + 0x2A), b, c, 8);
+            if ((s16)r != 0)
+            {
+                ((u32 *)*(u8 **)(p + 0x124))[7] |= 0x200000;
+                ((u32 *)d)[7] |= 0x200000;
+                *(s16 *)(*(u8 **)(p + 0x124) + 0x8A) = r;
+                (*(u8 **)(p + 0x124))[0x84] = 0x78;
+                (*(u8 **)(p + 0x124))[0x85] = 2;
+                func_8009F644(d, 0x30, *(s16 *)(p + 0x96), 0);
+                m = *(u32 *)(d + 0x1C);
+                s = *(void **)D_80081484;
+                *(void **)D_80081484 = NULL;
+                k = ~0x100000;
+                *(u32 *)(d + 0x1C) = m & k;
+                g2 = c;
+                t2 = D_800DCFD0;
+                g = (u8 *)&D_80083460;
+                *(u16 *)(g + 0xA) += 1;
+                *(u8 **)(g2 + 0x2C) = t2;
+                v = ((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7;
+                D_800E3540 = s;
+                func_80048A44(c, t2[v], 5, 1);
+                func_800A56E0(0x512);
+            }
+        }
+        break;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+        {
+            g2 = (u8 *)&D_80083460;
+            if (*(s16 *)(g2 + 0xA) == 0)
+            {
+                if ((*(u32 *)(d + 0x1C) & 0x200000) != 0)
+                {
+                    *(u32 *)(d + 0x1C) &= 0xFFDFFFFF;
+                    *(u16 *)(g2 + 0x2) |= 0x412;
+                    func_80099F70(*(void **)(d + 0x5C));
+                    func_80099F04(*(void **)(d + 0x5C));
+                }
+                *(u32 *)(p + 0x8C) = (u32)func_8008ACDC;
+            }
+        }
+        break;
+    }
+}
 
 /* The same two-handler install as func_80096088 below, behind two teardown
    calls on the fourth argument's +0x5C and the 0x812 flag set. The second
