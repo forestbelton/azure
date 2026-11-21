@@ -700,6 +700,10 @@ extern u8 D_800E0F07[];
 void func_800997FC(u8 *);
 s32 func_800A2424(u8 *, s16);
 s32 func_800647A0(s32);
+extern u8 D_800E0953[];
+extern u8 D_800E095F[];
+extern u8 D_800E0970[];
+extern u8 D_800E0979[];
 extern u8 D_800E098B[];
 extern u8 D_800E099A[];
 extern u8 D_800E09B2[];
@@ -16383,7 +16387,280 @@ s16 func_800A1C58(u8 *p)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A1D4C);
+/* The dungeon "level up" twin of func_800A2424.  438 words, 0 differing.
+
+   SIX LEVERS, and the sixth is one free reference.
+
+   1. THE SPELL LOOP'S RULE INDEX IS A FRESH LOCAL `k' THAT IS *ALSO* READ IN
+      THE MESSAGE LOOP -- `k = p[i * 3 + 8];' in both, in place of the inlined
+      subscript, lifted verbatim from the landed twin.  The message-loop read
+      is the half that pays; the spell loop alone was measured and is not
+      enough.  Fixes the whole spell-loop rotation (induction ptr $a2->$a1,
+      k $a1->$a0, &e[i] $a0->$a2).  13 rows.
+   2. `i = 0;' BEFORE `d = (UnkDungeonName0 *)D_8006DE24;', with the message
+      loop written `for (; i < 3; i++)'.  The two insns are independent, so
+      sched1 orders them by INSN_LUID and nothing downstream recovers the
+      swap.  2 rows.
+   3. `hi -= lo;' AS ITS OWN STATEMENT for STAT 5 ONLY (`hi -= lo; o = n =
+      p[5]; n += hi;' rather than `o = n = p[5]; n += hi - lo;').  15 rows.
+      It fixes both halves at once: the `lbu $v1, 0x5($s2)' stops being
+      scheduled two words early, AND the $a0/$v1 rotation in the `hi' block
+      comes out the target's way, because the statement changes the block's
+      LUIDs and with them global.c's priority order over the t[5] reload and
+      the two `mflo's.  The other five stat blocks keep `n += hi - lo;'.
+      Note the direction: `hi -= lo' -- the level-DOWN twin has `lo - hi'.
+   4. `hi = 0x63;' SPLIT OUT AS ITS OWN SET inside the loop, then
+      `r = (hi - p[i*3+0xA]) / u2 + p[i*3+0xA];'.  Lever "DENY loop.c A
+      CONSTANT HOIST BY PUTTING THE CONSTANT IN A *USER* VARIABLE": the holder
+      is a user variable, set three times, live across basic blocks, so all
+      three scan_loop arms fail, no movable is made, and the target's
+      `addiu $v0, $zero, 0x63' is rematerialised at the use instead of
+      hoisted to `li $t1, 0x63' in the preheader.  9 rows.
+   5. THE 0x63 IS HELD IN `hi', NOT IN `r'.  Which user variable holds it
+      decides whether the constant and the subtraction share a register.
+      Measured holders, aligned rows: hi 4, u 6, w 6, r 6, hp 7, n 7, c 17,
+      k 23, o 436 words/70, lo 440 words/104.
+
+   6. `u2 = 0x64 - lvl;' GOES IN THE LOOP BODY AFTER `e[i] = 1;' AND IS
+      HOISTED BY loop.c -- AND THE HOIST IS PAID FOR WITH ONE FREE REFERENCE
+      TO `lvl'.  This is what took the park's last 4 rows to 0.
+
+      The target's `addiu $v0, $zero, 0x64' / `subu $a3, $v0, $s1' sit at
+      words 272/273, at the END of the loop preheader, after four other
+      loop.c hoists.  That position can ONLY be a loop.c hoist: sched1 leaves
+      the preheader in INSN_LUID order (all eight insns have priority 1), and
+      `move_movables' does `emit_insn_before (..., loop_start)', so a hoist's
+      position in the preheader is its SOURCE position among the movables --
+      and arm insns are always emitted before every hoist, so no placement
+      inside the `if (p[0x13] != 0)' arm can reach word 272.  In the arm the
+      pair comes out at 267/268 instead: 438 words, 4 rows, which is where
+      this park sat.
+
+      But the hoist adds the five preheader insns to lvl's live range and
+      that LOSES THE p/lvl ALLOCATION RACE BY 0.2%.  global.c's
+      `allocno_compare' priority is floor_log2(n_refs) * n_refs / live_length:
+
+        u2 in the arm      lvl: 4*16/197 = 0.3249  >  p 0.3188   OK
+        u2 hoisted         lvl: 4*16/202 = 0.3168  <  p 0.3188   FLIP
+                           p:   5*38/596 = 0.3188
+
+      lvl must be allocated before p to get the target's lvl=$s1 / p=$s2.
+      Hoisted and unpaid-for the whole register file rotates: 437 words,
+      62 rows.
+
+      THE CURE IS A SINGLE `__asm__("" ::"r"(lvl));' AS THE FIRST STATEMENT
+      OF THE `if (p[0x13] != 0)' ARM.  It emits nothing, and because it has
+      no outputs it is implicitly volatile and survives flow -- so lvl gets
+      a 17th reference and the priority becomes 4*17/202 = 0.3366, well clear
+      of p.  The margin is wide, not marginal: 17 references stay ahead of p
+      until lvl's live length reaches 213.
+
+      That is the general shape of this fix -- `flow_analysis' runs ONCE
+      (toplev.c:3463) and BEFORE combine (:3488), so a reference that costs
+      no instruction is free in the allocator's arithmetic.  The alternative
+      route, taking one reference OFF p by gating the spell loop on
+      `if (c != 0)', does produce the exact preheader but makes `c'
+      callee-saved ($s6, pushing f to $s7 and the frame to 0x40): 438 words,
+      16 rows.
+
+      `u2' POSITIONS MEASURED (with levers 1-5 in place, aligned rows):
+      first statement in the arm 4; split as `u2 = 0x64; u2 -= lvl;' in the
+      arm 4 (identical); `i = 2;' before or after it in the arm 4
+      (identical); before the `if' 437 words/25; top of the loop body 14
+      (hoisted to the WRONG slot, before the D_8006DE24 base, and the `1'
+      hoist is then LOST into the loop); after `e[i] = 0;' 14 (same);
+      before `e[i] = 1;' 437/86; `(0x64 - lvl)' inline with no u2 local
+      437/62; `u2 = -lvl; u2 += 0x64;' in the loop 437/63.
+
+   Also measured and kept: `(*(u16 *)0x80013714 & 1) == 0' as a literal
+   address, not through a declared symbol -- the symbol lets reorg lift its
+   `lui' into the `beqz $v0, .L800A23F8' delay slot where the target has a
+   `nop', and that is the whole word.  The second test measures the same
+   either way. */
+void func_800A1D4C(u8 *p, s16 f)
+{
+    u8 *t;
+    u8 *q;
+    u8 *g;
+    void *m;
+    void *h;
+    UnkDungeonName0 *d;
+    s32 lvl;
+    s32 c;
+    s32 k;
+    s32 i;
+    s32 r;
+    s32 w;
+    s32 u;
+    s32 u2;
+    s32 lo;
+    s32 hi;
+    u32 n;
+    u32 o;
+    u32 hp;
+    u8 e[3];
+
+    if (p[0x11] < 0x63)
+    {
+        lvl = p[0x11];
+        c = p[0x13];
+        p[0x11] = lvl + 1;
+        t = D_800DDCBC[c];
+        q = (u8 *)&D_8006D168[c];
+        lo = q[5] + t[5] * (lvl - 1) / 16 + t[5] * func_800647A0(((lvl - 1) * t[5]) << 11) / 32768;
+        hi = q[5] + t[5] * lvl / 16 + t[5] * func_800647A0((lvl * t[5]) << 11) / 32768;
+        hi -= lo;
+        o = n = p[5];
+        n += hi;
+        if (n > 0xFF)
+        {
+            n = 0xFF;
+        }
+        p[5] = n;
+        o = n - o;
+        p[0x28] += o;
+
+        i = t[4] * q[4];
+        lo = q[4] + i * (lvl - 1) / 1024;
+        hi = q[4] + i * lvl / 1024;
+        o = n = p[4];
+        n += hi - lo;
+        if (n > 0xFF)
+        {
+            n = 0xFF;
+        }
+        p[4] = n;
+        o = n - o;
+        p[0x25] += o;
+
+        i = t[0] * q[0];
+        o = n = p[0];
+        lo = q[0] + i * (lvl - 1) / 64;
+        hi = q[0] + i * lvl / 64;
+        n += hi - lo;
+        if (n > 0xFF)
+        {
+            n = 0xFF;
+        }
+        p[0] = n;
+        o = n - o;
+        p[0x26] += o;
+
+        i = t[1] * q[1];
+        o = n = p[1];
+        lo = q[1] + i * (lvl - 1) / 64;
+        hi = q[1] + i * lvl / 64;
+        n += hi - lo;
+        if (n > 0xFF)
+        {
+            n = 0xFF;
+        }
+        p[1] = n;
+        o = n - o;
+        p[0x27] += o;
+
+        i = t[2] * q[2];
+        n = p[2];
+        lo = q[2] + i * (lvl - 1) / 64;
+        hi = q[2] + i * lvl / 64;
+        n += hi - lo;
+        if (n > 0xFF)
+        {
+            n = 0xFF;
+        }
+        p[2] = n;
+
+        i = t[3] * q[3];
+        n = p[3];
+        lo = q[3] + i * (lvl - 1) / 1024;
+        hi = q[3] + i * lvl / 1024;
+        n += hi - lo;
+        if (n > 0xFF)
+        {
+            n = 0xFF;
+        }
+        p[3] = n;
+
+        w = *(s16 *)(q + 6);
+        hp = w + lvl * w + lvl * lvl * (w + t[6] * lvl) / 512;
+        if (hp > 0xFFFF)
+        {
+            hp = 0xFFFF;
+        }
+        *(u16 *)(p + 6) = hp;
+        if (p[0x13] != 0)
+        {
+            __asm__("" ::"r"(lvl));
+            for (i = 2; i >= 0; i--)
+            {
+                e[i] = 0;
+                k = p[i * 3 + 8];
+                if (k != 0)
+                {
+                    u = D_8006DE24[k].unk_10 >> 4;
+                    if ((u & *(u32 *)(p + 0x14)) != 0 || (u & 7) == 0)
+                    {
+                        if (p[i * 3 + 0xA] < 0x63)
+                        {
+                            p[i * 3 + 0xA] += 1;
+                            e[i] = 1;
+                            u2 = 0x64 - lvl;
+                            hi = 0x63;
+                            r = (hi - p[i * 3 + 0xA]) / u2 + p[i * 3 + 0xA];
+                            if (r >= 0x64)
+                            {
+                                r = 0x63;
+                            }
+                            p[i * 3 + 0xA] = r;
+                        }
+                    }
+                }
+            }
+        }
+        func_80041E70(p);
+        if (f != 0)
+        {
+            if ((*(u16 *)0x80013714 & 1) == 0)
+            {
+                D_800DCF4F = 1;
+                g = (u8 *)&D_80083460;
+                *(u16 *)(g + 0xA) += 1;
+            }
+            func_800B4C7C((*(u32 *)(p + 0x14) & 0x2000) ? 0x8002 : 0x8003, p, -2, 1);
+            m = func_800990FC();
+            h = func_80099194(D_800E0953, m);
+            h = (void *)func_8009929C(0xA, h);
+            h = func_80099734(p, h);
+            h = func_80099194(D_800E095F, h);
+            h = func_8003AD08(p[0x11], h);
+            h = func_80099194(D_80089000, h);
+            if (p[0x13] != 0 && (*(u32 *)(p + 0x14) & 0x4000) != 0)
+            {
+                i = 0;
+                d = (UnkDungeonName0 *)D_8006DE24;
+                for (; i < 3; i++)
+                {
+                    if (e[i] != 0)
+                    {
+                        h = (void *)func_8009929C(0xA, h);
+                        k = p[i * 3 + 8];
+                        h = func_80099194(d[k].unk_00, h);
+                        h = func_80099194(D_800E0970, h);
+                        h = func_80099194(D_800E0979, h);
+                    }
+                }
+            }
+            if ((D_80013714 & 1) == 0)
+            {
+                h = (void *)func_8009929C(0x11, h);
+                h = (void *)func_8009929C(0x4C, h);
+                h = (void *)func_80099254(D_800E0458, h);
+            }
+            func_80099290(h);
+            func_800A5720(m);
+        }
+    }
+}
 
 /* The dungeon "level down" twin of func_800A1D4C. 432 words, 0 differing.
    The second parameter is a SHORT (`sll $v0, $s6, 16' + `beqz'), not the
