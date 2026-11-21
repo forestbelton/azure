@@ -328,6 +328,27 @@
 
    So the second set of `f' is load-bearing and these two rows are its price.
    This is a permuter target, not a hand-sweep target.
+   THE `z0' DEVICE IS LOAD-BEARING TOO, measured 2026-11-20 against six
+   plain-C spellings of the same conditional copy (the user prefers no asm
+   device, so this is the list of what it would cost):
+
+       m = n + z0; if ((s16)n < 0) m = 0;      2   <- this park
+       if/else with both arms assigning       15
+       m = (s16)n; if ((s16)n < 0) m = 0;     15
+       m = n; if ((s16)n < 0) m = 0;          18 -- and 91 words, one SHORT
+       m = (s16)n < 0 ? 0 : n;                22
+       m = 0; if ((s16)n >= 0) m = n;         22
+       do { m = n; } while (0); if ...        22
+
+   `m = n' alone is the one that loses a word, which is the tell: without the
+   device cse propagates `n' into `m' and the copy never reaches the
+   allocator.  A do-while around it does NOT save it -- the free-reference
+   lever buys a reference, not a copy.
+
+   SIX PERMUTER FINDS that scored better than this park measured 10, 10, 12,
+   13, 13 and 14 rows.  See tools/decomp/measure_finds.py: below about ten
+   rows the permuter's metric and the row count point in different directions.
+
 */
 
 typedef struct UnkDungeonMapHdr
