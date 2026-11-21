@@ -1068,3 +1068,50 @@ kills that shell. `docs/landing-a-function.md` already records this for
 `pgrep -f` ("a pattern like `pgrep -f "permrun.py $FUNC"` matches the command
 line of the very shell running it"); it applies to `pkill` with teeth. Stop a
 search by PID, or let it expire.
+
+## 2026-11-21: FOUR SWEEPS, ONE LANDING, AND THE RULE THAT A NEGATIVE GOES STALE
+
+Four sweeps now exist as tools rather than as scratchpad scripts, and each of
+them has the same shape: it splices the park into its own unit, measures that
+as the baseline, builds an `onefunc.py` standalone when the unit is over 8000
+lines (after confirming the standalone reproduces the unit's residue), sweeps
+there at 0.09 s a candidate, keeps the best single change, and repeats. All
+four take `--body PATH` to sweep something that is not the park, which is how
+each was validated against a case whose answer was already known.
+
+| tool | what it varies | what it has been worth |
+| --- | --- | --- |
+| `widthsweep.py` | every declared width for every local | func_800B6AC4 46→39 and its missing word, func_8009F644 81→42, three more parks a row each |
+| `refsweep.py` | a cancelled `v++; v--;` for every name at every statement position | **func_8009A3D0 2→0, landed**; func_800A94A0 59→41; func_800B8FC8 12→10 |
+| `devsweep.py` | `do { s } while (0);` and duplicated-arm `if (v) { s } else { s }` over every statement | func_800A94A0 41→39; func_800B8FC8 12→7 |
+| `stmtsweep.py` | each simple assignment moved to every legal position in its block | func_800C2824 80→78 **and its three missing words**; func_800CEA44 127→126 |
+
+### The rule
+
+**A SWEEP'S NEGATIVE IS SCOPED TO THE BODY IT WAS SWEPT ON, AND GOES STALE THE
+MOMENT ANYTHING LANDS.** Three cases in two days:
+
+* `func_800A05A4` had swept all 210 interleavings of its entry block and
+  concluded order "cannot get below 59". True then. After a
+  `do { } while (0);` landed, one of the orders that had measured 59 measured
+  45.
+* `func_800A94A0` had been swept for both free-reference wrappers with nothing
+  to show. After the cancelled pair landed, two of them are worth a row each.
+* `func_800B8FC8` had been swept for the wrappers at 16 rows. At 12 a do-while
+  around one call is worth five.
+
+So the loop is: land a change, re-run all four sweeps, then the permuter. Not
+the other way round -- the sweeps are minutes and the permuter is 45.
+
+### What the permuter is still for, and what it is not for
+
+It mutates types, which is how both width wins were found before
+`widthsweep.py` existed, and it reaches combinations the greedy sweeps cannot.
+It is also the only one of the five that proposes UNSAFE changes, and three
+finds have now been rejected on correctness rather than score: a conditional
+volatile read made unconditional (func_800AD6FC), a local read uninitialised
+because the assignment sits after a `return;` (func_800C2824), and a colour
+channel shifted before the store that initialises it (func_8009E798). Measure
+every find with `measure_finds.py`, then read what it MEANS, then split it into
+its individual changes and measure each -- two of four finds in this session's
+batch carried a second change worth exactly nothing.
