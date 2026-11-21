@@ -12316,7 +12316,204 @@ s32 func_8009A66C(u32 f, u8 *c, u8 *d, s16 y)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009A8C0);
+/* The landed func_8009A66C's probe, one layer in.  184 words, 0 differing.
+
+   Parked at 12 rows -- two `andi`s that should be moves, plus a three-way
+   rotation of $s4/$s5/$s6 -- and BOTH halves were diagnosed in the park to
+   the compiler pass and the line of compiler source.  Each had exactly one
+   missing fact, and both facts turn out to be the same two devices.
+
+   ============================ (A) THE TWO COPIES: `kx + z0` WITH z0 ON `$0`
+
+   The target computes `(f >> 9) & 7` into $a0, copies it to $s5 at word 6,
+   and copies THAT back to $a0 at word 22, where it waits twenty-odd words
+   and four conditional branches for `jal func_8009A540`.  Three pseudos, two
+   surviving MOVES -- and a plain `k = kx;` / `k2 = k;` can never survive,
+   because cse.c's make_regs_eqv puts the destination of a reg-to-reg copy
+   into the SOURCE's quantity and canon_reg rewrites every use of the
+   destination back to qty_first_reg, so the copy goes dead and flow deletes
+   it.  Its one escape -- NEW becomes canonical when it will outlive every
+   other reg of the quantity, beyond the current basic block -- is true for
+   `k = kx` but not for `k2 = k`, so at most one of the two can be a plain
+   copy.  The park's best was a WIDENED recomputation (`k = (u8)kx; k2 =
+   (u16)kx;`), which cse cannot hash into kx's class, at the cost of emitting
+   `andi` where the target has `addu`.
+
+   The spelling that is both is an addsi3 with `$zero` as the literal second
+   operand:
+
+       register s32 z0 __asm__("$0");
+       k = kx + z0;
+       k2 = k + z0;
+
+   `addu $s5, $a0, $zero` is the same word as `move $s5, $a0`, and cse cannot
+   hash a PLUS of a hard register into kx's class, so both copies survive as
+   real insns.  See docs/matching-levers.md, "A REDUNDANT REGISTER COPY
+   SURVIVES jump2 IF YOU SPELL IT `x + z0`" -- written for func_800CA1E0,
+   where it defeats jump2's noop-move deletion; here it defeats cse's copy
+   propagation, which is a different pass and the same spelling.  Note the
+   second copy reads `k`, not `kx`: the target's word 22 is
+   `addu $a0, $s5, $zero`.
+
+   =================== (B) THE ROTATION: TWO FREE REFERENCES, PRICED EXACTLY
+
+   global.c:587 allocno_compare is
+   `pri = floor_log2(n_refs) * n_refs / live_length * 10000`, and find_reg
+   then takes the lowest-numbered free hard register (MIPS defines no
+   REG_ALLOC_ORDER).  Off this body's `.lreg` after (A):
+
+       az  5/44 = 2272   ax 5/46 = 2173   c 10/152 = 1973   k<<1 5/56 = 1785
+       k   4/50 = 1600   wz 2/18 = 1111   h 4/68 = 1176     wx 2/18 = 1111
+
+   which allocates ..., k<<1 = $s3, k = $s4, h = $s5, wz = $s6.  The target
+   needs the order k<<1, **wz, k, h** -- wz = $s4, k = $s5, h = $s6.
+
+   flow_analysis runs ONCE (toplev.c:3463) and BEFORE combine (:3488), so a
+   reference costs nothing in the assembly and still counts here.  Two of
+   them do it, and the arithmetic says where each must go:
+
+   1. `__asm__("" ::"r"(wz));` AFTER `az = D_800DCEBC[k] + wz;` -- wz goes to
+      3 refs.  The park had predicted 3/18 = 1666, which would sit between
+      k's 1600 and k<<1's 1785; the asm is a scheduling barrier and lengthens
+      wz's range to 21, so it actually lands at 1428 -- still short of k, but
+      it lifts wz over `h` and that is four of the twelve rows (words 61, 63,
+      137, 160 go).  Eight rows left, k and wz simply swapped.
+   2. `__asm__("" ::"r"(k));` AFTER the `n = func_8009FB34(...)` line, deep
+      in the `(s8)c[0x26] < 0` arm.  This is the other side of the same
+      comparison: rather than lift wz to 1600+, it LOWERS k, because the
+      reference extends k's live range far past its last real use at
+      func_8009A350's third argument.  With 5 refs over the longer range k
+      falls below wz's 1428 and above h's 1176, and the order becomes
+      k<<1, wz, k, h.  Zero rows.
+
+      **The position is the whole lever and it was found by sweeping every
+      insertion point in the body** -- one measurement per line, which costs
+      0.09 s each on a `tools/decomp/onefunc.py` file.  The next-best
+      position is 1 row and everything outside that arm is 8.  A free
+      reference is a dial, not a switch: the park's own rejected list has
+      five attempts at wz's third reference that overshot (`wz &= 0xFFFF;`
+      gives 4 refs / 19 = 4210 and takes $s0) or undershot
+      (`do { wz = pz + 0x20; } while (0);` gives 3 refs but length 25, so
+      1200).  Price the window, then sweep the position.
+
+   ================================= THE FIVE LEVERS UNDER ALL OF THAT (j87)
+
+   1. `u8 *d` PLAIN -- no `volatile`, no `(void)&d;`.  The target's
+      `lw $t0, 0x50($sp)` at words 55, 118, 148 and `lw $a0, 0x50($sp)` at
+      8009AB1C are RELOAD reloads of a SPILLED PSEUDO, not reads of an
+      addressable variable: reload picks $t0, local-alloc would have picked
+      $v0/$v1.  `d` spills because this body puts nine pseudos in
+      $s0..$s7/$fp, leaving `d` and `y` as the two lowest-priority allocnos
+      with nowhere to go -- and `y` spills to 0x18($sp) exactly as the target
+      does.  Measured: plain 183w/14, volatile 183w/25, volatile +
+      `(void)&d` 184w/26, plain + `(void)&d` 182w/33.
+   2. THREE pseudos for the facing index, with func_8009A540's argument
+      taken from its OWN copy in the FIRST basic block.  That is what puts a
+      copy of k in $a0 at word 22; it is not a hoist, it is a source-level
+      copy in block 1 whose pseudo global_alloc gives $a0 (free, no call in
+      its range), after which the call's own `(set (reg a0) k2)` is a no-op
+      move flow deletes.
+   3. `if (ax == 0 || (1 << sh[10]) - 1 < ax) return -1;` -- the first two
+      tests JOINED with `||`, and the same for the az pair.  10 rows and 2
+      words.  With separate `if`s reorg's fill_slots_from_thread OWNS the
+      first test's `return -1` block, steals `addiu $v0, -1` into the
+      branch's delay slot and redirects the branch; joining them makes the
+      -1 block shared, so reorg cannot own it and fill_simple_delay_slots
+      puts `addiu $a2, %lo(D_8008333C)` there instead -- the target's word 28.
+   4. The ternary IN func_8009B25C's fourth argument, and the inverted tail
+      (`(s16)t >= 0x201 -> return -1` first).  The tail the other way round
+      is 183 words / 43 rows.
+   5. x/ax and z/az SHARE one local each; separate locals are 180w/102.
+
+   And from the park's rejected list, so it is not re-derived: ONLY ax/az's
+   width matters -- `s32`/`u32` for them is 178w/70, so they stay 16-bit --
+   while u16/u32 on wx, wz, h, k, kx, k2, t and s32 px/pz are all
+   byte-identical; all 24 declaration orders of wx/wz/k/h with wx before wz
+   are identical bytes and every order with wz first is 183w/92; all 30 legal
+   statement orders of the {h, px, pz, wx, wz} group are identical bytes;
+   and cc1psx's SN-only `shorten_lifetimes` pass is NOT behind the word-22
+   copy -- `.shorten` has the same 126 insns in the same order as `.sched`. */
+s32 func_8009A8C0(u32 f, u8 *c, u8 *d, s16 y)
+{
+    s16 *sh;
+    u16 w;
+    u16 ax;
+    u16 az;
+    u32 px;
+    u32 pz;
+    s32 wx;
+    s32 wz;
+    s32 k;
+    s32 h;
+    s32 t;
+    s16 n;
+    s32 k2;
+    s32 kx;
+    register s32 z0 __asm__("$0");
+
+    kx = (f >> 9) & 7;
+    k = kx + z0;
+    k2 = k + z0;
+    sh = (s16 *)D_8008333C;
+    ax = c[0x24] + (u16)D_8006CCD8[k];
+    if (ax == 0 || (1 << sh[10]) - 1 < ax)
+    {
+        return -1;
+    }
+    az = c[0x25] + (u16)D_8006CCE8[k];
+    if (az == 0 || (1 << sh[11]) - 1 < az)
+    {
+        return -1;
+    }
+    h = *(u16 *)(d + 0x88);
+    px = c[0x24] << 6;
+    pz = c[0x25] << 6;
+    wx = px + 0x20;
+    wz = pz + 0x20;
+    if ((s16)func_8009A540(k2, px >> 6, pz >> 6, h - y) == 0)
+    {
+        return 0;
+    }
+    ax = D_800DCEAC[k] + wx;
+    az = D_800DCEBC[k] + wz;
+    __asm__("" ::"r"(wz));
+    func_8009A350(c[0x24], c[0x25], k, &w);
+    if ((w & 0x8002) != 0)
+    {
+        return 0;
+    }
+    if ((s8)c[0x26] < 0)
+    {
+        n = func_8009FB34(c[0x24] + (u16)D_8006CCD8[k], c[0x25] + (u16)D_8006CCE8[k]);
+        __asm__("" ::"r"(k));
+        if (n >= 0 && (D_800E2970_s[n].unk_0C & 2) != 0 && (*(s32 *)(d + 0x1C) & 0x2000) == 0)
+        {
+            return 0;
+        }
+    }
+    if ((w & 0x3300) != 0)
+    {
+        if ((w & 0x40) == 0)
+        {
+            return -1;
+        }
+        t = func_800BCB04(ax, az, h - y);
+        if (func_8009B25C(d, ax >> 6, az >> 6,
+                          (s16)t < 0x201 ? (s16)t : *(s16 *)(d + 0x88)) != NULL)
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        t = func_800BCB04(ax, az, h - y);
+    }
+    if ((s16)t >= 0x201)
+    {
+        return -1;
+    }
+    return 1;
+}
 
 s32 func_8009ABA0(u16 a, UnkVec *b, u8 *c, s16 d, s16 e)
 {

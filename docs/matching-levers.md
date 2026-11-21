@@ -1022,9 +1022,9 @@ then read only the section you need.
 - `lw $t0` MEANS A SPILLED PSEUDO; `lw $v0`/`$v1` MEANS AN ADDRESSABLE VARIABLE  `:32370`
 - JOINING TWO EARLY-RETURN TESTS WITH `||` CHANGES WHICH BLOCK reorg CAN OWN  `:32389`
 - A REDUNDANT REGISTER COPY SURVIVES jump2 IF YOU SPELL IT `x + z0` WITH `z0` PINNED TO `$0`  `:32403`
-- A FREE REFERENCE WINS AN `allocno_compare` RACE: `__asm__("" ::"r"(x))` COSTS NO INSTRUCTION AND flow COUNTS IT  `:32474`
-- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:32524`
-- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:32594`
+- A FREE REFERENCE WINS AN `allocno_compare` RACE: `__asm__("" ::"r"(x))` COSTS NO INSTRUCTION AND flow COUNTS IT  `:32489`
+- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:32556`
+- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:32626`
 
 <!-- END INDEX -->
 
@@ -32454,6 +32454,21 @@ unreachable, check whether an earlier copy between the same two hard registers
 exists in the final insn stream -- if it does, jump2 is deleting yours, and the
 PLUS spelling is the escape.
 
+**AND IT IS NOT ONLY jump2.** `func_8009A8C0` (2026-11-20) needed TWO
+surviving copies of one value -- `(f >> 9) & 7` into $a0, copied to $s5, then
+copied back to $a0 twenty words later -- and there the pass eating them is
+cse: `make_regs_eqv` puts the destination of a reg-to-reg copy into the
+SOURCE's quantity and `canon_reg` rewrites every use of the destination back
+to `qty_first_reg`, so the copy goes dead and flow deletes it. Its one escape
+(NEW becomes canonical when it outlives every other reg of the quantity,
+beyond the current basic block) covers at most ONE of two such copies. The
+park's workaround was a widened recomputation, which cse cannot hash into the
+source's class but emits `andi` where the target has `addu`;
+`k = kx + z0; k2 = k + z0;` emits the target's two words, because cse cannot
+hash a PLUS of a hard register into that class either. **So reach for this
+spelling whenever a copy the target keeps will not survive -- the question is
+only which pass is deleting it, and the answer does not change the fix.**
+
 **What it replaces.** The same park reached 153 words with the right slot and
 registers by masking a fenced, pinned value (`kz2 = (u16)kg; ka = kz2 & 7;`),
 which survives for the same structural reason -- an `andi` is not a reg-reg
@@ -32516,6 +32531,23 @@ site and the middle of a block the target schedules tightly is a bad one. On
 `func_8009DAD8` the same device applied to `head` overshot -- six references
 put it ahead of two allocnos it must follow, 11 rows against 9 -- so price the
 window, not just the direction.
+
+**IT IS A DIAL, NOT A SWITCH, SO SWEEP THE POSITION.** The reference can be
+spent on EITHER side of the comparison: on `func_8009A8C0` (2026-11-20, 12
+rows to 0) the residue needed the order `k<<1, wz, k, h` and both halves of
+it were bought with free references -- one on `wz` to lift it over `h`, and
+then one on `k` placed deep in a later arm, which LOWERS `k` by extending its
+live range far past its last real use. Lifting `wz` the rest of the way was
+not reachable; lowering `k` was. And the position matters to the row: one
+insertion point gave 0, the next-best 1, and everything outside that arm 8.
+Sweeping every line of the body is one measurement per line, which is 0.09 s
+each on a `tools/decomp/onefunc.py` file -- so sweep it rather than reason
+about it, once the window is priced.
+
+Note that an input-only asm is a scheduling barrier and can lengthen the very
+range you are trying to keep short: on `func_8009A8C0` the `wz` reference was
+predicted at `3/18 = 1666` and measured at `3/21 = 1428`, because sched moved
+work across it. That still bought four rows. Price the window, then sweep.
 
 Related: the counter-case for `reg_n_sets` is "`adjust_priority`'s BIRTHING
 BOOST", below; `reg_n_refs` and `reg_n_sets` are different counters with
