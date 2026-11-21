@@ -23211,9 +23211,16 @@ void func_800AACA4(u8 *p, UnkVec *b, u8 *c, u8 *d)
    `|= 0x80000000` gate" and closed by the cure in docs/matching-levers.md,
    "THE `|= 0x80000000` GATE IS A LOCALITY PROBLEM, NOT UNREACHABLE": assign
    the constant to `cc2` ONE BLOCK EARLIER -- in the block holding the
-   `& 0x400` test -- and keep one input-only `__asm__("" ::"r"(cc2))` after
-   the store so a single-use REG_EQUIV constant is not rematerialised back
-   into the body block.  Multi-block, the constant leaves local_alloc,
+   `& 0x400` test -- and give it a SECOND reference so a single-use REG_EQUIV
+   constant is not rematerialised back into the body block.  Wrapping the
+   store in `do { } while (0);` is that reference in ordinary C: flow.c:2128
+   weights each reference by `loop_depth` and the loop NOTEs emit nothing.
+   (`__asm__("" ::"r"(cc2));` after the store does the same thing and is how
+   this first landed; the do-while is preferred because it is not a scaffold.
+   Both are 176 words / 0 differing; without either, 4 rows.  Of the plain-C
+   placements, `do { }` around the store and around `cc2 = 0x80000000;` are
+   both 0, a duplicated-arm `if (p)` around the store is 0, and everything
+   else measured runs 2 or worse.)  Multi-block, the constant leaves local_alloc,
    `block_alloc` can no longer tie the `ior`'s destination to it, and
    global_alloc hands the loaded value $v0 and the constant $v1 -- the
    target's `lw $v0` / `lui $v1` / `or $v0, $v0, $v1`.  Nothing else in the
@@ -23296,8 +23303,10 @@ join:
             cc2 = 0x80000000;
             if (*(s32 *)(p + 0x14) >= 0)
             {
-                *(u32 *)(p + 0x14) |= cc2;
-                __asm__("" ::"r"(cc2));
+                do
+                {
+                    *(u32 *)(p + 0x14) |= cc2;
+                } while (0);
                 *(u16 *)(p + 0x2A) += (func_800A6D30() & 7) << 9;
             }
         }
