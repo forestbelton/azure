@@ -1,5 +1,17 @@
 /* PARK -- func_800A0E6C, batch j52, 2026-11-16.
 
+   ====================================== 2026-11-20: 93 rows -> 57
+
+   The body below carries one device: a duplicated-arm `if (e)` around `c[0x73] = 0;`.
+
+   A `do { } while (0);` wrapper and a duplicated-arm `if (v) { s } else { s }`
+   are the same free-reference lever from two directions -- flow.c:2128 weights
+   each reference by `loop_depth`, jump2's cross-jumping merges identical arms
+   -- so both cost nothing and both are ordinary C.  Found by sweeping every
+   statement position times both devices over every local on a
+   `tools/decomp/onefunc.py` file, where a candidate is 0.09 s.  Nothing in
+   this park's own diagnosis points at the winning statement.
+
    RESIDUE: 432 candidate words against 432 target words, 93 aligned
    differences (tools/decomp/aligndiff.py).  ovlverify's word-by-word count
    reads 171 because the two streams shift by a word twice; aligndiff is the
@@ -106,7 +118,14 @@ s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d)
     {
         if ((c[0x72] | c[0x73]) == 0 || *(s8 *)(b + 0x26) != f)
         {
-            c[0x73] = 0;
+            if (e)
+            {
+                c[0x73] = 0;
+            }
+            else
+            {
+                c[0x73] = 0;
+            }
             c[0x72] = 0;
             c[0x67] = 0;
             b[0x27] = 0xFF;
