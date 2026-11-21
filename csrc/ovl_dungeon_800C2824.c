@@ -1208,13 +1208,13 @@ UnkNode *func_800C4EB4(s32 a, s32 b, s32 c, s16 d, s16 e)
     return n;
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_800893D4);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800C2824", D_800893D4);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_800893D8);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800C2824", D_800893D8);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_800893DC);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800C2824", D_800893DC);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_800893E0);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800C2824", D_800893E0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800C2824", func_800C4F20);
 
@@ -4261,9 +4261,9 @@ void func_800CAAC8(UnkDungeonActor *p, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_8008942C);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800C2824", D_8008942C);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089430);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800C2824", D_80089430);
 
 /* The five-state spin-up/spin-down for the warp tile: state 0 arms +0xB8 and
    either bails to state 4 or latches the mover's bearing at +0xB0, state 1

@@ -6314,28 +6314,28 @@ s32 func_800C27F0(void)
     return p != NULL;
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089354);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089354);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089358);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089358);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_8008935C);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_8008935C);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089360);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089360);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089364);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089364);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089368);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089368);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_8008936C);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_8008936C);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089370);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089370);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089374);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089374);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089378);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089378);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_8008937C);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_8008937C);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089380);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089380);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089384);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B6AC4", D_80089384);

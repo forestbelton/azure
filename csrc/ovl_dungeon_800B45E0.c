@@ -653,4 +653,4 @@ void func_800B69DC(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_800892F8);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800B45E0", D_800892F8);

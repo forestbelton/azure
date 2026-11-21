@@ -195,7 +195,7 @@ UnkNode *func_8003FC64(s32);
 /* Parked at the node's +0x10 by the pair below; an address-take needs a
    declaration. */
 s32 func_800A7CC4(u8 *, UnkVec *, UnkSlot *);
-void func_800B51C8();
+s32 func_800B51C8();
 
 /* Engine and overlay globals this unit reaches. D_800E3D7C is the resident
    engine's, and its `u8 *` spelling is copied from csrc/unk_154BC.c, which
@@ -1898,7 +1898,7 @@ s32 func_800CEEFC(u8 *, UnkVec *, UnkSlot *);
 s32 func_8003F794(s16, s16);
 void func_8003E1C4(s16);
 void func_800AFAD8();
-void func_800AFBFC();
+s32 func_800AFBFC();
 extern s8 D_800DCF4C;
 extern u8 D_800DEF90[];
 extern u16 D_800E2924[][2];
@@ -1922,7 +1922,7 @@ extern u8 D_800E221C[];
 extern u8 D_800DD7E0[];
 extern u8 D_800DD7DC;
 void func_8009E038();
-void func_8009E798();
+s32 func_8009E798(u8 *, UnkVec *, UnkSlot *);
 extern u8 D_800E1937[];
 extern u8 D_800E1A6D[];
 extern void *D_800DCF20;

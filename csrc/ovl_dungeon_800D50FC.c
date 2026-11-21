@@ -4484,6 +4484,6 @@ void func_800DCE0C(UnkNode *n)
     D_800814A0 |= 0x8000;
 }
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089490);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800D50FC", D_80089490);
 
-INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon", D_80089498);
+INCLUDE_RODATA("asm/nonmatchings/ovl_dungeon_800D50FC", D_80089498);
