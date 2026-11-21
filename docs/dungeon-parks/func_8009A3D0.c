@@ -1,12 +1,86 @@
 /* func_8009A3D0 (ovl_dungeon) -- PARK, best so far.
 
-   target 92 words, candidate 92 words, 15 differing (masked),
-   15 ALIGNED DIFFERENCES AND EVERY ONE OF THEM IS A REGISTER NAME.
-   The stream aligns 1:1 with no insertion or deletion anywhere, the whole
-   then-arm (words 0..49) is byte-identical, and the residue is confined to
-   six caller-saved quantities in the else-arm plus two words the second set
-   of `f` costs (see LEVER 5).  Previous state of this park: 91 words,
-   45 aligned differences, 77 masked.
+   target 92 words, candidate 92 words, **2 ALIGNED DIFFERENCES**
+   (2026-11-20).  Previous states: 91/45 (j41-era), 92/15 (j89).
+
+   THE RESIDUE IS LEVER 5's TWO WORDS AND NOTHING ELSE:
+
+       81  or  $s0, $v0, $a2     target  or  $v0, $v0, $a2
+       82  sh  $s0, 0x4($v1)             sh  $v0, 0x4($v1)
+
+   i.e. the tail's `or`/`sh` write `f` ($s0) where the target writes a
+   caller-saved temp.  Every other word of the 92, and every other register,
+   is correct.
+
+   ============ WHAT TOOK IT FROM 15 TO 2: THE CLAMP IS ONE-ARMED, AND ITS
+   ============ COPY IS AN addsi3 WITH `$zero`
+
+   The park had the diagnosis right and the shape wrong.  It is
+
+       m = n + z0;                 (* with register s32 z0 __asm__("$0") *)
+       if ((s16)n < 0)
+       {
+           m = 0;
+       }
+
+   and NOT the two-armed `if ((s16)n < 0) m = 0; else m = n;` this park
+   carried.  Both halves are needed and each is visible in the target.
+
+   (a) ONE-ARMED, WITH THE COPY FIRST.  The target's word 64 is
+   `addu $a2, $a0, $zero` -- the copy -- at a slot BEFORE the sign test at
+   67/68, and word 68 is `bgez $a0, .L8009A4EC`, an INVERTED branch whose
+   delay slot holds `sh $a1, 0x4($v1)` and whose taken arm is
+   `addu $a2, $zero, $zero` at 70.  That is `m = n;` unconditionally followed
+   by a one-armed `if (n < 0) m = 0;`.  The park's rejected list has the
+   OTHER one-arming -- `m = 0;` first with `if ((s16)n >= 0) m = n;`, 22 rows
+   -- and never measured this one.  On its own it is 91 words / 18 rows.
+
+   (b) THE COPY IS `n + z0`, NOT `n`.  This is the whole of the park's
+   identified root cause.  local-alloc's `optimize_reg_copy_1` eats a
+   `m = n` copy: sched1 has already placed it ahead of the sign-test `sll`,
+   so the forward scan from the copy reaches that `sll`, finds `REG_DEAD n`
+   on it and rewrites it to read `m` -- which shortens n's quantity, lifts
+   its QTY_CMP_PRI and cascades through six caller-saved registers.  The
+   park's cure was to BLOCK the scan with a third set of `m`, which works but
+   drags a `nor` to word 54 (19 differing).  The better cure is never to
+   enter the pass: local-alloc.c:1025-1028 gates it on
+
+       flag_expensive_optimizations && GET_CODE (dest) == REG
+       && GET_CODE (SET_SRC (set)) == REG
+       && ! find_reg_note (insn, REG_DEAD, SET_SRC (set))
+
+   and a PLUS is not a REG, so `m = n + z0;` is not considered at all -- while
+   `addu $a2, $a0, $zero` is the same word the target has.  See
+   docs/matching-levers.md, "A REDUNDANT REGISTER COPY SURVIVES jump2 IF YOU
+   SPELL IT `x + z0`": that spelling has now beaten jump2's noop-move
+   deletion (func_800CA1E0), cse's copy propagation (func_8009A8C0) and
+   local-alloc's optimize_reg_copy_1 (here).  Three passes, one spelling.
+
+   With the two-armed clamp, `m = n + z0` alone is 22 rows; with the
+   one-armed clamp it is 2.  `m = z0;` in place of `m = 0;` measures
+   identically, so the zero arm is free either way.
+
+   ======================================= WHAT IS LEFT, AND WHAT IT IS NOT
+
+   LEVER 5's two words.  `f` needs a second set or update_equiv_regs doubles
+   its live length and it cannot win $s0 (the arithmetic is below), and the
+   cheapest second set is the tail's `f = cell | m; cell = f;` -- which puts
+   the `or`/`sh` in $s0 where the target has $v0.  Measured on THIS body,
+   all 92 words unless noted:
+
+     * the tail storing direct, with no second set of `f` ...... 20 rows
+     * the tail through a fresh `s32 z` ........................ 20 rows
+     * the tail through `o` .................................... 20 rows
+     * `f = ~f;` ahead of the tail, storing direct ............. 20 rows
+     * `f = ~f;` moved into the THEN-arm instead, so the else-arm
+       tail can use a temp ....................................... 7 rows
+       -- it does give `f` its second set without the tail, but it
+          breaks the then-arm, which was byte-identical
+     * the same with the temp tail as well ............ 91 words / 11 rows
+
+   So the second set has to be in the else-arm and has to be the tail, unless
+   something gives `f` a second set in the then-arm WITHOUT moving the `nor`.
+   **That is the one thing left here, and it is two words.**
 
    WHAT THE FUNCTION IS.  (x, y, flags) over the 6-byte map cells at
    `*(s32 *)(&D_80083160 + 0x1DC)`, row shift at +0x1F0.  `flags & 0x8832`
@@ -223,7 +297,6 @@ typedef struct UnkDungeonMapHdr
     u8 pad_04[0x10];
     s16 unk_14;
 } UnkDungeonMapHdr;
-
 void func_8009A3D0(s32 x, s32 y, s32 f)
 {
     u8 *v;
@@ -267,19 +340,17 @@ void func_8009A3D0(s32 x, s32 y, s32 f)
         u16 o;
         s32 n;
         s32 m;
+        register s32 z0 __asm__("$0");
 
         px = (s16)x;
         py = (s16)y;
         o = *(u16 *)((px + (py << w->unk_14)) * 6 + t + 4);
         n = (o & f) - (f & 0x1100);
         *(u16 *)((px + (py << w->unk_14)) * 6 + t + 4) = o & ~f;
+        m = n + z0;
         if ((s16)n < 0)
         {
             m = 0;
-        }
-        else
-        {
-            m = n;
         }
         /* The second set of `f` is LEVER 5: it is what keeps
            update_equiv_regs from doubling f's live length, and it is worth
