@@ -24660,6 +24660,39 @@ check passes, the load moves to its use and is scheduled after the store.
 **All 24 permutations of the four head statements were measured and none
 reaches 0 (best 6). The array-ref spelling is the only route.**
 
+### Second instance, and the two things this entry did not say
+
+`func_800B8FC8`, ovl_dungeon_800B6AC4, 2026-11-21, landed at 95/95 words from
+a 5-row park. Same `lw 0x50($sp)` shape, same cure: the 0x8D0 store written
+`((u32 *)D_80083160.unk_00)[0x234]` instead of `*(u32 *)(... + 0x8D0)`
+(0x234 * 4 == 0x8D0). On the final body the array-ref store is **0 rows and
+the cast store is 19**.
+
+**THE PARAMETER'S PSEUDO MUST HAVE ONE USE, AND A LATE ONE.** A body copy like
+`ee = e;` at the top of the function defeats the lever completely: the
+pseudo's single use is then already in the first block, and the array-ref
+store measures BYTE-IDENTICAL to the cast. The park this landing closed had
+swept the array-ref spelling and recorded it as a clean negative for exactly
+that reason -- it was carrying an `ee = e;` copy, which also has to go. The
+2x2 on the final shape:
+
+| | `(s16)e` at the call | `ee` local, not first | `ee = e;` first |
+| --- | --- | --- | --- |
+| array-ref store | **0 / 95 w** | 0 / 95 w | 9 / 95 w |
+| cast store | 19 / 95 w | 19 / 95 w | -- |
+
+**AND IT ACTS THROUGH `update_equiv_regs`, NOT THROUGH sched2's
+`anti_dependence`.** A residue of this shape points you at the scheduler dump,
+and the scheduler is a dead end: `anti_dependence` (sched.c:867) cannot
+disambiguate `(mem (plus (reg v1) 2256))` from `(mem (plus sp 80))`, and
+BOTH of its escape clauses (sched.c:886) also require `! rtx_addr_varies_p` of
+the other MEM, which a frame slot never satisfies -- `rtx_varies_p` treats
+`(reg 29 sp)` as varying. Measured: with the load still in the prologue, all
+fifteen non-empty combinations of array-ref spellings over the four `+ 0x8D0`
+references are byte-for-byte identical, on two different bodies. The RTL
+confirms the array ref does set `mem/s`; the sched2 edge survives it anyway.
+The spelling matters at `validate_equiv_mem` and nowhere else.
+
 ## A GOTO TO A BLOCK AFTER THE FUNCTION'S `return` LETS jump.c INVERT INTO THE CROSS-JUMPED TAIL
 
 `func_800A4E2C`, ovl_dungeon, 2026-11-15. One word and 102 differing.

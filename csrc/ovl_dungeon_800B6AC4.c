@@ -916,7 +916,97 @@ void func_800B8EA8(void *a, s32 b, s32 c, s32 d, u16 *e, void *f, s16 g, s32 h, 
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800B6AC4", func_800B8FC8);
+/* 95 of 95 words, 0 differing.
+ *
+ * THE LEVER IS THE 0x8D0 STORE BEING AN ARRAY REF.  `((u32 *)X)[0x234]' and
+ * `*(u32 *)(X + 0x8D0)' are the same store (0x234 * 4 == 0x8D0) and differ
+ * only in MEM_IN_STRUCT_P: expr.c:5351 sets that flag when an INDIRECT_REF's
+ * operand is a PLUS_EXPR, which an ARRAY_REF on a cast pointer is and a
+ * dereference of a cast PLUS is not.  `validate_equiv_mem' (local-alloc)
+ * treats a store it cannot disambiguate as a clobber of the fifth
+ * parameter's frame slot, so with the cast spelling `update_equiv_regs'
+ * cannot move `lw $s5, 0x50($sp)' out of the prologue: it stays there and
+ * sched2 ranks it above the neighbouring `lui', taking that slot.  With the
+ * array ref the load moves past the store, gains a true dependence on it
+ * (sched2 priority 1 -> 3) and is emitted where the target has it, one insn
+ * before the first `jal'.  Measured on this body: array-ref store 0 rows,
+ * cast store 19 rows, and that is the whole difference -- the two spellings
+ * of the `ee' copy below make no difference once the store is right.
+ * (Second instance of docs/matching-levers.md "A STORE'S MEM_IN_STRUCT_P
+ * DECIDES WHETHER AN INCOMING *STACK* PARAMETER'S LOAD CAN MOVE TO ITS USE".)
+ *
+ * TWO DEVICES, both with no reason in the source beyond the register
+ * assignment they buy, and both measured:
+ *   - `do { } while (0);' around the func_800B9144 call.  Without it the
+ *     function is 93 words: flow.c:2128 weights the references inside it by
+ *     loop_depth, which is what keeps `r'/`g' in callee-saved registers and
+ *     gives the target's $fp save/restore pair something to hold.  A bare
+ *     block is 93/21 -- it is the loop depth, not the braces.
+ *   - `g++; g--;' INSIDE that wrapper, before the call.  It compiles to
+ *     nothing (combine folds the two addiu) and is worth 2 rows: without it
+ *     the body is 95/2.  The pair has to be on `g' and inside the wrapper:
+ *     `q' or `b2' there is 95/2, `p' is 95/37, `r' is 96/37, the pair after
+ *     the call is 95/2, and the pair outside the wrapper is 95/2.
+ *
+ * Also measured and NOT needed, against the park this closes: the `ee = e;'
+ * copy, the `bb = b;' copy, a separate `t2', and the park's
+ * `__asm__("" ::"r"(b2));' barrier -- the asm device is gone.  `s16 lean'
+ * and not `s32' is still load-bearing (95/56 as `s32'), and so is hoisting
+ * `cw = (u16)c;' out of the `if' (95/17 written `if ((u16)c != 0)').
+ */
+void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
+{
+    Unk80083160 *g;
+    u8 *q;
+    u8 *r;
+    u8 *u;
+    s16 w[2];
+    s16 lean;
+    s32 t;
+    u16 cw;
+
+    cw = (u16)c;
+    g = &D_80083160;
+    lean = D_80083160.unk_00 != D_801C9E40;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    r = D_80083160.unk_00 + 0x8B0;
+    ((u32 *)D_80083160.unk_00)[0x234] = (u32)(q + 0xC);
+    SetDrawArea(q, D_80083160.unk_00);
+    AddPrim(r, q);
+    w[0] = *(u16 *)b2;
+    t = *((s16 *)b2 + 1);
+    if (lean)
+    {
+        t -= 0xE0;
+    }
+    w[1] = t;
+    do
+    {
+        g++;
+        g--;
+        func_800B9144((u8 *)w, p, r, (s16)e);
+    } while (0);
+    if (cw != 0)
+    {
+        u = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(u + 0x10);
+        *(u32 *)(u + 0x4) = 0x60000000;
+        u[0x3] = 3;
+        *(u16 *)(u + 0x8) = *(u16 *)b;
+        t = *((s16 *)b + 1);
+        if (lean)
+        {
+            t -= 0xE0;
+        }
+        *(s16 *)(u + 0xA) = t;
+        *(u32 *)(u + 0xC) = b[1];
+        AddPrim(r, u);
+    }
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
+    SetDrawArea(q, b);
+    AddPrim(r, q);
+}
 
 void func_800B9144(u8 *a, u8 *p, u8 *ot, s16 d)
 {
