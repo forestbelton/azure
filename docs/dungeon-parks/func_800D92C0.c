@@ -1,5 +1,11 @@
 /* func_800D92C0 (ovl_dungeon) -- 343 of 344 words, 62 ALIGNED DIFFERENCES.
 
+   ====================================== 2026-11-21: 51 rows -> 48
+
+   A duplicated-arm `if (n)` around `r = func_8009A66C((s16)s, c, d...)`, from
+   tools/decomp/devsweep.py, on top of this morning's cancelled pair.  Three
+   rows, and the third device this park carries.
+
    ====================================== 2026-11-21: 52 rows -> 51
 
    `y++; y--;` before `if (c[0x24] == (u16)x && c[0x25] == (u16)y)`, from
@@ -241,7 +247,14 @@ void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d)
         {
             s = n + tbl[i];
         }
-        r = func_8009A66C((s16)s, c, d, 0x20);
+        if (n)
+        {
+            r = func_8009A66C((s16)s, c, d, 0x20);
+        }
+        else
+        {
+            r = func_8009A66C((s16)s, c, d, 0x20);
+        }
         if ((r << 16) > 0)
         {
             if (i >= 3 && f != 0)

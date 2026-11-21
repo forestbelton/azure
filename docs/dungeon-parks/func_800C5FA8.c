@@ -1,5 +1,13 @@
 /* PARK -- func_800C5FA8, agent j59, 2026-11-16.
 
+   ====================================== 2026-11-21: 172 rows -> 161
+
+   Two duplicated-arm devices from tools/decomp/devsweep.py: `if (kk)` around
+   `e = *(u8 **)(q - 0x14);` (172 -> 165) and `if (y1)` around
+   `txt = func_8009929C(0x11, txt);` (165 -> 161).  A third, `if (k)` around
+   `*(u16 *)(f + 0x2) |= 0x200;`, was found and superseded inside the same
+   round at 164, so another round on this body is worth running.
+
    ====================================== 2026-11-20: 239 rows at 701/706 words -> 175 at 706/706
 
    The body below carries one device: a duplicated-arm `if (u)` around `x++;` -- which is also the missing FIVE words.
@@ -230,7 +238,14 @@ void func_800C5FA8(u8 *p)
             txt = func_80099194(D_800E0B65, msg);
             if ((D_80013714 & 1) == 0)
             {
-                txt = func_8009929C(0x11, txt);
+                if (y1)
+                {
+                    txt = func_8009929C(0x11, txt);
+                }
+                else
+                {
+                    txt = func_8009929C(0x11, txt);
+                }
                 txt = func_8009929C(0x4C, txt);
                 txt = func_80099254(D_800E0458, txt);
             }
@@ -331,7 +346,14 @@ void func_800C5FA8(u8 *p)
         *(s16 *)(p + 0x12) = 0;
         do
         {
-            e = *(u8 **)(q - 0x14);
+            if (kk)
+            {
+                e = *(u8 **)(q - 0x14);
+            }
+            else
+            {
+                e = *(u8 **)(q - 0x14);
+            }
             if (kk == func_8009FBF0(e[0x24], e[0x25]))
             {
                 if (q[0x13] == 0)
