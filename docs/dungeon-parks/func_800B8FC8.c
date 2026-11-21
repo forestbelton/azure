@@ -215,7 +215,24 @@
 
    Measured and byte-identical, so free to spell either way: `lean` and `g`
    in either order after `ee`/`bb`, and `bb` as a `u8 *` with byte offsets
-   instead of an `s32 *`. */
+   instead of an `s32 *`.    ====================================== 2026-11-20: 16 rows -> 12 at 95/95
+
+   A PERMUTER FIND, two changes:
+
+     * `(u16)c' HOISTED INTO A LOCAL immediately after the `b2' barrier --
+       `cw = (u16)c;' -- and the later test written `if (cw != 0)' instead of
+       `if ((u16)c != 0)'.  The narrowing then happens once, on the near side
+       of the barrier, which is where the target has it.
+     * the second `SetDrawArea' takes `b' DIRECTLY rather than the `bb' copy.
+       `bb' is still load-bearing for the three `*(u16 *)bb' / `bb[1]' uses
+       further down -- it is only this one argument that wants the parameter
+       itself.
+
+   Found by decomp-permuter in half an hour and measured with
+   tools/decomp/measure_finds.py, which is necessary because the permuter's
+   score is not the row count: of its eight best finds here, one measured 12
+   and the rest measured 19 to 41.
+*/
 void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
 {
     Unk80083160 *g;
@@ -228,9 +245,11 @@ void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
     s32 ee;
     s32 *bb;
     s32 t2;
+    u16 cw;
 
     ee = e;
     __asm__("" ::"r"(b2));
+    cw = (u16)c;
     bb = b;
     g = &D_80083160;
     lean = D_80083160.unk_00 != D_801C9E40;
@@ -247,7 +266,7 @@ void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
     }
     w[1] = t;
     func_800B9144((u8 *)w, p, r, (s16)ee);
-    if ((u16)c != 0)
+    if (cw != 0)
     {
         u = *(u8 **)(D_80083160.unk_00 + 0x8D0);
         *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(u + 0x10);
@@ -265,6 +284,6 @@ void func_800B8FC8(u8 *p, s32 *b, s32 *b2, s32 c, s32 e)
     }
     q = *(u8 **)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
-    SetDrawArea(q, bb);
+    SetDrawArea(q, b);
     AddPrim(r, q);
 }
