@@ -32723,3 +32723,39 @@ plausible natural shape -- the call duplicated into both arms of the outer
 space is exhausted, a scaffold that matches is the answer; the thing not to do
 is leave the function as `INCLUDE_ASM` because the winning spelling is ugly.
 **Do not "simplify" duplicated arms away in a landed function.**
+
+## DECLARATION ORDER IS NOT A LEVER -- 446 orders, no change
+
+A tempting theory: gcc 2.7.2 numbers pseudo-registers in declaration order,
+`allocno_compare` (global.c:587) breaks a priority TIE by allocno number, and
+allocno numbers follow pseudo numbers -- so for a handful of same-sized locals
+that price equally, the declaration order would BE the allocation order and
+nothing else in the source would reach it.
+
+It is false, and it is worth knowing because so many of this block's remaining
+parks are callee-saved permutations that invite exactly this guess.
+
+`func_800A05A4` has ten locals and a 47-row residue that is a full
+callee-saved permutation -- `p` in $s6 against the target's $fp, and every
+other global shifted with it. Sweeping 446 declaration orders -- every single
+declaration moved to the front, every adjacent swap, every swap with position
+0, and random shuffles to fill -- measured **47 rows and 139/139 words for
+every one of them**. Not one order moved a single row.
+
+The reason is that gcc does not number pseudos in declaration order. DECL_RTL
+is created lazily by `expand_expr`, so a local's pseudo number follows its
+FIRST USE in the expanded RTL, not its position in the declaration block. A
+declaration with no initializer emits nothing at all. So reordering
+declarations is a no-op unless it changes the order of first uses, which it
+cannot.
+
+What this leaves: to move a quantity in the allocation order you have to
+change its PRICE (`floor_log2(n_refs) * n_refs / live_length`) or its
+CONFLICTS -- references, live length, or what is live alongside it. Statement
+order and devices do that; declaration order does not.
+
+Enumerate permutations by SAMPLING, never lexicographically, if you sweep
+anything of this shape: `itertools.permutations` varies the LAST positions
+first, and the first 401 lexicographic orders of these ten locals never moved
+anything out of positions 0 through 6, which looks exactly like a confirmed
+negative while actually testing nothing.
