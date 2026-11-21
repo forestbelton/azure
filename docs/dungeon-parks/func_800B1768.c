@@ -1,4 +1,33 @@
 /* func_800B1768 (ovl_dungeon) -- PARK, best candidate so far.
+
+   ================== 2026-11-20: 38 rows -> 22, a duplicated-arm `if (tmp)'
+
+   One device, at the end of the body:
+
+       if (tmp)
+       {
+           u[0x0] = 0xC0;
+       }
+       else
+       {
+           u[0x0] = 0xC0;
+       }
+
+   jump2's cross-jumping merges the two arms so it costs nothing, and flow --
+   which runs BEFORE combine -- has already counted `tmp' twice.  234 words
+   throughout; 38 -> 30 -> 28 -> 26 -> 22 as the sweep deepened.
+
+   Found by sweeping, not reasoned: every statement position times
+   {`do { } while (0)` wrapper, duplicated-arm `if (v)` for each of 20
+   locals} on a `tools/decomp/onefunc.py` file, which is ~1750 measurements
+   and a couple of minutes.  Note that `do { } while (0)` around `i = 0;` is
+   62 rows -- WORSE than the base -- and the duplicated-arm `if (base)`
+   around the same statement is 38, so the device and the variable both
+   matter and neither is guessable.
+
+   The residue is still (A) below -- the result copy and the `$a0 = u`
+   argument setup in the wrong order -- plus its shadow.  That is a pre-sched
+   RTL order fact and the park's note on it stands.
    target 234 words, candidate 234 words, 38 aligned differences
    (ovlverify masked: 48 differing -- read aligndiff, not that number).
    Previous park was 234 words / 55 aligned; this is the same word count with
@@ -267,7 +296,14 @@ void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
         u[0x1] = 0x81;
         *(s16 *)(u + 0x4) = 0x20;
         *(s16 *)(u + 0x6) = 0;
-        u[0x0] = 0xC0;
+        if (tmp)
+        {
+            u[0x0] = 0xC0;
+        }
+        else
+        {
+            u[0x0] = 0xC0;
+        }
     }
     *(s16 *)(q + 0x22) = 4;
     *(s16 *)(q + 0x26) = f;
