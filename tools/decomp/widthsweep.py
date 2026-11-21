@@ -22,6 +22,25 @@ It sweeps a local at a time, keeps the best single change, and repeats, so it
 finds combinations without paying for the product. A change that costs words
 is rejected outright -- the word count must stay equal to the target's.
 
+IT SWEEPS PARAMETERS AS WELL AS LOCALS, and parameters are where the biggest
+win so far came from. func_800B23F8 landed on 2026-11-21 at 81/81 words from a
+34-row park by declaring two parameters `u16` instead of `u8`: a parameter
+declared ONE STEP WIDER than the store that consumes it gets its raw hard-register
+copy deleted (combine folds it into the surviving truncation), which breaks
+sched1's parameter-pinning prefix loop at the resulting NOTE_INSN_DELETED and
+makes the remaining copies schedulable. u8 is 34 rows, u16 is 0, u32 is 29 --
+the width is exact, not merely "narrow". See docs/matching-levers.md, "A
+SUB-WORD parameter type is how a parameter copy becomes schedulable", whose
+mechanism that landing corrected. The first version of this tool swept only
+local declarations and reported a clean negative on that very body.
+
+A parameter width change alters the function's SIGNATURE, so a prototype
+elsewhere that disagrees makes the candidate fail to compile and it scores 999
+and is dropped -- the sweep cannot land a change that the unit as a whole
+rejects. Read what it proposes: a narrower declared type that truncates a value
+the body relies on shows up as MORE differences, and a WIDER one is only safe
+when every use is narrower (which is the case this lever is about).
+
 It will not propose a width that changes the function's behaviour: only the
 declaration text is edited, so a narrower type that truncates a value the body
 relies on shows up as MORE differences, not as a silent wrong match. Still
@@ -125,6 +144,43 @@ def main():
             print("widthsweep: no plain scalar declarations found")
             return
         found = None
+
+        # PARAMETERS, swept the same way. The signature runs from the
+        # definition's first line to the `{`, and a parameter list may wrap, so
+        # the text is edited in place rather than rebuilt.
+        sig_end = cur.index("{")
+        sig = cur[:sig_end]
+        open_paren = sig.index("(")
+        close_paren = sig.rindex(")")
+        inner = sig[open_paren + 1:close_paren]
+        parts, depth, start = [], 0, 0
+        for k, ch in enumerate(inner):
+            if ch in "([":
+                depth += 1
+            elif ch in ")]":
+                depth -= 1
+            elif ch == "," and depth == 0:
+                parts.append((start, k)); start = k + 1
+        parts.append((start, len(inner)))
+        for lo, hi in parts:
+            seg = inner[lo:hi]
+            m = re.match(r"^(\s*)((?:const\s+)?(?:s8|u8|s16|u16|s32|u32))(\s+)"
+                         r"([A-Za-z_][A-Za-z0-9_]*)\s*$", seg)
+            if not m:
+                continue
+            for nt in WIDTHS:
+                if nt == m.group(2):
+                    continue
+                newseg = m.group(1) + nt + m.group(3) + m.group(4)
+                body = (sig[:open_paren + 1] + inner[:lo] + newseg + inner[hi:]
+                        + sig[close_paren:] + cur[sig_end:])
+                rr, ww, _ = measure(body)
+                if ww == tw and (rr, ww) < best:
+                    best, found = (rr, ww), (body, "parameter %s: %s -> %s"
+                                             % (m.group(4), m.group(2), nt))
+                    print("  round %d: %d rows, %d words  %s"
+                          % (rnd, rr, ww, found[1]))
+
         for i, ind, ty, rest in decls:
             for nt in WIDTHS:
                 if nt == ty:
