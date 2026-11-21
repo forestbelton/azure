@@ -1,5 +1,13 @@
 /* PARK: func_800AFBFC, 227 of 238 words, 149 aligned differences.
 
+   ====================================== 2026-11-21: 123 rows -> 117
+
+   Two more do-while wrappers from tools/decomp/devsweep.py, around
+   `m = ang;` and `sp->unk_70[0].vy = sp->unk_70[2].vy = y;`: 123 rows -> 117.
+   refsweep in the same batch reached 121 with `m++; m--;` before the
+   `while (1)`, so the wrappers win and the cancelled pair should be re-swept
+   on this body.
+
    ====================================== 2026-11-21: 149 rows at 227/238 words
                                           -> 123 AT 238/238
 
@@ -175,14 +183,20 @@ s32 func_800AFBFC(u8 *a, void *b, u8 *c)
     }
     ang = a[6] + 0xC00;
     ang -= (*(u16 *)(g + 0xC8) + 0x80) & 0xF00;
-    m = ang;
+    do
+    {
+        m = ang;
+    } while (0);
     x = func_80064584((s16)ang) * 6 - cx;
     y = func_800644B8((s16)ang) * 6 - cy;
     while (1)
     {
         k = ang + 0x80;
         sp->unk_70[0].vx = sp->unk_70[2].vx = x;
-        sp->unk_70[0].vy = sp->unk_70[2].vy = y;
+        do
+        {
+            sp->unk_70[0].vy = sp->unk_70[2].vy = y;
+        } while (0);
         x2 = func_80064584((s16)k) * 6 - cx;
         y2 = func_800644B8((s16)k) * 6 - cy;
         sp->unk_70[1].vx = sp->unk_70[3].vx = x2;

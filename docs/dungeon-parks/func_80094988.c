@@ -1,5 +1,10 @@
 /* func_80094988, ovl_dungeon, agent j47, 2026-11-16.
 
+   ====================================== 2026-11-21: 76 rows -> 74
+
+   A cancelled pair `j++; j--;` before `v = *((u8 *)0x80012D52 + j);`, from
+   tools/decomp/refsweep.py: 76 rows -> 74.
+
    ====================================== 2026-11-21: 81 rows at 297/299 words
                                           -> 76 AT 299/299
 
@@ -181,6 +186,8 @@ void func_80094988(u8 *p, u8 *q, s16 x, s16 y)
     *(u32 *)(b + 0x29C + i * 4) = 0;
     for (j = 0; j < 2; j++)
     {
+        j++;
+        j--;
         v = *((u8 *)0x80012D52 + j);
         if (v != 0xFF)
         {

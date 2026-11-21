@@ -1,5 +1,13 @@
 /* PARK: func_800C2824 -- 285 words against a target of 278, 84 aligned
 
+   ====================================== 2026-11-21: 78 rows -> 73
+
+   A cancelled pair `r++; r--;` before the `if (func_800BBA40(r[0x24],
+   r[0x25], ...))` test, from tools/decomp/refsweep.py: 78 rows -> 73.
+   devsweep in the same batch reached 74 with a duplicated-arm `if (r)` around
+   `r = *(u8 **)(q - 0x14);`, so both sweeps found the same name and the pair
+   is the better of the two.
+
    ====================================== 2026-11-21: 80 rows at 281/278 words
                                           -> 78 AT 278/278, AND THE WORD COUNT
                                           IS FINALLY RIGHT
@@ -277,6 +285,8 @@ void func_800C2824(u8 *p, u8 *b, u8 *c)
         q = *(u8 **)p;
         r = *(u8 **)(q - 0x14);
         D_800DF55C = q;
+        r++;
+        r--;
         if (func_800BBA40(r[0x24], r[0x25], *(u16 *)(q + 0x88), &D_800DF45C, 0x2800, 0x208020,
                           (u32)func_800C27F0) != 0)
         {

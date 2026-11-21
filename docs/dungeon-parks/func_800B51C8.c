@@ -1,5 +1,17 @@
 /* PARK -- func_800B51C8, agent j59, 2026-11-16.  FRESH DECODE, no prior art
 
+   ====================================== 2026-11-21: 255 rows -> 237
+
+   Four duplicated-arm devices from tools/decomp/devsweep.py, which also
+   recovers the last missing word: 255 rows at 833/834 -> 237 at 834/834.
+   The ladder inside the sweep was `if (s)` around `r = &D_800E39C8[i];` 252,
+   `if (c)` there 250, `if (ms)` around the `*(u32 *)(q + 0x4)` copy 248,
+   `if (ms)` around `q[0x7] |= 2;` 247, a do-while around `gg = &D_80083160;`
+   239 and `if (md)` around the `*(u16 *)(q + 0x20)` store 237.  A refsweep in
+   the same batch reached 241 at 834/834 with two cancelled pairs instead
+   (`q++/--` before `q[0x3] = 9;` and `ms++/--` before `gg = &D_80083160;`), so
+   the two are alternatives on the same park and the device set wins.
+
    ====================================== 2026-11-21: 262 rows at 830/834 words
                                           -> 255 AT 833/834
 
@@ -264,7 +276,14 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                         *(u16 *)(q + 0x24) = p->unk_14.h + p->unk_10.h;
                         *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
                         func_800666F4(q);
-                        q[0x7] |= 2;
+                        if (ms)
+                        {
+                            q[0x7] |= 2;
+                        }
+                        else
+                        {
+                            q[0x7] |= 2;
+                        }
                         func_8006658C(p->unk_20 + p->unk_C0 * 4, q);
                     }
                 }
@@ -414,7 +433,14 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                             *(u16 *)(q + 0x12) = p->unk_F6 + p->unk_BA;
                             *(u16 *)(q + 0x18) = p->unk_F8 + p->unk_B8;
                             *(u16 *)(q + 0x1A) = p->unk_FA + p->unk_BA;
-                            *(u16 *)(q + 0x20) = p->unk_FC + p->unk_B8;
+                            if (md)
+                            {
+                                *(u16 *)(q + 0x20) = p->unk_FC + p->unk_B8;
+                            }
+                            else
+                            {
+                                *(u16 *)(q + 0x20) = p->unk_FC + p->unk_B8;
+                            }
                             q[0x3] = 9;
                             *(u16 *)(q + 0x22) = p->unk_FE + p->unk_BA;
                             *(u32 *)(q + 0x0C) = p->unk_0C.w + p->unk_08.w + 0x7FC00000;

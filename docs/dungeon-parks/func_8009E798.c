@@ -1,5 +1,13 @@
 /* ============================== 2026-11-21: 71 rows -> 70
 
+   ====================================== 2026-11-21: 60 rows -> 55
+
+   Two cancelled pairs on `r` from tools/decomp/refsweep.py, before
+   `r[0xD] = r[0x15] += 0x40;` and before `r[0x2D] >>= 1;`: 60 rows -> 55.
+   Note both are INSERTIONS ahead of those statements and neither moves them --
+   this park has twice rejected a permuter find that moved `r[0x2C]`/`r[0x2D]`
+   ahead of the store that initialises that word.
+
    ====================================== 2026-11-21: THE SAME REJECTION
                                           TWICE, ON A DIFFERENT BYTE
 
@@ -269,11 +277,15 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     q[0x7] |= 2;
     r[0xD] = r[0x15] += 0x40;
     *(u16 *)(r + 0x16) |= 0x100;
+    r++;
+    r--;
     r[0x1D] = r[0x25] += 0x40;
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r);
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, q);
     *(u32 *)(r + 0x2C) = 0x606060;
     r[0x2C] >>= 1;
+    r++;
+    r--;
     r[0x2D] >>= 1;
     r[0x2E] >>= 1;
     *(s32 *)(r + 0x30) = *(s32 *)(r + 0x8);

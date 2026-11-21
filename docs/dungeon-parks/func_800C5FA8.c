@@ -1,5 +1,10 @@
 /* PARK -- func_800C5FA8, agent j59, 2026-11-16.
 
+   ====================================== 2026-11-21: 161 rows -> 159
+
+   A second devsweep round on the 161-row body: 161 -> 159.  The first round
+   had found a fourth device and superseded it, which is why the re-run paid.
+
    ====================================== 2026-11-21: 172 rows -> 161
 
    Two duplicated-arm devices from tools/decomp/devsweep.py: `if (kk)` around
@@ -174,7 +179,14 @@ void func_800C5FA8(u8 *p)
         f = (u8 *)&D_80083460;
         if ((*(u16 *)(f + 0x2) & 0x10) != 0)
         {
-            *(u16 *)(f + 0x2) |= 0x200;
+            if (k)
+            {
+                *(u16 *)(f + 0x2) |= 0x200;
+            }
+            else
+            {
+                *(u16 *)(f + 0x2) |= 0x200;
+            }
         }
         a = *(u16 *)(f + 0x2);
         if ((a & 0x200) == 0)
@@ -384,7 +396,14 @@ void func_800C5FA8(u8 *p)
                     r = q;
                     if (*(s16 *)(p + 0x12) != 0)
                     {
-                        *(s16 *)(r + 0x6C) = 0;
+                        if (h)
+                        {
+                            *(s16 *)(r + 0x6C) = 0;
+                        }
+                        else
+                        {
+                            *(s16 *)(r + 0x6C) = 0;
+                        }
                     }
                     snd = 0x3000;
                     q = *(u8 **)(r + 0x58) + 0x20;

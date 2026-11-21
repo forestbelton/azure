@@ -1,5 +1,11 @@
 /* PARK: func_800CEA44, 240 of 242 words, 128 aligned differences.
 
+   ====================================== 2026-11-21: 121 rows -> 114
+
+   Two more duplicated-arm devices from tools/decomp/devsweep.py, `if (s)`
+   around the func_800A6DA4 call and `if (q)` around
+   `t = D_800E2970 + (s16)k * 0x14...`: 121 rows -> 114.
+
    ====================================== 2026-11-21: 126 rows -> 121
 
    Three cancelled increment pairs from tools/decomp/refsweep.py:
@@ -193,12 +199,26 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                 if (s != NULL)
                 {
                     i = 0xF;
-                    t = D_800E2970 + (s16)k * 0x14;
+                    if (q)
+                    {
+                        t = D_800E2970 + (s16)k * 0x14;
+                    }
+                    else
+                    {
+                        t = D_800E2970 + (s16)k * 0x14;
+                    }
                     while (1)
                     {
                         if (q)
                         {
-                            a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1)) + t[0];
+                            if (s)
+                            {
+                                a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1)) + t[0];
+                            }
+                            else
+                            {
+                                a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1)) + t[0];
+                            }
                         }
                         else
                         {
