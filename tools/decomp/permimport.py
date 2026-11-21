@@ -195,14 +195,14 @@ def main():
     # than making every caller remember to do it by hand.
     if "/dungeon-parks/" in park.replace(os.sep, "/"):
         raw = io.open(park, encoding="utf-8", errors="replace").read()
-        decls, inside = [], False
-        for line in raw.split("\n"):
-            if line.strip() == "DECLARATIONS":
-                inside = True
-            elif line.strip() == "END DECLARATIONS":
-                inside = False
-            elif inside and line.strip():
-                decls.append(line.strip())
+        # parkresidue.decls_of is the ONE parser for a park's declarations, and
+        # it has to be: the parks spell the block three different ways
+        # ("DECLARATIONS", "DECLARATIONS THIS BODY NEEDS (...)" and
+        # "NEEDS THESE DECLARATIONS at the top of the unit:"), and a private
+        # parser here silently found nothing in the third form -- which reads
+        # as a missing symbol in the park rather than a missing parse.
+        import parkresidue as _pr
+        decls = [l for l in _pr.decls_of(park).split("\n") if l.strip()]
         m = re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + re.escape(func) + r"\s*\(", raw)
         if not m:
             print("permimport: no definition of %s in %s" % (func, park))
@@ -210,6 +210,32 @@ def main():
         pre = ['#include "common.h"']
         if os.path.exists(os.path.join(PROJ, "csrc", "ovl_dungeon_decls.h")):
             pre.append('#include "ovl_dungeon_decls.h"')
+        # PROTOTYPES FOR SAME-UNIT CALLEES. A park body can MENTION a
+        # function that nothing declares -- `n->unk_10 = (u32)func_800B14FC;'
+        # is an address-taken use and a hard error, not a warning. The unit's
+        # own compile is fine because the callee is DEFINED earlier in it, so
+        # synthesise the prototype from that definition: the real compile sees
+        # exactly this, which is why it adds no divergence. onefunc.py does the
+        # same thing for the same reason and the two must agree.
+        unit_src = os.path.join(PROJ, "csrc", unit + ".c")
+        if os.path.exists(unit_src):
+            utxt = io.open(unit_src, encoding="utf-8", errors="replace").read()
+            declared = "\n".join(pre + decls)
+            for h in ("common.h", "ovl_dungeon_decls.h"):
+                hp = os.path.join(PROJ, "csrc", h)
+                if ('"%s"' % h) in declared and os.path.exists(hp):
+                    declared += "\n" + io.open(
+                        hp, encoding="utf-8", errors="replace").read()
+            body_txt = raw[m.start():]
+            for c in sorted(set(re.findall(r"\b(func_[0-9A-Fa-f]{8})\b", body_txt))):
+                if c == func:
+                    continue
+                if re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + c + r"\s*\([^;]*;", declared):
+                    continue
+                dm = re.search(r"(?m)^([A-Za-z_][^\n;]*\b" + c + r"\s*\([^)]*\))\s*\n?\s*\{",
+                               utxt)
+                if dm:
+                    decls.append(" ".join(dm.group(1).split()) + ";")
         synth = os.path.join(d, "permsrc.c")
         with io.open(synth, "w", encoding="utf-8") as f:
             f.write("\n".join(pre + [""] + decls + ["", raw[m.start():]]))
