@@ -79,7 +79,23 @@ WIDTHS = ["s32", "u32", "s16", "u16", "s8", "u8"]
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    # Drop flag VALUES as well as flags, so a `--body PATH' cannot leave PATH
+    # sitting in the positional list, and refuse a flag this tool does not
+    # know rather than ignoring it.
+    _TAKES_VALUE = ("--rounds", "--unit-copy", "--body")
+    _KNOWN = _TAKES_VALUE
+    args, _skip = [], False
+    for _a in sys.argv[1:]:
+        if _skip:
+            _skip = False
+            continue
+        if _a.startswith("--"):
+            if _a not in _KNOWN:
+                raise SystemExit("widthsweep: unknown flag %s (known: %s)"
+                                 % (_a, " ".join(_KNOWN)))
+            _skip = _a in _TAKES_VALUE
+            continue
+        args.append(_a)
     if not args:
         raise SystemExit((__doc__ or "").strip().split("\n\n")[0])
     func = args[0]
@@ -103,6 +119,29 @@ def main():
     st, en = find_definition(base_txt, func)
     head, fn, tail = base_txt[:st], base_txt[st:en], base_txt[en:]
 
+    # `--body PATH' sweeps the definition in PATH instead of the park's own,
+    # exactly as refsweep/devsweep/stmtsweep do.
+    #
+    # IT WAS MISSING HERE AND THAT IS A SILENT WRONG ANSWER, NOT A MISSING
+    # FEATURE. `args' above keeps only argv entries that do NOT start with
+    # `--', so a `--body /path/to/cand.c' had its flag dropped and its VALUE
+    # kept as a positional -- func stayed args[0], the path was ignored, and
+    # the tool swept THE PARK while reporting numbers as though it had swept
+    # the candidate. The f644b agent was handed a `--body' instruction for all
+    # four sweeps and three of them honoured it. A sweep that reports "clean"
+    # about a body it never looked at is the most expensive kind of negative
+    # this project collects.
+    for _i, _a in enumerate(sys.argv):
+        if _a == "--body":
+            _t = open(sys.argv[_i + 1]).read()
+            _s = find_definition(_t, func)
+            if not _s:
+                raise SystemExit("widthsweep: no definition of %s in %s"
+                                 % (func, sys.argv[_i + 1]))
+            fn = _t[_s[0]:_s[1]]
+            base_txt = head + fn + tail
+            open(dst, "w").write(base_txt)
+
     def measure_on(path, pre, post):
         def go(body):
             open(path, "w").write(pre + body + post)
@@ -123,7 +162,10 @@ def main():
     # and the reason the check is not optional: a standalone that declares one
     # symbol differently measures a different function.
     measure = measure_unit
-    if len(base_txt.split("\n")) > 8000:
+    # 800, not 8000: five of the six carved dungeon units are under 8000
+    # lines, so the old threshold silently disabled the standalone for all
+    # of them. See refsweep.py for the full reasoning and the cost numbers.
+    if len(base_txt.split("\n")) > 800:
         r1 = subprocess.run([sys.executable, os.path.join(HERE, "onefunc.py"),
                              func, "--src", dst, "--out", os.path.join(sp, "one")],
                             capture_output=True, text=True)

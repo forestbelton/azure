@@ -247,7 +247,10 @@ def main():
     # candidate to matter -- but only after it reproduces the unit's residue,
     # which is the protocol onefunc's docstring insists on.
     measure = measure_unit
-    if len(base_txt.split("\n")) > 8000:
+    # 800, not 8000: five of the six carved dungeon units are under 8000
+    # lines, so the old threshold silently disabled the standalone for all
+    # of them. See refsweep.py for the full reasoning and the cost numbers.
+    if len(base_txt.split("\n")) > 800:
         subprocess.run([sys.executable, os.path.join(HERE, "onefunc.py"), func,
                         "--src", dst, "--out", os.path.join(sp, "one")],
                        capture_output=True, text=True)

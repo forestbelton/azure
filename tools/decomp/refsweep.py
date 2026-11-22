@@ -188,11 +188,24 @@ def main():
     measure_unit = measure_on(dst, head, tail)
     rows, w, tw = measure_unit(fn)
 
-    # Sweep on onefunc.py's standalone when the unit is big enough for 25 s a
-    # candidate to matter -- but only after it reproduces the unit's residue,
-    # which is the protocol onefunc's docstring insists on.
+    # Sweep on onefunc.py's standalone whenever the unit is big enough for the
+    # per-candidate cost to matter -- but only after it reproduces the unit's
+    # residue, which is the protocol onefunc's docstring insists on and the
+    # reason the check below is not optional.
+    #
+    # THE THRESHOLD WAS 8000 LINES AND THE CARVE MADE THAT WRONG. The dungeon
+    # block is six translation units now and FIVE OF THE SIX are under 8000
+    # lines (1029, 4489, 4815, 5781, 6437; only csrc/ovl_dungeon.c at 26495 is
+    # over), so no sweep on a carved unit has built a standalone since the
+    # carve -- measuring the whole unit at ~0.23 s a candidate instead of
+    # ~0.09 s, over thousands of insertion points. The c2824e agent lost two
+    # 45-minute refsweep runs to it. The standalone costs one build, the
+    # saving is per candidate and sweeps measure hundreds to thousands, so the
+    # break-even is far below any unit we have; and a standalone that does not
+    # reproduce the residue is DISCARDED a few lines down, so a low threshold
+    # cannot cause a wrong measurement, only a wasted build.
     measure = measure_unit
-    if len(base_txt.split("\n")) > 8000:
+    if len(base_txt.split("\n")) > 800:
         subprocess.run([sys.executable, os.path.join(HERE, "onefunc.py"), func,
                         "--src", dst, "--out", os.path.join(sp, "one")],
                        capture_output=True, text=True)
