@@ -214,11 +214,44 @@ with `s32 t` it gives the target's `lui`/`slt` exactly.
 s16 func_800A35A4h(u8 *, s32) __asm__("func_800A35A4");
 s32 func_8009FD40w(u8 *, u8 *) __asm__("func_8009FD40");
 s32 func_800A40ACw(u8 *, u16) __asm__("func_800A40AC");
+
+   ====================================== 2026-11-21: 1826/1817 words, 256 rows
+                                          -> 1817/1817, 255 rows
+
+   THE NINE-WORD OVERRUN IS GONE.  Three declarations, found by widthsweep.py
+   on the first run after its objective was fixed to order by (word gap, rows)
+   instead of rows alone -- the same tool bug that was hiding func_800D13B8's
+   three-word shortfall.  Every one of them is honest, checked against its
+   uses rather than against the score:
+
+     u32 ret -> u16   ret only ever holds 0 or 2, and every return statement
+                      is already `return ret << 16 >> 16;'.
+     s32 t1  -> s16   t1 is read from a u16, so 0..0xFFFF; its guard
+                      `if (t1 > 0x10000)' is DEAD IN BOTH WIDTHS (a u16 cannot
+                      exceed 0xFFFF < 0x10000) and the value is stored back
+                      through a u16, so the bits are identical either way.
+                      The dead guard suggests the original read was wider;
+                      that is a separate question and does not affect this.
+     s32 aa  -> s16   aa is assigned `(s16)ang', already truncated at the
+                      assignment.
+
+   The sweep's own path, for the record -- it needed all three together and
+   the intermediate steps are worse on rows than the start:
+       round 0  s32 t1 -> s16     267 rows, 1818 words
+       round 1  s32 aa -> s16     256 rows, 1817 words
+       round 2  u32 ret -> u16    255 rows, 1817 words
+   Rejected on the way: s16 sp1C -> u16 is 1814 words (four SHORT), u8 k ->
+   u32 is 1820, u16 h1 -> u8 is 1819.
+
+   The standalone and the real unit agree (255 rows, 1817/1817).
+
+   Measured with
+     python3 tools/decomp/parkresidue.py func_800ADE74
  */
 
 s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
 {
-    u32 ret;
+    u16 ret;
     s16 sp18;
     s16 sp1A;
     s16 sp1C;
@@ -250,13 +283,13 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
     s32 r6;
     s32 r7;
     s32 r8;
-    s32 t1;
+    s16 t1;
     s32 t3;
     s32 t5;
     s32 t7;
     s32 n;
     s32 nn;
-    s32 aa;
+    s16 aa;
     s32 ang;
     s32 dx;
     s32 dy;
