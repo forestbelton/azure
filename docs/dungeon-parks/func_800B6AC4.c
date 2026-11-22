@@ -212,22 +212,27 @@
    arm, `addu $a0,$s1,$zero' lands at its target position 771, and the
    D_800814A0 store itself is byte-exact.
 
-   THE SPELLING IS A PLACEHOLDER AND THE TYPE IS NOT WITNESSED.
-   `(*(s16 (*)[0x16])d)[0x15]' is only a way to get an ARRAY_REF; a
-   COMPONENT_REF on a real typedef for `d' (a struct with a s16 at +0x2A)
-   sets MEM_IN_STRUCT_P the same way and is the honest form -- this park has
-   no witness for such a type.  Measured equivalents, all 13 rows:
-   `[0x100]' instead of `[0x16]' as the array bound, `u16' instead of `s16',
-   and the same cast applied to d+0x8A, d+0x60, c+0x2C or the D_800E3DF0
-   entry (none of which changes anything -- the d+0x2A load is the only one
-   whose dependence matters).  `(*(s16 (*)[1])(d + 0x2A))[0]' is 23: a
-   one-element array folds back to an INDIRECT_REF before expand.
-   Writing the sum the other way round, `(*(s16 (*)[0x16])d)[0x15]
-   + D_80083228', is 24.
+   THE SPELLING IS ORDINARY C AND NEEDS NO WITNESS.  CORRECTED 2026-11-21:
+   this paragraph used to say `((s16 *)d)[0x15]' was a placeholder for a
+   COMPONENT_REF on an unwitnessed struct type.  That was wrong.
+   MEM_IN_STRUCT_P is set when the TOP NODE of the INDIRECT_REF's address
+   tree is a PLUS_EXPR (expr.c:5344) -- a question about where the cast sits,
+   not about struct types -- so a pointer cast and an index is already the
+   honest form and a struct would buy nothing.
+   Measured equivalents, all 13 rows ON THE BODY OF THAT DATE: `u16' instead
+   of `s16', and the same shape applied to d+0x8A, d+0x60, c+0x2C or the
+   D_800E3DF0 entry (none of which changes anything -- the d+0x2A load is the
+   only one whose dependence matters).  Two spellings that do NOT work:
+   `(*(s16 (*)[1])(d + 0x2A))[0]' is 23, because a one-element array folds
+   back to an INDIRECT_REF before expand; and the plain `*(s16 *)(d + 0x2A)'
+   is 818 words / 46 rows on the current body, because the cast on top is a
+   NOP_EXPR and the flag is never set.
+   Writing the sum the other way round, `((s16 *)d)[0x15] + D_80083228',
+   is 24.
 
-   STATEMENT ORDER, re-measured on the array spelling, all 60 legal orders of
+   STATEMENT ORDER, re-measured on the in-struct spelling, all 60 legal orders of
    {B, D, C} x (Y before S): B,D,C,Y,S 13; D,B,C,Y,S 15; B,C,D,Y,S 21;
-   B,C,Y,D,S 21; B,C,Y,S,D 21; Y,B,C,D,S 23.  On the PLAIN cast the same
+   B,C,Y,D,S 21; B,C,Y,S,D 21; Y,B,C,D,S 23.  On the flagless cast the same
    sweep makes B,Y,D,C,S and B,D,Y,C,S the joint best at 23, so the two
    changes have to be made together.
 
@@ -306,7 +311,32 @@
    and func_800B69DC -- defined in the PREVIOUS carved unit and called only
    from here -- had no prototype in this unit, because the carve generated
    cross-unit prototypes only for callees that LANDED code mentions.
-*/
+
+   ====================================== 2026-11-21: the cast is no longer a
+                                          device.  Still 11 rows, 812/812.
+
+   The body said `(*(s16 (*)[0x16])d)[0x15]' and called it a device in
+   disguise -- a two-dimensional array cast whose only purpose was to make the
+   load an ARRAY_REF so MEM_IN_STRUCT_P would be set.  It is now
+   `((s16 *)d)[0x15]', which measures IDENTICALLY (11 rows, 812/812) and is an
+   ordinary pointer cast and index.
+
+   WHY THE FANCY CAST WAS NEVER NEEDED.  expr.c:5344 sets MEM_IN_STRUCT_P when
+   the TOP NODE of the INDIRECT_REF's address tree is a PLUS_EXPR.  That is a
+   question about where the cast sits, not about struct types:
+
+       *(s16 *)(d + 0x2A)     top node is the CAST (NOP_EXPR)  -> flag NOT set
+       ((s16 *)d)[0x15]       top node is the PLUS_EXPR        -> flag SET
+
+   No struct, no typedef and no usage witness is required.  The park's long
+   note about not being able to witness a struct for `d' was answering a
+   question that did not need to be asked.  See the CORRECTION entry in
+   docs/matching-levers.md.
+
+   For the record, on THIS body (with the B,D,C,Y,S statement order that the
+   flag makes possible) the flagless form `*(s16 *)(d + 0x2A)' is 818 words
+   and 46 rows -- the two halves are still only worth anything together.
+ */
 void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     Unk80083160 *q;
@@ -636,7 +666,7 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
                COMPONENT_REF on a real typedef for `d' would do the same and
                would be the right form; this park has no witness for one.
                Written `*(s16 *)(d + 0x2A)' the arm is 23 rows, not 11. */
-            func_80048A44(c, D_800DD140[((D_80083228 + (*(s16 (*)[0x16])d)[0x15] + 0x100) >> 9) & 7], 0, 1);
+            func_80048A44(c, D_800DD140[((D_80083228 + ((s16 *)d)[0x15] + 0x100) >> 9) & 7], 0, 1);
             p[0x9B]++;
         }
         break;
