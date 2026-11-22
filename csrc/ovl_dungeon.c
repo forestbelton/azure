@@ -14177,7 +14177,66 @@ s32 func_800A0548(s16 x, s16 y)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A05A4);
+s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n)
+{
+    u8 *r;
+    s16 xx;
+    s16 yy;
+    u16 i;
+    s32 g;
+    s16 lim;
+    s32 thr;
+    s32 k;
+    s32 d;
+
+    r = NULL;
+    g = ((u32)dir >> 9) & 7;
+    thr = 0x20;
+    lim = n + n - n;
+    i = g;
+    xx = (D_8006CCD8[g] & 0xFFFF) + x;
+    yy = (D_8006CCE8[g] & 0xFFFF) + y;
+    if (func_800A0548(xx, yy) != 0)
+    {
+        p[0x72] = *(u8 *)&D_8006CCD8[g] - xx;
+        p[0x73] = *(u8 *)&D_8006CCE8[g] - yy;
+        return 0;
+    }
+    k = 0;
+    while (k < lim)
+    {
+        r = func_8009B4B0(p, xx, yy);
+        if (r != NULL)
+        {
+            d = *(s16 *)(r + 0x88) - *(s16 *)(p + 0x88);
+            d = d >= 0 ? d : -d;
+            if (d <= (s16)thr)
+            {
+                break;
+            }
+        }
+        if (func_800A0548(xx + (D_8006CCD8[g] & 0xFFFF), yy + (D_8006CCE8[g] & 0xFFFF)) != 0)
+        {
+            p[0x72] = *(u8 *)&D_8006CCD8[g] - xx;
+            p[0x73] = *(u8 *)&D_8006CCE8[g] - yy;
+            return 0;
+        }
+        if ((s16)func_800A44E0((xx << 6) & 0xFFC0, (yy << 6) & 0xFFC0,
+                               (s16)(*(u16 *)(p + 0x88) - thr), i << 9) != 0)
+        {
+            p[0x72] = -xx;
+            p[0x73] = -yy;
+            return 0;
+        }
+        thr += 0x20;
+        k++;
+        xx += D_8006CCD8[g] & 0xFFFF;
+        yy += D_8006CCE8[g] & 0xFFFF;
+    }
+    p[0x72] = xx;
+    p[0x73] = yy;
+    return (s32)r;
+}
 
 /* 18 words, 0 differing. */
 s16 func_800A07D0(s16 a, s16 b, s16 c, s16 d)
