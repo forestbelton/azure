@@ -19,13 +19,13 @@
    776 through the arg copy, the `lh $a3, 0x2A($s3)' at 778, the a2 setup at
    750, `lui $a1, %hi(D_800DD140)' at 752 -- is byte-exact.
 
-   IT IS A sched2 TIE AND THE TIE-BREAK IS THE LUID.  sched1/sched2 priority
-   in this block takes only the two values 1 and 0x7f000001, so
-   `rank_for_schedule' (sched.c) falls through to
-   `INSN_LUID (tmp) - INSN_LUID (tmp2)': the HIGHER LUID sorts FIRST, and the
-   scheduler runs BACKWARD, so of a tied ready set the highest LUID is placed
-   at the LATEST position.  LUID is the POST-SCHED1 chain position.  Reading
-   `.shorten' for this candidate, that chain is
+   IT IS A sched2 FILLER TIE BROKEN ON LUID, AND THE LUID IS SET IN sched1.
+   `rank_for_schedule' (sched.c:2429) compares INSN_PRIORITY, then a CLASS
+   against the just-scheduled insn, then `INSN_LUID (tmp) - INSN_LUID (tmp2)'
+   with `tmp = *y' and `tmp2 = *x', so the HIGHER LUID sorts FIRST.  The
+   scheduler runs BACKWARD and takes ready[0], so of a tied ready set the
+   highest LUID is placed at the LATEST position.  LUID is the POST-SCHED1
+   chain position.  For this candidate that chain is
 
        ... 1838(sh -0x2)   1840(%hi D_800DD140)   1843(%hi D_800814A0)
            1846(lw %lo D_800814A0)   1841(lo_sum D_800DD140)
@@ -39,37 +39,108 @@
        ;; ready list at T-25: 1841 (1) 1843 (1) 1881 (1), now 1841 1843 1881
 
    -- 1841 sorts first because it has the higher LUID, so it takes T-25 (769)
-   and 1843 waits until T-31 (763).  THE WHOLE RESIDUE IS THAT ONE LUID
-   COMPARISON, so it is decided in sched1, and sched1's own trace shows
-   exactly where:
+   and 1843 waits until T-31 (763).  Position is `794 - T' in this block.
+
+   ============== CORRECTED 2026-11-22.  IT IS NOT A CLASS TIE-BREAK, AND
+   ============== CLASS 2 IS UNREACHABLE ON MIPS.
+
+   This header said for a day that sched1's T-20 pick was decided by
+   `rank_for_schedule''s CLASS test -- 1841 a DATA predecessor at
+   `insn_cost == 1' giving class 3 against 1846 an ANTI predecessor at cost 0
+   giving class 2.  BOTH HALVES ARE WRONG, and the second one is wrong for
+   every function in this project, so it is worth stating plainly.
+
+   `ADJUST_COST' (config/mips/mips.h:3187) is
+
+       if (REG_NOTE_KIND (LINK) != 0) (COST) = 0
+
+   for ANY anti or output dependence, and `insn_cost' (sched.c:1394) then does
+   `if (ncost <= 1) LINK_COST_FREE (link) = ncost = 1'.  So an anti or output
+   dependence ALWAYS returns cost 1, and `rank_for_schedule''s first class
+   test -- `link == 0 || insn_cost (...) == 1' -> class 3 -- fires before the
+   `REG_NOTE_KIND (link) == 0' test can ever be reached.  **On MIPS a
+   non-data dependence is always class 3 and tmp_class is never 2.**  Both
+   1841 and 1846 are class 3 here, so the class test TIES and decides nothing.
+
+   WHAT ACTUALLY DECIDES T-20 IS A FUNCTION-UNIT HAZARD.  The sched1 trace,
+   read in full rather than one line at a time, says so outright:
 
        ;; ready list at T-20: 1881 (1) 1877 (1) 1846 (7f000001) 1841 (7f000001)
+       ;; blocking insn 1846 for 1 cycles, now 1841 1881 1877
+       ;; launching 1846 before 1841 with no stalls at T-21
 
-   1846 (the D_800814A0 load) and 1841 (the table `lo_sum') are tied at the
-   maximum priority, and 1841 is picked -- although 1846 has the HIGHER LUID
-   and would win a LUID tie.  So the CLASS tie-break in `rank_for_schedule'
-   decided it: relative to the just-scheduled c+0x2C store (1849),
-   1841 is a DATA predecessor with `insn_cost == 1' (an ALU result feeding a
-   store's value operand costs nothing), which is class 3, while 1846 is an
-   ANTI predecessor at cost 0, which is class 2, and the higher class wins.
+   The sort puts 1846 first (higher LUID, same class, same priority).  Then
+   `schedule_select' (sched.c:2660) calls `actual_hazard' on each insn of the
+   top priority group and QUEUES 1846, because the c+0x2C store 1849 issued at
+   T-19 and mips.md:148-158 gives the "memory" unit multiplicity 1 with a
+   store ready-delay of 1 -- a load cannot issue the cycle after a store.  The
+   same blockage is visible twice more in this one block, at T-15 (the two
+   `lh' loads behind the D_800814A0 store) and at sched2 T-19, where it is
+   CORRECT and produces the target.  With 1846 queued, 1841 is the only insn
+   left in the top group, so `j - i - q == 1' and 1841 takes T-20.
 
-   THAT MAKES THE NEXT QUESTION PRECISE: get class(1846) up to 3 or
-   class(1841) down, and the LUID tie then puts 1841 ahead of 1843 and the
-   function lands.  class(1846) reaches 3 only if 1846 has NO link to 1849
-   at all, i.e. if the load and the c+0x2C store stop conflicting -- and the
-   one spelling that does that, the array form `((u8 **)c)[0xB]', costs
-   SEVEN rows elsewhere (9 instead of 2; 152 bodies measured, all 9).  So
-   the next agent wants either a way to raise 1846's class without the array
-   form, or a cost-free early use of `t10' that pulls 1841 forward in the
-   sched1 chain.  The only device that produces such a use -- a
-   duplicated-arm `if (t10) { s } else { s }' -- costs four words here
-   (816 words, 35 rows); measured over four statements x six condition
-   variables, every variant with `t10', `z', `c', `d' or `e10' as the
-   condition is 814-816 words, and only `base10' (a constant) stays at
-   812/2 while changing nothing.
+   ============== AND THAT MAKES THE BASIN PROVABLY CLOSED WHILE 1841 IS
+   ============== BIRTHING.  THIS IS A PROOF, NOT A SWEEP.
 
-   `tools/decomp/sched.py --sched1' and the `;; ready list at T-NN' trace are
-   the tools for all of this -- every number in this header came from them.
+   Three facts, each read off the dumps for this exact body:
+
+     (a) 1846 is an ANTI predecessor of 1849 (`REG_DEP_ANTI 1846' appears in
+         1849's LOG_LINKS), so 1846 must precede 1849 in the chain, and 1843
+         is 1846's DATA predecessor, so 1843 precedes 1846.
+     (b) 1841 is birthing -- `birthing_insn_p' (sched.c:2512), SET_DEST is
+         reg/v:SI 100 which is `t10' with `reg_n_sets == 1' -- so
+         `adjust_priority' gives it LAUNCH_PRIORITY and it is taken the
+         INSTANT it is ready.  It becomes ready the cycle after 1849, its
+         only late successor.
+     (c) that cycle is, BY CONSTRUCTION, the one where 1846 is blocked,
+         because 1849 is a store and 1846 is a load.
+
+   So 1841 is always placed in the slot immediately after the store, and
+   1840/1843/1846 are all before the store, hence before 1841.  1841 is
+   therefore ALWAYS the last of the three in the post-sched1 chain,
+   LUID(1841) > LUID(1843) always, and sched2 always puts 1841 at 769.
+   NO STATEMENT ORDER OR CAST CAN CHANGE THIS.  That is why 420 statement
+   orders, 93 spellings in the sibling basin and all five sweeps come back
+   empty -- they are all searching inside a closed basin.
+
+   THE TARGET'S FILLER LUID ORDER IS `a2 < 1840 < 1841 < 1843'.  This body
+   gives `a2 < 1840 < 1843 < 1841'.  It is ONE ADJACENT SWAP, and the swap
+   requires 1841 to be NON-BIRTHING, i.e. `reg_n_sets (t10) != 1'.
+
+   ============== THE NON-BIRTHING ROUTE IS BLOCKED BY THE ARGUMENT COPY,
+   ============== WHICH calls.c PUTS OUT OF REACH OF THE SOURCE.
+
+   Make 1841 non-birthing and the top priority group at T-20 is `{1846}'
+   alone.  It is entirely queued, so `j - i - q == 0' and `schedule_select'
+   CONTINUES to the next group -- the priority-1 one, which is
+   `{1881 (a2 = 0), 1877 (a0 = c), 1841}'.  The a2 argument copy has the
+   highest LUID of the three and takes the freed slot.  `calls.c:1851' emits
+   the argument copies LAST in the call's expansion, so no statement order can
+   lower their LUID -- see docs/matching-levers.md:18378, which proves exactly
+   this for two town functions.  The a2 copy's LUID then rises above 1843's,
+   it wins the FIRST sched2 filler slot, and it lands at 769 instead.
+   Verified in the dumps for the cancelled-pair body: insn 1847 (the lo_sum)
+   reads `priority = 1' at sched1, `;; insn 1887 has a greater potential
+   hazard' names the a2 copy as the winner of T-20, and the post-sched1 chain
+   becomes `1840 1847 1835 1883 1836 1838 1849 1852 1887 1855' -- the flip
+   HAPPENED and cost 11 rows elsewhere.
+
+   SO THE SHAPE OF ANY WINNING CANDIDATE IS NOW KNOWN AND IS THREE-PART:
+
+     1. `reg_n_sets (t10) != 1', so the lo_sum stops being birthing.
+     2. the freed sched1 slot taken by a NON-FILLER, so the a2 copy keeps its
+        low LUID.  THE ONE INSN THAT CAN DO THIS IS FOUND AND IT IS FREE --
+        see the d+0x60-2 MEM_IN_STRUCT_P entry below.  It is worth 0 rows on
+        its own and it is a PREREQUISITE, not a win.
+     3. t10 still block-local with `reg_n_deaths == 1', so local-alloc keeps
+        it and still hands the pair $a1.
+
+   Every mechanism measured satisfies 1 but breaks 3, and that is where this
+   park now stands.  Part 3 is the open question.
+
+   `tools/decomp/sched.py --sched1', `tools/decomp/dump.sh' and the
+   `;; ready list at T-NN' trace are the tools for all of this -- every
+   number in this header came from them.
 
    AN EQUAL-SCORING ALTERNATIVE EXISTS AND IS A DEAD END -- DO NOT SPEND ON
    IT.  With the c+0x2C store BEFORE the D_800814A0 read-modify-write and no
@@ -82,6 +153,121 @@
    dependence is in PROGRAM order, and the target's listing has the LOAD at
    774 and the STORE at 776, so the target's source has the load first.  93
    spellings in that basin all give the same 2-row residue.
+
+   ====================================== 2026-11-22 (second session): still 2
+                                          rows at 812/812.  189 candidates, a
+                                          corrected mechanism and a proof.
+
+   THE RESIDUE IS CONFIRMED IN RAW BYTES, so it is a real transposition of two
+   relocated operands and not a masking artefact.  `ovlverify.py --raw':
+   candidate 763 is `3C080000' against target `24A5D140', candidate 769 is
+   `24A50000' against target `3C088008'.
+
+   partsweep.py -- THE ONE SWEEP THAT HAD NEVER BEEN RUN HERE -- IS CLEAN.
+   Two groups found, `(u8 *)&D_80083460' over 4 names with 15 partitions and
+   `(u8 *)0x80010000' over 2 names with 2 partitions.  `no partition helps',
+   base and final both 2 rows at 812/812.  All five sweeps are now empty on
+   this body.
+
+   THE d+0x60-0x2 HALFWORD STORE AS AN ARRAY_REF IS WORTH 0 ROWS AND IS THE
+   PREREQUISITE FOR PART 2 ABOVE.  Written `((u16 *)*(u8 **)(d + 0x60))[-1]'
+   the top node of the INDIRECT_REF's address is a PLUS_EXPR, so
+   MEM_IN_STRUCT_P is set (expr.c:5344), and `true_dependence''s exception
+   fires against the D_800814A0 load -- HImode, address varies, in-struct,
+   against a `lo_sum' that is neither.  VERIFIED IN THE DUMP, not inferred:
+   insn 1846's LOG_LINKS go from `(1828, ANTI 1789, 1838, 1843)' to
+   `(1828, ANTI 1789, 1843)', and the sched1 trace changes from
+
+       ;; ready list at T-20: 1881 (1) 1877 (1) 1846 (7f000001) 1841 (7f000001)
+
+   to
+
+       ;; ready list at T-20: 1881 (1) 1877 (1) 1838 (8) 1846 (7f000001) 1841 (7f000001)
+
+   -- the `sh' (1838, priority 8, a NON-filler) is now ready in the contested
+   slot, which is exactly what keeps the a2 copy's LUID low.  It changes
+   nothing on its own because 1841 is still birthing and still wins the slot.
+   The output dependence that pins the `sh' ahead of the c+0x2C store SURVIVES
+   (the store's address varies, so the exception cannot fire there), so the
+   park's program-order proof is not disturbed.  Both spellings measure 2 at
+   812 words -- `((u16 *)*(u8 **)(d + 0x60))[-1]' and
+   `((u16 *)((u8 **)d)[0x18])[-1]'.  KEEP THIS IN MIND rather than
+   re-deriving it, and PAIR IT with any part-1 change.
+
+   EVERY WAY OF MAKING THE lo_sum NON-BIRTHING, PRICED.  All satisfy part 1
+   and all break part 3.
+
+     * a cancelled `t10++; t10--;' anywhere between the table assignment and
+       the call: 13 rows at 812 words, at all six positions and in both
+       orders.  AFTER the call it is dead and measures 2.  BEFORE the
+       assignment it is also dead -- 14 candidates over seven positions, all
+       2 -- because flow deletes the dead store and `reg_n_sets' is 1 again.
+       The 13 is combine's `i2dest_in_i2src' path (combine.c:2310) taking
+       `reg_n_deaths' to 2, which fails local-alloc.c:472, so t10 leaves
+       local-alloc and the pair comes out in $v0/$t0 where the target has $a1.
+       With the d+0x60 array_ref as well: 22.
+     * a REAL second set sharing t10 with another arm's table.  Twelve
+       candidates over cases 0, 1, 8 and 9, all at 812 words: store and index
+       both through t10 19-22, store only 19-22, index only 13.  t10 is then
+       live in two blocks, so flow.c:2561 makes it a GLOBAL allocno and
+       `find_reg' prices its whole range.  With the d+0x60 array_ref as well:
+       13 to 49.
+     * a REAL second set reusing a local whose live range is provably
+       disjoint: `e10' (which already has two real sets) 22, `base10' 14,
+       t10 holding e10's first value 15, t10 holding 0x80010000 14.
+     * a REAL second set from the d+0x60 pointer, whose last use precedes the
+       table assignment: for the `func_8009A028' argument only 2 at 812 --
+       AND THAT 2 IS A FALSE NEGATIVE OF THE MECHANISM, because cse folds the
+       set into the `if' condition's existing pseudo and flow deletes it.
+       Confirmed by counting `set (reg/v:SI 100)' in the dump -- ONE set, so
+       reg_n_sets is still 1 and nothing was tested.  For the call plus the
+       halfword store 32 at 811, for the halfword store only 16, set before
+       the `if' with the condition through it too 42 at 811.
+     * a READ-MODIFY-WRITE second set, which is the func_800D92C0 lever and
+       the one that costs no deaths: `t10 += idx' with the call as `*t10'
+       is 27 rows at 814 words, and the two extra words are NOT in this arm.
+       THE REASON IS CROSS-JUMPING AND IT PINS THE CALL'S SPELLING FOR GOOD:
+       case 8 ends `j .L800B770C' with `addu $v0, $v0, $a1' in the delay slot
+       at aligned 656/657, and `.L800B770C' IS CASE 10's `lbu $a1, 0x0($v0)'
+       at 786.  Case 8 cross-jumps INTO case 10's tail, so case 10 must emit
+       `addu $v0, $v0, $a1' then `lbu $a1, 0x0($v0)' -- which is `t10[idx]'
+       and not `*t10'.  Compensated forms are worse still: `t10 += K' with
+       `t10[idx - K]' is 27 rows at 815 words for K in 1, 2, 4, 8 and 0x10,
+       `t10 -= 8' with `t10[idx + 8]' 27 at 815, and the += moved ahead of the
+       store with the store compensated 32 at 816.  With the d+0x60 array_ref
+       as well: 40 at 814.
+     * A REGISTER PIN, which makes SET_DEST a HARD reg so `reg_n_sets' is the
+       count for that hard register and birthing_insn_p fails with no second
+       set at all.  THIS IS THE BEST NON-PARK NUMBER FOUND AND IT IS 6 ROWS at
+       812 words, with `register u8 *t10 __asm__("$5")' -- $a1, the target's
+       own register.  Its residue is the PREDICTED failure, which is the
+       value in it: the pair goes non-birthing and floats to the top of the
+       block at 749/752 against the target's 752/763, `lui $t0' lands at 763
+       against 769, and `addu $a2, $zero, $zero' is driven from 750 to 769.
+       Other pins, all one-line changes: $t0 9, $t1 9, $t8 9, $t9 9, $a3 10,
+       $v1 11, $a0 30 at 815, $a2 32 at 815, $v0 40 at 814.  With the d+0x60
+       array_ref, $a1 is 36 at 808 words (three spellings of the array_ref,
+       all 36/808) and $t0 is 9.
+     * ON THE PINNED ($a1) BODY, ALL 20 LEGAL STATEMENT ORDERS RE-SWEPT, with
+       and without the d+0x60 array_ref -- 40 candidates.  Best 6 (DTYCS and
+       TDYCS), then 7 (DTCYS, TDCYS), then 36 at 808 and 42-50 at 803.  So the
+       order space is empty on that body too.
+
+   PAIRS OF THE TWO KNOWN LEVERS, 40 candidates: the c+0x2C store in pointer
+   cast or array form, x four statement orders, x a cancelled pair at four
+   positions or none.  Pointer cast with no pair 2 everywhere.  Array form
+   with no pair 9 everywhere.  Pointer cast with a pair 7 to 13, array form
+   with a pair 10 to 18.  Nothing under 2.
+
+   THE PARK'S RECORDED NEGATIVES WERE RE-MEASURED AND ARE ALL SOUND.  Per the
+   brief's lens -- re-price every recorded negative whose word count is not
+   812 -- all of these reproduce exactly on this body, so there is no stale
+   number hiding a prerequisite here: the constant address on the load 18 at
+   813, on the store 24 at 813, on both 21 at 813, `k' for the rmw 26 at 813,
+   the e10 load through `| 0x29C' 20 at 813, `(lh + D_80083228 + 0x100)' 11,
+   `(D_80083228 + (lh + 0x100))' 37 at 809, `((D_80083228 + 0x100) + lh)' 40
+   at 809, the flagless `*(s16 *)(d + 0x2A)' 43 at 805, `((u16 *)d)[0x15]' 3,
+   and the D_800814A0 store ahead of the c store 42 at 803.
 
    ====================================== 2026-11-22: 11 -> 2 rows at 812/812
 
