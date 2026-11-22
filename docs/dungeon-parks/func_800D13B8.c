@@ -99,6 +99,27 @@
 
    Measured with
      python3 tools/decomp/parkresidue.py func_800D13B8
+
+   ====================================== 2026-11-21: 164/164, 70 -> 67 -> 63
+
+   stmtsweep: `k = t & 7;' moves between the two coordinate loads.  70 -> 67.
+   refsweep on that body: clean (8 names, 252 insertion points).
+
+   devsweep: an `if (e)' DUPLICATED ARM around `func_800D112C(k, x, y);'.
+   67 -> 63.  THIS IS A DEVICE AND I AM NOT HAPPY WITH IT -- `e' is `g + 0x18'
+   and can never be null, so the condition is a pure reference-adder.  It is
+   recorded here rather than defended: the device-free body is 67 rows at the
+   same 164 words, and if a later change makes the residue go the other way
+   this is the first thing to delete.  See the floor_log2 entry in
+   docs/matching-levers.md -- a device can only move a quantity UP the
+   allocation queue, so if the arithmetic ever says this one needs to be
+   cheaper, no spelling of this device will do it.
+
+   NOT a second SET: the wrapped statement is a void call with no assignment,
+   so this buys the extra reference on `e' and nothing else.
+
+   Measured with
+     python3 tools/decomp/parkresidue.py func_800D13B8
  */
 void func_800D13B8(void)
 {
@@ -119,8 +140,8 @@ void func_800D13B8(void)
     }
     t = 2 - ((*(s16 *)(g + 0xC8) + 0x100) >> 9);
     func_800D1338();
-    k = t & 7;
     x = *(u16 *)(e + 0xA4) >> 6;
+    k = t & 7;
     y = *(u16 *)(e + 0xA6) >> 6;
     if ((t & 1) != 0)
     {
@@ -131,7 +152,14 @@ void func_800D13B8(void)
     }
     else
     {
-        func_800D112C(k, x, y);
+        if (e)
+        {
+            func_800D112C(k, x, y);
+        }
+        else
+        {
+            func_800D112C(k, x, y);
+        }
         r = (k + 2) & 7;
         func_800D112C(r, x, y);
         u = (k - 2) & 7;
