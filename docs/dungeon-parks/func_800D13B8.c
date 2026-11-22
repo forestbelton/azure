@@ -57,7 +57,49 @@
    149 words / 136 rows -- the arm order is fixed.
 
    Three register-copy words in a 164-word function whose every opcode
-   already matches. */
+   already matches.
+
+   ====================================== 2026-11-21: 161/164 words, 66 rows
+                                          -> 164/164, 70 rows
+
+   `s32 x' -> `s16 x'.  THE WORD GAP IS CLOSED; this park is no longer the
+   one with an unexplained word count.  The declaration is honest: `x' is
+   `*(u16 *)(e + 0xA4) >> 6', at most 0x3FF, and every use is already cast to
+   `(s16)'.
+
+   WHY IT WAS NEVER FOUND, AND IT WAS A TOOL BUG RATHER THAN A HARD PROBLEM.
+   widthsweep.py accepted a candidate only when its ROW COUNT improved, so on
+   a park that is word-short it threw this one away for being four rows worse
+   -- while being three words better, which is the thing that actually
+   matters.  Fixed in the same commit: the objective is now (word gap, rows),
+   which is what measure_finds.py has always used and for exactly this
+   reason.  On the first run after the fix it was the first candidate found.
+
+   The neighbours, all measured serially against the real unit:
+       s16 x                 164/164, 70 rows   <- this body
+       s32 x (was)           161/164, 66
+       s16 x and s16 y       157/164, 52        fewer rows, SEVEN words short
+       u16 x                 166/164, 76
+       s16 y alone           155/164, 82
+       s16 x with u16 y      160/164, 69
+   `s16 x' with `s16 y' is the trap: 52 rows reads like the best result on
+   the page and it is seven words from the target, i.e. a different function.
+
+   ALSO MEASURED AND REJECTED on the 161-word body (the park's residue says
+   the target makes three register copies the candidate does not, so these
+   were attempts to force them):
+     * both arms' last call destructive with a SEPARATE pair of locals per
+       arm, to stop jump2 cross-jumping the tails: 153/83 with the odd arm's
+       own pair, 153/95 with the even arm's, 153/91 with both.  cse's
+       canon_reg propagates the copies away and the merge happens anyway, so
+       all three land on the 149-word merged shape plus four words.
+     * hoisting `r' and `u' to the top of the even arm (159/76), only `u'
+       (161/67), only `r' (159/74), and both above the `if' (161/75).
+   widthsweep is clean on the new body.
+
+   Measured with
+     python3 tools/decomp/parkresidue.py func_800D13B8
+ */
 void func_800D13B8(void)
 {
     u8 *g;
@@ -66,7 +108,7 @@ void func_800D13B8(void)
     s32 k;
     s32 r;
     s32 u;
-    s32 x;
+    s16 x;
     s32 y;
 
     g = (u8 *)&D_80083160;

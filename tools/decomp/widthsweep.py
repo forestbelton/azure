@@ -129,7 +129,17 @@ def main():
         print("widthsweep: the word count already differs from the target; a width")
         print("widthsweep: change may fix that, so candidates matching %d are kept too." % tw)
 
+    # ORDER BY WORD GAP FIRST, THEN ROWS -- not by rows alone.  A park that is
+    # already word-short (func_800D13B8 at 161 of 164) or word-long
+    # (func_800ADE74 at 1826 of 1817) wants the target WORD COUNT before it
+    # wants a lower row count, and a strict `rows' comparison silently throws
+    # away the candidate that reaches it.  measure_finds.py carries the same
+    # rule in its own docstring and for the same reason.
+    def key(r, ww):
+        return (abs(ww - tw), r)
+
     cur, best = fn, (rows, w)
+    best_key = key(rows, w)
     applied = []
     for rnd in range(rounds):
         # Every local declaration, as (line index, type, rest-of-line).
@@ -175,9 +185,10 @@ def main():
                 body = (sig[:open_paren + 1] + inner[:lo] + newseg + inner[hi:]
                         + sig[close_paren:] + cur[sig_end:])
                 rr, ww, _ = measure(body)
-                if ww == tw and (rr, ww) < best:
-                    best, found = (rr, ww), (body, "parameter %s: %s -> %s"
-                                             % (m.group(4), m.group(2), nt))
+                if key(rr, ww) < best_key:
+                    best, best_key = (rr, ww), key(rr, ww)
+                    found = (body, "parameter %s: %s -> %s"
+                             % (m.group(4), m.group(2), nt))
                     print("  round %d: %d rows, %d words  %s"
                           % (rnd, rr, ww, found[1]))
 
@@ -189,8 +200,9 @@ def main():
                 cand[i] = ind + nt + rest
                 body = "\n".join(cand)
                 rr, ww, _ = measure(body)
-                if ww == tw and (rr, ww) < best:
-                    best, found = (rr, ww), (body, "%s ->%s%s" % (ty, nt, rest))
+                if key(rr, ww) < best_key:
+                    best, best_key = (rr, ww), key(rr, ww)
+                    found = (body, "%s ->%s%s" % (ty, nt, rest))
                     print("  round %d: %d rows, %d words  %s"
                           % (rnd, rr, ww, found[1]))
         if not found:
@@ -204,7 +216,7 @@ def main():
         if (vr, vw) != (best[0], best[1]):
             print("widthsweep: *** THE STANDALONE AND THE UNIT DISAGREE on the")
             print("widthsweep: *** result (%d/%d vs %d/%d). Trust the unit." % (vr, vw, best[0], best[1]))
-            best = (vr, vw)
+            best, best_key = (vr, vw), key(vr, vw)
     print("final %d rows, %d/%d words" % (best[0], best[1], tw))
     if applied:
         out = os.path.join(sp, "best.c")
