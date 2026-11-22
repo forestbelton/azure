@@ -1,6 +1,12 @@
 #include "common.h"
 #include "ovl_dungeon_decls.h"
 
+extern u8 D_80089080[];
+extern u8 D_800DD880[];
+extern u8 D_800DD8B4[];
+extern u8 D_800E1C58[];
+s32 func_80069EF8(void);
+
 extern u8 *D_80073618[];
 extern u8 *D_800DF03C[];
 s32 func_80069E98(u8 *);
@@ -20033,7 +20039,203 @@ s16 func_800A9400(s16 x)
     return x;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A94A0);
+/* 227/227 words, 0 differing.  Came down from 76 aligned differences over two
+   days of parking; the five levers below are what closed it, and every device
+   in the body is load-bearing -- a leave-one-out sweep costs 8, 16, 21, 30 and
+   45 rows respectively.
+
+   1. `y' AND `z' ARE TWO SEPARATE SINGLE-SET LOCALS, not one variable and not
+      the parameter `q'.  The target's `addu $a0, $s4, $zero' comes BEFORE
+      `addu $s3, $v0, $zero' at words 169/170, and that order is unreachable
+      while the call result lands in a variable with more than one set:
+      expand_call pins the return copy's LUID immediately after the call, and
+      sched.c's rank_for_schedule falls through to INSN_LUID, so the copy comes
+      out first.  What flips it is `adjust_priority': the return copy becomes a
+      BIRTHING insn (LAUNCH_PRIORITY 7f000001 in the ready list) only when its
+      destination pseudo has reg_n_sets == 1, and then it wins the tie and is
+      emitted second.  `z' therefore has to be assigned exactly once -- the
+      `if (q) { q = func_800990FC(); } else { ... }' device this park carried
+      for two days gave it two sets and made those two words unreachable.
+      Same for `y': func_80069EF8's result needs its own single-set local, and
+      all three of q, y and z end up in $s3 because their ranges are disjoint.
+
+   2. `if (y) { func_800C77D0(...); } else { func_800C77D0(...); }' -- a
+      duplicated-arm device whose only purpose is a free reference on `y'.
+      Without it the dead `addu $s3, $v0, $zero' at word 70 (func_80069EF8's
+      result, never read on any path) is deleted and the whole file rotates:
+      45 rows.  The condition must be `y' and the device must sit inside the
+      `(s16)c == 0' arm, where `y' is defined.
+
+   3. `if (cc) { cc = c; } else { cc = c; }' READS `cc' BEFORE IT IS SET, and
+      that is the one device here that is not ordinary C.  It is worth 21 rows
+      and nothing defined reproduces it: every other condition (c, a, q, n, s,
+      e, y, z, t, q0, q1, k, cc2, h, m, p, g, src, o), initialising `cc' to 0
+      or to `c' first, moving the device onto `cc2', and a cancelled
+      `cc++; cc--;' in its place ALL measure 21.  Both arms store the same
+      value and `cc' is never read again, so nothing the function computes
+      depends on the branch, and gcc 2.7.2 does not exploit the UB.
+      `cc2 = c;' must stay AHEAD of it -- after it costs 10 rows.
+
+   4. TWO CANCELLED PAIRS, `n++; n--;' (30 rows) and `q0++; q0--;' (16 rows).
+      Each compiles to nothing -- combine folds the two addiu -- but flow
+      counts four references per pair, and global.c's allocno_compare orders
+      the queue by floor_log2(n_refs) * n_refs / live_length * 10000, with the
+      numbers printed by `dump_flow_info' at the top of the `.lreg' dump.  The
+      `q0' pair takes q0 from 10 refs/148 insns to 12/152, i.e. 2027 -> 2368,
+      which lifts it past `y' (2 refs/9 insns = 2222) so q0 takes $s2 and
+      y/q/z take $s3.  `q0 += 1; q0 -= 1;' and `n += 1; n -= 1;' are the same
+      bytes; about 30 statement positions for the q0 pair all land.
+
+   5. EACH ARM OF THE LAST `if' GETS ITS OWN BASE AND RESULT POINTER, and the
+      base is materialised BEFORE the index: `b1 = (u8 *)D_8006DE24_n;
+      n1 = b1 + q0 * 0x14;'.  The target materialises %hi/%lo(D_8006DE24)
+      first in each arm; `(u8 *)&D_8006DE24_n[q0]' makes expand emit the index
+      chain first and the base last, and nothing moves it back.  One shared
+      base is a global quantity by flow.c:2561 (two sets, two blocks) and
+      global_alloc gives it a register of its own after local_alloc has spent
+      $v1/$v0 on the block-local HIGH temps; per-arm locals keep it block-local
+      so the HIGH and the LO_SUM share $a0 as the target has them.  Worth 15
+      rows on the park's 26-row body in two halves (base-before-index 7,
+      per-arm locals 8); writing both arms back as `(u8 *)&D_8006DE24_n[q0]'
+      on THIS body is 16 rows.
+
+   And two spellings that must not be touched, both already in the park:
+   `q0 = func_800A9400(q0);' self-assigns so q0 keeps a second set and combine
+   cannot fold the three sll/sra pairs away (`k = func_800A9400(q0);' is 16
+   rows here and was 222 words on the park's earlier body), and the two
+   D_800DCEAC/D_800DCEBC halves are `>> 1', not `/ 2' -- `/ 2' is 233 words. */
+s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *p;
+    u8 *s;
+    u8 *g;
+    u8 *src;
+    u8 *o;
+    void *h;
+    s16 q0;
+    s32 cc;
+    s32 cc2;
+    u8 q1;
+    s16 k;
+    s32 t;
+    u8 *y;
+    u8 *z;
+
+    s = *(u8 **)(a - 0x14);
+    n = func_8003FD64(0x12, D_80083498);
+    n++;
+    n--;
+    if (n != NULL)
+    {
+        cc2 = c;
+        if (cc)
+        {
+            cc = c;
+        }
+        else
+        {
+            cc = c;
+        }
+        q0 = q[0];
+        D_800E3D68 = q[1];
+        t = func_800A982C(q0, (s16)c, a[0x13]);
+        q0++;
+        q0--;
+        if (t == 0)
+        {
+            n->unk_1E |= 0x8000;
+            D_800814A0 |= 0x8000;
+            return 0;
+        }
+        n->unk_10 = t;
+        p = (u8 *)n + 0x20;
+        *(u8 **)p = a;
+        *(u8 **)(p + 0x4) = e;
+        p[0x8] = q0;
+        D_800E3CC8[0] = q0;
+        q1 = q[1];
+        p[0x9] = q1;
+        D_800E3CC8[1] = q1;
+        if ((s16)c == 0)
+        {
+            m = n->unk_08;
+            src = *(u8 **)(a - 0x18);
+            *(s16 *)((u8 *)m + 0x2) = *(u16 *)(src + 0x2);
+            *(s16 *)((u8 *)m + 0x6) = *(u16 *)(src + 0x6);
+            *(s16 *)((u8 *)m + 0xA) = *(u16 *)(src + 0xA);
+            y = (u8 *)func_80069EF8();
+            if ((D_80013714 & 1) == 0)
+            {
+                o = *(u8 **)(a + 0x60);
+                if (o != NULL)
+                {
+                    func_8009FD40(*(u8 **)(a - 0x14), *(u8 **)(o - 0x14));
+                }
+            }
+            if (y)
+            {
+                func_800C77D0(n, (u8 *)m, 8, 0x300);
+            }
+            else
+            {
+                func_800C77D0(n, (u8 *)m, 8, 0x300);
+            }
+        }
+        else
+        {
+            g = D_80082E80;
+            if ((*(u16 *)(s + 0x14) & 0x8000) == 0 && (*(u16 *)(g + 0x14) & 0x8000) == 0)
+            {
+                func_800C7A3C(g, s, *(s16 *)(D_800E3D7C + 0x88), *(s16 *)(a + 0x88), 8, 0x300);
+            }
+            else
+            {
+                k = (*(u16 *)(D_800E3D7C + 0x2A) >> 9) & 7;
+                func_800C78A0(a - 0x20, (g[0x24] << 6) + (*(s16 *)&D_800DCEAC[k] >> 1) + 0x20,
+                              (g[0x25] << 6) + (*(s16 *)&D_800DCEBC[k] >> 1) + 0x20,
+                              *(s16 *)(D_800E3D7C + 0x88), 8, 0x300);
+            }
+        }
+        if ((s16)cc2 != 0)
+        {
+            func_800AD594(a, D_800DD8B4[q0] << 6);
+        }
+        else
+        {
+            func_800AD594(a, D_800DD880[q0] << 8);
+        }
+        if (n != NULL && *(s8 *)(a + 0x13) > 0)
+        {
+            z = (u8 *)func_800990FC();
+            h = func_80099734(a, z);
+            h = func_80099194(D_800E1C58, h);
+            if ((s16)cc2 != 0)
+            {
+                u8 *b1;
+                u8 *n1;
+
+                q0 = func_800A9400(q0);
+                b1 = (u8 *)D_8006DE24_n;
+                n1 = b1 + q0 * 0x14;
+                h = func_80099194(*(u8 **)(n1 + 8), h);
+            }
+            else
+            {
+                u8 *b2;
+                u8 *n2;
+
+                b2 = (u8 *)D_8006DE24_n;
+                n2 = b2 + q0 * 0x14;
+                h = func_80099194(*(u8 **)n2, h);
+            }
+            func_80099290(func_80099194(D_80089080, h));
+            func_800A5720(z);
+        }
+    }
+    return (s32)n;
+}
 
 /* Re-upload the dungeon HUD's 0xC x 0x18 tile when the (kind, variant) pair
    at D_800DCF4D changes, then hand func_8003F540 the pair of words the

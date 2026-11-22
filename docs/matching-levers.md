@@ -33151,3 +33151,67 @@ result copy is a plain `(set u v0)` sharing `u`'s register.
 **The park's stated goal -- "a lever that moves the copy exactly ONE slot closes
 this park" -- was unreachable.** The LUID order is fixed at expand time by which
 value goes in the temp, so the statement had to change, not the schedule.
+
+## `allocno_compare`'s PRIORITY IS READABLE STRAIGHT OFF THE `.lreg` DUMP -- STOP SWEEPING AND DO THE ARITHMETIC
+
+`func_800A94A0`, ovl_dungeon, 2026-11-21, landed at 227/227 from a 26-row park
+after four sweeps had come back empty.
+
+`toplev.c` prints `dump_flow_info` at the top of the `.lreg` dump, one line per
+pseudo:
+
+```
+Register 131 used 10 times across 148 insns; ...
+```
+
+Those two numbers ARE `allocno_n_refs` and `allocno_live_length`, so
+global.c:587's priority
+
+```
+floor_log2 (n_refs) * n_refs / live_length * 10000 * size
+```
+
+can be computed by hand for every allocno. Doing that for all fifteen of this
+function's allocnos reproduced `.greg`'s `;; N regs to allocate:` order
+**exactly**, three times on three different bodies.
+
+That converts a whole class of residue -- "the callee-saved file is rotated and
+no spelling moves it" -- from a search into arithmetic. You can see which two
+allocnos are adjacent in the queue and by how much, and therefore how many
+references you need to add to swap them. On this function it is what found an
+`e`/`cc` swap after four clean sweeps, and what predicted the pair that closed
+it: `q0++; q0--;` takes q0 from 10 refs/148 insns to 12/152, i.e.
+2027 -> 2368, lifting it past `y` at 2 refs/9 insns = 2222.
+
+### A cancelled pair placed after its variable's last use is DELETED and buys nothing
+
+`e++; e--;` after the last real use of `e` leaves it at 2 refs / 54 insns and
+the allocation order byte-identical with one, two or four pairs. Before the last
+use it jumps to 10 refs / 27 insns. `refsweep.py` tries both positions, but a
+park reading its clean negative should know that the position decides whether
+the pair exists at all by the time flow counts.
+
+### The return copy CAN win the LUID tie -- if its destination has `reg_n_sets == 1`
+
+This is the sibling to the `expand_call` entry above, and it matters because
+that entry says the other order is "unreachable by any schedule". It is
+unreachable only while the carrier has two or more sets.
+
+`expand_call` pins the return copy's LUID immediately after the call and
+`rank_for_schedule` falls through to `INSN_LUID`, so the copy normally comes out
+first. But `adjust_priority` gives a BIRTHING insn `LAUNCH_PRIORITY`
+(`7f000001`), and the return copy is birthing exactly when its destination
+pseudo has `reg_n_sets == 1` -- then it wins the tie and is emitted second,
+giving the target's `addu $a0, $s4, $zero` before `addu $s3, $v0, $zero`.
+
+So `z = f(); g(a, z);` with `z` a FRESH SINGLE-SET local reaches an order that
+is impossible once anything gives `z` a second set -- and a duplicated-arm
+device around the assignment is precisely such a thing. This park had carried
+`if (q) { q = func_800990FC(); } else { q = func_800990FC(); }` for two days,
+and that device was what made those two words unreachable.
+
+### And re-measure the negatives that say "identical bytes"
+
+This park recorded that func_80069EF8's result could go in any of six places
+for identical md5. True at 76 rows; worth 7 rows at 26. A park's rejection list
+needs re-measuring even where it claims two spellings are the same program.
