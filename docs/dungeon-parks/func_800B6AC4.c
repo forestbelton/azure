@@ -336,6 +336,30 @@
    For the record, on THIS body (with the B,D,C,Y,S statement order that the
    flag makes possible) the flagless form `*(s16 *)(d + 0x2A)' is 818 words
    and 46 rows -- the two halves are still only worth anything together.
+
+   ====================================== 2026-11-21: PERMUTER EXHAUSTED, 11 rows
+
+   150 minutes, 4 jobs, 219965 candidates, base score 645 -> best 485, eight
+   finds.  MEASURED AGAINST THE PARK, every one is worse or equal:
+
+       output-485-1 (best score)   19 rows, 812/812
+       output-505-2                21
+       output-505-1 / 515-1        22
+       output-580-1                33 rows, 813 words
+       output-550-1                64 rows, 814 words
+       output-585-1                65 rows, 813 words
+       output-630-1                11 rows, 812/812   (ties, no gain)
+
+   `no find beats the park'.  This is the documented divergence: the permuter
+   scores the whole object with its own diff, aligndiff counts rows in this
+   function's words, and below roughly ten rows the two point in different
+   directions -- the BEST-SCORING find is nearly the WORST on rows here.
+
+   So all four sweeps are clean AND the permuter is spent on this body.  The
+   remaining 11 rows are the single local-alloc choice described above
+   ($a3 vs $a1 for the D_800DD140 table pseudo, both quantities block-local).
+   The next spend should be hand analysis of QTY_CMP_PRI on a CHANGED body,
+   not another search on this one.
  */
 void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
