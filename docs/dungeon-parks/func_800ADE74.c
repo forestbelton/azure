@@ -2,9 +2,10 @@
    BEST MEASURED CANDIDATE for func_800ADE74,
    csrc/ovl_dungeon_800A4B88.c (1817 words).
 
-   2026-11-22, fifth session.   1817/1817 WORDS, 30 aligned rows
-                                (34 before the prototype block below; see
+   2026-11-22, SIXTH session.   1817/1817 WORDS, 23 aligned rows
+                                (27 before the prototype block below; see
                                  "THE CARVE REGRESSION")
+   was 2026-11-22, fifth:       1817/1817 words, 30 aligned rows
    was 2026-11-22, fourth:      1817/1817 words, 30 aligned rows
    was 2026-11-22, third:       1817/1817 words, 35 aligned rows
    was 2026-11-21, later:       1821/1817 words, 170 aligned rows
@@ -18,13 +19,153 @@
        python3 tools/decomp/onefunc.py func_800ADE74 --src <copy> --out one
        python3 tools/decomp/aligndiff.py one/ovl_dungeon.c func_800ADE74
 
-   NOTE ovlverify's POSITIONAL count on this body says `35 differing' where
-   aligndiff says 30.  aligndiff is the honest figure (ovlverify compares word
+   NOTE ovlverify's POSITIONAL count on this body says `27 differing' where
+   aligndiff says 23.  aligndiff is the honest figure (ovlverify compares word
    N against word N, so a transposed pair misses twice).  Use aligndiff.
 
-   THE WORD COUNT IS HONEST: every word is accounted for, and the first 274
-   words and the last 398 are byte-identical.  What is left is 30 rows in
-   THREE register/schedule clusters, listed at the bottom.
+   THE WORD COUNT IS HONEST: every word is accounted for, and the first 276
+   words and the last 398 are byte-identical.  What is left is 23 rows:
+   3 isolated `andi'-for-`addu' rows, 6 rows of cluster II and 14 of cluster I.
+
+   ===========================================================================
+   WHAT MOVED ON 2026-11-22 (SIXTH SESSION), 30 -> 23 ROWS, IN THREE CHANGES
+   Both came from reading the two streams side by side rather than from a
+   sweep.  All five sweeps were clean on the 30-row body and three of them are
+   clean again on this one.
+
+   (I) THE sp20 STORE MUST READ THE RAW CALL RESULT, AND THE WAY TO MAKE IT
+       DO THAT IS TO ASSIGN sp20 FROM THE CALL AND rN FROM sp20 THROUGH A
+       REDUNDANT ZERO-EXTENSION.              30 -> 26 rows, 0 words.
+
+           -   rN   = func(...);
+           -   sp20 = rN;
+           +   sp20 = func(...);
+           +   rN   = (u16)sp20;
+
+       applied at THREE sites and only three: case 0 (r2), case 1 (r3) and
+       case 2 (r4).  Each is worth exactly one row net, and all three are
+       independent -- measured singly and in every combination:
+           case 2 alone                 28      case 0 alone            29
+           case 1 alone                 29      case 2 + case 0         27
+           case 2 + case 1              27      all three               26
+       THE MECHANISM, read off the two streams and not guessed.  The target's
+       case-2 site is
+           jal  func_800A40AC / andi $a1,$v0,0xFFFF
+           sh   $v0, 0x20($sp)        <- the store reads the RETURN register
+           addu $v1, $v0, $zero       <- and the live copy is made AFTER it
+           sll  $v0, $v1, 16 / bltz $v0, .L800AE76C
+       and the old body's was
+           move $3,$2 / sll $2,$3,16 / bltz $2,$L58 / sh $3,32($sp)
+       -- the store reads the COPY and therefore cannot be lifted above it, so
+       cc1psx's delay-slot pass puts it in the BRANCH's slot instead.  It can
+       do that precisely BECAUSE the store reads $v1: the target's store reads
+       $v0, which the following `sll' overwrites, so the same move is illegal
+       there and the slot stays empty.  THE RESIDUE WAS A DELAY-SLOT
+       CONSEQUENCE OF WHICH PSEUDO THE STORE READS, not a sched1 priority.
+       `sp20 = func(...)' makes the store's source the call-result pseudo, and
+       the `(u16)' makes `rN' a SECOND pseudo -- a redundant recomputation is a
+       copy that survives where a plain copy does not, because cse cannot hash
+       the widened form into the original's class.  Both halves are required.
+       THE COST: the `(u16)' emits `andi $v1,$v0,0xFFFF' where the target has
+       `addu $v1,$v0,$zero', which is the one row each site keeps.  That
+       `andi' is the whole of the remaining residue (1) below.
+       MEASURED AND REJECTED for this slot, all on the 30- or 25-row body:
+         rN = sp20 = func(...)              31 (store right, copy replaced by
+                                               sll/sra -- no second pseudo)
+         sp20 = func(...); rN = sp20;       31 (same)
+         sp20 = func(...); rN = (s16)sp20;  31
+         drop rN, use sp20 everywhere       30 (byte-identical: the store is
+                                               NOT emitted from the valreg)
+         a fresh temp: u = f(); sp20 = u; rN = u;   byte-identical in BOTH
+                                               orders -- gcc coalesces u and rN
+         rN = (u16)sp20 with rN at u16 or s16      30 (plain HImode copy, so
+                                               the pseudos coalesce again)
+         rN = (u16)sp20 with rN at u32      28 (= the s32 spelling)
+         rN = sp20 & 0xFFFF, (s32)(u16)sp20        byte-identical to (u16)
+         the second variable spelled as an EXISTING 16-bit local instead of
+            rN -- aa, mx, h1, h2, h3 all 27, and k, k2, sp1C, sp1E 1818/45
+         r1 29, r9 30 as the second variable
+         test on sp20 with the `|' on rN    29
+         `|' on sp20 with the test on rN    30
+         the SAME change at the q7 tail     1816/68 and 1816/66 -- the q7
+            tail already matches and MUST BE LEFT ALONE
+         the SAME change at case 4 (r5)     n/a: case 4 has no sp20 residue
+       AND THE MEM_IN_STRUCT_P ROUTE IS REFUTED.  The obvious reading of the
+       target's `lhu / sh sp20 / sh 0x2A' order is that the 0x2A store's
+       dependence on the stack store was dropped, i.e. the catalogue's
+       "MEM_IN_STRUCT_P NEEDS A PLUS_EXPR ON TOP" with the flag on the STORE.
+       Writing `*(s16 *)(c + 0x2A) = sp1E' as `((s16 *)c)[0x15] = sp1E' is
+       1809/66 at case 0, 1816/48 at case 1, 1808/74 at both, 1817/30
+       (byte-identical) at the q7 tail and at case 4.  Note that case 0's
+       1809/66 and case 1's 1816/48 are EXACTLY the scores the fifth session
+       recorded for DROPPING r2 and r3 -- two different changes, the same
+       output -- and both delete words the target has.  Array form is wrong
+       here.
+
+   (J) case 2's `0x20000 / func_800A404C / 0x9A == 0x11' BLOCK BELONGS INSIDE
+       THE `func_80042900((s8 *)c, 6) == 0' BLOCK.      26 -> 25 rows, 0 words.
+
+           -       } while (i < 2);
+           -       }
+           -   }
+           -   if ((*(s32 *)(c + 0x1C) & 0x20000) != 0 && ...)
+           +       } while (i < 2);
+           +       }
+           +       if ((*(s32 *)(c + 0x1C) & 0x20000) != 0 && ...)
+           ... and the matching brace moved down past the block.
+
+       THIS IS A PROGRAM CHANGE, NOT A RESPELLING, AND THE LISTING IS WHAT
+       PROVES IT.  The row was the destination of ONE `bnez':
+           ours    row 405  bnez $v0, +0x834   (= word 525)
+           target  row 405  bnez $v0, .L800AE76C (= word 574)
+       Word 525 is case 2's `lw $v0,0x1C($s5)' -- the 0x20000 test -- and word
+       574 is its `jal func_800A2C34'.  So when func_80042900 returns nonzero
+       the TARGET skips the 0x20000 block entirely, while the old body ran it.
+       The other exit confirms the nesting from the inside: `sp1C < 0' branches
+       to .L800AE6A8 = word 525, i.e. INTO the 0x20000 test, which is only
+       reachable as a fall-through if that test is inside the same block.
+       RULE WORTH KEEPING: a differing BRANCH DESTINATION is not a register or
+       schedule residue -- it is a claim about which block the code belongs to,
+       and it is the cheapest row on the board.  Read every such row before
+       spending a compile on anything else.
+
+   ===========================================================================
+   WHEN THIS LANDS, func_800ADE74 MUST **NOT** BE FORWARD-DECLARED IN THE UNIT.
+   (2026-11-22, sixth session.  A LANDED FUNCTION IS BROKEN BY THE SPLICE AND
+   HAS BEEN IN EVERY SESSION'S MEASUREMENT OF THIS PARK.)
+
+   parksplice.py synthesises a forward declaration of the function it splices
+   and puts it at the end of the unit's top declaration block.  For this park
+   that line is
+       (the definition's own signature, with u16 on the 4th and 5th parameters)
+   and csrc/ovl_dungeon_800A4B88.c does NOT declare func_800ADE74 at all -- its
+   only in-unit caller, the LANDED func_800ADDA0 at csrc line 6039, calls it
+   through an implicit `int f()'.  With the synthesised declaration present:
+
+       func_800ADDA0   target 53 words, candidate 52 words, 50 differing
+       func_800ADE74   1817/1817 words, 25 aligned rows
+
+   and with that one line deleted:
+
+       func_800ADDA0   target 53 words, candidate 53 words, 0 differing
+       func_800ADE74   1817/1817 words, 25 aligned rows   (IDENTICAL)
+
+   -- so it costs func_800ADE74 nothing and costs its caller everything.  The
+   mechanism is the default argument promotions.  func_800ADDA0's 4th and 5th
+   arguments are `s16 d, s16 e'; through an implicit `int f()' they are
+   promoted with SIGN extension, which is what the target does
+       sll $a3,$a3,16 / lw $v1,0x3C($sp) / lh $v0,0x38($sp) / sra $a3,$a3,16
+   and through the `u16' prototype they are converted with ZERO extension
+       lw $v1,0x3C($sp) / lhu $v0,0x38($sp) / andi $a3,$a3,0xFFFF
+   which is the 50 differing rows.  The definition keeps `u16 d, u16 e' -- that
+   is what gives func_800ADE74 its own 1817 words -- so the landed file wants a
+   definition with no declaration, exactly like the unit's note on
+   func_800A0E6C ("CALLED WITHOUT A PROTOTYPE, as the unit's later call site
+   does") one section down.  gcc 2.7.2 only warns about the mismatch.
+
+   Verified with the whole unit: all 160 defined functions in the unit copy
+   are `0 differing' with that line deleted, and func_800ADDA0 is the only one
+   that moves either way.
 
    ===========================================================================
    THE CARVE REGRESSION: 30 -> 34 ROWS, AND IT IS ONE MISSING PROTOTYPE
@@ -274,6 +415,11 @@
        of change (A) below:
            dy = (t3 < 0) ? -t3 : t3;     30   <-- taken, does NOT fold
            dy = (t3 >= 0) ? t3 : -t3;    53       folds to one `abs' insn
+       BUT READ CLUSTER (II)(b) BEFORE BELIEVING THAT SECOND NUMBER.  The
+       sixth session showed that the FOLDING form reproduces the target's
+       SCHEDULE for this whole arm instruction for instruction, and scores
+       badly only because it then gets every register in the block wrong.  The
+       53 (now 48) is a register residue wearing a schedule residue's clothes.
        `x >= 0 ? x : -x' folds to a single `abs' RTL insn and `x < 0 ? -x : x'
        does not, so on dx (change (A)) you want the FOLDING form and on dy you
        want the NON-folding one.  THAT EXPLAINS THE dx/dy ASYMMETRY the
@@ -442,6 +588,93 @@
        (A `goto out;' to a label before the shared return measures exactly the
        same, 1817/36.  The `else' is preferred: this body contains no gotos.)
 
+   (K) SPLIT case 0x24's dx SUBTRACTION INTO TWO STATEMENTS, REUSING `dx' AS
+       ITS OWN TEMPORARY.                      25 -> 23 rows, 0 words.
+
+           -   dx = b[0x24] - sp18;
+           +   dx = b[0x24];
+           +   dx = dx - sp18;
+
+       THIS IS decomp-permuter's, AND IT ONLY SURVIVED BECAUSE THE FIND WAS
+       SPLIT.  It came out of the 40-minute run below as the body with the
+       WORST score of the ten finds (output-1070-1, score 1070 against a best
+       of 980) and it was the only one worth anything -- see "THE PERMUTER RUN"
+       below for the full table.  The find carried exactly this one change and
+       nothing else, which is why it transferred onto a body seven rows better
+       than the one it was found on.
+       WHAT IT FIXES: rows 1229 and 1231.  The target ties the subtraction's
+       destination to the LOAD'S OWN register --
+           lbu  $v1, 0x24($s7) / subu $v1, $v1, $a0
+       -- and the single-statement form gave `lbu $v0 / subu $v1,$v0,$a0', two
+       quantities where the target has one.  Writing the load and the
+       subtraction as separate statements, with the SAME variable on the left
+       of both, gives local-alloc's block_alloc the tie it takes
+       (local-alloc.c:1349 breaks at the first tying win, and addsi3_internal
+       prints `addu %0,%1,%2' so operand 1 is the one the dest ties to).
+       AND THIS IS A SEARCH SPACE NO SWEEP VARIES.  stmtsweep MOVES statements,
+       refsweep inserts cancelled pairs, devsweep wraps, widthsweep retypes and
+       partsweep repartitions; none of them SPLITS a compound right-hand side.
+       A 9-candidate hand sweep of the whole body for the same mutation
+       (`LHS = A <op> B;' -> `LHS = A; LHS = LHS <op> B;') found this one and
+       nothing else: `t3 = b[0x25] - sp1A' and both of case 0x2A's
+       `spXX = spXX + (u16)D_8006CCxx[sp1E]' are byte-identical, and
+       `dx = dx - sp18' re-split is byte-identical.  Worth adding to the sweep
+       family -- the space is small and this instance was worth 2 rows.
+       REJECTED NEARBY, on the 23-row body: `nn = (sp18 << 6) + 0x20' hoisted
+       out of the func_800BCB04 call 26, `nn = r7 - 2' hoisted out of the
+       guard 28, `sp1E = sp1E << 9' split at the arm's tail 1823/101,
+       `ang = *(u16 *)(c + 0x88)' split through a temp byte-identical,
+       `sp18 << 6' hoisted out of the func_800A45D8 call byte-identical,
+       the func_800A0818 result hoisted into r9/t3/t1/r1/i or sp1E itself
+       byte-identical (nn 27, n 29), `ang' moved after that call 1816/99,
+       and `i2A = 0' moved after the two `spXX = b[0x2X]' byte-identical.
+
+   ===========================================================================
+   THE PERMUTER RUN, 2026-11-22 SIXTH SESSION -- AND GATE 3 IS WHAT PAID
+   (base=1080 on the 30-row body, 40 minutes, 5 jobs, 43854 iterations,
+    best=980, ten finds.  Every one measured against the park with
+    measure_finds.py; `SPD' must be exported or the tool dies on a KeyError.)
+
+       output-980-1    1818/41   <- the BEST-SCORING find, a word long
+       output-995-1    1816/45
+       output-1040-1   1818/40
+       output-1040-2   1818/44
+       output-1040-3   1818/94
+       output-1040-4   1818/81
+       output-1040-5   1818/101
+       output-1060-1   1818/53
+       output-1065-1   1816/48
+       output-1070-1   1817/28   <- the WORST-SCORING find, and the only one
+                                    with anything in it -- see change (K)
+
+   SO GATE 1 HELD AGAIN, HARDER THAN BEFORE: the score ordering and the row
+   ordering are very nearly REVERSED here, and `best=980' names the find that
+   measures second-worst.  Read every find.
+   GATE 2 CAUGHT TWO, and both are the same defect -- an ADDRESS-TAKEN local
+   reused as a scratch while it is still live:
+     output-1040-1  `sp1C = (s16) func_800A2C34(c); if (sp1C != 0)' inside
+        case 2's sp1C >= 0 block.  sp1C is read AFTER that test, by
+        `func_800A35A4h(c, sp1C)' and `((u16 *)c)[0x23] = (sp1C + 1) | 0x8000'.
+     output-1065-1  case 0x2A's `n' replaced by `sp1E'.  sp1E is read after
+        the loop, by `*(s16 *)(c + 0x2A) = sp1E << 9'.
+   A third, output-1060-1, writes the func_800A70E4 result into `sp1A' in the
+   trailing k2 == 0x1E block; sp1A happens to be dead there, so it is legal,
+   but it measures 1818/53.
+   GATE 3 IS THE ONE THAT PAID.  output-1070-1 was ONE change; output-980-1
+   was two (a `nd = c + 0x60' base local for case 0's `*(u32 *)(c + 0x60)'
+   store, and a temp for case 1's func_800A384C result).  Split and measured
+   on the 23-row body: the base local alone is byte-identical, and with the dx
+   split 23 (no interaction).  Reading a permuter find means diffing it against
+   the PYCPARSER ROUND-TRIP of base.c, not against base.c -- the output is
+   regenerated C and a raw diff is 985 lines of reformatting:
+       import sys
+       sys.path.insert(0, "vendor/decomp-permuter")
+       from src import ast_util
+       ast = ast_util.parse_c(open("nonmatchings/F/base.c").read(), from_import=True)
+       fn, _ = ast_util.extract_fn(ast, "F")
+       print(ast_util.to_c(fn))
+   Against that, every find's real change is one or two lines.
+
    ===========================================================================
    THE LEVER BEHIND (B), (C) AND (D), AND WHY NO SPELLING REACHED IT
 
@@ -498,9 +731,30 @@
    opposite direction, and a device where the source change is ordinary C.
 
    ===========================================================================
-   RESIDUE THAT IS LEFT: 30 ROWS, 0 WORDS, THREE CLUSTERS
-   (rows 275/280/391/398/405/555/557/558 = cluster III+IV, 8 rows;
+   RESIDUE THAT IS LEFT: 25 ROWS, 0 WORDS
+   (rows 277/393/556 = residue (1), 3 rows -- see change (I) above;
     rows 1229..1248 = cluster II, 8 rows; rows 1330..1418 = cluster I, 14.)
+   Clusters III and IV ARE CLOSED by changes (I) and (J).  Their paragraphs
+   are kept below because every measurement in them is still a valid negative
+   for the shape it names.
+
+   (rows 277/393/556 = residue (1), 3 rows;
+    rows 1235..1248 = cluster II, 6 rows; rows 1330..1418 = cluster I, 14.
+    Rows 1229 and 1231 are CLOSED by change (K).)
+
+   (1) Three identical rows, one per site of change (I):
+           ours  andi $v1, $v0, 0xFFFF      target  addu $v1, $v0, $zero
+       at rows 277 (case 0), 393 (case 1) and 556 (case 2).  The target's
+       second pseudo is defined by a PLAIN SImode copy of the return register
+       and ours by a zero-extension.  Everything priced for this slot is in
+       change (I)'s rejected list: every plain-copy spelling collapses the two
+       pseudos back into one and costs the 2 rows that (I) bought, and every
+       other real recomputation (sign-extend, mask) is the same or worse.  The
+       honest statement of the residue is: gcc 2.7.2 will not keep a
+       pseudo-to-pseudo copy that computes nothing, so the target's copy was
+       not written as a copy in C -- it is the live-range copy gcc makes for
+       ITS OWN second pseudo, and we have not found the source form that makes
+       gcc create that pseudo without an instruction.
 
    (I) case 0x2A: a clean two-register swap.          14 rows, 0 words.
        Ours                      target
@@ -597,7 +851,197 @@
          declared size.  (Measured in the onefunc standalone, where the
          declaration block is local; csrc/ovl_dungeon_decls.h was not touched.)
 
-   (II) case 0x24's Chebyshev test.         WAS 13 rows; NOW 8, 0 words.
+       2026-11-22 (SIXTH session).  A DIAGNOSTIC THAT PINS THE RESIDUE DOWN,
+       and it is not landable (asm register pinning is a device) but it says
+       what the fourteen rows are: `register s32 r7 __asm__("$16")' measures
+       1817/27 and the four rows that are purely r7's -- 1337, 1338, 1360 and
+       1410 -- ALL MATCH.  What is left over then moves onto the pointer and
+       `ang', which swap into $s1/$s2 instead of the target's $s2/$s1, so the
+       cluster is a THREE-way contention (target: r7 $s0, ang $s1, pointer
+       $s2) in which only the r7/pointer pair is wrong today.  Other pinnings
+       for the record: r7 at $18 1817/68, i2A at $18 1817/70, r7 $16 + i2A
+       $18 1817/56, mx at $16 1817/29.
+
+       2026-11-22 (SIXTH session).  THE CLUSTER IS NOW CLOSED WITH A PROOF
+       RATHER THAN A LIST OF FAILURES, and the proof says what a candidate
+       would have to look like.  Re-read on the 25-row body: the pointer is
+       pseudo 1338 (`used 5 times across 44 insns; crosses 2 calls') -> $s0,
+       r7 is 119 (`used 6 times across 83 insns; crosses 3 calls') -> $s2, and
+       greg's order is `... 1208 81 570 1338 1557 130 806 119 118 ...'.
+       THE 44 IS ALREADY DOUBLED.  insn 4194 is
+           (set (reg 1338) (lo_sum (reg 1339) (symbol_ref "D_80082E80")))
+       with a REG_EQUIV note, so update_equiv_regs (local-alloc.c:1094,
+       `reg_live_length[regno] *= 2') has already run on it: the true length is
+       22.  That kills the only route left in the fifth session's list from the
+       other end -- giving the pointer a SECOND SET to lengthen its range
+       instead REMOVES the doubling (the gate at local-alloc.c:1043 is
+       `reg_n_sets[regno] != 1'), taking it from 44 to 22 and raising its
+       priority from 2272 to 4545.  Exactly the wrong direction.
+       AND THE "BLOCK $s0 WITH A THIRD ALLOCNO" ROUTE IS CLOSED BY THE
+       CONFLICT SETS THEMSELVES:
+           1338 conflicts: 81 82 88 119 127 + hard 2 4 5 6 29
+            119 conflicts: 81 82 88 111 119 124 125 127 1338 1376 1387 1427
+                           + hard 2 3 4 5 6 7 29
+       EVERY pseudo that conflicts with the pointer also conflicts with r7.
+       $s1 is already blocked for both (127 holds it), so the only thing
+       missing for the target's assignment is a conflicting allocno holding
+       $s0 at the pointer's turn -- and any EXISTING one that does that blocks
+       $s0 for r7 as well.  So a candidate has to CREATE a quantity Q with all
+       four of: pri(Q) > 2272, Q conflicts with 1338, Q does NOT conflict with
+       119, and Q lands in $s0 (which needs allocno_calls_crossed[Q] != 0, or
+       regs 2..15 otherwise excluded).  Q must therefore be born before the
+       pointer's materialisation and dead before r7's birth, i.e. live across
+       func_800A365C and dead by func_8009FD40w's return, and it must cross a
+       call.  The arm offers no honest value with that live range: the only
+       things live there are `b', `c' and the pointer itself, and the two
+       guards between them produce nothing that outlives its own test.
+       SO THE FOURTEEN ROWS ARE EITHER (a) one of the four priority routes --
+       all four of which are now measured negatives at every spelling tried --
+       or (b) a Q of that shape, which would not be C anyone wrote.
+
+   (II) case 0x24's Chebyshev test.         WAS 13 rows; STILL 8, 0 words.
+
+       2026-11-22 (SIXTH session).  THE EIGHT ROWS ARE **TWO INDEPENDENT
+       FACTS**, and separating them is the session's contribution here.
+       Side by side, rows 1229..1248:
+           ours                      target
+           lbu  v0,0x24(s7)          lbu  $v1,0x24($s7)
+           subu v1,v0,a0             subu $v1,$v1,$a0
+           sh   v1,0x18(sp)          addu $s0,$v1,$zero
+           lbu  v0,0x25(s7)          sh   $v1,0x18($sp)
+           move a2,v1                lbu  $v0,0x25($s7)
+           subu v0,v0,a1             sll  $v1,$v1,16
+           bgez v0,..                subu $v0,$v0,$a1
+           move a0,v0                bgez $v0,..
+           negu a0,v0                addu $a0,$v0,$zero
+           sll  v1,v1,0x10           negu $a0,$a0
+           ... (the slt block matches) ...
+           move a2,a0                addu $s0,$a0,$zero
+           sll  v0,a2,0x10           sll  $v0,$s0,16
+       (a) `mx' IS $a2 AND THE TARGET'S IS $s0 -- 3 rows.  greg says mx is
+           pseudo 130, `used 3 times across 16 insns, 2 bytes', with
+           `130 conflicts: 81 82 121 123 128 129 130 2 3 5 29' and no
+           calls-crossed line, so used1 = fixed_reg_set and find_reg's 0..31
+           scan hands it the first register not held by a conflicting allocno:
+           $v0 is 123's, $v1 is 121/128's, $a0 is 129's, $a1 is a hard
+           conflict, and $a2 is free.  For $s0 (16) every register from 2 to 15
+           must be excluded, which on this body means mx would have to CROSS A
+           CALL -- and the fifth session's corrected reading of global.c:924
+           is right about the code and wrong about the conclusion it drew:
+           crossing no call is the least restrictive case, which is exactly why
+           a short-lived non-call-crossing quantity can never reach $s0 by
+           priority.  mx's live range is entirely between the dx abs and
+           `if (mx == 1)', with no call in it, and there is no honest way to
+           extend it across one: `dx' does not exist before the func_800A0818
+           call.
+       (b) THE `sll $v1,$v1,16' IS IN A DIFFERENT BASIC BLOCK -- 5 rows.
+           This one is NOT a register fact and NOT a sched1 priority.  The dx
+           abs is ONE rtl insn (`x >= 0 ? x : -x' folds to `abs', and the
+           emitted text is the template's own `bgez %0,1f / negu %0,%0 / 1:'
+           with no `.set noreorder'), so it does not split the block, but the
+           dy abs IS a real branch in both streams.  The target's block
+           therefore ENDS at the dy branch and already contains the comparison's
+           `sll $v1,$v1,16'; ours contains four insns and emits that `sll' as
+           the FIRST insn of the join block.  sched1 cannot move an insn
+           between blocks, so the target's source must emit the sp18 widening
+           BEFORE the dy branch.
+           MEASURED AND REJECTED, all on the 25-row body, all BYTE-IDENTICAL
+           unless noted -- the hypothesis was that gcc expands a comparison's
+           LEFT operand (and its integral promotion) before its right, so
+           burying the dy conditional in the right operand would strand the
+           `sll' in the earlier block.  IT DOES NOT:
+             r9 = sp18 < (sp1A = dy = (t3 < 0) ? -t3 : t3)   25
+             r9 = sp18 < (sp1A = dy)                         25
+             sp1A = dy = (t3 < 0) ? -t3 : t3                 25
+             r9 = sp18 < (s16)dy                             25
+             r9 = mx < sp1A                                  25
+             r9 = (s16)dx < sp1A                             25
+             mx = r9 ? sp1A : mx                             25
+             dy = t3; if (t3 < 0) { dy = -dy; }              25
+             if (t3 < 0) { dy = -t3; } else { dy = t3; }      25
+             dy = t3 = sub; if (t3 < 0) { dy = -dy; }         25
+             mx = dx moved after sp18 = dx                   25
+             mx = (s16)dx / mx = sp18 / mx = dy              25
+             r9 = sp18 < (dy = (t3 < 0) ? -t3 : t3)          30
+             if ((r9 = sp18 < sp1A) != 0)                    28
+             r9 = sp18 < dy                                  33
+             r9 = dx < dy                                    1815/94
+             sp1A = (t3 < 0) ? -t3 : t3 with no `dy'         1820/101
+             r9 = sp18 < (sp1A = (t3 < 0) ? -t3 : t3)        1819/96
+             sp1A = t3 = sub before the abs                  1818/93
+             sp1A = dy moved after the comparison            1815/94
+           AND THEN THE REASON WAS FOUND, AND IT IS A BASIN THE FOURTH
+           SESSION DECLARED REFUTED.  **`dy = (t3 >= 0) ? t3 : -t3;' -- the
+           FOLDING direction, recorded at 53 rows and "do not clean up either
+           side" -- PRODUCES THE TARGET'S SCHEDULE EXACTLY.**  Read the two
+           streams with it in place (1817 words, 48 aligned rows):
+               ours                  target
+               move a2,v0            addu $s0,$v1,$zero
+               sh   v0,0x18(sp)      sh   $v1,0x18($sp)
+               lbu  v1,0x25(s7)      lbu  $v0,0x25($s7)
+               sll  v0,v0,16         sll  $v1,$v1,16     <- IN BLOCK B NOW
+               subu v1,v1,a1         subu $v0,$v0,$a1
+               bgez v1,..            bgez $v0,..
+               move a0,v1            addu $a0,$v0,$zero
+               negu a0,a0            negu $a0,$a0
+               sll  v1,a0,16         sll  $v0,$a0,16
+               slt  v0,v0,v1         slt  $v1,$v1,$v0
+           -- instruction for instruction identical, opcode for opcode, and
+           ONLY THE REGISTER ASSIGNMENT DIFFERS (ours dx $v0 / b[0x25] $v1 /
+           mx $a2, target dx $v1 / b[0x25] $v0 / mx $s0).  The reason the
+           earlier sessions scored it 53 and now 48 is that fixing the
+           schedule makes EVERY row of the block differ by register, where the
+           wrong schedule left some of them coinciding.  WHY IT WORKS: the
+           folded form is a single `abs' rtl insn, so there is NO basic-block
+           split at the dy abs, block B runs through the comparison, and sched1
+           is free to put the sp18 widening in the `lbu's load-delay slot.  The
+           emitted `bgez $v0,1f / addu $a0,$v0,$zero / negu $a0,$a0 / 1:' is
+           the abs TEMPLATE with dest != src, whose delay slot GAS fills with
+           the template's own `move' -- which is why it looks like a
+           compiler-scheduled branch and is not one.  (The dx abs gets a `nop'
+           instead because its negate writes the register the branch reads.)
+           PROOF THAT ONLY REGISTERS ARE LEFT, with asm pinning as a
+           diagnostic (not landable):
+               folded dy alone                              1817/48
+               + mx pinned $16                              1817/50
+               + dx pinned $3                               1817/37
+               + mx $16 AND dx $3                           1817/31
+           and in that last one rows 1232..1247 -- the whole Chebyshev core --
+           ARE BYTE-IDENTICAL TO THE TARGET.  What is left over is damage the
+           pinning itself does to the preceding block (rows 1218..1228) plus
+           the `sh' of sp18 reading mx's register.
+           SO THE 6 REMAINING ROWS OF CLUSTER II ARE ONE DECISION: get `mx'
+           into $s0 and `dx' into $v1 while keeping the folded dy.  Measured
+           and rejected on the folded body: mx merged with aa 48, mx at s32
+           1815/98, u16 1816/112, dx at s16 1817/59, u32 1814/110, dy at s16
+           48, t3 at s16 1823/127, the comparison respelled four ways 48,
+           `mx = dx' moved after `sp18 = dx' 48.
+           AND NOTE THE INTERACTION: change (K)'s dx split, which is worth 2
+           rows on the NON-folded body, is worth nothing on the folded one
+           (dx split + folded dy = 48, as is t3 split + folded dy).  The two
+           halves of this cluster are not additive, and the folded basin has
+           to be entered with the register fix already in hand.
+           WHICH IS WHY THE PARK STAYS NON-FOLDED AT 23 ROWS.  `do not clean
+           up either side' is still the right instruction for the body in this
+           file -- but the sentence "on dy you want the NON-folding one" is a
+           statement about a local optimum, not about the original, and the
+           original plainly used the folding form.  The next session's best
+           single shot at cluster II is the folded body plus an honest route to
+           mx-in-$s0.
+       (c) The `lbu' register ($v0 for us, $v1 for the target) is the
+           remaining 2 rows and follows (b): the target ties the subtraction's
+           destination to the load's own register, which it can because the
+           block's contents differ.
+
+       RE-SWEPT ON THE 25-ROW BODY (the fifth session's table was on the
+       30-row one, and the body has moved three times since): `mx' merged with
+       each of the 28 other scalar locals -- `aa' 25 (byte-identical, the only
+       other s16), k2 30, k 34, then ret 1816/92, sp1C 1816/93, sp1E 1816/93,
+       h1 1816/95, h2/h3 1816/96, i/i2A/j 1815/109, r1 1815/112, r2 1814/120,
+       r3 1814/122, r4 1815/111, r5 1815/113, r6/r7 1815/109, r8 1815/113,
+       r9 1815/108, t1 1815/113, t3 1816/123, n 1816/124, nn 1815/108,
+       ang 1815/114, dx 1815/98, dy 1816/110.  Unmoved.
+       THE PARAGRAPHS BELOW ARE THE OLDER DIAGNOSIS and still read true.
        Changes (G) and (H) closed five of these.  What is left is `mx': the
        target holds it in $s0 and we hold it in $a2, and rows 1229, 1231,
        -1235, 1237, 1241, +1242, 1247 and 1248 all follow from that one fact.
@@ -664,7 +1108,13 @@
        `|= 0x8000' store moved to four other positions, the 0x54/0x55/0x4C/
        0x15 stores in pointer-cast form) -- nothing beats it.
 
-   (III) `sp20 = r;' is stored from the COPY, not from the call result.
+   (III) CLOSED 2026-11-22 (sixth session) by change (I), which left one
+       `andi' row at each of the three sites -- residue (1) above.  The
+       paragraphs below are the fourth and fifth sessions' diagnosis; every
+       measurement in them is still a valid negative for the shape it names,
+       and the last one -- "any fix has to change which pseudo the store
+       reads" -- was right.
+       `sp20 = r;' WAS stored from the COPY, not from the call result.
                                                       6 rows, 0 words.
        Target, cases 0 and 1 and the case-2 site at 800AE720:
            lhu $v1,0x1E($sp) / sh $v0,0x20($sp) / sh $v1,0x2A($s5) /
@@ -735,9 +1185,9 @@
        source-level ways to do that -- drop rN, or chain the assignment in
        either nesting -- are both priced above and both fail at cases 0 and 1.
 
-   (IV) One single row: a `bnez' at target 405 whose destination is word 525
-       where the target's is 574.  Both are entries into the same shared
-       tail, so this is a `break' that reaches the tail one label earlier.
+   (IV) CLOSED 2026-11-22 (sixth session) by change (J) -- it was not a
+       `break' reaching the tail early, it was case 2's 0x20000 block sitting
+       one brace too far out.  See (J).
        (The `beq v0,s5' operand-order row at target 505 is CLOSED -- see the
        sixth change below.)
 
@@ -806,6 +1256,32 @@
 
    ===========================================================================
    SWEEPS RUN, AND WHAT THEY RETURNED
+
+   2026-11-22, SIXTH SESSION.  stmtsweep, widthsweep and partsweep were run
+   on the 26-row body and again on the 25-row body, and ALL SIX RUNS ARE
+   CLEAN:
+       stmtsweep   base 26 / base 25, 19 movable, "no safe move helps"
+       widthsweep  base 26 / base 25, "no width change helps"
+       partsweep   base 26 / base 25, same six groups, "no partition helps"
+   All five were relaunched on the 23-row body in this file.  THE THREE QUICK
+   ONES CAME BACK CLEAN ON IT TOO -- stmtsweep "no safe move helps" (19
+   movable), widthsweep "no width change helps", partsweep "no partition
+   helps" (same six groups), all three re-deriving `base 23 rows, 1817/1817'
+   first.  refsweep (36735 insertion points, ~160 min) and devsweep (17250 per
+   round, ~75 min) were still running when the session ended; logs are
+       /tmp/claude-1000/agent-ade74g/logs/refsweep23.log
+       /tmp/claude-1000/agent-ade74g/logs/devsweep23.log
+   and a SECOND permuter run was imported on this 23-row body and launched
+   (40 min, 5 jobs) -- /tmp/claude-1000/agent-ade74g/logs/permrun23.log, with
+   the previous run's ten output dirs moved aside to
+   /tmp/claude-1000/agent-ade74g/old-outputs2/ so measure_finds cannot mix the
+   two runs.  REMEMBER `export SPD=<a scratch dir>' before measure_finds.py.
+   NEW SWEEP SPACE, AND IT PAID 2 ROWS: the STATEMENT SPLIT
+   (`LHS = A <op> B;' -> `LHS = A; LHS = LHS <op> B;').  No existing sweep
+   varies it.  Nine candidates in this body, one of them is change (K), the
+   other eight byte-identical or worse.  Script at
+       /tmp/claude-1000/agent-ade74g/splitsweep.py
+   and it belongs in tools/decomp next to the other five.
 
    2026-11-22, FIFTH SESSION.  partsweep.py (new that day, and the ONE space
    no other sweep varies) run on the 30-row body IN THE CARVED UNIT, with the
@@ -1015,12 +1491,15 @@
      measured 1825/228 against 1823/160 when it was last priced.  Kept, but
      this is the one shape in the body that is still not explained.
    * `dx = (dx >= 0) ? dx : -dx;' next to
-     `dy = (t3 < 0) ? -t3 : t3;' in the SAME arm.  THIS ASYMMETRY IS NOW
-     EXPLAINED rather than merely measured -- see change (H).  `x >= 0 ? x :
-     -x' folds to one `abs' RTL insn and `x < 0 ? -x : x' does not; dx wants
-     the folded form and dy wants the unfolded one, because the target tests
-     the subtraction's own register and copies into dy in the delay slot.
-     Making the two match either way costs 10 to 23 rows.
+     `dy = (t3 < 0) ? -t3 : t3;' in the SAME arm, AND I AM NOW FAIRLY SURE IT
+     IS WRONG -- the original almost certainly wrote both the same way.  See
+     cluster (II)(b): the SYMMETRIC, folded spelling
+     `dy = (t3 >= 0) ? t3 : -t3;' reproduces the target's schedule for the
+     whole Chebyshev block instruction for instruction and loses only on
+     register assignment, and with `mx' and `dx' pinned to the target's
+     registers its core 16 words are byte-identical.  It is kept unfolded only
+     because 23 < 48 on today's body.  Do not "clean it up" without the
+     register half in hand, and do not treat the asymmetry as explained.
    * `r9 = sp18 < sp1A;' followed by `if (r9)' in case 0x24.  A boolean in an
      s32 scratch is not the prettiest C, but `r9' is the arm's own variable
      and holds the arm's own call result two statements earlier, which is the
@@ -1268,9 +1747,9 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                 {
                     break;
                 }
-                r2 = func_800A384C(c, q2, (u8 *)&sp1E, 0);
+                sp20 = func_800A384C(c, q2, (u8 *)&sp1E, 0);
                 *(s16 *)(c + 0x2A) = sp1E;
-                sp20 = r2;
+                r2 = (u16)sp20;
                 if ((s16)r2 < 0)
                 {
                     *(u16 *)(c + 0x46) = 0x800B;
@@ -1332,9 +1811,9 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                 {
                     break;
                 }
-                r3 = func_800A384C(c, q4, (u8 *)&sp1E, 0);
+                sp20 = func_800A384C(c, q4, (u8 *)&sp1E, 0);
                 *(s16 *)(c + 0x2A) = sp1E;
-                sp20 = r3;
+                r3 = (u16)sp20;
                 if ((s16)r3 < 4)
                 {
                     *(u16 *)(c + 0x46) = 0x800B;
@@ -1393,21 +1872,22 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                             j ^= 1;
                         } while (i < 2);
                     }
-                }
-                if ((*(s32 *)(c + 0x1C) & 0x20000) != 0 && (s16)func_800A404C() == 0 &&
-                    *(u8 *)(D_800814A8 + 0x9A) == 0x11)
-                {
-                    o = *(u8 **)(D_800814A8 + 0x60);
-                    if (o != NULL && (*(s32 *)(o + 0x14) & 0x2000) == 0)
+                    if ((*(s32 *)(c + 0x1C) & 0x20000) != 0 && (s16)func_800A404C() == 0 &&
+                        *(u8 *)(D_800814A8 + 0x9A) == 0x11)
                     {
-                        r4 = func_800A40ACw(c, func_8009CD58(o, 7, 0));
-                        sp20 = r4;
-                        if ((s16)r4 >= 0)
+                        o = *(u8 **)(D_800814A8 + 0x60);
+                        if (o != NULL && (*(s32 *)(o + 0x14) & 0x2000) == 0)
                         {
-                            *(u16 *)(c + 0x46) = r4 | 0x8000;
-                            *(s16 *)(c + 0x2A) = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
-                                                               D_80082E80[0x25], (u16 *)&sp20);
-                            return 3;
+                            sp20 = func_800A40ACw(c, func_8009CD58(o, 7, 0));
+                            r4 = (u16)sp20;
+                            if ((s16)r4 >= 0)
+                            {
+                                *(u16 *)(c + 0x46) = r4 | 0x8000;
+                                *(s16 *)(c + 0x2A) = func_800A0818(b[0x24], b[0x25],
+                                                                   D_80082E80[0x24],
+                                                                   D_80082E80[0x25], (u16 *)&sp20);
+                                return 3;
+                            }
                         }
                     }
                 }
@@ -1805,7 +2285,8 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             ((u16 *)c)[0x54] = sp18;
             ((u16 *)c)[0x55] = sp1A;
             ((u16 *)c)[0x4C] |= 0x8000;
-            dx = b[0x24] - sp18;
+            dx = b[0x24];
+            dx = dx - sp18;
             dx = (dx >= 0) ? dx : -dx;
             mx = dx;
             sp18 = dx;

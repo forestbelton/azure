@@ -56,6 +56,44 @@ def main():
         print("%s: not a stub in the unit (landed already?)" % func)
         return 1
     decls = pr.decls_of(park) + pr.preamble_of(park, func)
+
+    # THE SYNTHESISED SELF-PROTOTYPE IS A MEASUREMENT AID THAT CAN BREAK A
+    # LANDED FUNCTION, SO SAY SO BEFORE ANYONE MERGES THIS FILE.
+    #
+    # pr.splices() appends the park's own signature as a forward declaration
+    # (`decls + sig + ";"'), which is right for MEASURING: without it, a call
+    # hundreds of lines above the body draws "type mismatch with previous
+    # implicit declaration" and the park will not compile at all.
+    #
+    # But a caller that currently reaches this function through an implicit
+    # `int f()' is relying on DEFAULT ARGUMENT PROMOTIONS, and a real
+    # prototype changes them. On 2026-11-22, splicing func_800ADE74 -- whose
+    # signature takes `u16 d, u16 e' -- made its only in-unit caller,
+    # the LANDED func_800ADDA0, go from 53/53 and 0 differing to 52 candidate
+    # words and 50 DIFFERING: its s16 arguments are SIGN-extended through the
+    # implicit declaration, which is what the target has, and ZERO-extended
+    # through the u16 prototype. func_800ADE74 itself measures identically
+    # either way.
+    #
+    # So the file this tool writes is correct to MEASURE and wrong to MERGE,
+    # which is the most dangerous shape a tool output can have. Warn whenever
+    # the unit calls the function above the splice point and does not already
+    # declare it -- exactly the case where adding the prototype changes a
+    # caller.
+    _stub_at = unit.find(stub)
+    _above = unit[:_stub_at] if _stub_at > 0 else ""
+    _calls_above = len(re.findall(r"\b%s\s*\(" % re.escape(func), _above))
+    _declared = re.search(r"^[A-Za-z_][^\n;]*\b%s\s*\([^;]*;" % re.escape(func),
+                          _above, re.M) is not None
+    if _calls_above and not _declared:
+        print("%s: *** %d call site(s) above the body reach this function "
+              "through an IMPLICIT declaration, and this splice adds a real "
+              "prototype." % (func, _calls_above))
+        print("%s: *** That changes their DEFAULT ARGUMENT PROMOTIONS. Measure "
+              "those callers with ovlverify before you merge, and omit the "
+              "synthesised `%s(...);' line if any of them moves." % (func, func))
+        print("%s: *** It cost func_800ADDA0 50 differing rows on 2026-11-22; "
+              "the park is correct to MEASURE and wrong to MERGE." % func)
     # SAME placement and prototype-adoption logic as parkresidue.measure, and
     # it has to stay the same: this file is what an agent picks up and what
     # permimport --source compiles, so a splice that differs from the one the
