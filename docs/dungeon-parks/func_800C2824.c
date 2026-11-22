@@ -301,19 +301,20 @@
       `lui'/`addiu %lo' base and addresses the rest by displacement while
       the cast spelling makes each offset its own relocation.
 
-   ====================================== SWEEPS, ALL ON *THIS* BODY
+   ====================================== SWEEPS -- ALL FOUR CLEAN ON *THIS*
+                                          BODY (devsweep's only find is the
+                                          `if (q)' device two sections down)
 
-   refsweep.py ... clean at 49 rows (19 names, 2527 insertion points,
-     "no cancelled pair helps").  A re-run on THIS body was still in flight
-     when the session ended; its log is
-     /tmp/claude-1000/agent-c2824/ref2.log.  Note that the one cancelled
-     pair this park used to carry is now worth zero (see (h)), so a clean
-     answer is the expected one.
+   refsweep.py ... CLEAN ON THIS BODY.  Run twice: at 49 rows (19 names,
+     2527 insertion points) and again on this body (22 names, 2960
+     insertion points) -- "final 43 rows, 278/278 words, no cancelled pair
+     helps" both times.  Consistent with (h): the one cancelled pair this
+     park used to carry is now worth zero.
    widthsweep.py . clean at 49; and by hand on this body every one of `i',
      `j', `a', `f', `v', `w', `w0', `x2', `y2', `x17', `y17' through
      s8/u8/s16/u16/s32/u32 -- nothing under 43.  The tool's own re-run on
-     this body was queued behind that refsweep; log
-     /tmp/claude-1000/agent-c2824/wid2.log.
+     THIS body agrees: "final 43 rows, 278/278 words, no width change
+     helps".
    stmtsweep.py .. clean at 49 ("no safe move helps"), and a gated
      hand-rolled version is clean on this body over six rounds.
    devsweep.py ... run twice, on the 49-row body (47, `if (q)') and again

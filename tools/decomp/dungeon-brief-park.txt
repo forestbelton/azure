@@ -46,6 +46,28 @@ implicit `int f()` and changes codegen. The carved units each carry a
 generated block of those, and `onefunc.py` synthesises the same thing for a
 standalone file.
 
+## DO NOT WRITE A WAITER SHELL THAT GREPS FOR ITS OWN COMMAND LINE
+
+This has now stalled thirteen shells on this project, reinvented independently
+by several agents, and each one spins until something kills it.
+
+    # WRONG -- `pgrep -fc 'refsweep|devsweep'` matches THIS shell's own
+    # command line, which contains the pattern, so the count never reaches 0:
+    until [ "$(pgrep -fc 'refsweep|devsweep')" = "0" ]; do sleep 20; done
+
+    # ALSO WRONG -- `pgrep -fc` prints 0 AND exits 1, so `|| echo 0` makes the
+    # test compare the string "0 0":
+    n=$(pgrep -fc 'decomp/measure_finds\.py' || echo 0)
+
+Two rules. **Never put the launch and the wait on the same command line**, and
+**bracket a character of the pattern** so it cannot match itself:
+
+    until ! pgrep -f '[r]efsweep\.py' >/dev/null; do sleep 20; done
+
+Better still, do not poll at all: give the job a `timeout`, write its output to
+a log, and read the log when you next have something to do. A sweep that has
+finished leaves its verdict in the file whether or not anyone was watching.
+
 **A WRONG MEASUREMENT FROM PARALLELISM IS INDISTINGUISHABLE FROM A NEGATIVE.**
 On 2026-11-21 an agent's already-verified byte-exact body scored 183 words / 66
 rows inside a parallel batch and 181/0 three times serially. The cause was
