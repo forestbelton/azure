@@ -14454,7 +14454,188 @@ void func_800A0E44(void)
     D_80083466 = v & 0xF;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800A0E6C);
+s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d)
+{
+    u8 seen[8];
+    u8 *g;
+    u8 *r;
+    u8 *e;
+    u8 *e2;
+    u8 *e3;
+    s16 i;
+    s16 j;
+    s16 k;
+    s16 t;
+    s32 v;
+    s32 q;
+    s32 w;
+    s16 m;
+
+    if (*(s8 *)(b + 0x26) >= 0)
+    {
+        if ((c[0x72] | c[0x73]) == 0 || *(s8 *)(b + 0x26) != f)
+        {
+            do
+            {
+                c[0x73] = 0;
+            } while (0);
+            c[0x72] = 0;
+            c[0x67] = 0;
+            b[0x27] = 0xFF;
+            r = (u8 *)func_8009FCAC(*(s8 *)(b + 0x26));
+            if (r != NULL)
+            {
+                g = D_800E2970;
+                for (i = 0; i < *(s16 *)(g + *(s8 *)(b + 0x26) * 0x14 + 0xE); i++)
+                {
+                    e = (u8 *)(i * 4 + (s32)r);
+                    if (e[0] != 0)
+                    {
+                        v = b[0x24] - e[0];
+                        v = v >= 0 ? v : -v;
+                        if (v < 2)
+                        {
+                            v = b[0x25] - e[1];
+                            v = v >= 0 ? v : -v;
+                            if (v < 2)
+                            {
+                                goto hit;
+                            }
+                        }
+                    }
+                }
+            again:
+                j = func_800A6D30();
+                for (i = 0; i < D_800E2970_s[*(s8 *)(b + 0x26)].unk_0E; i++)
+                {
+                    j = j % D_800E2970_s[*(s8 *)(b + 0x26)].unk_0E;
+                    e2 = (u8 *)(j * 4 + (s32)r);
+                    if (e2[0] != 0 && b[0x27] != j)
+                    {
+                        t = 0;
+                        switch (c[0x67])
+                        {
+                        case 0:
+                            t = *(s16 *)(e2 + 2) < 2;
+                            break;
+                        case 1:
+                            t = *(s16 *)(e2 + 2) == 2;
+                            break;
+                        case 2:
+                            t = *(s16 *)(e2 + 2) == 0;
+                            break;
+                        }
+                        if (t != 0)
+                        {
+                            goto found;
+                        }
+                    }
+                    j++;
+                }
+                return 0;
+            hit:
+                b[0x27] = i;
+                c[0x67] = e[2];
+                goto again;
+            }
+        }
+        else if (b[0x24] == c[0x72] && b[0x25] == c[0x73])
+        {
+            r = (u8 *)func_8009FCAC(*(s8 *)(b + 0x26));
+            if (r != NULL)
+            {
+                j = D_8008347E;
+                for (i = 0; i < D_800E2970_s[*(s8 *)(b + 0x26)].unk_0E; i++)
+                {
+                    j = j % D_800E2970_s[*(s8 *)(b + 0x26)].unk_0E;
+                    e2 = (u8 *)(j * 4 + (s32)r);
+                    if (e2[0] != 0 && b[0x27] != j)
+                    {
+                        t = 0;
+                        switch (c[0x67])
+                        {
+                        case 0:
+                            t = *(s16 *)(e2 + 2) < 2;
+                            break;
+                        case 1:
+                            t = *(s16 *)(e2 + 2) == 2;
+                            break;
+                        case 2:
+                            t = *(s16 *)(e2 + 2) == 0;
+                            break;
+                        }
+                        if (t != 0)
+                        {
+                            goto found;
+                        }
+                    }
+                    j++;
+                }
+                return 0;
+            }
+        }
+        else
+        {
+            k = (((s16) * (u16 *)(c + 0x2A) >> 9) - 4) & 7;
+            *(s32 *)&seen[0] = 0;
+            *(s32 *)&seen[4] = 0;
+            seen[k] = 1;
+            seen[(k + 1) & 7] = 1;
+            seen[(k - 1) & 7] = 1;
+            w = (s16)(func_800A0818(b[0x24], b[0x25], *(s8 *)(c + 0x72), *(s8 *)(c + 0x73),
+                                    (u16 *)d) &
+                      0xFFF);
+            k = ((w >> 9) - 4) & 7;
+            seen[k] = 1;
+            seen[(k + 1) & 7] = 1;
+            seen[(k - 1) & 7] = 1;
+            for (i = 0; i < 8; i++)
+            {
+                if ((*(u16 *)d & 2) != 0)
+                {
+                    m = ((w - D_8006CD00[i]) >> 9) & 7;
+                }
+                else
+                {
+                    m = ((w + D_8006CD00[i]) >> 9) & 7;
+                }
+                if (seen[m] == 0)
+                {
+                    if ((s16)func_800BCB04((u16)(D_800DCEAC[m] + (b[0x24] << 6)),
+                                           (u16)(D_800DCEBC[m] + (b[0x25] << 6)),
+                                           (s16)(*(u16 *)(c + 0x88) - 0x20)) < 0x200)
+                    {
+                        *(s16 *)(c + 0x2A) = m << 9;
+                        return 0;
+                    }
+                }
+            }
+            return 0;
+        }
+        goto out;
+    found:
+        e3 = (u8 *)(j * 4 + (s32)r);
+        c[0x72] = e3[0];
+        c[0x73] = e3[1];
+        c[0x67] = e3[2];
+        *(s16 *)(c + 0x2A) =
+            func_800A0818(b[0x24], b[0x25], *(s8 *)(c + 0x72), *(s8 *)(c + 0x73), (u16 *)d);
+        b[0x27] = j;
+    }
+    else
+    {
+        b[0x27] = 0xFF;
+        q = ((*(s16 *)(c + 0x2A) - D_8006CD02) >> 9) & 7;
+        if ((s16)func_800BCB04((u16)(D_800DCEAC[q] + (b[0x24] << 6)),
+                               (u16)(D_800DCEBC[q] + (b[0x25] << 6)),
+                               (s16)(*(u16 *)(c + 0x88) - 0x20)) < 0x200)
+        {
+            *(s16 *)(c + 0x2A) = q << 9;
+        }
+    }
+out:
+    return 0;
+}
 
 /* The `q == NULL` arm is laid out INLINE here, so it is the second arm of the
    `if`, not an early return: `if (q == NULL) { return 0; }` puts the

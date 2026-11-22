@@ -306,6 +306,7 @@ void func_800CEFB8(u8 *, UnkVec *, UnkSlot *, s16, s16);
 extern s16 D_8006CCD8[];
 extern s16 D_8006CCE8[];
 extern s16 D_8006CD00[];
+extern s16 D_8006CD02;
 /* func_800A7234's two eight-way offset tables, and its own forward
    declaration: the definition is below func_8008F6EC and func_800A7A7C,
    which were calling it IMPLICITLY. */
@@ -1336,7 +1337,8 @@ typedef struct UnkDungeonRoom
     u8 pad_08[0x2];
     s16 unk_0A;
     u16 unk_0C;
-    u8 pad_0E[0x6];
+    s16 unk_0E;
+    u8 pad_10[0x4];
 } UnkDungeonRoom;
 extern UnkDungeonRoom D_800E2970_s[] __asm__("D_800E2970");
 /* The scratchpad frame func_800C95C0's tag walk uses. A different frame from
