@@ -1,6 +1,13 @@
 #include "common.h"
 #include "ovl_dungeon_decls.h"
 
+extern u8 D_800E0CAE[];
+extern u8 D_800E0CDC[];
+extern u8 D_800E0CF3[];
+extern u8 D_800E0D1B[];
+extern u8 D_800E0D36[];
+extern u8 D_80089084[];
+
 extern u8 D_80089080[];
 extern u8 D_800DD880[];
 extern u8 D_800DD8B4[];
@@ -22853,7 +22860,136 @@ void func_800AD594(u8 *p, s32 dmg)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_800AD6FC);
+/* 174/174 words, 0 differing.  Builds one of four message strings for a
+   record, adds a score to its +0x24 counter and clamps it.
+   Parked at 31 aligned differences; the whole residue was one $s2/$s4
+   exchange between `mode' and the third argument, plus six rows of delay
+   slots around the double condition, and TWO SPELLING FACTS closed both.
+
+   (1) THE THIRD ARGUMENT IS USED THROUGH A CAST AT EVERY USE AND IS NEVER
+   COPIED TO A LOCAL.  A `p = (u8 *)arg;' at the top -- which reads far
+   better -- costs 25 of the 31 rows, and the mechanism is a REGISTER NOTE,
+   not the copy instruction (combine deletes that).  assign_parms
+   (function.c:4014) puts a REG_EQUIV on each incoming parameter's copy
+   insn, and update_equiv_regs (local-alloc.c:1094) DOUBLES the
+   REG_LIVE_LENGTH of any pseudo that has one and is set exactly once.
+   When a local copy exists, cse rewrites the parameter pseudo away and the
+   surviving insn's note is a REG_EQUAL, which update_equiv_regs ignores:
+   the argument prices at 10 refs / 89 insns = 3370 instead of 10 / 178 =
+   1685, and sorts ABOVE `c' (16 / 240 = 2666) in allocno_compare instead of
+   below it.  Measured: with the copy, `arg' got $s2 and `mode' $s4; without
+   it, the order is c > mode > arg and the two had merely swapped (39 rows).
+
+   (2) THE DOUBLE CONDITION IS TWO `else if' ARMS WITH THEIR OWN `mode = 2;'
+   -- not `if (a && b || c && d) mode = 2;'.  That is worth both of the
+   remaining levers at once, which is why neither was findable alone:
+     * the second `mode = 2' is an 11th reference to `mode', taking it from
+       10 / 116 = 2586 to 11 / 118 = 2796, just past `c' at 16 / 244 = 2622.
+       Nothing else cheap reaches that: `mode++; mode--;' (14 refs) and a
+       matched-operand asm (12 refs) both overshoot but still measure 10.
+     * each arm materialises `addiu $v0, 0xC' for itself, so jump2's
+       cross-jump merges the arms only from the `bne' onward and dbr has a
+       constant to steal into BOTH delay slots (0x800AD7B0 and 0x800AD7C0),
+       leaving the shared block's head as the `lbu's load-delay nop.
+   The single-condition form needs a device to stop -fcse-skip-blocks
+   commoning the two `p[1]' reads, and the best one found --
+   `*(volatile u8 *)(arg + 1) == 0xC' on the second test -- puts the re-read
+   at the TOP of the join block, where nothing can move across it: 174 words
+   but 10 rows, and 31 before fact (1).  Two arms need no volatile at all.
+
+   Measured and rejected on the final body: the condition as one `if' with
+   the volatile re-read (10), with `mode++; mode--;' instead of the second
+   assignment (10), the arms duplicated down to two full `p[1] == 0xC &&
+   p[0] == 6' tests (171-182 words, 8-28 rows over all 16 volatile
+   placements), the third parameter redeclared `u8 *' (0 differing as well,
+   but it needs 53 call sites in two other units changed, so the cast is
+   preferred).  `((u8 *)arg)[1]' and `*(u8 *)(arg + 1)' are both 0.  */
+s32 func_800AD6FC(u8 *c, s32 mode, s32 arg)
+{
+    u8 *m;
+    u8 *h;
+    s32 t;
+    s32 t0;
+
+    m = func_800990FC();
+    h = m;
+    if ((s16)func_80042900((s8 *)c, 0x19) != 0)
+    {
+        h = func_80099194(D_800E0CAE, h);
+        h = func_80099734(c, h);
+        h = func_80099194(D_80089084, h);
+        func_80099290(h);
+        func_800A5720(m);
+        return 0;
+    }
+    if (mode == 3 && arg != 0)
+    {
+        if (((u8 *)arg)[1] == 2 && ((u8 *)arg)[0] == 1)
+        {
+            mode = 2;
+        }
+        else if (((u8 *)arg)[1] == 0xC && ((u8 *)arg)[0] == 6)
+        {
+            mode = 2;
+        }
+    }
+    t = *(u16 *)(c + 0x24);
+    t0 = t;
+    switch (mode)
+    {
+    case 0:
+        h = func_80099194(D_800E0CDC, h);
+        h = func_80099734(c, h);
+        h = func_80099194(D_80089084, h);
+        break;
+    case 1:
+        h = func_80099734(c, h);
+        h = func_80099194(D_800E0CF3, h);
+        t += 0x300;
+        break;
+    case 2:
+        h = func_80099734(c, h);
+        h = func_80099194(D_800E0D1B, h);
+        if (arg != 0 && ((u8 *)arg)[1] == 0xC && ((u8 *)arg)[0] == 6)
+        {
+            t += 0xA00;
+        }
+        else
+        {
+            t += 0x3200;
+        }
+        break;
+    case 3:
+        h = func_80099734(c, h);
+        h = func_80099194(D_800E0D36, h);
+        t += 0x6400;
+        break;
+    }
+    if (arg != 0 || mode == 0)
+    {
+        func_80099290(h);
+        func_800A5720(m);
+    }
+    if (t0 != t)
+    {
+        func_800A56E0(0x51E);
+    }
+    if (t > 0x10000)
+    {
+        t = 0xFFFF;
+    }
+    *(u16 *)(c + 0x24) = t;
+    if (c[0x25] != 0)
+    {
+        *(s32 *)(c + 0x1C) &= ~0x8;
+    }
+    if (c[0x66] < c[0x25])
+    {
+        c[0x25] = c[0x66];
+        c[0x24] = 0xFF;
+    }
+    return mode;
+}
 
 /* Can the actor step onto the tile the view names? THE func_800B500C RESULT
    IS `s16`: through an s32 local the `sll 16`/`sra 16` pair in front of the

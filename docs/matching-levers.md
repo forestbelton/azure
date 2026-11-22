@@ -33215,3 +33215,71 @@ and that device was what made those two words unreachable.
 This park recorded that func_80069EF8's result could go in any of six places
 for identical md5. True at 76 rows; worth 7 rows at 26. A park's rejection list
 needs re-measuring even where it claims two spellings are the same program.
+
+## A LOCAL COPY OF A POINTER PARAMETER DESTROYS ITS `REG_EQUIV` AND HALVES ITS PRICED LIVE LENGTH
+
+`func_800AD6FC`, ovl_dungeon, 2026-11-21. **Worth 25 of 31 rows**, and the park
+had the copy written in as a fixed part of its shape with a note saying not to
+touch the declaration.
+
+`assign_parms` (function.c:4014) hangs a `REG_EQUIV` on every incoming
+parameter's copy insn. `update_equiv_regs` (local-alloc.c:1094) then **doubles**
+`REG_LIVE_LENGTH` for any pseudo that has one and is set exactly once -- the
+same doubling that the "a second set" levers elsewhere in this file turn off
+deliberately, gated at :1043 on `reg_n_sets[regno] != 1`.
+
+Write `p = (u8 *)arg;` at the top of the function and that note is LOST. The
+source now has two pseudos, cse rewrites the parameter pseudo away, and the
+surviving `(set (reg 83) (reg a2))` carries only a `REG_EQUAL`, which
+`update_equiv_regs` ignores. The parameter prices at `3 * 10 / 89 = 3370`
+instead of `3 * 10 / 178 = 1685` and sorts ABOVE another quantity in
+`allocno_compare` instead of below it -- on this function, `$s2` and `$s4`
+exchanged between two parameters and 25 rows followed.
+
+**The copy instruction is not the problem; combine deletes that.** The note is.
+So no spelling of the copy helps and none of the four sweeps can reach it: the
+copy has to not exist, and every use written `((u8 *)arg)[n]` instead.
+
+### The diagnostic, and it is free
+
+Compare `dump_flow_info`'s output in the `.shorten` dump with the one in
+`.lreg` -- `.shorten` runs before `local_alloc`, `.lreg` after:
+
+* a pseudo whose `across N insns` DOUBLES between them was doubled by
+  `update_equiv_regs`;
+* a single-set PARAMETER whose length did NOT double has had its `REG_EQUIV`
+  downgraded, and a local copy of it is why.
+
+On this function `c` reads 120 insns in `.shorten` and 240 in `.lreg`, and the
+park had explained that 240 as "c dies in 2 places, so it is the two ranges
+summed". That was wrong, and it is the kind of wrong that keeps a park parked:
+both dumps come out of the same two-second `-da` compile the `allocno_compare`
+entry above already asks for.
+
+## TWO ARMS WITH THEIR OWN ASSIGNMENT BEAT ONE CONDITION WITH A cse DEVICE
+
+Same function, the remaining 6 rows, and it pays twice -- which is why neither
+half was findable alone.
+
+```c
+if (a[1] == 2 && a[0] == 1)        { mode = 2; }
+else if (a[1] == 0xC && a[0] == 6) { mode = 2; }
+```
+
+against `if ((a[1]==2 && a[0]==1) || (a[1]==0xC && a[0]==6)) mode = 2;`:
+
+* **The duplicated assignment is a free extra reference** on the assigned
+  variable, 10 -> 11. That is the cheapest +1 this file knows: a cancelled
+  `v++; v--;` gives +4 and a matched-operand `asm` +2, and both OVERSHOOT a
+  tight window -- measured here, each still leaves 10 rows where the duplicated
+  assignment leaves 0.
+* **Each arm materialises the comparison constant for itself**, so jump2's
+  cross-jump merges the arms only from the `bne` backwards and dbr has a
+  constant in each predecessor to steal into BOTH delay slots. The
+  single-condition form needs a device to stop `-fcse-skip-blocks` commoning the
+  two reads, and the best one -- a `volatile` re-read on the second test -- puts
+  that read at the head of the join block where nothing can move across it: 174
+  words but 10 rows.
+
+Two arms need no `volatile` at all, which also removes the conditional-volatile
+hazard that got this park's permuter find rejected.
