@@ -1,6 +1,58 @@
 #include "common.h"
 #include "ovl_dungeon_decls.h"
 
+typedef struct UnkDungeonSPB
+{
+    s16 unk_00;
+    u16 unk_02;
+    u8 pad_04[0x4];
+    UnkDungeonSPW unk_08;
+    UnkDungeonSPW unk_0C;
+    UnkDungeonSPW unk_10;
+    UnkDungeonSPW unk_14;
+    u8 pad_18[0x8];
+    u8 *unk_20;
+    s16 unk_24;
+    u8 pad_26[0x2];
+    s16 unk_28;
+    s16 unk_2A;
+    s16 unk_2C;
+    u8 pad_2E[0x2];
+    s32 unk_30;
+    s32 unk_34;
+    s32 unk_38;
+    u8 pad_3C[0xC];
+    s32 unk_48;
+    u8 pad_4C[0x24];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    s16 unk_78;
+    s16 unk_7A;
+    s16 unk_7C;
+    u8 pad_7E[0x2];
+    s16 unk_80;
+    s16 unk_82;
+    s16 unk_84;
+    u8 pad_86[0x2];
+    s16 unk_88;
+    s16 unk_8A;
+    s16 unk_8C;
+    u8 pad_8E[0xA];
+    s16 unk_98;
+    s16 unk_9A;
+    s16 unk_9C;
+    u8 pad_9E[0x46];
+    s32 unk_E4;
+    s32 unk_E8;
+    s32 unk_EC;
+    u8 pad_F0[0x10];
+    u16 unk_100;
+    u16 unk_102;
+} UnkDungeonSPB;
+s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s);
+
 extern u8 D_800E0CAE[];
 extern u8 D_800E0CDC[];
 extern u8 D_800E0CF3[];
@@ -13286,7 +13338,169 @@ void func_8009E038(u8 *p, u8 *v, u8 *q)
     func_8009DF0C(p);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_8009E798);
+/* 358 words, 0 differing.  LANDED 2026-11-22, after five days parked and a
+   final run at 1 row.
+
+   THE ONE SPELLING FACT: the SECOND of the two adjacent AddPrim calls passes
+   `r - 0x28', not `q'.  They are the same pointer -- `r == q + 0x28' there --
+   but naming `r' lets combine fold the subtraction straight into the argument
+   move, `(set (reg a1) (plus (reg/v r) (const_int -40)))', so the target's
+   `addiu $a1, $s2, -0x28' comes out where `q' gives `addu $a1, $s0, $zero'.
+
+   Identical instruction count, identical allocation -- `.greg' is byte-identical
+   between the two bodies and there is no $s8 in either, which refutes the
+   park's own long-standing diagnosis.  The change is worth exactly ONE ROW and
+   ZERO WORDS, which is why no sweep and no permuter could ever see it: both
+   spellings are one instruction at 358 words.
+
+   Spelling it `c - 0x50' -- the same address off the cursor -- is 1 row,
+   because the target reaches the argument from `r' in $s2 and not from the
+   cursor in $s1.  That is a fact about which local the original author wrote.
+
+   AND THE PARK HAD THIS LINE RECORDED AS REFUTED, at 360 words / 128 rows,
+   in a list that claimed to be scoped to the 1-row body.  That measurement was
+   taken on an ANCESTOR body, before one or more of the park's own four
+   changes.  A two-word regression reads as a 128-row catastrophe, so it looked
+   like a refutation of the mechanism rather than of the body it was tried on.
+   The reliable tell is the WORD COUNT.
+
+   The three devices are all still load-bearing at 0 rows: without the asm on
+   `r' 80 rows, without the asm on `q' 359 words / 128 rows, without the
+   cancelled `r++'/`r--' pair 9 rows.  `base' is free either way (0 rows
+   without it) and is kept for legibility. */
+s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkDungeonSPB *sp = (UnkDungeonSPB *)0x1F800000;
+    u8 *base = D_80083160.unk_00;
+    u8 *q;
+    u8 *r;
+    u8 *e;
+    s16 flag;
+    s32 ry;
+    s16 a;
+    s16 bb;
+    RECT rc;
+    u8 *c;
+
+    q = *(u8 **)(base + 0x8D0);
+    sp->unk_20 = base + 0xB0;
+    sp->unk_38 = 0x1000;
+    flag = base != D_801C9E40;
+    sp->unk_48 = 0;
+    func_80067E2C((DR_AREA *)q, (RECT *)base);
+    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, q);
+    sp->unk_30 = s->unk_1C;
+    sp->unk_34 = s->unk_1E;
+    sp->unk_00 = *(u16 *)((u8 *)b + 0x2);
+    sp->unk_02 = *(u16 *)((u8 *)b + 0x6);
+    e = (u8 *)s->unk_08;
+    sp->unk_24 = s->unk_14;
+    PushMatrix();
+    sp->unk_98 = 0;
+    sp->unk_9A = 0;
+    sp->unk_9C = g->unk_C8;
+    RotMatrix((SVECTOR *)0x1F800098, (MATRIX *)0x1F8000D0);
+    ScaleMatrix((MATRIX *)0x1F8000D0, (VECTOR *)0x1F800030);
+    sp->unk_E4 = sp->unk_00;
+    sp->unk_E8 = (s16)sp->unk_02;
+    sp->unk_EC = 0;
+    func_80064CF0((MATRIX *)0x1F8000D0);
+    func_80064D80((MATRIX *)0x1F8000D0);
+    sp->unk_28 = 0x20 - s->unk_20;
+    sp->unk_2A = 0x20 - s->unk_22;
+    sp->unk_2C = 0;
+    func_80065320((SVECTOR *)0x1F800028, (s32 *)0x1F800100, (s32 *)0x1F800094);
+    q += 0xC;
+    sp->unk_100 = sp->unk_100 - sp->unk_00;
+    sp->unk_102 = sp->unk_102 - sp->unk_02;
+    sp->unk_08.w = e[0x8];
+    sp->unk_0C.w = e[0x9];
+    sp->unk_10.w = e[0xA];
+    sp->unk_14.w = e[0xB];
+    a = (s8)e[0x2];
+    sp->unk_80 = a;
+    sp->unk_70 = a;
+    a = a + sp->unk_10.h;
+    sp->unk_88 = a;
+    sp->unk_78 = a;
+    bb = (s8)e[0x3];
+    sp->unk_7A = bb;
+    sp->unk_72 = bb;
+    bb = bb + sp->unk_14.h;
+    sp->unk_8A = bb;
+    sp->unk_82 = bb;
+    sp->unk_8C = 0;
+    sp->unk_84 = 0;
+    sp->unk_7C = 0;
+    sp->unk_74 = 0;
+    func_80065320((SVECTOR *)0x1F800070, (s32 *)(q + 0x8), (s32 *)0x1F800094);
+    func_80065320((SVECTOR *)0x1F800078, (s32 *)(q + 0x10), (s32 *)0x1F800094);
+    func_80065320((SVECTOR *)0x1F800080, (s32 *)(q + 0x18), (s32 *)0x1F800094);
+    func_80065320((SVECTOR *)0x1F800088, (s32 *)(q + 0x20), (s32 *)0x1F800094);
+    *(s16 *)(q + 0x8) = *(u16 *)(q + 0x8) + sp->unk_100;
+    *(s16 *)(q + 0x10) = *(u16 *)(q + 0x10) + sp->unk_100;
+    *(s16 *)(q + 0x18) = *(u16 *)(q + 0x18) + sp->unk_100;
+    *(s16 *)(q + 0x20) = *(u16 *)(q + 0x20) + sp->unk_100;
+    *(s16 *)(q + 0xA) = *(u16 *)(q + 0xA) + sp->unk_102;
+    *(s16 *)(q + 0x12) = *(u16 *)(q + 0x12) + sp->unk_102;
+    *(s16 *)(q + 0x1A) = *(u16 *)(q + 0x1A) + sp->unk_102;
+    *(s16 *)(q + 0x22) = *(u16 *)(q + 0x22) + sp->unk_102;
+    sp->unk_10.w = sp->unk_10.w + sp->unk_08.w;
+    sp->unk_14.w = (sp->unk_14.w + sp->unk_0C.w) << 8;
+    sp->unk_0C.w = sp->unk_0C.w << 8;
+    *(s16 *)(q + 0xE) = s->unk_12 + *(u16 *)(e + 0x6);
+    *(s16 *)(q + 0xC) = sp->unk_0C.h + sp->unk_08.h;
+    *(u32 *)(q + 0x14) =
+        sp->unk_0C.w + sp->unk_10.w + ((s->unk_10 | *(s16 *)(e + 0x4)) << 16);
+    *(s16 *)(q + 0x1C) = sp->unk_14.h + sp->unk_08.h;
+    *(s16 *)(q + 0x24) = sp->unk_14.h + sp->unk_10.h;
+    *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
+    func_800666F4((POLY_FT4 *)q);
+    __asm__("" : "=r"(q) : "0"(q));
+    r = q + 0x28;
+    __asm__("" : "=r"(r) : "0"(r));
+    func_8003DB6C((int *)r, (int *)q, 0xA);
+    c = r + 0x28;
+    q[0x7] |= 2;
+    r[0xD] = r[0x15] += 0x40;
+    *(u16 *)(r + 0x16) |= 0x100;
+    r++;
+    r--;
+    r[0x1D] = r[0x25] += 0x40;
+    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r);
+    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r - 0x28);
+    *(u32 *)(c + 0x4) = 0x606060;
+    *(s32 *)(c + 0x8) = *(s32 *)(c - 0x20);
+    *(s32 *)(c + 0xC) = *(s32 *)(c - 0x18);
+    *(s32 *)(c + 0x10) = *(s32 *)(c - 0x10);
+    *(s32 *)(c + 0x14) = *(s32 *)(c - 0x8);
+    c[0x4] >>= 1;
+    c[0x5] >>= 1;
+    c[0x6] >>= 1;
+    func_800666E0((POLY_F4 *)c);
+    c[0x7] |= 2;
+    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, c);
+    c = r + 0x40;
+    func_80067F20((u32 *)c, 0, 0, 0x40, 0);
+    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, c);
+    rc.x = *(u16 *)(p + 0x4);
+    ry = *(u16 *)(p + 0x6);
+    c = r + 0x4C;
+    rc.y = ry;
+    rc.w = *(u16 *)(p + 0x8);
+    rc.h = *(u16 *)(p + 0xA);
+    if (flag != 0)
+    {
+        rc.y = ry + 0xE0;
+    }
+    func_80067E2C((DR_AREA *)c, &rc);
+    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, c);
+    PopMatrix();
+    c = r + 0x58;
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)c;
+    return 0;
+}
 
 /* The one-shot spawner for the kind-0x12 node: raise bit 0x80 of D_800E296C
    so it never runs twice, install func_8009E038 at the node's +0x10 and hand
