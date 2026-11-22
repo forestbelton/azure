@@ -1,253 +1,680 @@
 /* ===========================================================================
    BEST MEASURED CANDIDATE for func_800ADE74, ovl_dungeon (1817 words).
-   2026-11-16, agent j36.  Supersedes j34's uncompiled decode: the structural
-   reading in that file was right and is what this was built from, but almost
-   every per-instruction claim in it needed a compile to settle, and three of
-   its "load-bearing" notes were wrong (see below).
 
-   MEASURED, with the three alias declarations below in place:
+   2026-11-21, later session.   1821/1817 words, 170 aligned rows
+   was 2026-11-21 morning:      1817/1817 words, 255 aligned rows
+   was 2026-11-16 (j36):        1826/1817 words, 256 aligned rows
 
-       python3 tools/decomp/aligndiff.py <unit copy> func_800ADE74
-       built 1826 words, target 1817 words, 256 aligned differences
+   Measured with, and both agree:
+       python3 tools/decomp/parkresidue.py func_800ADE74        (real unit)
+       python3 tools/decomp/onefunc.py func_800ADE74 --src <copy> --out one
+       python3 tools/decomp/aligndiff.py one/ovl_dungeon.c func_800ADE74
 
-   256 is aligndiff's raw count and it OVERSTATES this residue badly: my
-   build is 9 words long, so EVERY branch in the function has a different
-   displacement and aligndiff cannot mask that.  Counting only rows that are
-   not a pure branch-offset difference gives
+   READ THIS FIRST: THE +4 WORDS ARE NOT A REGRESSION.  The morning's
+   1817/1817 was TWO CANCELLING ERRORS -- see "THE WORD COUNT WAS A LIE".
+   The honest residue is much smaller than either row count suggests:
 
-       non-branch R  54      (register assignment, almost all of it)
-       X             20      (one instruction against a different one)
-       + / -         56      (words one side has and the other does not)
-       -------------------
-       130 rows of 1817 words -- 93% of the function is byte-identical.
+     95 rows   pure BRANCH-DISPLACEMENT noise.  The built and target words
+               are the same opcode and the same registers and differ only in
+               the displacement, because our build is 4 words long overall
+               and 6 words short at target index 108, so every branch to the
+               shared tails (.L800AF89C / .L800AF8A0 / .L800AF8A4 /
+               .L800AFAA4) and every branch across a hole misses.  Each of
+               these rows is (dest_index - src_index) off by exactly the net
+               word error between the branch and its target, so every one of
+               them becomes equal as soon as the +/- clusters below are
+               closed -- they are consequences, not independent defects.
+               Nearly all of them are gated on residue (1) alone, which is
+               +8 words sitting between almost every branch and almost every
+               tail.  See "HOW TO COUNT THEM" below.
+     35 rows   real register differences (R with different register names)
+     10 rows   X, one instruction against another
+     17 rows   words we emit that the target does not
+     13 rows   words the target has that we do not
 
-   ovlverify's "1685 differing (masked)" is meaningless at a 9-word length
-   difference; use aligndiff.
-
-   THIS IS A PERMUTER CANDIDATE.  The residue is overwhelmingly register
-   allocation inside three arms plus two cross-jump decisions, which is
-   exactly what decomp-permuter is good at and what hand spelling is not: I
-   measured ~60 variants by hand and the last 17 rows of progress cost most
-   of them.
    ===========================================================================
+   BLOCK ORDER: CHECKED AND CORRECT.
 
-   WHAT THE COMPILER SETTLED (none of this was in j34's decode)
+   Mapping the emitted stream against the listing's addresses with
+   `aligndiff.py -v', difflib finds ONE monotone alignment that covers
+   ~1790 of 1817 words.  There is no transposed chunk left anywhere: the
+   22 switch arms are emitted in the listing's address order (0x19, 0x16,
+   0x2C, 0x2B, 0x22, 0x29, 0x28, 0x1A, 0x23, 0x26, 0x27, 0x20, 0x24, 0x25,
+   0x18, 0x2A, 0x1B, 9/0xA, 0x17, 0x1C, 0x1D, 0x15), and so are the four
+   arms of the first switch and the trailing code.  So the source order of
+   the arms is a FIXED parameter -- do not permute it looking for the
+   cross-jump in residue (1) below.
 
-   * THE EMPTY CASES MUST NOT BE WRITTEN OUT.  j34's decode says cases
-     11..20, 0x1E, 0x1F and 0x21 have to appear or the table comes out short.
-     They do not: gcc emits a dense table from the lowest case label to the
-     highest, so `case 9` and `case 0x2C` alone produce all 36 entries with
-     every gap pointing at the default label.  The table is byte-identical
-     with the gaps left out.  Checked against the compiler rather than taken
-     on the measurement: `stmt.c:5052-5071` takes `minval`/`maxval` from the
-     case list and sizes the vector from their difference, and
-     `stmt.c:5304-5307` is a loop headed `(* Fill in the gaps with the
-     default.  `.So only the LOWEST and HIGHEST case labels matter to the
-    table's extent; everything between is free.
-        *THE SIX SHARED TAILS ARE NOT A GOTO LADDER,
-    and they are not written
-        out per arm either.  `.L800AF89C` is simply THE CODE AFTER THE SWITCH;
-    every arm reaches it with a plain `break`, and the three entry points
-                                                           .L800AF89C /
-                                                           .L800AF8A0 /.L800AF8A4 are the delay -
-                                                   slot scheduler
-                                                       stealing one or two instructions from the head of that
-                                                       block(`addu $a0, $s7, $zero`, then `addu $a1, $s5, $zero`) and bumping the
-                                                   branch target by one word each time.Written this way the whole tail
-                                                   structure falls out with NO gotos anywhere in the function-- the
-                                                   finished body below contains none.
-                                                       *THE FACING PREAMBLE HAS NO SEPARATE INDEX VARIABLE.It is
-     `sp1E = (*(u16 *)(c + 0x2A) >> 9) & 7;` and then `D_8006CCD8[sp1E]` directly.j34 's `s32 u` intermediate puts the index in a second register and defers the `sh $v1, 0x1E($sp)` past the `sll`, costing a word of shuffling in each of the NINE copies.(The nine copies themselves are real-- that part of the decode is correct.) * `ret` IS `u32` AND IS RETURNED AS `ret << 16 >> 16`.Every other spelling loses the target' s `sll $v0, $fp, 16` / `srl $v0, $v0, 16` pair and compiles to a bare `move v0, s8`:
-measured `u16 ret;
-return ret;
-`,
-     `s32 ret;
-return (u16)ret;
-`, `s32 ret;
-return ret & 0xFFFF;
-` and
-     `s16 ret;
-return (u16)ret;
-` all give the move(150 rows), and
-     `return (u16)(ret << 16) >> 16;
-` gives 175. The shift pair is 147. * THREE LANDED CALLEES NEED AN ALIAS WITH A DIFFERENT RETURN TYPE : -func_800A35A4 is landed returning `u8`.The target compares its
-                                                                                                            result with func_8009FD40 's as `sll`/`sll`/`slt`, which is C' s
-                                                                                                                shorten_compare narrowing a comparison of two SHORT -
-    typed rvalues.Through the `u8` return the cast leaves an `andi $v0,
-    $v0, 0xFF` and the compare degrades to `sra`/`slt`: +5 words over the three copies.The casts must come OFF and the callee must be `s16`.- func_8009FD40 is landed returning `s16`.Cases 0x2C and 0x2A need its result UNEXTENDED(`addu $s0, $v0, $zero`) so that
-         `(u16)(r - 2) < 7` keeps its `andi $v0, $v0, 0xFFFF`; through the s16
-         return gcc sign-extends on assignment and then drops the andi.
-       - func_800A40AC is landed returning `s16` and costs a `sra` in case
-         2's throw path for the same reason.
-     The unit already uses this mechanism (`func_800BCB04h` at line 329), so
-     these are three more of the same and they leave the landed definitions
-     alone.
-   * `sp1E = ((u32)func_800A0818(...) >> 9) & 7;` in cases 0x2A and 0x1C.
-     func_800A0818 returns s32, so without the `(u32)` the shift is `sra`
-     where the target has `srl` -- 2 words, and the same two arms also need
-     it to reach their `.L800AF720` tail.
-   * `*(s16 *)(c + 0x2A) = sp1E;` BEFORE `sp20 = r;` in cases 0 and 1.  The
-     other order puts the func_800A384C result in $a0 instead of $v1 and
-     costs 14 rows across the two arms -- the single largest hand win in the
-     run (147 -> 133).
-   * CASE 0x2A'S LOOP COUNTER MUST BE ITS OWN VARIABLE.  Sharing the `i` of
-     the other six loops stops gcc reusing $s2 for both `&D_80082E80` and the
-     counter, which forces a seventh callee-saved register ($s6) and shifts
-     every register in the arm (133 -> 130).  Giving cases 0x22, 0x29 or 0x1B
-     their own counters does nothing or hurts (0x22: 130 -> 178).
-   * `D_800E2970_s[*(s8 *)(b + 0x26)].unk_0C & 2` is csrc/ovl_dungeon.c's own
-     spelling (around line 32172) and matched on the first compile, 0x14
-     stride and all.
-   * func_800A0E6C IS CALLED WITHOUT A PROTOTYPE, exactly as the unit's later
-     call site does.  Adding one would change that landed call.
-   * The dead `*(u16 *)(c + 0x24) > 0x10000` test is real and is written out
-     as j34 says;
-with `s32 t` it gives the target's `lui`/`slt` exactly.
+   ONE block order defect WAS found and fixed, worth 9 rows: see change (2).
 
-    RESIDUE,
-    by region(+9 words net)
+   There is no frame-size cluster.  The prologue, the epilogue and every
+   stack displacement match: 0x50 frame, $s0-$s7/$fp/$ra saved at
+   0x28..0x4C, sp18/sp1A/sp1C/sp1E/sp20 at 0x18/0x1A/0x1C/0x1E/0x20,
+   outgoing arg 5 at 0x10($sp).  Every `lhu/sh ..($sp)' row in the diff is a
+   register-name row, not a displacement row.
 
-            1. case 0x1D's tail does not cross
-        - jump into case 0x26's at.L800AEEFC:
-      +8 words, 9 rows.  The nine instructions are TEXTUALLY IDENTICAL in
-      both arms in my build -- same opcodes, same registers, same branch
-      targets -- and gcc still emits both copies.  I read jump.c's
-      find_cross_jump in scratch/gcc-src: for case 0x1D's `j .L800AFA10` the
-      FIRST attempt, `find_cross_jump (insn, JUMP_LABEL (insn), 1, ...)`,
-      matches the single `ori $v0,$zero,0x8009` that sits before that label
-      in t6, succeeds at minimum 1, and the `for (target = jump_chain[...])`
-      loop that would have found case 0x26's nine-instruction tail is guarded
-      by `newjpos == 0` and never runs.  Giving either arm its own `g` does
-      not change it (0x1D: 130 -> 137, 0x26: no change).
-
-      ANSWERED 2026-11-16 by the dispatcher, and the answer says to stop
-      looking at the two arms.  The first attempt compares the insns before
-      the jump with the insns before **its own target label** -- E2 in
-      `find_cross_jump (e1, e2, ...)` is the LABEL, not the sibling jump
-      (`jump.c:2564`'s own comment).  So the original build gets past it
-      because in the original the last instruction before `.L800AFA10`
-      DIFFERS from case 0x1D's last instruction, the minimum-1 match fails,
-      `newjpos` stays 0 and the `jump_chain` loop runs and finds case 0x26's
-      nine-instruction tail.
-
-      **The lever is in whatever falls into `.L800AFA10`, not in either
-      arm.**
-
-      CONFIRMED BY THE PERMUTER, 2026-11-16, 35 minutes, 6 jobs.  It found
-      the +8 words and it found them exactly where the analysis above says
-      they are: its one change is to DUPLICATE t6's `*(u16 *)(c + 0x46) =
-      0x8009; return 5;` body into two arms of a test, which changes the last
-      instruction before `.L800AFA10` and unblocks the longer merge.
-      Re-measured with aligndiff rather than taken from its own score
-      (6080 -> 5220): **1818 words against 1817 and 229 aligned rows**, from
-      this body's 1826 / 256.  So the direction and the magnitude are proved.
-
-      **Its spelling is not usable.**  The test it duplicated under is
-      `if (D_80082E80)` -- an `extern u8 []`, so the condition is the array's
-      address and is always true.  That cannot be the original source; it is
-      the permuter finding the shape by the only route its mutation set
-      offers.  The remaining job is a legitimate source form that makes gcc
-      emit that block twice, or that otherwise changes the instruction
-      before the label.
-
-      One legitimate partial, measured here: inverting the function's FINAL
-      test -- `if (*(s8 *)(b + 0x26) >= 0) return 2; return ret << 16 >> 16;`
-      rather than the other way round -- is **1823 words**, three better than
-      this body, though the aligned count rises to 271 because a shorter
-      build shifts more branch displacements.  Writing the second 0x8009
-      store through a temp is 1829 / 273.  Neither reaches the permuter's
-      1818, and whether they stack with it is untested.  Change which constant that block leaves in a register, or
-      reorder its last statements, so that its final instruction stops
-      matching the arm's.  See docs/matching-levers.md, "A SHORT CROSS-JUMP
-      MATCH FOUND FIRST BLOCKS A LONGER ONE".  Nothing in cases 0x1D or 0x26
-      can reach this, which is why ~60 variants on them did not.
-   2. case 0x18's last `c[0x46] = 0x800B; return 2;` does not cross-jump into
-      .L800AF8F0:
-      + 3 words.gcc holds the 0x800B in $v1 there;
-      the target
-          holds it in $v0,
-          which is what lets it merge.3. .L800AE010's `func_800A0818(...); c[0x2A]=; c[0x46]=0x800B; return 2;` cross - jumps in MY build(into case 0x18's identical tail) and does NOT
-                                                                                                                        in the target : -5 words.(2)and(3) are one question with opposite
-                                                                                                                                        signs : in the target.L800AE010 holds 0x800B in $v1 and case 0x18 holds
-                                                                                                                                                it in $v0,
-          so neither merges with the other and case 0x18 merges with
-                  .L800AF8F0 instead.Both of mine hold it in $v1.4. The claim block reloads D_800814A8 with two load
-              - delay nops where the
-              target interleaves the `lw` with the `lhu $v0,
-          0x1C($sp)` chain:
-      +2 words, 3 rows.  I tried the array-reference spelling the unit's
-      func_80097F84 comment records (`((u8 **)(D_800814A8 + 0xAC))[j]`, which
-      IS MEM_IN_STRUCT_P where `*(u8 **)(D_800814A8 + j*4 + 0xAC)` is not):
-      byte-for-byte no change here, so that lever does not reach this store.
-   5. case 0x24's Chebyshev test:
-      ~15 rows, net - 2 words.The dx / dy / mx shape below reproduces the target's instruction sequence but gcc puts `mx` in $a2 where the target has $s0, and sp18 / sp1A in $v1 / $a0 where the target has $a0 / $a1.Six orderings measured, all 130 or worse.6. case 0x2A: ~20 rows, a clean permutation of the callee-saved registers
-      ($s0<->$s3 for r/ang, $s1<->$s2 for &D_80082E80).  Instruction-for-
-      instruction correct otherwise.
-   7. case 0x22: 3 rows, `lui $s1` where the target has `lui $s0` and the
-      probed record kept in $s0 instead of $a0.
-   8. Parameters `d` and `e` are swapped between $s0 and $s1 against the
-      target: 4 rows, no word cost, and nothing I tried moved them.
-
-   SPELLINGS MEASURED AND REJECTED (count = non-branch rows, lower is better)
-     one variable per use site for q/nd/i/j/r/t/g/h   1829 words, 224
-     one variable per use site for i                  1823 words, 417
-     one variable per use site for nd                 1829 words, 224
-     one variable per use site for g                  1817 words, 182
-     all of q/nd/i/j/r/t/g/h shared (the start point)  1820 words, 192
-     `s32 u` for the facing index (j34's decode)      +1 word x 9 arms
-     `(s16)func_800A35A4(...)` with the landed u8     +5 words
-     `u16 ret; return ret;`                           1823 words, 150
-     `s32 ret; return ret & 0xFFFF;`                  1823 words, 151
-     `s16 mx` -> `s32 mx` in case 0x24                1825 words, 159
-     case 0x24 without the dx/dy temporaries          1828 words, 160
-     case 0x24 max as if/else                         1827 words, 138
-     `sp20 = r` before `c[0x2A] = sp1E` (cases 0,1)    1824 words, 147
-     the same swap in the fallback                    1827 words, 144
-     declaration-order search, 80 random reorderings   no effect at all
    ===========================================================================
+   THE WORD COUNT WAS A LIE: 1817/1817 WAS TWO CANCELLING ERRORS
 
-   THE THREE ALIAS DECLARATIONS BELOW ARE REQUIRED and are not yet in
-   csrc/ovl_dungeon.c's declaration block.  Everything else this body needs
-   is already declared or defined above line 20092 of the unit.
-*)
+   The morning session reached 1817/1817 with `s32 t1 -> s16'.  That
+   narrowing DELETES A BASIC BLOCK THE TARGET HAS.  The target's listing
+   contains, at 800ADF90..800ADFAC:
+
+       lui  $v0, (0x10000 >> 16)
+       lhu  $v1, 0x24($s5)
+       nop
+       slt  $v0, $v0, $v1
+       beqz $v0, .L800ADFAC
+       nop
+       ori  $v1, $zero, 0xFFFF
+       sh   $v1, 0x24($s5)
+
+   -- the `if (t1 > 0x10000) t1 = 0xFFFF;' guard, emitted in full.  With
+   `s16 t1' the guard is NOT emitted at all, because `shorten_compare'
+   folds it at TREE level:
+
+       c-common.c:1960  shorten_compare ()
+       c-common.c:2031  "If comparing an integer against a constant more
+                         bits wide, maybe we can deduce a value of 1 or 0
+                         independent of the data."
+       c-common.c:2049  if (!real1 && !real2
+                            && TREE_CODE (primop1) == INTEGER_CST
+                            && TYPE_PRECISION (TREE_TYPE (primop0))
+                               < TYPE_PRECISION (*restype_ptr))
+       c-common.c:2108  else if (code == GT_EXPR)
+                          { if (min_gt)  val = boolean_true_node;
+                            if (!max_gt) val = boolean_false_node; }
+
+   For `s16 t1', TYPE_PRECISION(s16)=16 < 32, TYPE_MAX_VALUE(s16)=32767 is
+   not > 0x10000, so `!max_gt' holds and the comparison becomes
+   boolean_false_node: guard and body both vanish, 6 words gone.  For
+   `s32 t1' the precision test fails (32 < 32 is false), nothing folds, and
+   the compare is emitted exactly as the target has it.
+
+   The morning header's claim -- "its guard is DEAD IN BOTH WIDTHS ... so the
+   bits are identical either way" -- is true about the RUNTIME VALUE and
+   false about the CODE, which is the only thing being matched.
+
+   SO THE DEAD GUARD IS POSITIVE EVIDENCE ABOUT THE DECLARED WIDTH.  A
+   comparison that appears in the target's listing but can never be true
+   proves its operand is 32-bit in the original, because at any narrower
+   width cc1psx would not have emitted it.  `s32 t1' is restored and is not
+   negotiable.
+
+   TWO MORE WIDTH NARROWINGS HAVE THE SAME SHAPE and widthsweep will keep
+   offering them, because its objective orders by (word gap, rows) and each
+   one reaches 1817 by deleting code:
+
+     s32 t1 -> u8    1817/1817, 209 rows.  Also WRONG ON VALUE: t1 is read
+                     from and stored back to *(u16 *)(c + 0x24), so u8
+                     would zero the high byte.
+     u8 k   -> u32   1817/1817, 214 rows.  Deletes FIVE words the target has
+                     at 800AE0B8..800AE0C8 (`andi $v1,$s0,0xFF' twice, the
+                     `beqz $s0' and the two `addiu ..,1') -- the u8
+                     truncation of `k' on both paths into the switch.
+     s32 dx -> u32   1822/1817, 192 rows.  Deletes the `bgez/nop/negu' abs
+                     at 800AF1B4..800AF1BC plus the `addu $s0,$v1,$zero'
+                     that follows it: `dx < 0' is constant-false for an
+                     unsigned.  Same for `dy -> u16/u32', `t3/t5/t7 -> u*',
+                     `n/nn -> u*', `r1 -> u32' (whose `r1 >= 0' guard is the
+                     target's `bltz $a0, .L800AE008').
+
+   Inverting the function's FINAL test the other way --
+       if (*(s8 *)(b + 0x26) >= 0) return 2; return ret << 16 >> 16;
+   -- is 1818/1817 and 201 rows, and it is the SAME TRAP: it deletes the
+   canonical `.L800AF8F0: ori $v0,0x800B / sh / j / addiu $v0,2' block
+   (target 1695..1698) that the target plainly has.  The morning header
+   floated this as a "legitimate partial".  It is not.
+
+   RULE FOR THE NEXT AGENT: before believing any candidate that moves the
+   word count toward 1817, look at the `-' rows.  If a run of `-' rows is a
+   whole basic block (a compare plus its branch plus its body), the
+   candidate deleted code the target has and the word count is a
+   coincidence.
+
+   ===========================================================================
+   WHAT CHANGED THIS SESSION, AND WHAT EACH WAS WORTH
+
+   All measured on the standalone (which agrees with the real unit at every
+   step) and quoted as (words, aligned rows).  Start: 1817/255.
+
+   (1) s16 t1 -> s32                              1825 / 244   (-11 rows)
+       Restores the dead guard, above.  Costs +8 words, which were ALREADY
+       there and were being hidden; it also realigns the whole top of the
+       function, so ten displacement rows go with it.
+
+   (2) The function's LAST test, written the other way round:
+           if ((s16)r8 >= 0) { c[0x46] = r8 | 0x8000; return 1; }
+           c[0x46] = 0x800B; return 2;
+       instead of
+           if ((s16)r8 < 0)  { c[0x46] = 0x800B; return 2; }
+           c[0x46] = r8 | 0x8000; return 1;
+                                                  1825 / 235   (-9 rows)
+       A BLOCK ORDER fix, not a spelling: the target's listing has
+       `bltz $v0, .L800AF8F0' at 800AF8D8, i.e. the r8<0 arm is the
+       OUT-OF-LINE one and `return 1' falls through.  Written as above the
+       two four-word blocks swap into the target's order and the whole tail
+       at 800AF8D8..800AF8FC becomes byte-identical.  It also creates the
+       `.L800AF8F0 / .L800AF8F4' entry pair the target has.
+       NOTE the other two tests of this family must NOT be inverted: case 0's
+       `if ((s16)r2 < 0)' and case 4's `if ((s16)r5 >= 0)' are already right
+       (both measured: no change), and case 1's is `< 4', a different test.
+
+   (3) ((s16 *)c)[0x15] = func_800A0818(...) in cases 0, 1 and 2's FIRST
+       return-4 block (the D_80082E80 one), all three together
+                                                  1823 / 220   (-15 rows)
+       This is docs/matching-levers.md's "MEM_IN_STRUCT_P NEEDS A PLUS_EXPR
+       ON TOP", and it is the lever that did nearly all the work this
+       session.  Verified again here:
+         expr.c:5332  case INDIRECT_REF:
+         expr.c:5344  if (TREE_CODE (TREE_OPERAND (exp, 0)) == PLUS_EXPR
+                          || ... ) MEM_IN_STRUCT_P (temp) = 1;
+       `*(T *)(c + K)' puts a NOP_EXPR (the cast) on top of the PLUS_EXPR,
+       so MEM_IN_STRUCT_P stays 0; `((T *)c)[K/sizeof(T)]' puts the
+       PLUS_EXPR on top, so it is set, at the same address and with no
+       struct or typedef invented.  Then
+         sched.c:835  true_dependence ()
+         sched.c:854      && ! (MEM_IN_STRUCT_P (mem) && rtx_addr_varies_p (mem)
+                                && GET_MODE (mem) != QImode
+                                && GET_CODE (XEXP (mem, 0)) != AND
+                                && ! MEM_IN_STRUCT_P (x) && ! rtx_addr_varies_p (x))
+       drops the dependence between the STORE through `c' (varying address)
+       and a later -G0 global LOAD (a LO_SUM, non-varying by rtlanal.c:104),
+       so sched1 may hoist the load above the store.  output_dependence
+       (sched.c:895/904) has the IDENTICAL clause, so the same spelling also
+       frees a STORE TO A STACK LOCAL to move across it -- a stack slot is
+       (plus virtual_frame_pointer K) at sched1 time and rtlanal.c:101 makes
+       the frame pointer non-varying.  Here that lets `lw %lo(D_800814A8)'
+       and `addiu $v0,4' float up and the `sh $v0,0x2A($s5)' fall into a
+       delay slot, which is exactly the target's schedule.
+       THE RELEVANT MEM_IN_STRUCT_P IS THE ONE ON THE **STORE**, not on the
+       load -- which is why the morning header's note that the array-ref
+       spelling of the LOAD (`((u8 **)(D_800814A8 + 0xAC))[j]') "does not
+       reach this store" was looking at the wrong operand.
+
+   (4) ((u16 *)c)[0x23] |= 0x4000;  (the function's FIRST statement)
+                                                  1823 / 213   (-7 rows)
+
+   (5) ((u16 *)c)[0x23] = r5 | 0x8000; in case 4
+                                                  1823 / 208   (-5 rows)
+
+   (6) The four `c'-relative stores of case 0x24 in array form, together:
+           ((u16 *)c)[0x4C] &= 0x7FFF;      (and the |= 0x8000 below it)
+           ((s16 *)c)[0x15] = func_800A0818(...);
+           ((u16 *)c)[0x54] = sp18;
+           ((u16 *)c)[0x55] = sp1A;
+                                                  1823 / 199   (-9 rows)
+       ALL-OR-NOTHING: the minimal subset that pays is the PAIR
+       {((s16 *)c)[0x15], ((u16 *)c)[0x54]} -- 1823/199 on its own.  EITHER
+       ONE ALONE is worth nothing (0x15 alone 1824/208, 0x54 alone
+       1823/208), and so is every other pair in the arm.  The other two
+       stores are free; they are included so the arm reads consistently.
+
+   (7) case 0x22's `g' given its own variable, `g22'
+                                                  1823 / 187   (-5 rows)
+       MECHANISM, and it is a general one: the target holds the probed
+       record in **$a0** here (`lw $a0,0xAC($v0)' / `beqz $a0, .L800AEC38'
+       with an EMPTY delay slot), where a shared `g' gets $s0 and needs an
+       extra `move a0,s0'.  A callee-saved register is only reachable for an
+       allocno that CROSSES A CALL:
+         global.c:925  if (accept_call_clobbered)
+                         COPY_HARD_REG_SET (used1, call_fixed_reg_set);
+         global.c:927  else if (allocno_calls_crossed[allocno] == 0)
+                         COPY_HARD_REG_SET (used1, fixed_reg_set);
+         global.c:929  else
+                         COPY_HARD_REG_SET (used1, call_used_reg_set);
+       In case 0x22 `g' dies at the `func_800A2CAC(g)' call, so a variable
+       local to that arm crosses no call, `used1' excludes only the fixed
+       registers, and find_reg's 0..31 scan hands it $a0 -- the argument
+       register, so the copy disappears.  A `g' SHARED with the arms that do
+       keep it across a call has allocno_calls_crossed != 0 for the whole
+       function and can only ever get $s0.
+       Splitting any OTHER arm's `g' is worth nothing or hurts: 0x19, 0x29,
+       0x1A, 0x26, 0x27, 0x18, 0x1B all 187; 0x2C 189; 0x17 189; 9/0xA 191;
+       0x15 190; 0x1D 194; the trailing k2==0x1E block 199.  Splitting all
+       fourteen at once is 217.  Same for `nd' (cases 0/1/2 are 238/238/234,
+       0x29 187, 0x1B 204, 9/0xA 193) and for `i'/`j' (every split 188 or
+       much worse; cases 0/1/2 are 1846-1869 words).
+
+   (8) ((u16 *)c)[0x23] = 0x8009; at case 0x2A's tail AND case 0x1C's tail,
+       the two textually identical tails, both or neither
+                                                  1823 / 180   (-7 rows)
+       ALL-OR-NOTHING AGAIN: each alone is 187, the pair is 180, and no
+       other pair or triple among the nineteen `c[0x46] = 0x8009' sites does
+       anything.  (It lands as 192 -> 187 -> 180 depending on the order the
+       changes are applied; on the final body it is worth 7.)
+
+   (9) ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;  at ALL SEVEN sites
+                                                  1821 / 172   (-15 rows, -2 words)
+       THE BIGGEST SINGLE FIND, and the clearest all-or-nothing group in the
+       function.  The minimal paying subset is the THREE sites inside the
+       cases 0/1/2 do-while loops (lines with `q1/q3/q5'); adding the three
+       straight-line copies and the one in the trailing block is free.
+       ANY ONE OF THEM ALONE IS A DISASTER: 1832/204, 1843/211, 1832/216.
+       What it buys is the target's interleave at 800AE63C..800AE650,
+           lhu $v0, 0x1C($sp) / lw $v1, %lo(D_800814A8)($s6) /
+           addiu $v0,$v0,1 / ori $v0,$v0,0x8000 / addu $v1,$s4,$v1 /
+           sh $v0,0x46($s5) / lw $v0,0xAC($v1)
+       where ours had the global load after the store with two load-delay
+       nops.  Same true_dependence mechanism as (3), on the store to
+       c + 0x46 this time.
+
+  (10) In case 4, `ret = 0;' AFTER the func_800A03C4 call rather than before
+                                                  1821 / 170   (-2 rows)
+       The target computes it late: at 800AE79C it has `addu $a0,$s5,$zero'
+       and only at 800AE7AC, in the jal's shadow, `addu $fp,$zero,$zero'.
+       Found by swapping every pair of ADJACENT same-indent simple
+       assignments in the body (42 legal candidates, one minute); it is the
+       only one of the 42 that is both legal and an improvement.  The other
+       five that score better are all wrong: swapping
+       `h2 = *(u16 *)(c + 0x98);' with the store that consumes h2 (two
+       sites, 1819/175), swapping `q7 = func_800A3D18(...)' with the store
+       of its own result (1815/227), and two that move a `c + 0x2A' store
+       across the call that produces its value (1819/223, 1820/174).
+
+   NET: 255 -> 170 rows; 1817 -> 1821 words, of which the +8 at residue (1)
+   was present and hidden from the start.
+
+   ===========================================================================
+   HOW TO COUNT THEM (the 95 displacement rows)
+
+   aligndiff's `R' rows are two words with the same key but different bytes.
+   For a branch that is almost always the DISPLACEMENT only, because our
+   build is a different length.  To separate them: for each `R' row, strip
+   the branch destination (the last operand, and the `<func+0x..>' comment)
+   from both sides and compare what is left.  Equal means the row is pure
+   displacement noise.  On this body that is 95 of the 130 `R' rows; the
+   other 35 are real register differences and are listed below.
+
+   DO NOT report aligndiff's raw count as the residue of this function while
+   the word count is off; it is dominated by displacement noise and moves by
+   tens for changes that alter nothing but the length.  Order candidates by
+   (word gap, real rows), and check every `-' run for a deleted basic block.
+
+   ===========================================================================
+   RESIDUE THAT IS LEFT, BY CLUSTER, LARGEST FIRST
+
+   (1) case 0x1D's nine-instruction tail does not cross-jump into case
+       0x26's at .L800AEEFC.      +8 words, 10 rows, and it is what holds
+       ~95 displacement rows hostage.
+
+       The target has, at 800AF7CC:
+           lbu $v0, 0x13($s0)
+           j   .L800AEEFC
+           nop
+       and .L800AEEFC is a label do_cross_jump planted INSIDE case 0x26, at
+       800AEEFC, in front of the nine insns
+           beqz $v0, .L800AF89C / addu $a0,$s0,$zero / jal func_80042900 /
+           addiu $a1,$zero,0x4 / sll $v0,$v0,16 / bnez $v0,.L800AF8A0 /
+           addu $a0,$s7,$zero / j .L800AFA10 / ori $v0,$zero,0x8009
+       We emit both copies.  OUR TWO COPIES ARE BYTE-IDENTICAL, including
+       the branch destinations: grep our ovl_dungeon.s for the two
+       occurrences of `jal func_80042900' followed by `li $5,4' and the two
+       blocks are character-for-character the same, so
+       rtx_renumbered_equal_p cannot be what fails.
+
+       WHAT IS ACTUALLY GOING ON (read off jump.c, and this corrects the
+       morning header's diagnosis).  Both tails originally end
+           (set v0 0x8009) (set mem(s5+0x46) v0) (set v0 5) (jump return_label)
+       and jump2 processes unconditional jumps at jump.c:2178-2211:
+           find_cross_jump (insn, JUMP_LABEL (insn), 1, &newjpos, &newlpos);
+           if (INSN_UID (JUMP_LABEL (insn)) < max_uid)
+             for (target = jump_chain[INSN_UID (JUMP_LABEL (insn))];
+                  target != 0 && newjpos == 0;
+                  target = jump_chain[INSN_UID (target)])
+               if (target != insn && JUMP_LABEL (target) == JUMP_LABEL (insn) ...)
+                 find_cross_jump (insn, target, 2, &newjpos, &newlpos);
+       Three gates, and all three are GLOBAL properties of the function, not
+       properties of either arm:
+         * jump_chain is built ONCE, before the `while (changed)' loop
+           (jump.c:249-269), by PREPENDING, so the chain for a label lists
+           the jumps to it in REVERSE source order; the first partner that
+           matches two insns wins, so the pairing is decided by how many
+           `j return_label' there are and in what order.
+         * `JUMP_LABEL (target) == JUMP_LABEL (insn)' -- do_cross_jump
+           retargets a jump with redirect_jump and does NOT update
+           jump_chain for a simplejump (only the RETURN arm at
+           jump.c:2776-2781 does).  So once case 0x26's jump has been
+           retargeted by its own earlier merge, it is INVISIBLE to case
+           0x1D, which is processed later because case 0x26 is earlier in
+           the function.
+         * `INSN_UID (JUMP_LABEL (insn)) < max_uid' -- a label do_cross_jump
+           created during this pass has a UID past max_uid, so once a jump
+           points at one the jump_chain loop is skipped entirely and only
+           the 1-insn "code before my own label" attempt remains.
+       In our build both tails end up as `j <label before the sh>' with
+       their own `ori' in the delay slot, i.e. each merged three insns into
+       the trailing k2==0x1E block's copy and neither ever saw the other.
+       In the target case 0x1D's jump found case 0x26's jump first and
+       merged nine.
+
+       SO THE LEVER IS NEITHER ARM, AND IT IS NOT A SPELLING IN EITHER ARM.
+       It is the number/order/content of the `return 5' sites that share the
+       epilogue label.  The 2026-11-16 permuter run proved the direction by
+       DUPLICATING a `c[0x46] = 0x8009; return 5;' body into two arms of a
+       test, re-measured at 1818/229 against that body's 1826/256; its own
+       spelling (`if (D_80082E80)', an always-true array address) is not
+       usable.  I could not find a legitimate source form, and I measured:
+         - the array form of each of the 19 `c[0x46] = 0x8009' sites alone,
+           and every pair and triple of them: nothing changes the merge;
+         - the array form of each of the 10 `c[0x46] = 0x800B' sites alone
+           and every pair and triple: nothing;
+         - cancelled `r7++; r7--;' pairs and statement moves throughout
+           case 0x2A and case 0x24: nothing;
+         - rewriting the trailing k2==0x1E block as
+               if (c[0xAC] < 2) { if (g == NULL) g = ...; if (g) return 5; }
+               else if (g != NULL) { ... return 5; }
+           (equivalent, and it does duplicate the block in SOURCE) -- NOT
+           measured, because the target's listing at 800AF974..800AFA08 is
+           instruction-for-instruction what we already emit, so this would
+           have to break that to help.  Someone should still try it.
+       THIS IS THE PERMUTER'S JOB.  Re-import before running it: the body
+       has moved a long way since the 2026-11-16 import.
+
+   (2) case 0x24's Chebyshev test: a register permutation.   22 rows, -2 words.
+       Instruction-for-instruction correct, and the delay slots agree, but
+         mx    is $a2 where the target has $s0
+         dx    is $a1 where the target has $v1
+         (s16)sp1A is $a0/$a3 where the target has $a1
+       and the target has a real `addu $s0,$v1,$zero' for `mx = dx;' at the
+       join (.L800AF1C0) where we keep mx in dx's register and copy later,
+       plus a different split of the two `sll/sra' pairs.
+
+       BEST THEORY, and the dump settles the first half of it.  `mx' must
+       be in a CALLEE-SAVED register, and global.c:925-930 (quoted under
+       change (7)) says that happens ONLY for an allocno with
+       allocno_calls_crossed != 0.  `.lreg' for this body says
+
+           Register 131 used 3 times across 15 insns; 2 bytes;
+
+       -- pseudo 131 is `mx' (HImode, `.greg' says `131 in 6' = $a2, and
+       its neighbours 129/130 are `dx' in $a1 and `dy' in $a0) -- and the
+       line carries NO `crosses N calls' clause, i.e. zero.  So our `mx'
+       cannot reach $s0 at all, whatever its priority, and no allocation
+       tie-break or device can change that: nothing in case 0x24 is live
+       across a call after `mx = dx'.
+       THEREFORE THE ORIGINAL'S `mx' IS A VARIABLE THAT CROSSES A CALL
+       SOMEWHERE ELSE IN THE FUNCTION -- one name reused across arms, which
+       is already the catalogue's "`reg_n_calls_crossed' IS A PROPERTY OF
+       THE C VARIABLE" and "A CALL-CROSSING SHARED LOCAL IN **ONE** ARM SETS
+       THE REGISTER CLASS FOR **EVERY** ARM".  I could not find which name.
+       Measured and rejected (all on the 1823/187 body):
+         mx <-> aa                     no change at all (so `aa' crosses no
+                                       call either; they may well be one
+                                       variable in the original, and saying
+                                       so costs nothing)
+         mx -> nn, r1, r6, r8 as s16   no change
+         mx -> n as s16  193   mx -> r7 as s16  191   mx -> k2 as u8  192
+         mx -> i as s16  421   mx -> j as s16   203   mx -> i2A as s16 203
+         mx -> i/j/i2A as s32          200/200/200
+         mx -> ang/t3/t5/t7 as s16     198/196/198/198
+         s16 mx -> u16                 1822/201
+         sp1A <-> mx                   1820/198 and WRONG (mx = sp1A becomes
+                                       a no-op and the max is lost)
+         all six legal reorderings of {mx = dx; sp18 = dx;} against the dy
+                                       block: 187 or 188-189
+       stmtsweep-style moves inside case 0x24 report 1817/195, 1818/186 and
+       1819/186 -- every one of them moves `sp1A = dy;' or `mx = sp1A;'
+       to a point where its right-hand side is not yet computed or is
+       immediately overwritten.  They are wrong, not better.
+
+   (3) case 0x2A: a clean two-register swap.          13 rows, 0 words.
+       Ours                      target
+         &D_80082E80 -> $s0        $s2
+         i2A         -> $s0        $s2   (reusing the pointer's register)
+         r7          -> $s2        $s0
+       and `ang' is $s1, `&D_8006CCE8' $s3, `&D_8006CCD8' $s4 in BOTH, and
+       every instruction in the arm is right.  So it is exactly the priority
+       order of TWO allocnos, and the dumps make it arithmetic.  From
+       tools/decomp/dump.sh on the standalone of THIS body:
+
+         .lreg
+           Register 119 used 6 times across 83 insns; crosses 3 calls;
+           Register 1342 used 5 times across 44 insns; crosses 2 calls;
+           Register 128 used 9 times across 70 insns; crosses 3 calls;
+         .greg
+           ;; 70 regs to allocate: ... 1342 ... 119 ...
+           119 in 18     1342 in 16     128 in 17
+
+       119 is `r7' (the insn setting it follows the `*func_8009FD40' call in
+       case 0x2A), 1342 is that arm's `&D_80082E80' (its lo_sum carries
+       REG_EQUIV (symbol_ref D_80082E80)), 128 is `ang'.
+
+       THOSE TWO NUMBERS IN THE DUMP LINE ARE EXACTLY allocno_compare'S
+       INPUTS, which is what makes this arithmetic and not a guess:
+         flow.c:2957  fprintf (file, "\nRegister %d used %d times across %d
+                      insns", i, reg_n_refs[i], reg_live_length[i]);
+         flow.c:2963  if (reg_n_calls_crossed[i] == 1) ... else if
+                      (reg_n_calls_crossed[i]) fprintf (... "%d calls" ...)
+                      -- so NO `crosses' clause means ZERO calls crossed
+         global.c:420 allocno_n_refs[allocno]      += reg_n_refs[i];
+         global.c:422 allocno_live_length[allocno]  = max over the pseudos
+       and allocno_compare is
+
+         global.c:585  allocno_compare ()
+         global.c:596  pri1 = (((double) (floor_log2 (allocno_n_refs[v1])
+                                          * allocno_n_refs[v1])
+                                / allocno_live_length[v1])
+                               * 10000 * allocno_size[v1]);
+         global.c:606  return v1 - v2;      (tie-break: LOWER pseudo first)
+
+       so, dropping the common factor,
+         1342:  floor_log2(5) * 5 / 44 = 2*5/44 = 0.227
+         119:   floor_log2(6) * 6 / 83 = 2*6/83 = 0.145
+       1342 is allocated first and find_reg's 0..31 scan hands it the lowest
+       free callee-saved register, $s0; `r7' then gets $s2 because $s1 is
+       held by `ang'.  (Both cross calls, so global.c:925-930 restricts both
+       to callee-saved.)
+
+       THE TARGET NEEDS 119 FIRST, AND floor_log2 IS A STEP FUNCTION, so
+       there are exactly three ways in and the thresholds are known:
+         * r7 at n_refs >= 8 : floor_log2 goes 2 -> 3 and 3*8/83 = 0.289 >
+           0.227.  n_refs is loop-weighted (flow.c:2122,
+           `reg_n_refs[regno] += loop_depth'), so ONE more reference to r7
+           INSIDE the loop is worth 2 and is enough.  r7 at 7 refs is
+           2*7/83 = 0.169 and is NOT enough.
+         * the pointer at n_refs <= 3 : 1*3/44 = 0.068 < 0.145.  At 4 refs
+           it is 2*4/44 = 0.182 and still wins, so dropping ONE of its four
+           uses is not enough -- two must go, or they must be served by a
+           SECOND address pseudo.
+         * the pointer's live_length > 69 : 2*5/x < 0.145 needs x > 69,
+           i.e. its range would have to span the loop.
+       Measured and rejected on the way (1823/199 body unless noted):
+         r7++; r7--;  at every statement boundary in case 0x2A INCLUDING
+                      inside the loop body, both orders: EVERY ONE compiles
+                      BYTE-IDENTICALLY, so the "+4 references" route does
+                      not exist for this quantity.  THEORY (not verified in
+                      a dump): cse2 runs before flow -- cse_main at
+                      toplev.c:3376, flow_analysis at toplev.c:3463 -- and
+                      folds r7+1-1 back to r7, so flow never counts it.  Two,
+                      three and four stacked pairs: also byte-identical.
+                      The one position that changes anything, after
+                      `if (i2A != (s16)r7)': 1819/206, worse.
+         a named local for the pointer (`u8 *dp; dp = D_80082E80;' with dp
+                      at all four uses), declared first and last in the
+                      block: 175 either way (1821 words).
+         every statement move inside case 0x2A: 187 or worse, and the
+                      1818/222 entries all move a loop-body statement out
+                      of the loop (wrong).
+       Note also: the morning header's "CASE 0x2A'S LOOP COUNTER MUST BE ITS
+       OWN VARIABLE" is still true and `i2A' must stay.
+
+   (4) The 0x800B triangle -- ONE defect with three symptoms, 0 words net,
+       ~13 rows.
+       The target has the canonical block ONCE as
+           .L800AF8F0: ori $v0,$zero,0x800B
+           .L800AF8F4: sh  $v0,0x46($s5)
+                       j   .L800AFAA4
+                       addiu $v0,$zero,0x2
+       (0x800B first, in $v0), and writes .L800AE010's copy out in full
+       with the OTHER schedule (`addiu $v0,2' first, so 0x800B lands in $v1).
+       Case 0x18's tail and case 0x20's `+0x800' tail both cross-jump into
+       the canonical block: `j .L800AF8F0 / sh $v0,0x2A($s5)' and
+       `addiu $v0,$v0,0x800 / j .L800AF8F0 / sh $v0,0x2A($s5)'.
+       We get the canonical block right (change (2) created it) but
+       CASE 0x18's tail becomes a SECOND copy in the $v1 schedule, and then
+         - .L800AE010 cross-jumps into case 0x18's copy instead of being
+           written out:            -5 words at target 108..112
+         - case 0x18 keeps 4 words:                      +4
+         - case 0x20 keeps its own `addiu $v0,$zero,2':   +1
+       Measured and rejected (1823/199 body), as a 6x6 grid over
+       .L800AE010's block x case 0x18's block:
+         array form on either or both stores of either block   199 (no change)
+         `h1 = 0x800B; *(u16 *)(c + 0x46) = h1;'  in .L800AE010  1828/198
+                                                  in case 0x18   1828/195
+                                                  in both        1825/201
+         storing c[0x46] BEFORE the func_800A0818 call
+                                   in .L800AE010  1826/201
+                                   in case 0x18   1825/203
+                                   in both        1824/207
+       None reaches 199, and the two 195/198 entries cost five words.  This
+       is the same jump2-ordering question as residue (1) and should go to
+       the permuter with it.
+
+   (5) `sp20 = r;' lands after the branch, not before.  6 rows, 0 words.
+       Cases 0, 1 and 2: the target has `sh $v0,0x20($sp)' BEFORE the
+       `addu $v1,$v0,$zero' copy and an empty delay slot; we put
+       `sh $v1,0x20($sp)' in the delay slot, from the copy.  Writing
+       `sp20 = r2;' before `*(s16 *)(c + 0x2A) = sp1E;' -- which is what
+       the target's order suggests -- is WORSE and loses words:
+         case 0 only   1813/189      case 1 only  1820/186
+         both          1812/198      (and 1813/1812 delete real code)
+       Left as it is.
+
+   (6) `ret' is read as a constant at the c[0x25]==0 exit.  1 row.
+       Target: `j .L800AFA9C / addu $fp,$zero,$zero' -- it sets $fp and goes
+       THROUGH `sll $v0,$fp,16 / srl $v0,$v0,16'.  Ours: `j <epilogue> /
+       move v0,zero', because `ret = 0; return ret << 16 >> 16;' sits in one
+       extended basic block and cse folds 0<<16>>16 to 0.  For the target
+       not to fold it, that `return' must have had two predecessors at cse
+       time, which means a shared exit (a goto, or `ret = 0;' with the rest
+       of the function in an else).  Everything the morning header measured
+       about `ret''s type still holds -- `u16 ret' with
+       `return ret << 16 >> 16;' is right and all five alternatives lose the
+       shift pair -- so do not touch the type; this is about control flow.
+       The OTHER two `ret' rows (target 586/590) are just a swap of
+       `addu $fp,$zero,$zero' and `addu $a0,$s5,$zero' in case 4, 0 words.
+
+   (7) One empty delay slot at 800ADFE4.  1 row, -1 word.
+       The target leaves the `beqz $v0, .L800ADFF4' slot empty; cc1psx fills
+       ours with the `addiu $v0,$zero,0xFF' that heads the then-arm
+       (`.set noreorder / beq $2,$0,$L10 / li $2,255' in our ovl_dungeon.s).
+       Not chased.
+
+   (8) `lb $a1,0x9C($s5)' one slot earlier in the target, case 0x20.  2 rows.
+   (9) case 0x20's `+0x800' result is in $v1 where the target has $v0.  2 rows.
+       Both fall out of (4).
+
+   ===========================================================================
+   SWEEPS RUN, AND WHAT THEY RETURNED
+
+   On the 1823/208 body:  devsweep --rounds 3   "0 device(s) already in the
+       body ... 351 statements, 49 names -> 17550 candidates per round ...
+       no wrapper helps".  THE BODY CONTAINS NO DEVICES AND WANTS NONE.
+   On the 1823/208 body:  widthsweep --rounds 4  offers `s32 t1 -> u8' at
+       1817/218.  REJECT -- see "THE WORD COUNT WAS A LIE".
+   On the 1821/172 body:  every declared width of every non-pointer local
+       (240 candidates, by hand): every candidate that improves the word gap
+       does it by deleting a block the target has; nothing improves rows.
+   On the 1821/172 body:  every `*(T *)(V + K)' in the body converted to
+       `((T *)V)[K/sizeof T]' -- 142 singly, 448 pairs within 20 lines, and
+       every (type,base,offset) group and every identical-statement group
+       converted wholesale (30 groups).  All neutral or worse.  THE
+       MEM_IN_STRUCT_P LEVER IS EXHAUSTED on this body.
+   On the 1821/172 body:  every arm's `g' split out singly (13), `nd' (6),
+       `i' (6), `j' (3).  All neutral or worse.
+   On the 1823/187 body:  every same-width pair of the 40 locals merged
+       (about 350 pairs).  The only hits truncate a width and delete code.
+   On the 1823/187 body:  group merges {q1..q7}, {r1..r8}, {t1,t3,t5,t7},
+       {h1,h2,h3}: 210, 221, 202, 197.  {t3,t5,t7} alone: NO CHANGE, so
+       those three may be one variable in the original at no cost.
+   stmtsweep-style statement moves over lines 100-150, 200-300 and the whole
+       of case 0x24 and case 0x2A: every candidate that scores better is
+       semantically wrong (reads a variable before its assignment, or moves
+       a store past the assignment it feeds, or moves a loop-body statement
+       out of the loop).  READ WHAT THEY MEAN BEFORE APPLYING ANY OF THEM.
+
+   On the 1821/170 body:  every ADJACENT pair of same-indent simple
+       assignments swapped (42 candidates).  One win -- change (10) -- and
+       five wrong-but-better-scoring candidates, listed under (10).
+   On the 1821/170 body:  the last two statements of every `return 5' tail
+       swapped, single-line (4) and multi-line (8): all neutral or worse
+       (1819/225, 1824/179 x2, 1824/181, 1824/183, 1829/184, 1830/187 x2).
+       This was a deliberate attempt to move jump2's cross-jump pairing for
+       residue (1) and it does not.
+   On the 1821/170 body:  case 0x2A's `&D_80082E80' given a named local
+       (`u8 *dp; dp = D_80082E80;' and dp used for all four references),
+       declared both first and last in the block: 175 either way.
+   On the 1821/170 body:  s32 dy -> s16 is 1822/168 -- two rows better and
+       one word WORSE, and asymmetric with dx (s16 dx is 1822/180, both s16
+       is 1823/174), so it is not taken.  If someone closes residue (1) and
+       the word count comes out at 1816, this is the first thing to try.
+
+   STILL NOT RUN to completion on the final body: tools/decomp/refsweep.py
+   and tools/decomp/stmtsweep.py with the real tools (the hand versions
+   above covered the regions with residue, not the whole function; a
+   refsweep over 49 names x 351 statements is about 90 minutes here).
+
+   ===========================================================================
+   SHAPES I AM NOT HAPPY ABOUT, WITH THE HONEST ALTERNATIVE AND ITS COST
+
+   * THE `((T *)c)[K]' SPELLINGS.  NINETEEN of the ~160 `c'-relative
+     accesses are written as array references and the rest are not, and
+     there is no story in which the original source mixed them like that.
+     The honest reading is that `c' is a STRUCT in the original and these
+     nineteen sites are field accesses -- a COMPONENT_REF also sets
+     MEM_IN_STRUCT_P -- but then ALL of them would be, and that is measured:
+     every `c + 0x2A' site in array form is 1812/198, every `c + 0x46' site
+     is 1821/172 (neutral), every `c + 0x98' site neutral, and all 22
+     `*(s16 *)(c + 0x2A) =' at once is 1815/242 on the 1823/220 body.  So a
+     uniform struct does NOT reproduce the target and a mixed spelling does.
+     Something about this function's `c' is still wrong; I do not know what.
+     The array form is ordinary C and not a device, and the alternative --
+     the pointer-cast form at all nineteen, i.e. this park's morning body
+     with everything else of this session kept -- measures 1825/228, so it
+     costs 58 rows and four words.  Kept.
+   * `g22'.  A second pointer variable for one arm is the shape the register
+     allocation demands (see change (7)) and is a perfectly ordinary local,
+     but the name is mine.  The alternative, one shared `g', costs 5 rows.
+   * NO DEVICES.  There is not a single `do { } while (0)', cancelled pair,
+     duplicated arm or redundant store in this body, and devsweep confirms
+     none helps.  That is worth keeping true.
+
+   ===========================================================================
+   STILL TRUE FROM THE 2026-11-16 HEADER, DO NOT RE-DERIVE
+
+   * The empty switch cases must NOT be written out; gcc sizes the table
+     from the lowest and highest case labels only (stmt.c:5052-5071, and the
+     gap-filling loop at stmt.c:5304-5307).
+   * The six shared tails are NOT a goto ladder: .L800AF89C/.L800AF8A0/
+     .L800AF8A4 are the delay-slot scheduler stealing one or two
+     instructions from the head of the code after the switch.  The body
+     contains no gotos.
+   * The facing preamble has NO separate index variable:
+     `sp1E = (*(u16 *)(c + 0x2A) >> 9) & 7;' then `D_8006CCD8[sp1E]'.
+     A `s32 u' intermediate costs a word in each of the nine copies.
+   * `u16 ret' returned as `ret << 16 >> 16'.  Every other spelling loses
+     the `sll $v0,$fp,16 / srl $v0,$v0,16' pair.
+   * THE THREE ALIAS DECLARATIONS BELOW ARE REQUIRED.  func_800A35A4 must be
+     seen as `s16' (through the landed `u8' the cast leaves an `andi' and
+     the compare degrades: +5 words over three copies); func_8009FD40 must
+     be seen as `s32' at cases 0x2C and 0x2A so `(u16)(r - 2) < 7' keeps its
+     `andi'; func_800A40AC as `s32' in case 2.  They leave the landed
+     definitions alone, the same way the unit's own `func_800BCB04h' does.
+   * `sp1E = ((u32)func_800A0818(...) >> 9) & 7;' in cases 0x2A and 0x1C --
+     without the (u32) the shift is `sra' where the target has `srl'.
+   * `*(s16 *)(c + 0x2A) = sp1E;' BEFORE `sp20 = r;' in cases 0 and 1
+     (re-measured this session: the other order is 1813/189 and 1820/186).
+   * `D_800E2970_s[*(s8 *)(b + 0x26)].unk_0C & 2' is csrc/ovl_dungeon.c's
+     own spelling.
+   * func_800A0E6C IS CALLED WITHOUT A PROTOTYPE, as the unit's later call
+     site does.  Adding one would change that landed call.
+   * declaration-order search, 80 random reorderings: no effect at all.
+   =========================================================================== */
 
 s16 func_800A35A4h(u8 *, s32) __asm__("func_800A35A4");
 s32 func_8009FD40w(u8 *, u8 *) __asm__("func_8009FD40");
 s32 func_800A40ACw(u8 *, u16) __asm__("func_800A40AC");
-
-   ====================================== 2026-11-21: 1826/1817 words, 256 rows
-                                          -> 1817/1817, 255 rows
-
-   THE NINE-WORD OVERRUN IS GONE.  Three declarations, found by widthsweep.py
-   on the first run after its objective was fixed to order by (word gap, rows)
-   instead of rows alone -- the same tool bug that was hiding func_800D13B8's
-   three-word shortfall.  Every one of them is honest, checked against its
-   uses rather than against the score:
-
-     u32 ret -> u16   ret only ever holds 0 or 2, and every return statement
-                      is already `return ret << 16 >> 16;'.
-     s32 t1  -> s16   t1 is read from a u16, so 0..0xFFFF; its guard
-                      `if (t1 > 0x10000)' is DEAD IN BOTH WIDTHS (a u16 cannot
-                      exceed 0xFFFF < 0x10000) and the value is stored back
-                      through a u16, so the bits are identical either way.
-                      The dead guard suggests the original read was wider;
-                      that is a separate question and does not affect this.
-     s32 aa  -> s16   aa is assigned `(s16)ang', already truncated at the
-                      assignment.
-
-   The sweep's own path, for the record -- it needed all three together and
-   the intermediate steps are worse on rows than the start:
-       round 0  s32 t1 -> s16     267 rows, 1818 words
-       round 1  s32 aa -> s16     256 rows, 1817 words
-       round 2  u32 ret -> u16    255 rows, 1817 words
-   Rejected on the way: s16 sp1C -> u16 is 1814 words (four SHORT), u8 k ->
-   u32 is 1820, u16 h1 -> u8 is 1819.
-
-   The standalone and the real unit agree (255 rows, 1817/1817).
-
-   Measured with
-     python3 tools/decomp/parkresidue.py func_800ADE74
- */
 
 s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
 {
@@ -258,6 +685,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
     s16 sp1E;
     s16 sp20;
     u8 *g;
+    u8 *g22;
     u8 *q1;
     u8 *q2;
     u8 *q3;
@@ -283,7 +711,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
     s32 r6;
     s32 r7;
     s32 r8;
-    s16 t1;
+    s32 t1;
     s32 t3;
     s32 t5;
     s32 t7;
@@ -295,7 +723,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
     s32 dy;
     s16 mx;
     ret = 2;
-    *(u16 *)(c + 0x46) |= 0x4000;
+    ((u16 *)c)[0x23] |= 0x4000;
     if ((D_80013714 & 8) != 0)
     {
         func_800A9A0C(c);
@@ -369,9 +797,9 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                         func_8009FD40(b, D_80082E80) < func_800A35A4h(c, sp1C) &&
                         (s16)func_800A3518(D_800E3D7C) != 0)
                     {
-                        *(u16 *)(c + 0x46) = (sp1C + 1) | 0x8000;
-                        *(s16 *)(c + 0x2A) = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
-                                                           D_80082E80[0x25], (u16 *)&sp1C);
+                        ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;
+                        ((s16 *)c)[0x15] = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
+                                                         D_80082E80[0x25], (u16 *)&sp1C);
                         *(u32 *)(c + 0x60) = D_800814A8;
                         return 4;
                     }
@@ -386,7 +814,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                             if (func_8009FD40(b, nd) < func_800A35A4h(c, sp1C) &&
                                 (s16)func_800A3518(*(u8 **)(D_800814A8 + j * 4 + 0xAC)) != 0)
                             {
-                                *(u16 *)(c + 0x46) = (sp1C + 1) | 0x8000;
+                                ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;
                                 if (*(u8 **)(D_800814A8 + j * 4 + 0xAC) != c)
                                 {
                                     *(s16 *)(c + 0x2A) =
@@ -433,9 +861,9 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                         func_8009FD40(b, D_80082E80) < func_800A35A4h(c, sp1C) &&
                         (s16)func_800A3518((u8 *)D_800814A8) != 0)
                     {
-                        *(u16 *)(c + 0x46) = (sp1C + 1) | 0x8000;
-                        *(s16 *)(c + 0x2A) = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
-                                                           D_80082E80[0x25], (u16 *)&sp1C);
+                        ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;
+                        ((s16 *)c)[0x15] = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
+                                                         D_80082E80[0x25], (u16 *)&sp1C);
                         *(u32 *)(c + 0x60) = D_800814A8;
                         return 4;
                     }
@@ -450,7 +878,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                             if (func_8009FD40(b, nd) < func_800A35A4h(c, sp1C) &&
                                 (s16)func_800A3518(*(u8 **)(D_800814A8 + j * 4 + 0xAC)) != 0)
                             {
-                                *(u16 *)(c + 0x46) = (sp1C + 1) | 0x8000;
+                                ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;
                                 if (*(u8 **)(D_800814A8 + j * 4 + 0xAC) != c)
                                 {
                                     *(s16 *)(c + 0x2A) =
@@ -497,9 +925,9 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                         {
                             return -1;
                         }
-                        *(u16 *)(c + 0x46) = (sp1C + 1) | 0x8000;
-                        *(s16 *)(c + 0x2A) = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
-                                                           D_80082E80[0x25], (u16 *)&sp1C);
+                        ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;
+                        ((s16 *)c)[0x15] = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
+                                                         D_80082E80[0x25], (u16 *)&sp1C);
                         *(u32 *)(c + 0x60) = D_800814A8;
                         return 4;
                     }
@@ -518,7 +946,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                                 {
                                     return -1;
                                 }
-                                *(u16 *)(c + 0x46) = (sp1C + 1) | 0x8000;
+                                ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;
                                 if (*(u8 **)(D_800814A8 + j * 4 + 0xAC) != c)
                                 {
                                     *(s16 *)(c + 0x2A) =
@@ -562,8 +990,8 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             {
                 return -1;
             }
-            ret = 0;
             q6 = func_800A03C4(c, b[0x24], b[0x25]);
+            ret = 0;
             *(u8 **)(c + 0x60) = q6;
             if (q6 != NULL)
             {
@@ -571,7 +999,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                 sp20 = r5;
                 if ((s16)r5 >= 0)
                 {
-                    *(u16 *)(c + 0x46) = r5 | 0x8000;
+                    ((u16 *)c)[0x23] = r5 | 0x8000;
                     *(s16 *)(c + 0x2A) = sp1E;
                     return 1;
                 }
@@ -605,7 +1033,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
         sp1C = func_800A3544(c, 0x1E);
         if (sp1C >= 0 && (s16)func_800A3518(c) != 0)
         {
-            *(u16 *)(c + 0x46) = (sp1C + 1) | 0x8000;
+            ((u16 *)c)[0x23] = (sp1C + 1) | 0x8000;
             *(u8 **)(c + 0x60) = c;
             return 4;
         }
@@ -739,8 +1167,8 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
         }
         for (i = 0; i < 2; i++)
         {
-            g = *(u8 **)(D_800E3D7C + i * 4 + 0xAC);
-            if (g != NULL && (s16)func_800A2CAC(g) != 0)
+            g22 = *(u8 **)(D_800E3D7C + i * 4 + 0xAC);
+            if (g22 != NULL && (s16)func_800A2CAC(g22) != 0)
             {
                 *(u16 *)(c + 0x46) = 0x8009;
                 *(s16 *)(c + 0x2A) = func_800A0818(b[0x24], b[0x25], D_80082E80[0x24],
@@ -935,7 +1363,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
         return 2;
 
     case 0x24:
-        *(u16 *)(c + 0x98) &= 0x7FFF;
+        ((u16 *)c)[0x4C] &= 0x7FFF;
         if (c[0x49] != 0)
         {
             break;
@@ -944,10 +1372,10 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
         {
             break;
         }
-        *(s16 *)(c + 0x2A) = func_800A0818(b[0x24], b[0x25], sp18, sp1A, (u16 *)(c + 0x98));
-        *(u16 *)(c + 0xA8) = sp18;
-        *(u16 *)(c + 0xAA) = sp1A;
-        *(u16 *)(c + 0x98) |= 0x8000;
+        ((s16 *)c)[0x15] = func_800A0818(b[0x24], b[0x25], sp18, sp1A, (u16 *)(c + 0x98));
+        ((u16 *)c)[0x54] = sp18;
+        ((u16 *)c)[0x55] = sp1A;
+        ((u16 *)c)[0x4C] |= 0x8000;
         dx = b[0x24] - sp18;
         if (dx < 0)
         {
@@ -1064,7 +1492,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
         {
             break;
         }
-        *(u16 *)(c + 0x46) = 0x8009;
+        ((u16 *)c)[0x23] = 0x8009;
         *(s16 *)(c + 0x2A) = sp1E << 9;
         return 5;
 
@@ -1166,7 +1594,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
         {
             break;
         }
-        *(u16 *)(c + 0x46) = 0x8009;
+        ((u16 *)c)[0x23] = 0x8009;
         *(s16 *)(c + 0x2A) = sp1E << 9;
         return 5;
 
@@ -1234,13 +1662,13 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
         r8 = func_800A384C(c, q7, (u8 *)&sp1E, 1);
         sp20 = r8;
         *(s16 *)(c + 0x2A) = sp1E;
-        if ((s16)r8 < 0)
+        if ((s16)r8 >= 0)
         {
-            *(u16 *)(c + 0x46) = 0x800B;
-            return 2;
+            *(u16 *)(c + 0x46) = r8 | 0x8000;
+            return 1;
         }
-        *(u16 *)(c + 0x46) = r8 | 0x8000;
-        return 1;
+        *(u16 *)(c + 0x46) = 0x800B;
+        return 2;
     }
     k2 = c[0x13];
     if (k2 == 0x1E && (*(s32 *)(c + 0x14) & 0x20000000) == 0)

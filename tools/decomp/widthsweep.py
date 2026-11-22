@@ -34,6 +34,23 @@ SUB-WORD parameter type is how a parameter copy becomes schedulable", whose
 mechanism that landing corrected. The first version of this tool swept only
 local declarations and reported a clean negative on that very body.
 
+DANGER, AND IT HAS ALREADY COST A DAY: A NARROWING CAN REACH THE TARGET WORD
+COUNT BY DELETING CODE THE TARGET HAS. `shorten_compare' (c-common.c:2049)
+folds a comparison against a constant too wide for the narrowed type to a
+CONSTANT AT TREE LEVEL, and the guard and its body vanish. On func_800ADE74
+`s32 t1 -> s16' deleted the eight words of `if (t1 > 0x10000) t1 = 0xFFFF;'
+-- which the target EMITS at 800ADF90..800ADFAC -- and reached 1817/1817 only
+because the body was separately six words SHORT elsewhere. Two cancelling
+errors read as a closed word gap, and three independent narrowings on that
+function all "closed" it the same way.
+
+The runtime value is not the test. `t1' is read from a u16 and stored back
+through a u16, so the bits are identical at either width; the CODE is not, and
+the code is what is being matched. SO: whenever a candidate improves the word
+gap, check the aligndiff output for a CONTIGUOUS RUN OF MISSING TARGET WORDS
+before believing it. A run of four or more is a deleted basic block, not a
+closed gap.
+
 A parameter width change alters the function's SIGNATURE, so a prototype
 elsewhere that disagrees makes the candidate fail to compile and it scores 999
 and is dropped -- the sweep cannot land a change that the unit as a whole
@@ -218,6 +235,14 @@ def main():
             print("widthsweep: *** result (%d/%d vs %d/%d). Trust the unit." % (vr, vw, best[0], best[1]))
             best, best_key = (vr, vw), key(vr, vw)
     print("final %d rows, %d/%d words" % (best[0], best[1], tw))
+    if applied and best[1] < w:
+        print("widthsweep: *** THIS RESULT IS SHORTER THAN THE BODY YOU STARTED")
+        print("widthsweep: *** WITH (%d -> %d words). A narrowing can reach the" % (w, best[1]))
+        print("widthsweep: *** target count by DELETING code the target has --")
+        print("widthsweep: *** shorten_compare folds a comparison against a too-wide")
+        print("widthsweep: *** constant to a constant and the guard disappears.")
+        print("widthsweep: *** Check aligndiff for a contiguous run of MISSING")
+        print("widthsweep: *** target words before applying this. See the docstring.")
     if applied:
         out = os.path.join(sp, "best.c")
         open(out, "w").write(cur)
