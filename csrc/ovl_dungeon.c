@@ -53,7 +53,148 @@ void func_800894A0(void)
     func_80089588();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80089588);
+/* 151 words, 0 differing.  THREE levers, each measured on the body before it,
+   and the park file this replaced records every rejected spelling with its
+   score (9 -> 13 -> 1 -> 0 rows):
+
+   * BLOCK 2's STORE INSIDE BOTH ARMS (no `y').  cse2's extended block walks
+     AROUND a one-armed `if' (cse.c:8198, skip_blocks), so canon_reg commons
+     the two `q[0x3] = 5;' into ONE callee-saved pseudo and the function comes
+     out a word short of the target's two `addiu $v1, $zero, 0x5'.  Two-armed
+     ends cse's block at the join (cse.c:8166) and both 5s appear; jump2
+     cross-jumps the identical `sh' tails so the branch is unchanged.  Worth
+     -4 rows alone and +12 with the next one.
+
+   * `h' DECLARED INSIDE EACH TAIL BLOCK.  At function scope it is assigned in
+     two basic blocks, so combine_regs refuses it (local-alloc.c:1834, a local
+     assigned in more than one block has reg_qty == -1) and `h + 0xE' cannot be
+     tied to `h'.  The target's `addiu $v0, $v0, 0xE' IS that tie.  Two
+     inner-scope declarations give two block-local pseudos, each tied to its own
+     sum: h in $v0 and the 5 in $v1 in both tails.  Undoing it costs 12 rows.
+
+   * `g' MATERIALISED LATE.  `Unk80083160 *g;' with no initialiser, all seven
+     block-0 accesses spelled `D_80083160.unk_00', and `g = &D_80083160;' inside
+     block 1's five-store header.  That moves the `addiu $s1, $s1, %lo' lo_sum
+     three insns later, to 80089634, and lowers the %hi quantity's QTY_CMP_PRI
+     span enough that `s32 lean' wins $s0 without the `andi' that `u8 lean'
+     costs.  The direct spellings are free alone and the move is worth nothing
+     alone: one change.  Outside the header it is 22-23 rows.
+
+   The do-while pair is a reference count, not a guess.  `lean' must be
+   allocated before the `%hi(D_80083160)' pseudo (getting it the wrong way round
+   is 21 rows) and local-alloc ties the xor temp into lean's quantity
+   (local-alloc.c:1939), which gives it 5 refs where it needs 7:
+   floor_log2(n)*n is 10, 12, 14 at n = 5, 6, 7 and 6 refs still loses.
+   flow.c:2122 is `reg_n_refs[regno] += loop_depth;', so depth 3 on the `tmp'
+   read supplies them for no words.  The SPLIT through `tmp' is required -- the
+   same wrapper on `lean2 = (s16)lean;' gives `lean2' four refs, which outranks
+   `g' in allocno_compare and swaps $s1/$s3 (23 rows).  `tmp = lean;' without
+   the cast is 21 rows: a plain copy dies in cse before flow counts it.
+   `u8 lean' reaches 7 refs instead but costs the `andi' -- 152 words / 1 row.
+   refsweep (386 points), widthsweep and stmtsweep are all clean on the
+   device-free body, so there is no cancelled pair that replaces it.
+
+   `lean2 = (s16)lean;' before the first `if' and `lean3 = (s16)lean2;' before
+   the second are the target's two reg-reg copies at 80089638 and 800896A8:
+   combine folds a redundant extension of a value whose nonzero_bits is 1 into
+   a plain movsi (combine.c:8303).  `lean2 = lean;' coalesces and emits
+   nothing.  Do not simplify the chain. */
+void func_80089588(void)
+{
+    Unk80083160 *g;
+    u32 w[2];
+    u8 *q;
+    s32 lean;
+    s32 tmp;
+    s32 lean2;
+    s32 lean3;
+
+    lean = D_80083160.unk_00 != D_801C9E40;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    SetDrawArea(q, D_80083160.unk_00);
+    AddPrim(D_80083160.unk_00 + 0x7B0, q);
+    q += 0xC;
+    SetDrawArea(q, D_80083160.unk_00);
+    AddPrim(D_80083160.unk_00 + 0x830, q);
+    q += 0xC;
+    func_80067EF4(q, 0, 0);
+    AddPrim(D_80083160.unk_00 + 0x830, q);
+    q += 0xC;
+    *(u32 *)(q + 0x4) = 0x2A000000;
+    *(s16 *)(q + 0x10) = 1;
+    *(s16 *)(q + 0x8) = 1;
+    do
+    {
+        do
+        {
+            tmp = (s16)lean;
+        } while (0);
+    } while (0);
+    *(s16 *)(q + 0x14) = 0x100;
+    g = &D_80083160;
+    *(s16 *)(q + 0xC) = 0x100;
+    lean2 = (s16)tmp;
+    if (lean)
+    {
+        *(s16 *)(q + 0xE) = 0xE0;
+    }
+    else
+    {
+        *(s16 *)(q + 0xE) = 0x1C0;
+    }
+    q[0x3] = 5;
+    {
+        s32 h;
+        h = *(u16 *)(q + 0xE);
+        *(s16 *)(q + 0xA) = h;
+        *(s16 *)(q + 0x16) = h + 0xE;
+        *(s16 *)(q + 0x12) = h + 0xE;
+    }
+    AddPrim(g->unk_00 + 0x830, q);
+    q += 0x18;
+    *(u32 *)(q + 0x4) = 0x2A000000;
+    *(s16 *)(q + 0x10) = 1;
+    *(s16 *)(q + 0x8) = 1;
+    *(s16 *)(q + 0x14) = 0x100;
+    *(s16 *)(q + 0xC) = 0x100;
+    lean3 = (s16)lean2;
+    if (lean3 == 0)
+    {
+        *(s16 *)(q + 0xE) = 0x1C0;
+    }
+    else
+    {
+        *(s16 *)(q + 0xE) = 0xE0;
+    }
+    q[0x3] = 5;
+    {
+        s32 h;
+        h = *(u16 *)(q + 0xE);
+        *(s16 *)(q + 0xA) = h;
+        *(s16 *)(q + 0x16) = h + 0xE;
+        *(s16 *)(q + 0x12) = h + 0xE;
+    }
+    AddPrim(g->unk_00 + 0x7B0, q);
+    q += 0x18;
+    func_80067EF4(q, 0, 1);
+    AddPrim(g->unk_00 + 0x830, q);
+    q += 0xC;
+    func_80067F20((u32 *)q, 0, 0, 0x20, 0);
+    AddPrim(g->unk_00 + 0x7B0, q);
+    q += 0xC;
+    func_80067F20((u32 *)q, 0, 0, 0x20, 0);
+    AddPrim(g->unk_00 + 0x830, q);
+    q += 0xC;
+    w[0] = 0x01C00000;
+    w[1] = 0x00100100;
+    SetDrawArea(q, w);
+    AddPrim(g->unk_00 + 0x7B0, q);
+    q += 0xC;
+    SetDrawArea(q, w);
+    AddPrim(g->unk_00 + 0x830, q);
+    q += 0xC;
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 /* 175 words, 0 differing.  Three alternative loops over the same pair of
    arrays: D_80083360[i] is a handler pointer and D_800833E0[i] the object it
