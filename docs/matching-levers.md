@@ -33345,3 +33345,90 @@ The honest spelling is a `COMPONENT_REF` on a real typedef, and if the struct
 can be witnessed that is what should ship. `d` here is `u8 *` at all 310 of
 its uses across the six units and no witness exists, so the array cast is the
 form in the park, with the alternative (23 rows, no cast) recorded beside it.
+
+## A NEGATIVE DISPLACEMENT IN THE LISTING NAMES A SOURCE POINTER LOCAL
+
+`func_8009E798`, 55 rows -> 29, and five days of parks had read the same
+listing without seeing it.
+
+The target reached a block of data with `lw $v1,-0x20($s1)` ... `sw
+$v1,0x8($s1)` while `$s1 = $s2 + 0x28` and **`$s2` was live in the very same
+instructions** -- two insns after an `addiu $a1,$s2,-0x28`. The park had been
+addressing all of it off `$s2`'s variable at positive displacements, which is
+the same addresses and the wrong registers.
+
+**The rule: when the target reaches data that lies BEFORE a register's value
+using negative displacements, while another register holding the natural
+positive base is live across those same insns, the negative-offset register is
+a SOURCE-LEVEL VARIABLE.** cse will happily rebase an address it already has,
+but it has no reason to invent a pointer that is only ever used backwards when
+the forward base is sitting right there. Here the second local is a rolling
+cursor, reassigned `r+0x28`, `r+0x40`, `r+0x4C`, `r+0x58` -- and its final
+value is what the function stores at the end, which is also where the target's
+spare `addu $v0,$zero,$zero` delay-slot filler comes from.
+
+Beware the half-measure, which measures WORSE and reads as a refutation: this
+park had already recorded "a `r + 0x28` local -> 362 words". That was true, and
+it was a different change -- one local for one primitive, with the rest of the
+block still addressed off `r`. The cursor only pays when **everything** that
+follows it is addressed off the cursor.
+
+## A NARROWER DECLARATION CAN FLIP A LOCAL-ALLOC TIE WITH NO REFERENCE CHANGE
+
+Same function, the last 11 rows -> 1, on `s32 flag` -> `s16 flag`. The obvious
+explanation is wrong and the right one is a different lever entirely.
+
+**It is NOT `QTY_CMP_PRI`'s size term.** `qty_size` comes from
+`PSEUDO_REGNO_SIZE` (local-alloc.c:2068), which regs.h:65 defines in WORDS:
+
+```c
+#define PSEUDO_REGNO_SIZE(N) \
+  ((GET_MODE_SIZE (PSEUDO_REGNO_MODE (N)) + UNITS_PER_WORD - 1)	\
+   / UNITS_PER_WORD)
+```
+
+so it is 1 for HImode and SImode alike and the priority arithmetic cannot see
+the change at all. The two `.lreg` flow-info blocks confirm it: both pseudos
+read `5 times across 596 insns` and `2 times across 287 insns` in BOTH bodies,
+byte for byte, and neither carries a `2 bytes` tag -- MIPS's `PROMOTE_MODE`
+keeps the narrow local in an SImode pseudo either way.
+
+What differs is in `.greg`'s dispositions: an EXTRA PSEUDO appears (`266 in
+19`), every pseudo above it is renumbered, and five live lengths move by one or
+two insns. That breaks local-alloc's TIES the other way round, and the two
+quantities exchange `$s3`/`$s4`. Both bodies emit the same 358 words; the rows
+between them were register names only.
+
+**The transferable rule, and it is a cheap check**: before explaining a width
+win by `n_refs`/`live_length`, DIFF THE TWO `.lreg` FLOW-INFO BLOCKS. If they
+are identical, the lever is an extra pseudo and a renumbering in `.greg`, not
+the priority arithmetic -- which means it is a tie-break, which means it is
+fragile and will not survive an unrelated edit nearby. Re-measure it after
+every later change.
+
+## AN ILLEGAL PERMUTER HOIST NAMES THE READ THE SCHEDULER WANTS EARLY
+
+Two independent permuter runs on `func_8009E798` proposed hoisting
+`r[0x2C] >>= 1;` and `r[0x2D] >>= 1;` above the store that initialises that
+word. Both were rejected on correctness, and both were pointing at something
+real: the scheduler wanted reads from that region earlier. The LEGAL statement
+that supplies them is not the shifts at all -- it is four unrelated quad copies
+moved ahead of the shifts, worth 14 rows, with the colour word's
+store-before-read left intact.
+
+**So treat a repeated illegal find as a measurement, not just a rejection: it
+tells you WHICH READ the scheduler wants early, and the job is to find a
+statement you are allowed to move that supplies it.**
+
+The supporting fact, and it is the reason a pure reordering is available at
+all: `true_dependence` (sched.c:835) only reaches its `MEM_IN_STRUCT_P` escape
+if `memrefs_conflict_p` says the refs conflict in the first place, and
+`memrefs_conflict_p` resolves same-base/different-constant addresses exactly --
+`(plus reg c1)` against `(plus reg c2)` recurses on the equal bases and ends in
+`(c >= 0 && xsize > c) || (c < 0 && ysize + c > 0)`, a byte-range overlap test.
+**A block of accesses off one base at distinct non-overlapping constant offsets
+therefore has NO memory dependences among them whatsoever**, and its emitted
+order is decided purely by `INSN_LUID` tie-breaks -- that is, by source
+statement order. Interleaving such a block is free to sweep and often the whole
+answer: here a 70-way sweep found five orders at 15 rows and nothing at all
+between 15 and 19.
