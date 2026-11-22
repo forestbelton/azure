@@ -169,6 +169,39 @@ segments:
       # 0xb6c unit and has to start one of its own. That is the same inversion
       # the first carve learned the hard way; splat prints both splits under
       # "File split suggestions".
+      # THE THIRD CARVE, 2026-11-22, for func_8009F644 -- and it needs TWO
+      # splits, not one, for exactly the reason the second carve records
+      # below: splitting at a 4-mod-8 offset INVERTS the alignment class of
+      # every other table in the new unit.
+      #
+      # 0xa361c is jtbl_80088D7C itself, func_8009F644's table, so relative to
+      # this unit it is 0 mod 8 and the `.align 3' is a no-op. But THREE other
+      # tables fall in [0x61c, 0xb6c) and ALL THREE invert:
+      #
+      #   jtbl_80089008 (0x8a8, func_800A4B88)  -> 0x28c rel, 4 mod 8
+      #   jtbl_80089088 (0x928, func_800ADE74)  -> 0x30c rel, 4 mod 8
+      #   jtbl_800891C0 (0xa60, func_800B348C)  -> 0x444 rel, 4 mod 8
+      #
+      # func_800ADE74 is still INCLUDE_ASM, so splat emits its table verbatim
+      # and it costs nothing while that park is open. But **func_800A4B88 AND
+      # func_800B348C ARE BOTH LANDED**, so a single split at 0x61c would put
+      # `.align 3' before their compiled tables and the container would come
+      # out eight bytes long -- the identical failure the first carve hit and
+      # the second carve documents below.
+      #
+      # splat SAYS SO ITSELF: run it with only the 0x61c split and it prints
+      # `- [0xA38A8, .rodata]' under "File split suggestions". Read them. A
+      # first pass here enumerated the tables with a grep that took only the
+      # FIRST one per listing file and therefore missed jtbl_80089008
+      # entirely; splat caught it.
+      #
+      # So THREE splits. 0xa38a8 is jtbl_80089008 and 0xa3a60 is
+      # jtbl_800891C0, each 0 mod 8 relative to its own unit. And 0x8a8 pays a
+      # bonus: jtbl_80089088 lands at 0x80 relative to it, which is 0 mod 8,
+      # so func_800ADE74 will NOT need a fourth carve when its park lands.
+      - [0xa361c, .rodata, ovl_dungeon_8009F644]
+      - [0xa38a8, .rodata, ovl_dungeon_800A4B88]
+      - [0xa3a60, .rodata, ovl_dungeon_800B348C]
       - [0xa3b6c, .rodata, ovl_dungeon_800B45E0]
       - [0xa3bb0, .rodata, ovl_dungeon_800B6AC4]
       - [0xa3c2c, .rodata, ovl_dungeon_800C2824]
@@ -184,6 +217,13 @@ segments:
       - [0xa3ce0, .rodata, ovl_dungeon_800CABA8]
       - [0xa3cf4, .rodata, ovl_dungeon_800D50FC]
       - [0xa3d40, c, ovl_dungeon]
+      # The code boundaries name the SAME functions as the rodata ones, which
+      # the first carve learned the hard way: cc1psx emits a unit's rodata in
+      # function order, so a code split anywhere else puts a table on the
+      # wrong side of the rodata split and the link fails undefined.
+      - [0xb9ee4, c, ovl_dungeon_8009F644]
+      - [0xbf428, c, ovl_dungeon_800A4B88]
+      - [0xcdd2c, c, ovl_dungeon_800B348C]
       - [0xcee80, c, ovl_dungeon_800B45E0]
       - [0xd1364, c, ovl_dungeon_800B6AC4]
       - [0xdd0c4, c, ovl_dungeon_800C2824]
