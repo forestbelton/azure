@@ -6180,7 +6180,131 @@ void func_800948BC(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon", func_80094988);
+void func_80094988(u8 *p, u8 *q, s16 x, s16 y)
+{
+    s16 sx;
+    s16 sy;
+    u8 bx;
+    u8 by;
+    u8 *b;
+    u8 *e;
+    u8 *n;
+    s16 sv;
+    s16 idx;
+    s32 i;
+    s32 k;
+    u8 *slot;
+    u8 *c3;
+    u8 *c4;
+    u8 *c;
+    u8 *c2;
+
+    b = (u8 *)0x80010000;
+    sv = *(u16 *)(b + 0x3714) & 2;
+    *(u16 *)(b + 0x3714) |= 2;
+    func_800A6A9C();
+    func_80041E28(q, (u8 *)0x80012194);
+    *(u16 *)(p + 0xF8) = *(u16 *)(b + 0x2D50);
+    *(u32 *)(p + 0xFC) = *(u32 *)(b + 0x2D58);
+    for (i = 0; i < 0x14; i++)
+    {
+        *(UnkDungeonName4 *)(b + 0x248 + i * 4) = *(UnkDungeonName4 *)(b + 0x21E8 + i * 4);
+        if (*(u8 *)(b + 0x2238 + i) != 0xFF)
+        {
+            *(u32 *)(b + 0x29C + i * 4) = (u32)((u8 *)0x80010248 + *(u8 *)(b + 0x2238 + i) * 4);
+        }
+        else
+        {
+            *(u32 *)(b + 0x29C + i * 4) = 0;
+        }
+        D_800E3E48[i] = *(Unk800E3E48 *)(b + 0x2260 + i * 0x8C);
+        if (*(u8 *)(b + 0x224C + i) != 0xFF)
+        {
+            D_800E3DF0[i] = (s32)&D_800E3E48[*(u8 *)(b + 0x224C + i)];
+        }
+        else
+        {
+            D_800E3DF0[i] = 0;
+        }
+    }
+    n = (u8 *)0x80010000;
+    *(u32 *)(n + 0x29C + i * 4) = 0;
+    for (i = 0; i < 2; i++)
+    {
+        if (*((u8 *)0x80012D52 + i) != 0xFF)
+        {
+            *(u32 *)(p + i * 4 + 0xD0) = (u32)((u8 *)0x80010248 + *((u8 *)0x80012D52 + i) * 4);
+        }
+        else
+        {
+            *(u32 *)(p + i * 4 + 0xD0) = 0;
+        }
+    }
+    c = (u8 *)0x80010000;
+    c2 = (u8 *)0x80010000;
+    slot = (*(u8 *)(c + 0x21E0) == 0xFF) ? NULL : (u8 *)0x80010248 + *(u8 *)(c2 + 0x21E0) * 4;
+    func_800982A8(q, slot);
+    c3 = (u8 *)0x80010000;
+    c4 = (u8 *)0x80010000;
+    slot = (*(u8 *)(c3 + 0x21E1) == 0xFF) ? NULL : (u8 *)0x80010248 + *(u8 *)(c4 + 0x21E1) * 4;
+    func_80098614(q, slot);
+    slot = (u8 *)0x80010248;
+    for (k = 0; k < 0x14; k++, slot += 4)
+    {
+        if (slot[1] == 0x13 && (slot[3] & 0x20) != 0)
+        {
+            for (i = 0, idx = 0; i < 2; i++)
+            {
+                if (*(u32 *)(p + i * 4 + 0xD0) == (u32)slot)
+                {
+                    idx = i + 1;
+                }
+            }
+            if (idx != 0)
+            {
+                idx--;
+                e = func_800A1618(slot[0], 3);
+                if (e != NULL)
+                {
+                    if (func_8009B88C(NULL, x, y, &sx, &sy) == 0)
+                    {
+                        while ((s16)func_800A4E2C(&bx, &by) < 0)
+                        {
+                        }
+                        sx = bx;
+                        sy = by;
+                    }
+                    e = ((u8 * (*)(s32, s16, s16, s16)) func_800A0B94(slot[0], e,
+                                                                      1))(1, sx, sy,
+                                                                          *(s16 *)(q + 0x88));
+                    *(u8 **)(p + idx * 4 + 0xAC) = e;
+                    if (e != NULL)
+                    {
+                        func_80042640((Unk42710 *)e, e[0x13]);
+                        func_800424E0(e, e[0x13], slot);
+                        *(u32 *)(p + idx * 4 + 0xD0) = (u32)slot;
+                        slot[3] |= 0x20;
+                        D_800E3D74[idx] = 0;
+                        if (e[0x25] == 0)
+                        {
+                            *(u32 *)(e + 0x1C) |= 8;
+                        }
+                        D_800E3DF0[slot[3] & 0x1F] = (s32)e;
+                        func_80042984(e);
+                        func_800A152C(slot[0], 3);
+                        func_80042560((s8 *)e);
+                        func_800C542C(e, D_800DCED4[func_800429E4(e)], idx, 1);
+                    }
+                }
+            }
+        }
+    }
+    if (sv == 0)
+    {
+        D_80013714 &= 0xFFFD;
+    }
+    func_80035208(D_800E045C);
+}
 
 /* THE +0x1C FLAG WORD HAS TO BE AN ARRAY REF, not a `u8 *` cast: only an
    ARRAY_REF is MEM_IN_STRUCT_P, and only a MEM_IN_STRUCT_P load is hoisted
