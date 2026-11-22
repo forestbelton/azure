@@ -1,6 +1,8 @@
 #include "common.h"
 #include "ovl_dungeon_decls.h"
 
+void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d);
+
 /* dungeon.bin's overlay, translation unit 4 of 4: func_800D50FC to the next
  * boundary.  THE SPLIT IS FORCED BY JUMP-TABLE ALIGNMENT, not by size --
  * see splat/dungeon.bin.yaml for the offsets and why each one is where it
@@ -2387,7 +2389,221 @@ void func_800D904C(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800D50FC", func_800D92C0);
+/* 344 words, 0 differing.
+
+   THE TABLE ADDRESS IS A LOCAL THAT THE INDEX ADD WRITES BACK INTO, so the
+   `%lo' insn's destination has reg_n_sets != 1, `birthing_insn_p'
+   (sched.c:2512) fails on it, and the `%hi'/`%lo' pair is no longer forced to
+   sit immediately before its consumer -- it floats to the top of the block,
+   which is the only thing that lets QTY_CMP_PRI give the c[0x24] load $v0 and
+   the address chain $v1 the way the target has them.  Written with the lookup
+   inline (`c[0x24] += *(u8 *)(kk + (s32)D_8006CCD8)') it is 8 aligned
+   differences, and with a cancelled `t1++; t1--;' pair buying the second set
+   instead it is 5: combine folds the pair, re-places a REG_DEAD note on a
+   `use' insn it inserts at the ternary's join label, and the second death
+   drops the local out of local-alloc (local-alloc.c:472) so the chain never
+   becomes one quantity.  A read-modify-write set costs no instruction and
+   makes no second death (flow.c:2578).  The second lookup must stay inline:
+   giving D_8006CCE8 the same local is 343 words, because cse knows
+   D_8006CCE8 is D_8006CCD8 + 0x10 and folds the second `%hi'/`%lo' away.
+
+   The four devices are all load-bearing, re-priced by deletion at 0 rows:
+   the `cc2' do-while 4, the duplicated arm `if (n)' 3, the
+   `do { return; } while (0);' 4, the duplicated arm `if (d)' around
+   func_800BCB04 91.  Every condition is definitely assigned where it stands.
+ */
+void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *g2;
+    u8 *w;
+    s16 *tbl;
+    s16 f;
+    s16 i;
+    s16 m;
+    s32 s;
+    s32 n;
+    u8 *t80;
+    s32 j;
+    s32 k;
+    s32 r;
+    s32 v;
+    s32 kk;
+    s32 t1;
+    s32 cc2;
+    s32 x;
+    s32 y;
+
+    g = (u8 *)&D_80083460;
+    f = 0;
+    if ((*(u16 *)(g + 0x2) & 0x4000) != 0 || *(s8 *)(d + 0x71) >= 0)
+    {
+        func_800A9A0C(d);
+        return;
+    }
+    if ((*(u16 *)(g + 0x2) & 0x2000) == 0)
+    {
+        return;
+    }
+    w = p + 0x9C;
+    func_800A19E4((s32)c, d, 3, 6, w);
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x410) != 0)
+    {
+        if ((v & 0x400) != 0)
+        {
+            cc2 = 0x80000000;
+            if (*(s32 *)(d + 0x14) >= 0)
+            {
+                do
+                {
+                    *(s32 *)(d + 0x14) |= cc2;
+                } while (0);
+                *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) + ((func_800A6D30() & 7) << 9);
+            }
+        }
+    }
+    else
+    {
+        if (*(s8 *)(d + 0x71) >= 0)
+        {
+            return;
+        }
+        if ((*(u16 *)(g + 0x2) & 0x2000) == 0)
+        {
+            return;
+        }
+        func_800A19E4((s32)c, d, 3, 6, w);
+        v = *(s32 *)(d + 0x1C);
+        if ((v & 0x2000) != 0)
+        {
+            if ((v & 0x20000) != 0)
+            {
+                t80 = D_80082E80;
+                k = ((d[0x45] + ((s16)(*(u16 *)(D_800814A8 + 0x2A)) >> 9)) & 7) * 2;
+                x = t80[0x24] + *(u16 *)(k + (s32)D_8006CCD8);
+                y = t80[0x25] + *(u16 *)(k + (s32)D_8006CCE8);
+                if (c[0x24] == (u16)x && c[0x25] == (u16)y)
+                {
+                    d[0x71] &= 0x7F;
+                    return;
+                }
+                m = func_800A0818(c[0x24], c[0x25], x, y, (u16 *)(p + 0x98));
+                *(s16 *)(d + 0x2A) = m;
+                if ((s16)func_8009A66C(m, c, d, 0x20) <= 0)
+                {
+                    *(s16 *)(d + 0x2A) = func_800A0818(c[0x24], c[0x25], D_80082E80[0x24],
+                                                       D_80082E80[0x25], (u16 *)(p + 0x98));
+                }
+                if (func_8009FD7C(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25]) != 0)
+                {
+                    f = 1;
+                }
+            }
+            else
+            {
+                func_800A0E6C(c, *(s8 *)(p + 0x9C), d, p + 0x98);
+            }
+        }
+        else
+        {
+            j = *(s8 *)(c + 0x26);
+            if (j >= 0 && (D_800E2970_s[j].unk_0C & 2) != 0)
+            {
+                func_800A0E6C(c, *(s8 *)(p + 0x9C), d, p + 0x98);
+            }
+            else if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+            {
+                func_800A0E6C(c, *(s8 *)(p + 0x9C), d, p + 0x98);
+            }
+        }
+    }
+    i = 0;
+    tbl = D_8006CD00;
+    do
+    {
+        n = *(s16 *)(d + 0x2A);
+        if ((*(u16 *)(p + 0x98) & 2) != 0)
+        {
+            s = n - tbl[i];
+        }
+        else
+        {
+            s = n + tbl[i];
+        }
+        if (n)
+        {
+            r = func_8009A66C((s16)s, c, d, 0x20);
+        }
+        else
+        {
+            r = func_8009A66C((s16)s, c, d, 0x20);
+        }
+        if ((s16)r > 0)
+        {
+            if (i >= 3 && f != 0)
+            {
+                d[0x71] &= 0x7F;
+                return;
+            }
+            *(s16 *)(d + 0x2A) = s;
+            *(d + (d[0x71] & 0x7F) + 0x74) = c[0x24];
+            *(d + (d[0x71] & 0x7F) + 0x7C) = c[0x25];
+            d[0x71]++;
+            func_8009A3D0(c[0x24], c[0x25], (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+            kk = (*(u16 *)(d + 0x2A) >> 8) & 0xE;
+            t1 = (s32)D_8006CCD8;
+            t1 += kk;
+            c[0x24] += *(u8 *)t1;
+            c[0x25] += *(u8 *)(kk + (s32)D_8006CCE8);
+            func_8009A21C(c[0x24], c[0x25], (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+            break;
+        }
+        if (i == 0 && *(u16 *)(D_80082E80 + 0x24) != *(u16 *)(c + 0x24))
+        {
+            if ((s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+            {
+                do
+                {
+                    return;
+                } while (0);
+            }
+        }
+        i++;
+    } while (i < 8);
+    if (i >= 8)
+    {
+        d[0x71] &= 0x7F;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        func_800A9A0C(d);
+    }
+    else
+    {
+        p[0x9C] = c[0x26];
+        d[0x6D]--;
+        g2 = (u8 *)&D_80083460;
+        *(u16 *)(g2 + 0x8) = *(u16 *)(g2 + 0x8) + 1;
+        if (*(s8 *)(d + 0x6D) == 0)
+        {
+            d[0x71] &= 0x7F;
+            return;
+        }
+        if (d)
+        {
+            i = func_800BCB04(c[0x24] * 64 | 0x20, c[0x25] * 64 | 0x20,
+                              *(u16 *)(d + 0x88) - 0x20);
+        }
+        else
+        {
+            i = func_800BCB04(c[0x24] * 64 | 0x20, c[0x25] * 64 | 0x20,
+                              *(u16 *)(d + 0x88) - 0x20);
+        }
+        if (i < 0x200)
+        {
+            *(s16 *)(d + 0x88) = i;
+        }
+    }
+}
 
 /* State 0x10, and hand c the D_800E260C entry the facing at d+0x2A selects.
    The table base is a POINTER LOCAL because it is used twice -- stored at
