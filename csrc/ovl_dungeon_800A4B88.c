@@ -6090,7 +6090,150 @@ void func_800AFAD8(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800A4B88", func_800AFBFC);
+/* func_800AFBFC: 238/238 words, 0 differing.
+ *
+ * THE TWO LOOP ACCUMULATORS ARE 16 BITS WIDE, and that is the whole function.
+ * `u16 k' / `u16 bs' make the backward loop top ONE insn,
+ * `(set (reg:HI k) (plus:HI (reg:HI m) (const_int -128)))' -- convert.c's
+ * convert_to_integer distributes the narrowing conversion down into the
+ * MINUS_EXPR, so `m' is read straight out of its spill slot as an operand and
+ * reload emits the target's `lhu $t0, 0x18($sp)' + nop + `addiu $s1,$t0,-0x80'
+ * at 800AFE54.  With `s32 k' the subtraction is int arithmetic, `m' has to be
+ * widened first, and the `(zero_extend:SI (reg:HI m))' needs a register of its
+ * own: `lhu $s0' + `addiu $s1,$s0,-0x80', which is a 2-row residue no
+ * respelling of that temp can fix ($t0 is never a pseudo's hard register here,
+ * global_alloc keeps it for reloads).
+ *
+ * Narrow k also changes which cse-association breaker works.  With `s32 k' the
+ * loop top is `Z = zero_extend(m); k = Z - 0x80', so k's class names the
+ * unnamed Z and a write to `m' breaks nothing (17 rows).  Narrow, the class
+ * names `m' itself, so updating the accumulator in place --
+ * `m = k; m -= 0x80; k = m;' and `bs = k; bs += 0x80; k = bs;' -- both breaks
+ * the association and needs no dead store.  `k += 0x80' with the breaker
+ * dropped is 19 rows, `m -= 0x80; k = m' without the copy is 78 rows at 240.
+ * The two changes are a pair: `u16 k' alone is 3 rows, `s16 k' alone 26, and
+ * the park sat at 2 for a day with every single change priced as a loss.
+ *
+ * `s16 x, y, x2, y2' are load-bearing: with an SImode RHS and a HImode
+ * destination, store_expr (expr.c:3221) cannot compute into TARGET, so the
+ * value lands in an SImode temp and store_expr's tail copies it -- those
+ * copies are the four `addu $s4,$s0,$zero' at 800AFDB8, 800AFDD4, 800AFF14
+ * and 800AFF30, and `s32' cannot produce them at all.  `ang = a[6];' then
+ * `ang += 0xC00;' as two statements is the in-place update at 800AFCB4 (one
+ * statement costs 2 rows), and `ang <<= 16; ang >>= 16;' in the head rather
+ * than `(s16)ang' makes the narrowing write `ang' itself (5 rows vs 10).
+ */
+s32 func_800AFBFC(u8 *a, void *b, u8 *c)
+{
+    UnkDungeonSP5 *sp;
+    u8 *g;
+    POLY_GT4 *p;
+    POLY_GT4 *q;
+    u8 *t;
+    s32 cx;
+    s32 cy;
+    s32 f;
+    s32 v;
+    s32 ang;
+    u16 k;
+    u16 bs;
+    u16 m;
+    s16 x;
+    s16 y;
+    s16 x2;
+    s16 y2;
+
+    g = (u8 *)&D_80083160;
+    sp = (UnkDungeonSP5 *)0x1F800000;
+    p = *(POLY_GT4 **)(*(u8 **)g + 0x8D0);
+    sp->unk_20 = (u32)(*(u8 **)g + 0x8B0);
+    t = *(u8 **)(c + 0x8);
+    sp->unk_118 = (u32)t;
+    cx = *(u16 *)(g + 0xAC);
+    cy = *(u16 *)(g + 0xAE);
+    v = t[1];
+    c[0xF] = v;
+    f = *(u16 *)(c + 0x14);
+    if (f & 8)
+    {
+        c[0xF] = (f & 4) ? (v | 2) : (v & 0xFD);
+    }
+    ang = a[6];
+    ang += 0xC00;
+    ang -= (*(u16 *)(g + 0xC8) + 0x80) & 0xF00;
+    m = ang;
+    bs = ang;
+    ang <<= 16;
+    ang >>= 16;
+    x = func_80064584(ang) * 6 - cx;
+    y = func_800644B8(ang) * 6 - cy;
+    while (1)
+    {
+        k = bs + 0x80;
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+        sp->unk_70[0].vy = sp->unk_70[2].vy = y;
+        x2 = func_80064584((s16)k) * 6 - cx;
+        y2 = func_800644B8((s16)k) * 6 - cy;
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x2;
+        sp->unk_70[1].vy = sp->unk_70[3].vy = y2;
+        q = func_800AFFB4(a, c, sp, p, 0);
+        if (q == NULL)
+        {
+            break;
+        }
+        p = q;
+        bs = k;
+        bs += 0x80;
+        k = bs;
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x2;
+        sp->unk_70[0].vy = sp->unk_70[2].vy = y2;
+        x = func_80064584((s16)k) * 6 - cx;
+        y = func_800644B8((s16)k) * 6 - cy;
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x;
+        sp->unk_70[1].vy = sp->unk_70[3].vy = y;
+        q = func_800AFFB4(a, c, sp, p, 1);
+        if (q == NULL)
+        {
+            break;
+        }
+        p = q;
+    }
+    x = func_80064584((s16)m) * 6 - cx;
+    y = func_800644B8((s16)m) * 6 - cy;
+    while (1)
+    {
+        k = m - 0x80;
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x;
+        sp->unk_70[1].vy = sp->unk_70[3].vy = y;
+        x2 = func_80064584((s16)k) * 6 - cx;
+        y2 = func_800644B8((s16)k) * 6 - cy;
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x2;
+        sp->unk_70[0].vy = sp->unk_70[2].vy = y2;
+        q = func_800AFFB4(a, c, sp, p, 1);
+        if (q == NULL)
+        {
+            break;
+        }
+        p = q;
+        m = k;
+        m -= 0x80;
+        k = m;
+        sp->unk_70[1].vx = sp->unk_70[3].vx = x2;
+        sp->unk_70[1].vy = sp->unk_70[3].vy = y2;
+        x = func_80064584((s16)k) * 6 - cx;
+        y = func_800644B8((s16)k) * 6 - cy;
+        sp->unk_70[0].vx = sp->unk_70[2].vx = x;
+        sp->unk_70[0].vy = sp->unk_70[2].vy = y;
+        q = func_800AFFB4(a, c, sp, p, 0);
+        if (q == NULL)
+        {
+            break;
+        }
+        p = q;
+    }
+    *(u32 *)(*(u8 **)g + 0x8D0) = (u32)p;
+    return 0;
+}
 
 /* The vertical strip of gouraud-textured quads one ring segment is drawn as:
    fourteen RotAverageNclip4 passes up one 0xE00-per-step column of the
