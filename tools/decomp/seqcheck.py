@@ -80,11 +80,32 @@ def canon(entry):
     return entry
 
 
-def target_seq(func):
+def target_seq(func, unit=None):
     # Find the listing by GLOB rather than hard-coding one overlay: the town
     # overlay alone is carved into three translation units, and the same check
     # has to work for any of them and for the resident units.
+    #
+    # PREFER THE DIRECTORY NAMED BY THE UNIT WE WERE GIVEN.  A carve leaves
+    # the OLD unit's listing directory behind -- `make splat' writes the new
+    # one and never removes the stale copy -- so on 2026-11-21 seven listings
+    # existed twice, in `ovl_dungeon_800C2824' (the first carve, when that
+    # unit still ran to the end of the block) and in the unit the second carve
+    # created.  A bare glob then matches two and this check refused to run,
+    # which is the SAFE failure; the unsafe one is a stale copy that differs.
+    # We are handed the unit path, so use it.
     hits = glob.glob(os.path.join(PROJ, 'asm/nonmatchings/*', func + '.s'))
+    if len(hits) > 1 and unit:
+        want = os.path.splitext(os.path.basename(unit))[0]
+        pref = [h for h in hits
+                if os.path.basename(os.path.dirname(h)) == want]
+        if len(pref) == 1:
+            others = [h for h in hits if h not in pref]
+            same = all(open(h, 'rb').read() == open(pref[0], 'rb').read()
+                       for h in others)
+            print('%s: %d listings matched; using %s%s'
+                  % (func, len(hits), os.path.relpath(pref[0], PROJ),
+                     '' if same else '  *** AND THE OTHERS DIFFER ***'))
+            hits = pref
     if len(hits) != 1:
         raise SystemExit('%s: %d listings matched asm/nonmatchings/*/%s.s'
                          % (func, len(hits), func))
@@ -152,7 +173,7 @@ def main():
                               '--raw', unit, f], cwd=PROJ, capture_output=True, text=True).stdout
         m = re.search(r'(\d+) differing', raw)
         rawn = int(m.group(1)) if m else -1
-        t = target_seq(f)
+        t = target_seq(f, unit)
         c, total = cand_seq(unit, f)
         # splat names a resident routine func_80065610 and common_syms.txt
         # names the same address RotNclip4.  A unit whose container links

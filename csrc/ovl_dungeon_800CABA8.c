@@ -3630,7 +3630,43 @@ void func_800D1338(void)
     *(u8 *)D_80081508 = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800CABA8", func_800D13B8);
+void func_800D13B8(void)
+{
+    u8 *g;
+    u8 *e;
+    s32 t;
+    s16 k;
+    s16 x;
+    s16 y;
+
+    g = (u8 *)&D_80083160;
+    e = g + 0x18;
+    if (func_80044724() == 0)
+    {
+        return;
+    }
+    t = 2 - ((*(s16 *)(g + 0xC8) + 0x100) >> 9);
+    func_800D1338();
+    k = t & 7;
+    x = *(u16 *)(e + 0xA4) >> 6;
+    y = *(u16 *)(e + 0xA6) >> 6;
+    if ((t & 1) != 0)
+    {
+        func_800D112C((k + 1) & 7, x, y);
+        func_800D112C((k - 1) & 7, x, y);
+        func_800D112C((k + 3) & 7, (s16)(x + D_8006CCD8[k] * 10), (s16)(y + D_8006CCE8[k] * 10));
+        func_800D112C((k - 3) & 7, (s16)(x + D_8006CCD8[k] * 10), (s16)(y + D_8006CCE8[k] * 10));
+    }
+    else
+    {
+        func_800D112C(k, x, y);
+        func_800D112C((k + 2) & 7, x, y);
+        func_800D112C((k - 2) & 7, x, y);
+        func_800D112C((k + 4) & 7, (s16)(x + D_8006CCD8[k] * 10), (s16)(y + D_8006CCE8[k] * 10));
+        func_800D112C((k + 2) & 7, (s16)(x + D_8006CCD8[k] * 10), (s16)(y + D_8006CCE8[k] * 10));
+        func_800D112C((k - 2) & 7, (s16)(x + D_8006CCD8[k] * 10), (s16)(y + D_8006CCE8[k] * 10));
+    }
+}
 
 /* 21 words, 0 differing. */
 void func_800D1648(void)
