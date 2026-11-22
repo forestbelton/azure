@@ -26,6 +26,7 @@ identical, so the branch cannot change what the function computes -- but it is
 worth preferring a condition that is live and defined when two spellings
 measure the same.  See docs/matching-levers.md.
 """
+TAG = "devsweep"
 import os
 import re
 import subprocess
@@ -265,7 +266,19 @@ def main():
                       " NOT using it" % (orows, ow, rows, w))
 
     print("%s: base %d rows, %d/%d words" % (func, rows, w, tw))
+    # ORDER BY WORD GAP FIRST, THEN ROWS -- and never gate on `ww == tw'.
+    # A strict word-exactness gate is useless on a park that is not already
+    # word-exact, and WORSE THAN USELESS on one that is long: the only
+    # candidates that pass are the ones reaching the target by DELETING code
+    # the target has (shorten_compare will fold a guard away for you).  On
+    # func_800ADE74 at 1821 of 1817 words that gate made these tools accept
+    # nothing but block deletions, and an agent had to re-implement both.
+    # Same fix, same reason, as widthsweep.py and measure_finds.py.
+    def key(r, ww):
+        return (abs(ww - tw), r)
+
     cur, best, applied = fn, (rows, w), []
+    best_key = key(rows, w)
     for rnd in range(rounds):
         lines = cur.split("\n")
         cands = candidates(cur)
@@ -284,8 +297,8 @@ def main():
                 cand = lines[:lo] + repl + lines[hi + 1:]
                 body = "\n".join(cand)
                 rr, ww, _ = measure(body)
-                if ww == tw and (rr, ww) < best:
-                    best = (rr, ww)
+                if key(rr, ww) < best_key:
+                    best, best_key = (rr, ww), key(rr, ww)
                     what = "%s %s" % (
                         ("do-while" if kind == "do" else "if (%s) arms" % cond), label)
                     found = (body, what + " at `%s'" % stmts[0].strip()[:34])
@@ -320,8 +333,8 @@ def main():
                 cand = lines[:i] + repl + lines[i + 1:]
                 body = "\n".join(cand)
                 rr, ww, _ = measure(body)
-                if ww == tw and (rr, ww) < best:
-                    best = (rr, ww)
+                if key(rr, ww) < best_key:
+                    best, best_key = (rr, ww), key(rr, ww)
                     found = (body, what)
                     print("  round %d: %d rows, %d words  %s" % (rnd, rr, ww, what))
         if not found:
@@ -335,8 +348,13 @@ def main():
         if (vr, vw) != best:
             print("devsweep: *** STANDALONE AND UNIT DISAGREE (%d/%d vs %d/%d);"
                   " trust the unit." % (vr, vw, best[0], best[1]))
-            best = (vr, vw)
+            best, best_key = (vr, vw), key(vr, vw)
     print("final %d rows, %d/%d words" % (best[0], best[1], tw))
+    if applied and best[1] < w:
+        print("%s: *** THE RESULT IS SHORTER THAN THE BODY YOU STARTED WITH" % TAG)
+        print("%s: *** (%d -> %d words).  Check aligndiff for a CONTIGUOUS RUN" % (TAG, w, best[1]))
+        print("%s: *** of missing target words -- four or more is a deleted" % TAG)
+        print("%s: *** basic block, not a closed word gap." % TAG)
     if applied:
         out = os.path.join(sp, "best.c")
         open(out, "w").write(cur)
