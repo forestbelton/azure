@@ -8,6 +8,9 @@ implicit `int f()'. Declarations stay shared through ovl_dungeon_decls.h.
 """
 import re, sys, os
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import parkresidue as pr
+
 SRC = 'csrc/ovl_dungeon.c'
 HDR = 'csrc/ovl_dungeon_decls.h'
 bounds = sys.argv[1:]
@@ -55,6 +58,44 @@ for i, (nm, ch) in enumerate(zip(names, chunks)):
     protos = []
     if i:
         named = set(re.findall(r'\b(func_[0-9A-Fa-f]{8})\b', ch))
+        # A PARKED FUNCTION'S CALLEES ARE INVISIBLE IN `ch', AND THAT COST
+        # func_800ADE74 FOUR ROWS ON 2026-11-22.
+        #
+        # The callee set above is read out of the unit's own C TEXT. A parked
+        # function contributes nothing to that text but its `INCLUDE_ASM(...)'
+        # line, so none of the functions its PARK BODY calls is named here and
+        # no prototype is synthesised for them. The park then compiles against
+        # implicit `int f()' declarations that the single pre-carve unit had
+        # supplied for free, and its residue changes.
+        #
+        # The third carve moved func_800ADE74 into ovl_dungeon_800A4B88 and it
+        # went 30 rows -> 34. Fourteen of its callees were newly undeclared;
+        # bisecting them one at a time showed THIRTEEN MOVE NOTHING and the
+        # whole four rows are one prototype:
+        #
+        #     s16 func_800A45D8(u16 x, u16 y, s32 c);
+        #
+        # and specifically the `u16' on the first two parameters -- the call
+        # passes `sp18 << 6' from s16 stack locals, so u16 is a narrowing the
+        # target performs. Every spelling with u16/u16 and a 32-bit-or-wider
+        # return measures 30; widening or signing them measures 34, exactly
+        # like no prototype at all.
+        #
+        # So union in the callees of every park this unit stubs, read from the
+        # park's LIVE BODY (body_of, which skips `#if 0' alternatives) and not
+        # from its header, since a header names functions in prose. This
+        # cannot disturb a landed function: if one in this unit called the
+        # same callee, the name would already be in `ch'.
+        for pf in re.findall(r'INCLUDE_ASM\("[^"]*",\s*(func_[0-9A-Fa-f]{8})\)', ch):
+            pk = os.path.join('docs/dungeon-parks', pf + '.c')
+            if not os.path.exists(pk):
+                continue
+            try:
+                b = pr.body_of(pk, pf)
+            except Exception:
+                b = ''
+            if b:
+                named |= set(re.findall(r'\b(func_[0-9A-Fa-f]{8})\b', b))
         for f in sorted(named & set(earlier)):
             if re.search(r'(?m)^[A-Za-z_][^\n;]*\b' + f + r'\s*\([^;]*;', hdr):
                 continue

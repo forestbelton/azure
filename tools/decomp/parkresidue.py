@@ -136,6 +136,34 @@ def decls_of(path):
             if not explicit and not TYPEWORD.match(line):
                 continue
         out.append(line)
+    # THE FALLBACK PATH IS SILENT AND IT CAN SPLICE A FOREIGN PROTOTYPE.
+    #
+    # On 2026-11-22 an agent added a prose table of OTHER parks' missing
+    # prototypes to func_800ADE74's header, with semicolons. Those lines are
+    # declaration-shaped and that park has no explicit DECLARATIONS block, so
+    # the fallback harvested all of them: parksplice reported 43 declaration
+    # lines where 17 were meant and spliced fourteen other units' prototypes
+    # into ovl_dungeon_800A4B88.c -- among them func_800B1768, func_800BC318,
+    # func_800C0180 and func_800C27F0, any of which could reach a LANDED
+    # function in that unit and change its codegen.
+    #
+    # The body still measured its expected 30 rows, so nothing failed and
+    # nothing warned. It was caught only by someone reading parksplice's own
+    # declaration count and finding it implausible.
+    #
+    # So say so. The threshold is deliberately low: a park that genuinely needs
+    # more than a handful of declarations should name them in an explicit
+    # DECLARATIONS block, which is what the block is for.
+    if out and not explicit:
+        print("parkresidue: %s has NO `DECLARATIONS' block, so %d "
+              "declaration-shaped line(s) were harvested from its header prose."
+              % (os.path.basename(path), len(out)), file=sys.stderr)
+        if len(out) > 6:
+            print("parkresidue: *** THAT IS A LOT. Prose that merely looks like "
+                  "C is harvested too, and a foreign prototype spliced into the "
+                  "unit can change a LANDED function's codegen. Check the list, "
+                  "or give the park an explicit DECLARATIONS block.",
+                  file=sys.stderr)
     return "".join(l + "\n" for l in out)
 
 

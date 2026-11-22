@@ -1,7 +1,11 @@
 /* ===========================================================================
-   BEST MEASURED CANDIDATE for func_800ADE74, ovl_dungeon (1817 words).
+   BEST MEASURED CANDIDATE for func_800ADE74,
+   csrc/ovl_dungeon_800A4B88.c (1817 words).
 
-   2026-11-22, fourth session.  1817/1817 WORDS, 30 aligned rows
+   2026-11-22, fifth session.   1817/1817 WORDS, 30 aligned rows
+                                (34 before the prototype block below; see
+                                 "THE CARVE REGRESSION")
+   was 2026-11-22, fourth:      1817/1817 words, 30 aligned rows
    was 2026-11-22, third:       1817/1817 words, 35 aligned rows
    was 2026-11-21, later:       1821/1817 words, 170 aligned rows
    was 2026-11-21, morning:     1817/1817 words, 255 rows -- but that word
@@ -21,6 +25,143 @@
    THE WORD COUNT IS HONEST: every word is accounted for, and the first 274
    words and the last 398 are byte-identical.  What is left is 30 rows in
    THREE register/schedule clusters, listed at the bottom.
+
+   ===========================================================================
+   THE CARVE REGRESSION: 30 -> 34 ROWS, AND IT IS ONE MISSING PROTOTYPE
+   (2026-11-22, fifth session.  DIAGNOSED, FIXED, AND IT IS A carve_dungeon.py
+   BUG THAT AFFECTS FOUR OTHER PARKS.)
+
+   The third rodata carve (commit fb2d885) moved this function out of
+   csrc/ovl_dungeon.c into csrc/ovl_dungeon_800A4B88.c.  The park body did not
+   change by one character, and it went from 30 aligned rows to 34.
+
+   THE CAUSE, measured with one variable:
+       the park body in a PRE-CARVE csrc/ovl_dungeon.c   1817 words, 30 rows
+       the SAME body in csrc/ovl_dungeon_800A4B88.c      1817 words, 34 rows
+   Fourteen of this function's callees are defined in an EARLIER unit now and
+   are declared NOWHERE in csrc/ovl_dungeon_800A4B88.c nor in
+   csrc/ovl_dungeon_decls.h, so they became implicit `int f()'.  Each of the
+   fourteen was added to the 34-row body ALONE:
+
+       s32 func_8009CD58(u8 *a, s32 b, s16 c);                   34
+       s16 func_800A0134(u8 *a, u8 *b);                          34
+       u8 *func_800A02AC(u8 *p, u16 x, u16 y);                   34
+       s32 func_800A0818(s16 a, s16 b, s16 c, s16 d, u16 *f);    34
+       s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d);            34
+       s32 func_800A2CAC(u8 *p);                                 34
+       s32 func_800A3518(u8 *p);                                 34
+       s16 func_800A3544(u8 *p, u8 k);                           34
+       s32 func_800A365C(u8 *a, u8 *b);                          34
+       s32 func_800A36B4(u8 *a, u8 *b);                          34
+       s32 func_800A384C(u8 *a, u8 *b, u8 *c, s32 s);            34
+       u8 *func_800A3D18(u8 *a, u8 *b, s16 c);                   34
+       s32 func_800A404C(void);                                  34
+       s16 func_800A45D8(u16 x, u16 y, s32 c);                   30  <-- THIS
+       all fourteen together                                     30
+       the other thirteen, without func_800A45D8                 34
+
+   So it is EXACTLY ONE prototype, `s16 func_800A45D8(u16 x, u16 y, s32 c)',
+   and it is necessary and sufficient.  Its single call site is case 0x2A's
+
+       if ((s16)func_800A45D8(sp18 << 6, sp1A << 6, (s16)(ang + 0x20)) != 0)
+
+   -- inside residue cluster (I), which is why the four rows land there.
+   With the prototypes restored the generated text is IDENTICAL to the
+   pre-carve build: `aligndiff' output diffs clean against the pre-carve
+   standalone except for the disassembler's absolute branch addresses
+   (`bnez v0,834' against `bnez v0,9b1c', same `+0x834' offset), which is the
+   function sitting at a different file offset.  **Therefore every sweep
+   result recorded below, measured pre-carve, transfers unchanged.**
+
+   THE GENERATOR BUG, and it is not defs_in().  carve_dungeon.py:58-62 is
+
+       named = set(re.findall(r'\b(func_[0-9A-Fa-f]{8})\b', ch))
+       for f in sorted(named & set(earlier)):
+
+   -- the callee set is read out of THE UNIT'S OWN C TEXT.  A PARKED function
+   contributes nothing but its `INCLUDE_ASM(...)' line, so its callees are
+   invisible and no prototype is synthesised for them.  Proof it is this and
+   not a parse failure: `s16 func_800A45D8(u16 x, u16 y, s32 c);' IS present
+   in csrc/ovl_dungeon_800D50FC.c:21, because that unit has a LANDED caller at
+   line 623 whose text names it.  The generator parsed the definition line
+   fine; it just never asked for it here.
+
+   THE FIX (safe, and narrow): union in the callee names of each park the unit
+   stubs, read from the park's LIVE BODY (parkresidue.body_of), not its header
+   -- a header mentions functions in prose.  It cannot change a landed
+   function: if a landed function in the unit called the same callee, the name
+   would already be in `ch' and the prototype would already exist.
+
+   FOUR OTHER PARKS ARE MISSING PROTOTYPES FOR THE SAME REASON (computed by
+   replaying the generator's own `earlier' map over the nine units in order;
+   each line is the generated spelling that is absent):
+   (THE SPELLINGS BELOW DELIBERATELY HAVE NO TRAILING SEMICOLON.  They are
+   prose about OTHER units, and parkresidue.decls_of harvests every
+   declaration-SHAPED line out of a park header -- with semicolons it spliced
+   all fourteen of them into THIS unit, where func_800B1768, func_800BC318,
+   func_800C0180 and func_800C27F0 could reach a landed function.  Caught by
+   reading `parksplice' reporting 43 declaration lines where 17 were meant.)
+       ovl_dungeon_800B6AC4  park func_800B6AC4  6 missing
+           void func_80093C70(u8 *a, u8 *b, u8 *c)
+           void func_80093D8C(u8 *a, u8 *b, u8 *c)
+           s16  func_8009904C(void *x)
+           s32  func_80099090(void)
+           u8  *func_80099254(u8 *s, u8 *d)
+           void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
+       ovl_dungeon_800C2824  park func_800C2824  4 missing
+           s32  func_800A6620(u8 *p, s32 f)
+           void func_800BC318(u8 *key)
+           s32  func_800C0180(void)
+           s32  func_800C27F0(void)
+       ovl_dungeon_800CABA8  park func_800CEA44  3 missing
+           s32  func_800A0B94(s16 a, u8 *s, s16 c)
+           s32  func_800A152C(s16 a, s16 b)
+           void func_800A1D4C(u8 *p, s16 f)
+       ovl_dungeon_800D50FC  park func_800D92C0  1 missing
+           s32  func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d)
+   ALL FOUR WERE MEASURED, and none of them is affected -- the exposure is
+   real but it only bit this park:
+       func_800B6AC4  812/2  rows with and without its 6        -> unaffected
+       func_800C2824  278/10 rows with and without its 4        -> unaffected
+       func_800CEA44  242/3  rows with and without its 3        -> unaffected
+       func_800D92C0  344/5  rows with and without its 1        -> unaffected
+   (func_800C2824 needed care: its park already DECLARES func_800C27F0 and
+   func_800C0180 as `void f()' where the definitions are `s32 f(void)', so
+   adding the generated spellings is a `conflicting types' hard error.
+   Replacing the park's two with the definitions' and adding the other two is
+   the measurement above, and it is 10 rows either way.)
+
+   AND THE PROTOTYPE SPELLING IS ITSELF A LEVER, swept here for the first time
+   because before the carve it was not a free parameter -- the definition line
+   supplied it.  Fourteen spellings of func_800A45D8, on the 30-row body:
+       s16 f(u16 x, u16 y, s32 c)   30   <-- the definition's own, KEPT
+       s32 f(u16 x, u16 y, s32 c)   30        (return type does not matter)
+       u32 f(u16 x, u16 y, s32 c)   30
+       s16 f(u16 x, u16 y, s16 c)   30        (3rd parameter does not matter)
+       s16 f(u16 x, u16 y, u32 c)   30
+       s8  f(u16 x, u16 y, s32 c)   31
+       s16 f(u16 x, u16 y, u16 c)   43
+       s16 f(s16 x, s16 y, s32 c)   34
+       s16 f(s32 x, s32 y, s32 c)   34
+       s16 f(s32 x, s32 y, s16 c)   34
+       s16 f(u32 x, u32 y, s32 c)   34
+       s16 f()                      34        (= the implicit `int f()')
+       u16 f(u16 x, u16 y, s32 c)   1818/112  (truncates the result)
+       u8  f(u16 x, u16 y, s32 c)   1818/112
+       s16 f(u8 x, u8 y, s32 c)     1819/124
+   SO THE WHOLE FOUR ROWS ARE THE **u16 ON THE FIRST TWO PARAMETERS**, not the
+   `s16' return: every spelling with `u16 x, u16 y' and a 32-bit-or-wider
+   return is 30, and every spelling that widens or signs them is 34, exactly
+   like having no prototype at all.  The call passes `sp18 << 6' and
+   `sp1A << 6' from `s16' stack locals, so a `u16' parameter is a narrowing
+   conversion the target plainly performs and a wider one is not.  Nothing
+   beats the definition's own spelling, which is what the generator emits.
+
+   func_800AFBFC, which moved into THIS unit in the same commit, is NOT
+   affected: it is still 238/238 words and 2 aligned rows after the carve.
+   Its only two callees are func_800644B8 (another unit entirely) and
+   func_800AFFB4 (defined LATER in this same unit), so both were implicit
+   before the carve as well and nothing changed for it.
 
    ===========================================================================
    WHAT MOVED ON 2026-11-22 (FOURTH SESSION), 35 -> 30 ROWS, IN TWO CHANGES
@@ -666,6 +807,29 @@
    ===========================================================================
    SWEEPS RUN, AND WHAT THEY RETURNED
 
+   2026-11-22, FIFTH SESSION.  partsweep.py (new that day, and the ONE space
+   no other sweep varies) run on the 30-row body IN THE CARVED UNIT, with the
+   prototype block in place:
+       partsweep   base 30 rows, 1817/1817 words      CLEAN
+                   -- "no partition helps".  It enumerated six
+                      same-expression groups and 21 partitions:
+                        `0'                                  i, i2A, ret
+                        `*(u8 **)(D_800814A8 + j * 4 + 0xAC)' q1, q3, q5
+                        `*(u8 **)(D_800E3D7C + i * 4 + 0xAC)' g, g22
+                        `*(u16 *)(c + 0x98)'                  h1, h2, h3
+                        `func_8009FD40w(D_80082E80, b)'       r6, r7
+                        `dx'                                  mx, sp18
+                      -- so `g'/`g22' (change (g)) and `mx'/`sp18' and
+                      `r6'/`r7' are all confirmed as drawn, and the three
+                      `h' and three `q' locals must stay separate.
+   THE OTHER FOUR SWEEPS' RESULTS BELOW TRANSFER TO THE CARVED UNIT UNCHANGED,
+   and that is proved rather than assumed: with the prototype block restored
+   the generated text is IDENTICAL to the pre-carve build (aligndiff output
+   diffs clean except for the disassembler's absolute branch addresses), and
+   the declaration set the compiler sees is the same, so a candidate measured
+   pre-carve measures the same now.  gcc 2.7.2 has no interprocedural
+   analysis, so the rest of the unit cannot matter.
+
    ON THE CURRENT 1817/30 BODY (2026-11-22, fourth session), with each sweep
    given its OWN AZURE_SCRATCH -- all four under one scratch produced
    `symbol func_800ADE74 is already defined' from concurrent compiles, which
@@ -912,6 +1076,33 @@
    * CASE 0x2A'S LOOP COUNTER MUST BE ITS OWN VARIABLE: `i2A' must stay.
    * declaration-order search, 80 random reorderings: no effect at all.
    =========================================================================== */
+
+/* THE FOURTEEN PROTOTYPES THE THIRD CARVE TOOK AWAY.  Every one of these
+   callees is DEFINED IN AN EARLIER UNIT now, so this unit sees an implicit
+   `int f()' where the single-unit compile saw the definition line.  They are
+   copied VERBATIM from those definition lines, i.e. they say exactly what
+   csrc/ovl_dungeon.c said before commit fb2d885.  ONLY func_800A45D8 IS
+   LOAD-BEARING (it is worth 4 rows); the other thirteen are byte-identical
+   singly and are kept so the park reproduces the pre-carve compile exactly,
+   which is what makes every sweep result recorded below transfer.  None of
+   the fourteen is referenced anywhere else in csrc/ovl_dungeon_800A4B88.c
+   (0 textual references, and none is in csrc/ovl_dungeon_decls.h), so
+   declaring them cannot touch a landed function.  carve_dungeon.py should
+   generate them -- see "THE CARVE REGRESSION" at the top. */
+s32 func_8009CD58(u8 *a, s32 b, s16 c);
+s16 func_800A0134(u8 *a, u8 *b);
+u8 *func_800A02AC(u8 *p, u16 x, u16 y);
+s32 func_800A0818(s16 a, s16 b, s16 c, s16 d, u16 *f);
+s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d);
+s32 func_800A2CAC(u8 *p);
+s32 func_800A3518(u8 *p);
+s16 func_800A3544(u8 *p, u8 k);
+s32 func_800A365C(u8 *a, u8 *b);
+s32 func_800A36B4(u8 *a, u8 *b);
+s32 func_800A384C(u8 *a, u8 *b, u8 *c, s32 s);
+u8 *func_800A3D18(u8 *a, u8 *b, s16 c);
+s32 func_800A404C(void);
+s16 func_800A45D8(u16 x, u16 y, s32 c);
 
 s16 func_800A35A4h(u8 *, s32) __asm__("func_800A35A4");
 s32 func_8009FD40w(u8 *, u8 *) __asm__("func_8009FD40");
