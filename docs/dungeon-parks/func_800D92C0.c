@@ -1,5 +1,251 @@
 /* func_800D92C0 (ovl_dungeon_800D50FC) -- 344 of 344 words, 5 ALIGNED DIFFERENCES.
 
+   ====================================== 2026-11-22: STILL 5 ROWS, BUT THE
+   RESIDUE IS NOW PROVED AND THE BASIN THE PARK SITS IN IS PROVED WRONG.
+
+   No row was gained.  What changed is that the five rows are no longer a
+   conjecture about QTY_CMP_PRI: the model below predicts the register
+   assignment of THREE different bodies exactly, the park's own spelling of
+   the `c[0x24]' line is proved NOT to be the target's, and the one lever that
+   would close it is proved unreachable from C.  Read (A)-(F) before measuring
+   anything; most of the obvious moves are now closed negatives WITH REASONS.
+
+   (A) THE TARGET'S `c[0x24]' LINE IS VALUE-FIRST.  THIS IS A PROOF, NOT A
+   ROW COUNT, AND IT OVERRIDES CHANGE (3) OF THE 2026-11-21 HEADER.
+
+   `addsi3_internal' prints `addu %0,%1,%2', so the TARGET'S OWN LISTING gives
+   the RTL operand order of the sum.  At 0x800D9674 the target has
+
+       800D965C   lbu   $v0, 0x24($s3)      <- the c[0x24] load, in $v0
+       800D966C   lbu   $v1, 0x0($v1)       <- the table byte,   in $v1
+       800D9674   addu  $v0, $v0, $v1       <- operand 1 is $v0 = c[0x24]
+
+   so RTL operand 1 of the plus is the c[0x24] LOAD.  block_alloc's tying loop
+   (local-alloc.c:1349) walks operands 1,2,... and breaks at the first win, so
+   operand 1 is the one the sum's destination is tied to -- which means the
+   target's source reads `c[0x24] = c[0x24] + table', i.e. VALUE-FIRST.  The
+   same reading of 0x800D9694 (`addu $v0,$v0,$v1' with $v0 = the c[0x25] load)
+   confirms the method on the c[0x25] line, which IS value-first in the body
+   below and matches.
+
+   The park's table-first `c[0x24] = *(u8 *)(kk + (s32)D_8006CCD8) + c[0x24];'
+   ties the sum to the TABLE BYTE instead.  It scores 5 against value-first's
+   8 only because, with the registers transposed, `addu $v0,$v0,$v1' comes out
+   byte-identical by coincidence and the `sb' happens not to move.  ovlverify
+   agrees the park body is the better NUMBER (5 differing masked against the
+   value-first body's 7) and the row count agrees too -- and both are measuring
+   a spelling that cannot reach 0.  THIS IS THE STALE-POSITIVE RULE WITH A
+   PROOF ATTACHED: change (3) of the previous header is correct about what it
+   measured and wrong about what it concluded.
+
+   (B) THE QUANTITY MODEL, NOW VALIDATED AGAINST THREE BODIES.
+
+   Read block 37 of the `-ds'/`-dl' dumps.  In the value-first body local-alloc
+   sees this sched1 order (positions relative to the func_8009A3D0 call at +0):
+
+       +1 lhu 0x2A    +2 srl 8    +3 andi 0xE (kk)   +4 high(D_8006CCD8)
+       +5 lo_sum      +6 addu kk+base   +7 lbu 0x24(c)   +8 lbu 0(addr)
+       +9 addu (the sum)   +10 sb 0x24(c)
+
+   block_alloc's units are 2*insn_number, a SET is born at 2n and a dying
+   input dies at 2n (local-alloc.c:2038, :2126).  The ties combine_regs makes
+   (local-alloc.c:1923, only where an operand is a REG -- a `lbu' loads from a
+   MEM operand, so a load NEVER ties to its own address register) give exactly
+   three quantities:
+
+       Q2 = {high, lo_sum, addu}   refs 12, [8,16)  -> 3*12/8  = 45000
+       Q3 = {the c[0x24] load, the sum}  refs 8, [14,20) -> 3*8/6 = 40000
+       Q4 = {the table byte}       refs  4, [16,18) -> 2*4/2  = 40000
+
+   (every pseudo reads "used 4 times" for two textual references: flow.c:2128
+   has already weighted reg_n_refs by loop_depth, and QTY_CMP_PRI reads
+   reg_n_refs via qty_n_refs, local-alloc.c:297.)
+
+   Q2 and Q3 OVERLAP on [14,16), so whichever sorts first takes $v0.  Q2 wins
+   at 45000 -> the address chain gets $v0, Q3 gets $v1, and Q4 -- which
+   overlaps Q3, not Q2 -- gets $v0.  That IS the candidate.  The target is the
+   other way round: Q3 first ($v0), Q2 and Q4 both $v1.  The model also
+   predicts the park's table-first body (there the sum ties to the table byte,
+   so Q = {high,lo_sum,addu,table byte,sum} at 4*20/12 = 66666 beats
+   {c[0x24] load} at 40000) and predicts WHY THE SECOND LOOKUP ALREADY MATCHES:
+   `kk' DIES at the second addu, so that addu ties into kk's quantity ($a0)
+   and the second lo_sum pair is a short [22,26) quantity disjoint from the
+   c[0x25] pair -- both legally get $v0, which is what the target has.
+
+   SO THE WHOLE RESIDUE IS ONE INEQUALITY: PRI(Q3) > PRI(Q2), i.e.
+
+       span(Q2) >= 10   (36/10 = 36000 < 40000)   OR   refs(Q3) >= 10
+                                                       (30/6 = 50000 > 45000)
+
+   and span(Q2) = 2 * (position of the table `lbu' - position of the `high').
+
+   (C) span(Q2) IS PINNED AT 8 BY `birthing_insn_p', AND THAT IS WHY FORTY
+   SPELLINGS OF THESE THREE STATEMENTS ALL LAND ON 5 OR 8.
+
+   cc1psx's sched1 is a BACKWARD list scheduler (sched.c:3985 prepends;
+   `;; ready list at T-N' counts from the block END, so the choice at the
+   LARGEST T is emitted FIRST).  `adjust_priority' (sched.c:2549) has a dead
+   n_deaths test -- gcc's own comment says REG_DEAD notes are gone by then --
+   so EVERY ready insn falls into `case 0:' and, if `birthing_insn_p' holds,
+   is bumped to LAUNCH_PRIORITY (0x7f000001, sched.c:189/3998).  birthing_insn_p
+   (sched.c:2512) is `SET_DEST is a live REG && reg_n_sets[dest] == 1'.
+
+   Consequence: a `%hi'/`%lo' pair is ALWAYS chosen the instant its consumer
+   is scheduled, so it lands IMMEDIATELY BEFORE the `addu' -- which is why the
+   high-to-lbu distance is exactly {high, lo_sum, addu, one interloper, lbu}
+   = 4, span 8, forever.  The only interloper available is the c[0x24] load
+   itself, because by that point in the backward walk every insn after the
+   `sb' has already been scheduled: the ready list is of size 1 or 2 for the
+   whole window.  You cannot put a second interloper there and you cannot add
+   an insn (the function is word-exact).
+
+   This is also how the dumps prove the mechanism rather than suggest it: the
+   ONLY insns in block 37 that do NOT read 0x7f000001 in the ready lists are
+   the two `sb's (SET_DEST is a MEM) and the ternary's `li 12288' -- whose
+   pseudo is set twice, by the two arms.  reg_n_sets == 1 is the whole of it.
+
+   (D) refs(Q3) >= 10 IS UNREACHABLE: EVERY C DEVICE THAT ADDS A REFERENCE
+   ALSO ADDS A SET OR A DEATH, AND BOTH DISQUALIFY THE PSEUDO.
+
+   Q3's two pseudos are compiler temps with two textual references each.  To
+   add one reference (weighted 2) without an instruction, the device has to
+   survive FLOW (which computes reg_n_refs, toplev.c:3463) and be removed
+   LATER.  Measured, all on the value-first body:
+
+     * every front-end-foldable no-op is gone before RTL and measures the
+       unchanged 8 -- `c2 += 0', `c2 -= 0', `c2 |= 0', `c2 &= -1', `c2 *= 1',
+       `c2 ^= 0', `c2 <<= 0', `c2 = c2', and `c[0x24] = c2 & 0xFF' /
+       `& 0x1FF' / `& 0xFFFF' / `(c2 << 24) >> 24' / `(u8)(...)' (all 8);
+       `c2 % 256' is 28 rows / 349 words.
+     * a redundant COPY CHAIN is gone before flow too, because cse runs at
+       toplev.c:3380, BEFORE flow: `c2 -> c3 -> store' 8, `c2 -> c3 -> c4 ->
+       store' 8, a copy on the load side 11, both sides 8, `u8' flavours 8.
+     * `c2++; c2--;' is the ONE ref-adder that survives flow (combine folds it
+       at toplev.c:3488, after flow) -- and it adds a second DEATH.
+       local_alloc's eligibility gate is literally `reg_n_deaths[i] == 1'
+       (local-alloc.c:472; block_alloc's own header at :1230 says "Only the
+       pseudos that die but once can be handled"), so the local gets
+       reg_qty = -1, is dropped from local-alloc entirely, the sum cannot tie
+       to it, and it measures 13.  A redefinition ALWAYS kills the previous
+       value, so there is no spelling of "a second set" that does not also
+       bring a second death: the two handles are mutually exclusive.
+       `c2 += kk; c2 -= kk;' and `c2 ^= kk; c2 ^= kk;' are 13 as well; the
+       pair on the load side is 11.
+
+   So the ONLY handle left in the whole mechanism is `reg_n_sets != 1' on the
+   `%lo' insn's destination -- and the only free way to get it is a cancelled
+   pair, which brings the second death with it.  That is a genuine dead end,
+   not an unexplored one.
+
+   (E) AND IT ALMOST WORKS ANYWAY -- A SECOND, STRUCTURALLY CORRECT 5-ROW
+   BASIN.  THIS IS THE BODY TO HAND THE PERMUTER.
+
+   Putting a NON-CONSECUTIVE cancelled pair on a base-address local makes its
+   `lo_sum' non-birthing, the pair lingers in the ready list, and the whole
+   `%hi'/`%lo' moves to the TOP of the block -- span(Q2) grows past 10 and Q3
+   takes $v0 exactly as derived.  On the value-first body, with
+   `s32 t1;' added to the declarations:
+
+       t1 = (s32)D_8006CCD8;
+       t1++;
+       kk = (*(u16 *)(d + 0x2A) >> 8) & 0xE;
+       t1--;
+       c[0x24] += *(u8 *)(kk + t1);
+       c[0x25] += *(u8 *)(kk + (s32)D_8006CCE8);
+
+   5 rows, 344/344 words (7 differing by ovlverify's word-for-word count --
+   one transposition).  AND ITS FIVE ROWS ARE A DIFFERENT, SMALLER RESIDUE:
+
+       228  lui   v0        | lui   $v1, %hi(D_8006CCD8)
+       229  lhu   a0,42(s2) | addiu $v1, $v1, %lo(D_8006CCD8)
+       230  addiu v0        | lhu   $a0, 0x2A($s2)
+       231  srl             | lbu   $v0, 0x24($s3)      <- candidate has this
+       233  addu  v1,a0,v0  | ...                          at word 234
+       234  lbu   v0,36(s3) | addu  $v1, $a0, $v1
+
+   The sum, the c[0x24] load and the table byte are now in the TARGET'S
+   registers ($v0/$v0/$v1); what is left is that the pair cost `t1' its place
+   in local-alloc (the second death again), so the chain splits into
+   {high, lo_sum} = $v0 and {addu, table byte} = $v1 instead of one quantity
+   in $v1, and sched2 then puts the `lhu' between the `lui' and the `addiu'.
+   ONE unit of span, or a second set without a second death, closes it.
+
+   Ten spellings of that device are byte-identical at 5 rows (`t1++' before
+   the `kk' line and `t1--' after; the pair split by the two halves of a split
+   `kk'; the pair after the whole `kk' line; `t1 += kk; t1 -= kk;';
+   `t1 = (s32)D_8006CCD8 + kk; t1 -= kk;'; the `u8 *t1' flavour; and
+   table-first on top of it).  All four sweeps are clean on it (devsweep 1488
+   candidates a round, refsweep, stmtsweep, widthsweep, partsweep).
+
+   WHAT COSTS WORDS AND WHY, so the next agent does not re-measure it: a base
+   local with ONE set is loop-invariant, scan_loop (loop.c:804) hoists it into
+   $s7 and the save/restore pair costs 2 words -- 14 rows / 346 words, and
+   that is the whole of the old header's "a pointer local for a -G0 global
+   costs two to three words here".  A DEAD second set (`t1 = 0;' after the
+   lookups) blocks the hoist and comes back to 344/8, because flow deletes the
+   dead store and reg_n_sets is 1 again.  A CONSECUTIVE live pair
+   (`t1 = sym; t1++; t1--;' with nothing between) is hoisted anyway: 14/346.
+   Only a pair with a real statement BETWEEN the two sets is both
+   non-hoistable and non-birthing.  Two live sets of one base local
+   (D_8006CCD8 then D_8006CCE8) is 24 rows / 343 words -- cse turns the second
+   `%hi/%lo' into `addiu t1, t1, 0x10', because D_8006CCE8 IS D_8006CCD8+0x10.
+
+   (F) EVERYTHING ELSE MEASURED ON 2026-11-22, all on the value-first body
+   unless marked, all 344 words unless given:
+
+     the four devices already in the body, re-priced in the value-first basin
+     (so the previous header's numbers are confirmed, not stale):
+       D1 `cc2' + do-while deleted                          12
+       D1 `__asm__("" ::"r"(cc2));' instead of the do-while   8 (identical)
+       D2 duplicated arm `if (n)' deleted                    11
+       D3 `do { return; } while (0);' unwrapped              12
+       D2+D3 deleted 15, D1+D2 15, D1+D3 16, D1+D2+D3 19
+       D2's condition swept over every local: `if (n)' 8 is the best; `if (p)',
+       `if (i)', `if (tbl)' 11; everything else 19-42 (and 345-349 words)
+
+     the three loop statements, value-first base:
+       kk split into two statements                          8 (identical)
+       kk = ((x>>9)&7)*2 8;  kk = (x & 0xE00)>>8 10;  (u32) cast 8
+       kk declared u32 / s16 / u16 / u8                      8 (all identical)
+       `((u8 *)D_8006CCD8)[kk]' / `*(u8 *)((s32)D_8006CCD8 + kk)' /
+         `*((u8 *)D_8006CCD8 + kk)'                          8 (all identical)
+       base-first WITH the mask inline -- `*(u8 *)((s32)D_8006CCD8 +
+         (kk & 0xE))' -- 8, and the `-dc'/combine dump shows why: `fold'
+         canonicalises PLUS so the `andi' keeps the LOWER insn uid and the
+         sched1 order does not move.  The whole "give the %hi a lower LUID"
+         family dies here.
+       the two lookups inline with no `kk' at all             77 / 347
+       `c[0x25]' line before the `c[0x24]' line              17
+       `c[0x25]' written table-first                         10 (both: 10)
+       `c[0x24] = c[0x24] + ...' written out / via
+         `*(u8 *)(c + 0x24) += ...' / `*(u8 *)(c+0x24) = *(u8 *)(c+0x24)+...'
+                                                              8 (all identical)
+       a `c2' local for the sum, a `q24' local for the load, an `a1' local for
+         the whole address, a `t2' local for the second table only
+                                                              8 (all identical)
+       a `q' local for the TABLE BYTE                        12
+       `q24' local for the load                              11
+       do-while around the c[0x24] line 17/345, around both lookups 20/346,
+         around the `kk' line 76/345
+       a cancelled pair on each of i, f, m, s, n, r, j, x, y, v, k, cc2, t80
+         before the c[0x24] line                              8 (all identical)
+       `kk++; kk--;' before the c[0x24] line                 18
+
+     ALL FIVE SWEEPS ARE CLEAN ON THE VALUE-FIRST BODY TOO (devsweep 1357
+     candidates a round, refsweep 2865 insertion points, stmtsweep 7 movable
+     assignments, widthsweep, partsweep) -- and partsweep, which had never
+     been run on this park, is clean on the 5-row park body as well: the only
+     same-expression groups in this function are {g, g2} and {f, i}.
+
+   NEXT STEP, SHARPENED.  Hand the permuter the VALUE-FIRST body, not the one
+   below.  The 150-minute/314k-candidate `found=none' recorded further down was
+   spent in the table-first basin, which (A) proves cannot reach 0; the
+   value-first basin has never been imported.  What the permuter is looking for
+   is one of exactly two things, and nothing else in this function matters:
+   a second SET of the `%lo' insn's destination that does not also give it a
+   second DEATH, or one more insn of distance between the `%hi' and the table
+   `lbu' in sched1's order.
+
    ====================== 2026-11-21 (later): 48 -> 44 -> 34 -> 31 -> 30 -> 17 -> 12 -> 5
 
    THREE CLUSTERS at 48 rows: 4 at words 42-46 (the `|= 0x80000000' gate),
