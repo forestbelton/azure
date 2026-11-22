@@ -72,14 +72,13 @@
      * merging each of the sixteen pointer locals into each other (240
        pairs) and all 96 legal assignments of {k,x,y,v} to the four scalar
        temp roles;
-     * widthsweep and stmtsweep over the whole body at 11 rows (both clean);
-       refsweep AND devsweep over the whole body at 23 rows ("no cancelled
-       pair helps" / "no wrapper helps").  Whole-body refsweep and devsweep
-       runs started on the 13-row body had not finished when this was
-       written -- re-run both on THIS body before spending anything else on
-       it, because the three case-10 changes since 23 rows make those two
-       negatives stale in principle, even though the case-10-only versions
-       of both sweeps (done by hand on this body, above) are clean.
+     * ALL FOUR SWEEPS COME BACK EMPTY ON THIS BODY, which is the brief's
+       stopping condition for the sweep cycle: widthsweep "no width change
+       helps", stmtsweep "no safe move helps", devsweep "no wrapper helps"
+       (4563 candidates) and refsweep "no cancelled pair helps" (7079
+       insertion points).  They were also empty on the 23-row body, and the
+       case-10-only versions above were run by hand on this one.  The next
+       thing to spend on this park is the permuter, not another sweep.
      * `(((D_80083228 + 0x100) + lh) >> 9) & 7` is 45 rows / 810 words and
        `(s16)` around the sum is 13, so the index expression as written is
        load-bearing too.
