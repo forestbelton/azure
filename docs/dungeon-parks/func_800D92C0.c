@@ -428,7 +428,22 @@
    its own it is 57 rows, and on top of the do-while it turns 52 into 53. The
    permuter's score could not tell the two apart because it scores the pair.
    Measuring the halves separately is the only way this came out clean.
-*/
+
+   ====================================== 2026-11-21: PERMUTER SPENT AT 5 ROWS
+
+   150 minutes, 4 jobs, 314251 candidates, base score 50 -> best 50,
+   `found=none'.  Not one candidate in 314k improved even the permuter's OWN
+   metric, let alone the row count; the output-* dirs measured by
+   measure_finds are an older run's and are 45-59 rows at 345-346 words.
+
+   That is the THIRD clean permuter negative at the floor today
+   (func_800B6AC4 at 11 rows, func_8009E798 at 1, this at 5).  All four sweeps
+   were already clean here too, so both automatic routes are spent and the
+   last 5 rows need hand analysis -- the agent's own theory is that the target
+   wants value-first with the table byte's priced length >= 2 and the pointer
+   chain's > 7, which are sched1 PLACEMENT facts rather than source-expression
+   facts, and that is why ~40 spellings all land on 5 or 8 and never between.
+ */
 void func_800D92C0(u8 *p, void *b, u8 *c, u8 *d)
 {
     u8 *g;
