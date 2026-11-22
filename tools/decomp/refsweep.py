@@ -212,6 +212,27 @@ def main():
 
     print("%s: base %d rows, %d/%d words" % (func, rows, w, tw))
     # ORDER BY WORD GAP FIRST, THEN ROWS -- and never gate on `ww == tw'.
+    #
+    # BUT KNOW EXACTLY WHAT THE OLD GATE BROKE, because on 2026-11-22 the
+    # scare was worse than the bug and cost three agents a redo instruction.
+    # The old gate was `if ww == tw and (rr, ww) < best' with `best' starting
+    # at `(rows, w)'.  WHEN THE PARK IS WORD-EXACT (w == tw) THAT IS EXACTLY
+    # EQUIVALENT TO THE KEY BELOW: a candidate with ww == tw and rr < rows
+    # satisfies (rr, tw) < (rows, tw) and is accepted, and the two predicates
+    # enumerated over a grid of candidate (rows, words) disagree ZERO times.
+    # So a clean sweep recorded on a word-exact park BEFORE this fix is still
+    # valid evidence -- ten of the eleven dungeon parks were word-exact when
+    # this was checked, so the fix invalidated almost nothing anyone recorded.
+    #
+    # It bit a park whose words DIFFER from the target: the old gate demanded
+    # ww == tw exactly, so it threw away a partial closing of the gap, and it
+    # threw away a candidate that CLOSES the gap while costing rows -- which,
+    # since we order word gap before rows, is the candidate we most want.
+    # func_800ADE74 at 1826/1817 was that park, and there two of these tools
+    # had to be re-implemented by hand before they would report anything.
+    #
+    # The transferable rule is the one the stale-body check already makes: a
+    # sweep is evidence about THE BODY IT RAN ON, not about the function.
     # A strict word-exactness gate is useless on a park that is not already
     # word-exact, and WORSE THAN USELESS on one that is long: the only
     # candidates that pass are the ones reaching the target by DELETING code
