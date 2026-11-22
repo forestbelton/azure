@@ -159,8 +159,17 @@
      a duplicated arm on `n1 = 0x80' with any condition            9-33
      merging `n1' with any other s32 local                        3 (best) or worse
      merging `r1' with any other s32 local                        3 (best) or worse
-     widthsweep.py (every width for every local AND parameter)     clean at 3
-     stmtsweep.py                                                  clean at 3
+     ALL FOUR SWEEPS ARE CLEAN ON THIS BODY, each run to completion with
+     its own AZURE_SCRATCH on 2026-11-21:
+       widthsweep.py (every width, every local AND parameter)
+                                                    "no width change helps"
+       stmtsweep.py  (18 movable assignments)       "no safe move helps"
+       refsweep.py   (51 names x 23232 points)      "no cancelled pair helps"
+       devsweep.py   (51 names x 228 statements)    "no wrapper helps"
+     All four were re-run from scratch after EVERY change above, and the
+     ORDER mattered: `tc++; tc--;' (change 6) is only findable once the
+     ARRAY_REF changes are in, and `ta++; ta--;' went inert once the
+     sentinels were merged.
 
    MEASURED AND REJECTED EARLIER IN THE SESSION, each on the body named
      tc merged into ta, on the 62-row body                           69
