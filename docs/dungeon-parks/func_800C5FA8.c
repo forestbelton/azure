@@ -1,5 +1,11 @@
 /* PARK -- func_800C5FA8, agent j59, 2026-11-16.
 
+   ====================================== 2026-11-21: 159 rows -> 157
+
+   Cancelled pairs from tools/decomp/refsweep.py on the body devsweep
+   produced.  This park has now gone 175 -> 172 (width) -> 161 -> 159
+   (devsweep) -> 157, on the sweep alternation rather than any one idea.
+
    ====================================== 2026-11-21: 161 rows -> 159
 
    A second devsweep round on the 161-row body: 161 -> 159.  The first round
@@ -330,6 +336,8 @@ void func_800C5FA8(u8 *p)
                 for (y = *(s16 *)(p + 0xA); y < y1; y++)
                 {
                     *(u16 *)((x + (y << *(s16 *)(h + 0x14))) * 6 + m + 0x4) |= 0x8000;
+                    x++;
+                    x--;
                     *(u16 *)((x + (y << *(s16 *)(h + 0x14))) * 6 + m + 0x4) &= 0xFF73;
                     func_800B6008(x, y);
                     func_800A7030(x, y);
@@ -345,6 +353,8 @@ void func_800C5FA8(u8 *p)
                 for (y = 1; y < y1; y++)
                 {
                     *(u16 *)((x + (y << *(s16 *)(h + 0x14))) * 6 + m + 0x4) |= 0x8000;
+                    x++;
+                    x--;
                     *(u16 *)((x + (y << *(s16 *)(h + 0x14))) * 6 + m + 0x4) &= 0xFF73;
                     func_800B6008(x, y);
                     func_800A7030(x, y);

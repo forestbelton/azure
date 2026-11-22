@@ -33283,3 +33283,65 @@ against `if ((a[1]==2 && a[0]==1) || (a[1]==0xC && a[0]==6)) mode = 2;`:
 
 Two arms need no `volatile` at all, which also removes the conditional-volatile
 hazard that got this park's permuter find rejected.
+
+## A `-G0` GLOBAL'S ADDRESS DOES NOT VARY, SO ONE ARRAY_REF DELETES A sched1 DEPENDENCE
+
+`func_800B6AC4`, 23 rows -> 13, and neither half of the change is worth
+anything alone (the array cast by itself is 46 rows and 807 words; the
+statement order by itself is 36).
+
+In sched1 the store to a `-G0` global came out as a PREDECESSOR of an
+unrelated `lh 0x2A($s3)` -- `sched_analyze_insn` asks `true_dependence`, and
+`memrefs_conflict_p` cannot disambiguate
+
+    (mem:SI (lo_sum (reg) (symbol_ref D_800814A0)))     the store
+    (mem:HI (plus (reg) (const_int 42)))                the load
+
+so the store is pinned ahead of the load, which pins the global's base pseudo
+to a short live range, which gets it `$a2` in local-alloc, after which the
+argument setup `addu $a2,$zero,$zero` has to follow the store (WAR) and lands
+at the BOTTOM of the block instead of the top. Eight of the eleven surviving
+rows were that one shift.
+
+`true_dependence` (sched.c:835) has exactly one applicable escape, and it is
+symmetric in the two MEMs:
+
+```c
+&& ! (MEM_IN_STRUCT_P (x) && rtx_addr_varies_p (x)
+      && GET_MODE (x) != QImode
+      && GET_CODE (XEXP (x, 0)) != AND
+      && ! MEM_IN_STRUCT_P (mem) && ! rtx_addr_varies_p (mem))
+```
+
+**The half nobody expects is already true**: `rtx_addr_varies_p` of the
+global's MEM is `rtx_varies_p` of `(lo_sum (reg) (symbol_ref))`, and
+`rtx_varies_p`'s LO_SUM case (rtlanal.c:103) returns the varies-ness of
+OPERAND 1 -- "operand 0 of a LO_SUM is considered constant" -- which for a
+`SYMBOL_REF` is 0. A `-G0` global reference therefore has a NON-VARYING
+address despite being `lui`/`lo_sum` off a register, while `(plus (reg)
+(const_int))` varies because the REG does.
+
+So the escape needs only its other half: make the competing load
+`MEM_IN_STRUCT_P`. An `ARRAY_REF` or `COMPONENT_REF` sets it, a cast over a
+`PLUS_EXPR` does not (expr.c:5351, and see the MEM_IN_STRUCT_P entry above):
+
+    *(s16 *)(d + 0x2A)            -> dependence, store before load
+    (*(s16 (*)[0x16])d)[0x15]     -> no dependence, the scheduler is free
+
+**Corollaries worth having before you reach for this**:
+
+* It is QImode-exempt. A competing BYTE load can never take this escape, so
+  widening the access (`s16`/`u16` here, both measure the same) is sometimes
+  the whole fix.
+* `(*(s16 (*)[1])(d + 0x2A))[0]` is NOT equivalent -- a one-element array
+  folds back to an `INDIRECT_REF` before expand and measures the original 23.
+  The bound has to be big enough that the index is a real `ARRAY_REF`; `0x16`
+  and `0x100` both work.
+* It cuts both ways by construction, so the same cast on either MEM of a
+  stuck pair is worth trying; here it was the load, because the store's
+  address was the one already non-varying.
+
+The honest spelling is a `COMPONENT_REF` on a real typedef, and if the struct
+can be witnessed that is what should ship. `d` here is `u8 *` at all 310 of
+its uses across the six units and no witness exists, so the array cast is the
+form in the park, with the alternative (23 rows, no cast) recorded beside it.
