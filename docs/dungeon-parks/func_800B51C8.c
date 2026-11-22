@@ -1,4 +1,236 @@
-/* PARK -- func_800B51C8, agent j59 2026-11-16..21, agent b51c8 2026-11-21.
+/* PARK -- func_800B51C8, agent b51c8d 2026-11-22.
+
+   ========================= 2026-11-22 (pass 4): 24 rows -> 3, STILL EXACT.
+
+       target 834 words, candidate 834 words, 3 aligned differences.
+
+   Four changes, each measured on the body before it, every measurement
+   `aligndiff.py` on a real unit copy (the unit is ovl_dungeon_800B45E0.c,
+   ~1030 lines, so a candidate measures in ~0.12 s).  NO NEW DEVICE: two of
+   the four are statement positions, one is a deleted pointer local and one is
+   a declaration moved into an inner block.  Every batch below was run with a
+   BASELINE CANARY interleaved between candidates, because a concurrent
+   compile in the same TMPDIR corrupts the intermediate and the symptom is a
+   plausible `unrecognized opcode` / `symbol already defined` FAIL, not a
+   wrong number.  Results from a batch whose canary did not read the baseline
+   were discarded and re-measured serially.
+
+   ------------------------------------------------------------- THE FOUR
+
+   (10) 24 -> 16.  DELETE `UnkDungeonSpotB *r;` AND WRITE THE SUBSCRIPT
+        `D_800E39C8[i].` AT EVERY SITE.  This closes the old header's whole
+        cluster B (8 rows) and it was already written down twice:
+
+          * `docs/matching-levers.md:13236` -- "A SYMBOL ARRAY REFERENCE EMITS
+            ITS `lui` FIRST AS A *MEM*, ITS `sll` FIRST AS A *POINTER VALUE*".
+            The two forms are different TREES: for the MEM the ADDR_EXPR is
+            operand 0 of the PLUS and `expand_expr`'s binop path expands
+            operand 0 first, so `lui`/`addiu` precede the index chain; for a
+            pointer assignment the scaled index is operand 0.
+          * the LANDED SIBLING IN THIS VERY UNIT, func_800B5F80, whose comment
+            says "THE SUBSCRIPT IS WRITTEN AT EVERY SITE, not hoisted into a
+            pointer local.  `q = &D_800E39C8[i]` is 34 words / 9 differing".
+
+        The old header's "five spellings measured IDENTICAL" was right and
+        beside the point: all five were pointer-value forms.  The first TOUCH
+        of the array has to be a MEM.
+        Measured, all 834 words: subscript at every site 16; `r` kept but the
+        `unk_14 & 0x40` test respelled as a MEM and `r = &D_800E39C8[i];`
+        moved BELOW it 16; same with `(u8 *)(D_800E39C8 + i)` as the call
+        argument 16 -- all three BYTE-IDENTICAL streams.  Respelling only the
+        condition while `r =` stays first: 24, i.e. nothing.
+
+   (11) 16 -> 13.  `i = 0;` AS ITS OWN STATEMENT at the head of the post-call
+        block with `for (; i < 0x20; i++)`, AND `gg = &D_80083160;` MOVED TO
+        THE END of that block.  This is `docs/matching-levers.md:29051`
+        ("A DECLARATION INITIALISER'S POSITION AMONG THE OTHER LOCALS DECIDES
+        WHICH CONSTANT OWNS A SHARED `lui`", measured on the sibling
+        func_800BABA8) -- except that here it is the STATEMENT form that pays
+        and the declaration-initialiser form does nothing:
+
+          all 14 declaration slots for `s32 i = 0;`        16 (every one)
+          `i = 0;` as a statement, before the 0x18 store   16
+                                  before `p->unk_20 =`     16
+                                  before `cv[0] =`         16
+                                  before `func_80064AE0`   16
+                                  before `gg =`            14
+                                  before `md =`            14
+                                  before `f1 =`            17
+                                  immediately before `for` 16
+
+        Then ALL 720 ORDERINGS of {`i = 0`, md, ms, f0, f1, gg}:
+        `iz-md-ms-f0-f1-gg` is 13 and UNIQUE; five orderings give 14, one 16,
+        eleven 17, and the mode of the distribution is 29.
+        It buys 3 of the old cluster A's 6 rows: the target's
+        `sw $s5, 0x74($sp)` / `addu $s5, $zero, $zero` at insns 2-3 come out
+        at 2-3 instead of 15-16.
+
+   (12) 13 -> 11.  In ARM A, `b = (s8)e[3];` MOVED ABOVE the
+        `q = *(u8 **)((u8 *)p + 0x18);` pair.  The target issues
+        `lbu $v1, -0x1($s2)` at 800B5470, BEFORE the thirteen argument-setup
+        insns; with the load written after them sched2 puts it two slots
+        later.  (Arm B has no `q` pair there and needed no move.)
+
+   (13) 11 -> 3.  **`s16 b;` IS DECLARED INSIDE EACH ARM'S
+        `if ((e[0] & 0x20) == 0)` BLOCK AND THE OUTER `s16 b;` IS DELETED.**
+        This is the whole of the old header's cluster C (10 rows) and the
+        mechanism is `combine_regs` (local-alloc.c:1791):
+
+            // If UREG is a pseudo-register that hasn't already been assigned
+            // a quantity number, it means that it is not local to this block
+            // or dies more than once.  In either event, we can't do anything
+            // with it.
+            if ((ureg >= FIRST_PSEUDO_REGISTER && reg_qty[ureg] < 0) ...
+              return 0;
+
+        `block_alloc` (local-alloc.c:1404) walks an insn's INPUT operands in
+        order and tries to tie the OUTPUT's quantity to each in turn.  For
+        `b = b + p->unk_14.h;` the SImode sum is its own pseudo (a HImode
+        local receiving an SImode expression).  With `b` declared at function
+        scope it is assigned in BOTH arms, so it is a MULTI-BLOCK pseudo,
+        `reg_qty[b] == -1`, and the tie to `b` is refused -- so the sum ties
+        to the OTHER operand, the block-local `lhu` temp holding
+        `p->unk_14.h`, and takes its `$v0`.  That is the candidate's
+        `addu $v0, $v1, $v0` and the two `sh $v0` after it.
+        Declared inside the arm's block, `b` is referenced in ONE basic block,
+        local_alloc gives it a quantity, the sum ties to it, and the target's
+        `addu $v1, $v1, $v0` / `sh $v1, 0x8A` / `sh $v1, 0x82` come out in
+        BOTH arms at once.
+
+        Measured on the 11-row body, all 834 words unless noted:
+          `s16 b;` inner in BOTH arms, no outer                3
+          `s16 b;` inner in arm A only (outer kept)            3
+          `s16 b;` inner in arm B only (outer kept)            3
+          `u16 b;` inner in both, no outer                     3
+          `s32 b;` inner in both, no outer             830 words / 55
+          `s16 a;` inner in both arms, no outer               11 (nothing)
+        `a` needs nothing because `a`'s own register IS `$v0`, so the untied
+        sum lands in the right place by accident.  That is why the old
+        header's long list of `b` respellings all measured the same: NONE of
+        them was about the quantity, and the old park's "the analogous pair on
+        `b` does NOT work" was true and not the reason.
+
+   ------------------------------------------------- WHAT IS LEFT: THREE ROWS
+
+   One cse decision, no word delta, nothing else in the function differs:
+
+       R   16  800B5208  lui v1,%hi(D_80083160)   vs  lui $v0, %hi(D_80083160)
+       X   19  800B5214  move t0,v1               vs  lui $t0, %hi(D_80083160)
+       R   20  800B5218  lw v0,%lo(v1)            vs  lw $v0, %lo(..)($v0)
+
+   cse shares the ONE `(high (symbol_ref D_80083160))` between the head's
+   `D_80083160.unk_00` load and `gg = &D_80083160`, and pays a reg-reg copy
+   for it; the target spends a SECOND `lui` instead.  Both shapes are four
+   words, which is why the park stays word-exact.
+
+   THE MECHANISM, as far as I got it, from the compiler sources:
+
+     * `movsi` SPLITS A SYMBOLIC MOVE AT EXPAND TIME (mips.md:3488), into
+       `(set tem (high sym))` + `(set gg (lo_sum tem sym))`, with `tem` a
+       FRESH pseudo -- EXCEPT that `tem = ((reload_in_progress |
+       reload_completed) ? operands[0] : gen_reg_rtx (mode))`, so a
+       reload-time rematerialisation puts both halves in ONE hard register.
+       `lui $t0, %hi` immediately followed by `addiu $t0, $t0, %lo` is that
+       shape, i.e. the target's $t0 pair is consistent with reload
+       rematerialising `gg`, not with an expand-time pair.
+     * A SYMBOL POINTER NORMALLY EARNS THAT REMAT THROUGH cse.c:5720,
+       `(lo_sum (high X) X)` folds to `X` when operand 0's recorded constant
+       is `(high X)` -- which turns `gg`'s set into a CONSTANT set, which is
+       what `update_equiv_regs` (local-alloc.c:1043, gated on
+       `reg_n_sets == 1`) needs to attach REG_EQUIV and delete the set.
+     * In the candidate the `unk_00` load's `(high sym)` is recorded FIRST, so
+       `gg`'s own `(set tem (high sym))` is rewritten to a reg-reg COPY of it;
+       that is the `move t0,v1`, and `gg` never becomes a constant set.
+     * `cse.c` has no special case for `HIGH` in its record path (checked), so
+       inside one extended basic block the sharing is unconditional.  The
+       target's two INDEPENDENT `high`s therefore cannot both be visible to
+       one cse pass, and NO STATEMENT POSITION REACHES THAT -- see the list
+       below: first, last, inside the loop, inside the loop with a second
+       non-consecutive set to defeat loop.c's hoist, and all 744 orderings of
+       the preamble all leave the sharing in place.  What is left to try is
+       something that changes the SCOPE rather than the order.
+
+   Measured and rejected on the 3-row body (834 words unless noted):
+     `gg = &D_80083160;` as the FIRST statement of the function        9
+       -- and its diff shows the sharing UNCHANGED (`lui v0` / `move t0,v0` /
+          `lw v1,%lo(v0)`, just v0/v1 swapped) plus six extra
+          register-naming rows, so this is not a near miss.
+     `gg` in the loop WITH a second non-consecutive set (loop.c:804,
+       to stop the invariant being hoisted back to the preheader)  3 (identical)
+     the head's `unk_00` in a `u8 *h` with a reference to `h` in the
+       loop body, to make `h` a global allocno                    3 (identical)
+     `cv[]` moved into the post-call block, bare symbol, at slots 0-5
+                                                             835 words / 25
+     `cv[]` moved into the post-call block, bare symbol, at slot 6     20
+     `cv[]` after `gg` read through `gg`                               20
+     `cv[]` after `gg` read bare                                      20
+     `Unk80083160 *gg = &D_80083160;` as a declaration initialiser     9
+     `gg` assigned at the top of the loop body                3 (identical)
+     `gg` at the top of arm B + tail on the bare symbol      832 / 16
+     no `gg` at all, bare symbol at all four sites           829 / 40
+     tail on the bare symbol, `gg` only for arm B's 0xB8     833 /  6
+     arm B on the bare symbol, `gg` only for the tail        831 / 27
+     `cv[]` read through `gg`, with `gg` first                         9
+     the head's `unk_00` read through `gg`, with `gg` first            9
+     the head's `unk_00` read through its own `u8 *h` local   3 (identical)
+     all 24 orderings of the head block (p18, u20, zer, cv):
+       `p18-u20-zer-cv` is the UNIQUE best; every other ordering is 6 or worse
+     all 720 orderings of the post-call block: `iz-md-ms-f0-f1-gg` unique at 3
+     (744 orderings in one batch, canary 3 at both ends, nothing below 3)
+
+   THE `e + 4` GIV-BASE INVARIANT STILL HOLDS.  The candidate's $s2-relative
+   offsets are exactly the target's set -- -2, -1, 0, 2, 4, 5, 6, 7 -- and
+   `addiu $s2, $s3, 0x4` is still the base in both arms.  The old header's
+   FRAGILE note stands: none of the four changes above adds a later
+   `e`-relative reference to either arm.
+
+   THE DEVICES THIS BODY STILL CARRIES are the two `a++; a--;` pairs (one per
+   arm) and nothing else; the `gg`/scratchpad-constants-as-statements shape the
+   old header was unhappy about is now ordinary statement order with `i = 0;`
+   at its head.  The `a` pairs were NOT re-ablated on the 3-row body -- that
+   is the first thing the next agent should measure, because (13) changed what
+   the `b` block does to the register assignment and the pairs may now be
+   unnecessary.
+
+   SWEEPS NOT RE-RUN ON THIS BODY.  The old header's clean refsweep/devsweep/
+   stmtsweep/widthsweep were measured on the 24-row body and the body has
+   changed four times since, so by the standing rule they are STALE.  A
+   refsweep was started twice on the 3-row body and abandoned both times; see
+   the note below on why a sweep could not be run alongside anything else.
+
+   CONCURRENCY: TWO COMPILES FROM ONE AGENT CORRUPT EACH OTHER EVEN WITH
+   SEPARATE `AZURE_SCRATCH` *AND* SEPARATE `TMPDIR`.  Six identical baseline
+   candidates measured while a refsweep of this same park was running gave
+   3 rows, FAIL, FAIL, FAIL, 3 rows, 3 rows -- the FAILs being the
+   `unrecognized opcode` / `symbol already defined` / `junk at end of line`
+   class.  Earlier in the same run one such batch also produced plausible
+   WRONG NUMBERS (830/56 for a candidate that measures 832/51 serially).  So
+   something outside both of those directories is shared.  Every number in
+   this header was taken from a batch with a BASELINE CANARY interleaved
+   between candidates, and any batch whose canaries did not read the baseline
+   was discarded and re-measured serially.  Do the same.
+
+   ------------------------- WHAT IN THE OLD HEADER IS NOW STALE OR DISPROVED
+
+   * Its "WHAT IS LEFT: 24 ROWS" three clusters A/B/C are all GONE: B by (10),
+     the 3 scheduler rows of A by (11), C by (13).  The 3 rows above are the
+     other half of A.
+   * Its "ALSO MEASURED AND REJECTED ON THIS BODY" list was measured on the
+     24-row body and is VOID -- in particular everything it says about `b`
+     (s32/u16/declaration order/`+=`/read-back/do-while) was measuring the
+     wrong thing, see (13).
+   * Its cluster B conclusion "the spelling is not the lever" is DISPROVED:
+     the spelling is the whole lever, it is just not any of the five pointer
+     forms it tried.
+   * Its nine earlier changes (1)-(9) all still stand and are all still in the
+     body; (2), the honest initialisation of md/ms/f0/f1, must not be undone.
+*/
+
+/* ==== OLD HEADER (agent j59 2026-11-16..21, agent b51c8 2026-11-21) ====
+   KEPT FOR ITS DECODE.  ITS SCORES BELONG TO BODIES THAT NO LONGER EXIST;
+   read the 2026-11-22 header above first.
+
+   PARK -- func_800B51C8, agent j59 2026-11-16..21, agent b51c8 2026-11-21.
 
    ================================= 2026-11-21 (pass 3): 228 rows -> 24 rows,
                                      and the word count is now EXACT.
@@ -430,12 +662,10 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
     void *ms;
     void *f0;
     void *f1;
-    UnkDungeonSpotB *r;
     u8 *q;
     u8 *e;
     s32 i;
     s16 a;
-    s16 b;
     Unk80083160 *gg;
 
     *(u8 **)((u8 *)p + 0x18) = *(u8 **)(D_80083160.unk_00 + 0x8D0);
@@ -448,12 +678,13 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
     cv[1] = D_80083160.unk_C6;
     cv[2] = D_80083160.unk_C8;
     func_80064AE0(&m);
-    gg = &D_80083160;
+    i = 0;
     md = (void *)0x1F8000D0;
     ms = (void *)0x1F800050;
     f0 = (void *)0x1F800090;
     f1 = (void *)0x1F800094;
-    for (i = 0; i < 0x20; i++)
+    gg = &D_80083160;
+    for (; i < 0x20; i++)
     {
         if ((D_800E3648_s[i].unk_03 & 0x80) != 0 && (D_800E296C & 8) == 0)
         {
@@ -467,21 +698,20 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
         {
             continue;
         }
-        r = &D_800E39C8[i];
-        if ((r->unk_14 & 0x40) != 0)
+        if ((D_800E39C8[i].unk_14 & 0x40) != 0)
         {
-            func_800478B8((u8 *)r);
+            func_800478B8((u8 *)&D_800E39C8[i]);
         }
-        p->unk_00 = (r->unk_06 << 6) + 0x20;
-        p->unk_02 = (r->unk_07 << 6) + 0x20;
-        p->unk_04 = r->unk_12;
-        r->unk_10 = p->unk_04;
-        e = (u8 *)r->unk_08;
+        p->unk_00 = (D_800E39C8[i].unk_06 << 6) + 0x20;
+        p->unk_02 = (D_800E39C8[i].unk_07 << 6) + 0x20;
+        p->unk_04 = D_800E39C8[i].unk_12;
+        D_800E39C8[i].unk_10 = p->unk_04;
+        e = (u8 *)D_800E39C8[i].unk_08;
         if (e == NULL)
         {
             continue;
         }
-        if ((r->unk_14 & 0x100) != 0)
+        if ((D_800E39C8[i].unk_14 & 0x100) != 0)
         {
             p->unk_30.w = 0x2000;
             p->unk_34.w = 0x2000;
@@ -501,6 +731,8 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
             {
                 if ((e[0] & 0x20) == 0)
                 {
+                    s16 b;
+
                     p->unk_08.w = e[8];
                     p->unk_10.w = e[10];
                     if (p->unk_08.w + p->unk_10.w >= 0x100)
@@ -521,9 +753,9 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                     a = a + p->unk_10.h;
                     p->unk_88 = a;
                     p->unk_78 = a;
+                    b = (s8)e[3];
                     q = *(u8 **)((u8 *)p + 0x18);
                     *(u8 **)((u8 *)p + 0x18) = q + 0x28;
-                    b = (s8)e[3];
                     p->unk_7A = b;
                     p->unk_72 = b;
                     b = b + p->unk_14.h;
@@ -589,6 +821,8 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
             {
                 if ((e[0] & 0x20) == 0)
                 {
+                    s16 b;
+
                     p->unk_08.w = e[8];
                     p->unk_0C.w = e[9];
                     p->unk_10.w = e[10];
