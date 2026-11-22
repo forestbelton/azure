@@ -1,87 +1,296 @@
 /* PARK -- func_800B6AC4, the 12-case +0x9B state machine over jtbl_80089310.
-   NOT LANDED.  CURRENT STATE, 2026-11-21 (the dated sections below are a
+   NOT LANDED.  CURRENT STATE, 2026-11-22 (the dated sections below are a
    log, newest first; this block is the only one that describes the body as
    it stands):
 
-       812 words, target 812 words, 11 aligned differences
+       812 words, target 812 words, 2 aligned differences
        (tools/decomp/aligndiff.py); ovlverify's positional count is
-       14 differing (masked), and the extra three are the one-insn shift
-       the `((u8 **)c)[0xB]` store causes at aligned 768.
+       2 differing (masked).
 
-   CASES 0-9 AND 11 ARE BYTE-EXACT, and so are the prologue, the switch
-   dispatch, the epilogue, the shared `p[0x9B]++` tail
-   (.L800B7718/.L800B771C) and the shared redraw tail (.L800B770C).
-   THE WHOLE RESIDUE IS CASE 10, ONE CLUSTER, and it is ONE REGISTER:
+   EVERY ARM IS BYTE-EXACT EXCEPT FOR TWO INSNS IN CASE 10, AND THE RESIDUE
+   IS ONE TRANSPOSITION OF TWO ADJACENT FILLERS:
 
-     the D_800DD140 table pseudo takes $a3 where the target takes $a1,
-     and case 10's `lh 0x2A($s3)` takes $a1 where the target takes $a3.
+       aligned 763   candidate `lui $t0, %hi(D_800814A0)'
+                     target    `addiu $a1, $a1, %lo(D_800DD140)'
+       aligned 769   candidate `addiu $a1, $a1, %lo(D_800DD140)'
+                     target    `lui $t0, %hi(D_800814A0)'
 
-   That is three rows on its own -- aligned 778 (`lh a1,42(s3)` against
-   `lh $a3, 0x2A($s3)`), 780 and 784 -- and the other eight are its
-   consequences, in aligned-index order:
+   Everything else in case 10 -- the register map, `sw $a1, 0x2C($a0)' at
+   776 through the arg copy, the `lh $a3, 0x2A($s3)' at 778, the a2 setup at
+   750, `lui $a1, %hi(D_800DD140)' at 752 -- is byte-exact.
 
-     750 / 752   the table's `lui %hi` and `addiu %lo` come out back to
-                 back at 750 and 752; the target spreads them to 752 and
-                 763, into the two load-delay holes after `lh $v0,0x8A($s3)`
-                 and after `lw $a0,0x0($v0)`.
-     763         so `addu $a2, $zero, $zero` -- the redraw call's third
-                 argument -- lands at 763 instead of the target's 750.
-     768 / 776   and the `((u8 **)c)[0xB]` store, whose only input is the
-                 table address, is emitted at 768 as `sw $a3, 0x2C($s1)`
-                 through `c` itself, where the target has it at 776 as
-                 `sw $a1, 0x2C($a0)` after the `addu $a0, $s1, $zero` at
-                 771 (which the candidate DOES get right).  Everything
-                 between 769 and 776 is that one-insn shift, so the
-                 D_800814A0 load reads at 776 instead of 774.
+   IT IS A sched2 TIE AND THE TIE-BREAK IS THE LUID.  sched1/sched2 priority
+   in this block takes only the two values 1 and 0x7f000001, so
+   `rank_for_schedule' (sched.c) falls through to
+   `INSN_LUID (tmp) - INSN_LUID (tmp2)': the HIGHER LUID sorts FIRST, and the
+   scheduler runs BACKWARD, so of a tied ready set the highest LUID is placed
+   at the LATEST position.  LUID is the POST-SCHED1 chain position.  Reading
+   `.shorten' for this candidate, that chain is
 
-   WHY IT IS THE REGISTER AND NOT THE SCHEDULE.  Both case-10 pseudos are
-   BLOCK-LOCAL (lreg prints them `in block 68`), so this is local-alloc, and
-   local-alloc.c:1693's QTY_CMP_PRI is arithmetic:
+       ... 1838(sh -0x2)   1840(%hi D_800DD140)   1843(%hi D_800814A0)
+           1846(lw %lo D_800814A0)   1841(lo_sum D_800DD140)
+           1849(sw c+0x2C)   1857(%hi D_80083228) ...
 
-       floor_log2(n_refs) * n_refs * size / (death - birth) * 10000
+   At sched2 both 1841 and 1843 have INSN_PRIORITY 1 (sched2 priorities here
+   are NOT binary -- the trace shows 8, 7, 6, 5, 4, 3, 2, 1), so they are
+   FILLERS and get placed only when nothing better is ready.  The sched2
+   trace reads
 
-   The `lh 0x2A` quantity has 2 references over a 2-insn life, so 10000; the
-   table pseudo has 4 (lui, addiu, the store's use, the final `addu`) over a
-   34-insn life, so 2352.  The lh is therefore allocated FIRST and takes the
-   lowest free register, $a1, and the table has to settle for $a3; the target
-   allocates them the other way round.  To beat 10000 the table needs about
-   twelve references (floor_log2(n)*n > 34).  THAT IS THE ARITHMETIC TO AIM
-   AT, and the obvious way to reach it does not work: binding the table to a
-   local `t10` used by both the store and the call is 11 (no change), and
-   `t10++; t10--;` after it -- one pair or two, at every one of the eleven
-   statement positions in case 10 -- is 12, i.e. worse, at every position.
-   Shrinking the lh's priority instead needs its life to reach 5 insns, and
-   hoisting the load into a local (`k`, `y`, `v` or a fresh `s16 i10`, at
-   each of ten positions, in both the plain and the array spelling) is 11 at
-   best and 13 or worse everywhere else.
+       ;; ready list at T-25: 1841 (1) 1843 (1) 1881 (1), now 1841 1843 1881
 
-   ALSO MEASURED AND REJECTED ON THE CURRENT BODY, all 11 rows (= no change)
-   unless stated:
-     * every `do { } while (0);` over every contiguous run of case 10's
-       eleven statements (the whole arm is 13; two runs tie the base at 11);
-     * a cancelled `v++; v--;` for all 26 names at all 12 statement positions
-       in case 10;
-     * a duplicated-arm `if (v) { s } else { s }` for all 26 names over each
-       of case 10's last six statements;
-     * all 180 legal orders of {B1, B2, D, C} x (Y before S) -- see the
-       13 -> 11 entry;
-     * `*(u8 **)(c + 0x2C)` and an array-typed cast for the c+0x2C store;
-       the array-typed cast for d+0x8A, d+0x60, and the D_800E3DF0 entry;
-     * a separate local for `e10[3] & 0x1F`, for the D_800E3DF0 entry, for
-       the table, and dropping `e10` altogether;
-     * merging each of the sixteen pointer locals into each other (240
-       pairs) and all 96 legal assignments of {k,x,y,v} to the four scalar
-       temp roles;
-     * ALL FOUR SWEEPS COME BACK EMPTY ON THIS BODY, which is the brief's
-       stopping condition for the sweep cycle: widthsweep "no width change
-       helps", stmtsweep "no safe move helps", devsweep "no wrapper helps"
-       (4563 candidates) and refsweep "no cancelled pair helps" (7079
-       insertion points).  They were also empty on the 23-row body, and the
-       case-10-only versions above were run by hand on this one.  The next
-       thing to spend on this park is the permuter, not another sweep.
-     * `(((D_80083228 + 0x100) + lh) >> 9) & 7` is 45 rows / 810 words and
-       `(s16)` around the sum is 13, so the index expression as written is
-       load-bearing too.
+   -- 1841 sorts first because it has the higher LUID, so it takes T-25 (769)
+   and 1843 waits until T-31 (763).  THE WHOLE RESIDUE IS THAT ONE LUID
+   COMPARISON, so it is decided in sched1, and sched1's own trace shows
+   exactly where:
+
+       ;; ready list at T-20: 1881 (1) 1877 (1) 1846 (7f000001) 1841 (7f000001)
+
+   1846 (the D_800814A0 load) and 1841 (the table `lo_sum') are tied at the
+   maximum priority, and 1841 is picked -- although 1846 has the HIGHER LUID
+   and would win a LUID tie.  So the CLASS tie-break in `rank_for_schedule'
+   decided it: relative to the just-scheduled c+0x2C store (1849),
+   1841 is a DATA predecessor with `insn_cost == 1' (an ALU result feeding a
+   store's value operand costs nothing), which is class 3, while 1846 is an
+   ANTI predecessor at cost 0, which is class 2, and the higher class wins.
+
+   THAT MAKES THE NEXT QUESTION PRECISE: get class(1846) up to 3 or
+   class(1841) down, and the LUID tie then puts 1841 ahead of 1843 and the
+   function lands.  class(1846) reaches 3 only if 1846 has NO link to 1849
+   at all, i.e. if the load and the c+0x2C store stop conflicting -- and the
+   one spelling that does that, the array form `((u8 **)c)[0xB]', costs
+   SEVEN rows elsewhere (9 instead of 2; 152 bodies measured, all 9).  So
+   the next agent wants either a way to raise 1846's class without the array
+   form, or a cost-free early use of `t10' that pulls 1841 forward in the
+   sched1 chain.  The only device that produces such a use -- a
+   duplicated-arm `if (t10) { s } else { s }' -- costs four words here
+   (816 words, 35 rows); measured over four statements x six condition
+   variables, every variant with `t10', `z', `c', `d' or `e10' as the
+   condition is 814-816 words, and only `base10' (a constant) stays at
+   812/2 while changing nothing.
+
+   `tools/decomp/sched.py --sched1' and the `;; ready list at T-NN' trace are
+   the tools for all of this -- every number in this header came from them.
+
+   AN EQUAL-SCORING ALTERNATIVE EXISTS AND IS A DEAD END -- DO NOT SPEND ON
+   IT.  With the c+0x2C store BEFORE the D_800814A0 read-modify-write and no
+   `t10'/`z' at all (case 10 then needs no local: `D_800814A0 |= 0x8000;'),
+   the body also measures 2 rows at 812 words, and its single residue is
+   `lw $v1, %lo(D_800814A0)($t0)' at candidate 776 against target 774.  THAT
+   BASIN CANNOT CLOSE: `*(u8 **)(c + 0x2C)' is not MEM_IN_STRUCT_P and the
+   D_800814A0 refs have non-varying `lo_sum' addresses, so the sched.c:835
+   exception cannot fire in either direction and the two conflict; a
+   dependence is in PROGRAM order, and the target's listing has the LOAD at
+   774 and the STORE at 776, so the target's source has the load first.  93
+   spellings in that basin all give the same 2-row residue.
+
+   ====================================== 2026-11-22: 11 -> 2 rows at 812/812
+
+   FOUR CHANGES IN CASE 10.  Each is listed with what it is worth and the
+   mechanism; none of the first three is worth anything without the one
+   before it, which is why the park sat at 11 for a day.
+
+   (1) THE d+0x60 STORE MOVES AHEAD OF THE c+0x2C TABLE STORE, and
+   (2) CASE 10's D_800814A0 TEMP STOPS SHARING `x' WITH CASE 9's p+0xC0 BYTE.
+       Together 11 -> 9.  (1) alone is 19 rows; (2) alone is 11, no change.
+   (3) THE TABLE STORE IS `*(u8 **)(c + 0x2C)', NOT `((u8 **)c)[0xB]'.
+       9 -> 2.
+   (4) THE TABLE GETS ITS OWN `u8 *t10' LOCAL, ASSIGNED BEFORE THE
+       D_800814A0 LOAD, used by both the store and the call's index.
+       3 -> 2 in the load-before-store basin.  THIS REVERSES the park's
+       "THE SIX FACING TABLES ARE NAMED TWICE, NOT BOUND TO A u8 *t" for
+       CASE 10 ONLY; the other five sites still have no local and are
+       byte-exact.
+
+   WHY (1), AND IT IS A GENERAL WAY TO READ A SOURCE ORDER OFF A LISTING.
+   The target's case 10 has `sw $a1,0x2C($a0)' AFTER `sh $v0,-0x2($v1)' and
+   after `lw $v1,0x60($s3)'.  Those pairs are dependences no scheduler may
+   reorder: `(plus (reg c) 44)' against `(plus (reg d) 96)' and against
+   `(plus (reg629) -2)'.  BOTH addresses vary, so the MEM_IN_STRUCT_P
+   exception cannot fire, and `memrefs_conflict_p' (sched.c) bottoms out on
+   two distinct REGs and returns 1 -- `reg_known_value' cannot separate two
+   parameters either, since their single sets are the incoming arg hard regs.
+   A DEPENDENCE IS IN PROGRAM ORDER, so if the target's asm has A after B and
+   A/B cannot be disambiguated, the TARGET'S SOURCE HAS B FIRST.  That is a
+   proof, not a guess, and it is what pointed at a basin the park's own row
+   count had rejected at 19.
+
+   It also explains the target's `sw ...,0x2C($a0)', which the park had
+   recorded as unexplained: with the store after the arg copy in the
+   post-sched1 chain and `c' not dead at the copy, `optimize_reg_copy_1'
+   (local-alloc.c, called from update_equiv_regs) rewrites the later use of
+   `c' to the hard reg $a0.  CAUTION, measured here: reorg.c:3700 UNDOES
+   that substitution -- "if this insn is a register-register copy and the
+   next insn has a use of our destination, change it to use our source" --
+   whenever the store is the IMMEDIATE `next_nonnote_insn' after the copy.
+   On the 9-row body local-alloc produced `0x2C($a0)' and reorg turned it
+   back into `0x2C($s1)'; the dumps show it flipping between `jump2' and
+   `dbr'.  So the $a0 spelling needs the store NOT adjacent to the copy.
+
+   WHY (2).  In the target $v1 is busy CONTINUOUSLY from aligned 749 to 785,
+   which is what forces the D_800DD140 quantity out of $v1 and into $a1.
+   With `x' shared between case 9 and case 10 it is a GLOBAL allocno, so at
+   local_alloc time $v1 is not yet reserved, the block-local table quantity
+   grabs $v1, and global_alloc then has to put `x' in $a1 -- which also moved
+   case 9's byte to $a1 and cost two rows there.  THIS REVERSES the
+   2026-11-21 finding below ("sharing the case 9 byte with the case 10 rmw
+   measures 23, splitting 26"): that was measured on the C-before-D body and
+   is a STALE POSITIVE.  A shared-local decision is only valid inside the
+   statement-order basin it was measured in.
+
+   WHY (3).  `((u8 **)c)[0xB]' sets MEM_IN_STRUCT_P (expr.c:5344 -- the top
+   node of the INDIRECT_REF's address is a PLUS_EXPR), and the D_800814A0
+   load and store have `(lo_sum (reg) (symbol_ref))' addresses, which
+   `rtx_varies_p' (rtlanal.c:103) reports as NON-varying.  That is exactly
+   the shape `true_dependence'/`output_dependence' (sched.c:835) make an
+   exception for, so with the array form the table store has NO dependence on
+   the D_800814A0 pair and floats; with the NOP_EXPR cast the flag is clear,
+   the exception cannot fire in either direction, and the store is PINNED
+   between them -- which is where the target has it.  So the lever is the
+   same MEM_IN_STRUCT_P question as the 2026-11-21 d+0x2A entry, used in the
+   OPPOSITE direction: there we wanted a dependence gone, here we want it
+   kept.  152 bodies with the array form all measure 9; the same bodies with
+   the pointer cast measure 2.
+
+   THE ALLOCATOR ARITHMETIC, confirmed against the compiler's own dumps.
+   local-alloc.c:1693
+
+       QTY_CMP_PRI = floor_log2(n_refs) * n_refs * size / (death - birth) * 10000
+
+   where (a) `n_refs' is the SUM of reg_n_refs over every pseudo combine_regs
+   tied into the quantity (`qty_n_refs[sqty] += reg_n_refs[sreg]',
+   local-alloc.c:1939) -- the D_800DD140 quantity is the `%hi' pseudo AND the
+   `lo_sum' pseudo, tied at the lo_sum because the %hi dies there, so it is
+   2+3 = 5 and NOT the 3 that `.lreg' prints for the lo_sum alone; (b) birth
+   and death are `2*insn_number (+1 for an output)' over the POST-SCHED1
+   order, so death-birth = 2*(span in insns) - 1, and this is NOT
+   reg_live_length; (c) `size' is in WORDS, so 1 here.  On the 11-row body
+   that was TBL 2*5/39 = 2564 against the d+0x2A load's 1*2/5 = 4000, so the
+   load went first and took the lower register.
+
+   A SMALL INSTRUMENT IS WORTH MORE THAN A SWEEP HERE.  Compile the
+   `onefunc.py' standalone with `-dl', parse the `.lreg' dump for
+   `Register N used M times', `;; Register N in R.' and the insn order, and
+   print each quantity's n_refs / span / PRI / hard reg.  That is 0.05 s a
+   candidate -- CHEAPER than aligndiff -- and it says whether a candidate
+   moved the allocator at all before you spend a measurement on it.  It is
+   also what proved the do-while(0) family below was hitting the target's
+   register pair and losing on everything else.
+
+   MEASURED AND REJECTED.  ON THE CURRENT (2-ROW) BODY:
+     * all 20 legal orders of {D, T(t10=), Y(z=load), C(store), S} after the
+       e10 chain, with D<C, T<C, Y<S: DTCYS / DTYCS / TDCYS / TDYCS all 2;
+       DYTCS 3; TYDCS / YDTCS / YTDCS 16; the eight orders that put the
+       D_800814A0 STORE before C are 803 words / 42 rows.
+     * THE FOUR SWEEPS WERE RE-RUN ON EVERY BODY THIS PARK PASSED THROUGH.
+       On the 9-ROW body widthsweep ("no width change helps"), stmtsweep
+       ("no safe move helps") and devsweep ("no wrapper helps", 4760
+       candidates per round) all came back empty; the park's older entries
+       record all four empty on the 11-row and 23-row bodies.  ON THIS
+       2-ROW BODY: widthsweep "no width change helps", stmtsweep "no safe
+       move helps" (6 movable assignments), devsweep "no wrapper helps"
+       (4959 candidates per round) and refsweep "no cancelled pair helps"
+       (28 names, 7680 insertion points) ALL CAME BACK EMPTY, each having
+       confirmed the 2-row baseline on its own standalone first.  That is
+       the brief's stopping condition for the sweep cycle; the next spend on
+       this park is the sched1 class/LUID question above, or the permuter on
+       THIS body (the 2026-11-21 permuter run below is spent on a body that
+       no longer exists -- it was 11 rows, four changes ago).
+     * THE ARM IS INSENSITIVE TO EVERY REMAINING MINOR SPELLING, all 2:
+       case 10's own `if' condition in four forms (both `(u8 **)d)[0x18]'
+       and `((u32 *)...)[7]', and with an explicit `!= 0'); `e10[3]' as
+       `*(u8 *)(e10 + 3)'; `~0x4000' written `0xFFFFBFFF'; `(u32)0x8000';
+       the d+0x60-2 `|=' split into an explicit load/or/store;
+       `t10 = &D_800DD140[0]'; and the call's index as `*(t10 + i)'.
+     * THE `RTX_UNCHANGING_P' ESCAPE IN `anti_dependence' IS NOT REACHABLE
+       FROM A CAST.  sched.c's anti_dependence returns 0 outright when the
+       READ is unchanging, which is exactly the link we want gone, but
+       `z = *(const u32 *)&D_800814A0;', the same through `const s32 *', the
+       array form `((const u32 *)&D_800814A0)[0]', and a `const u32 *' local
+       all measure 2 -- identical to the unqualified load, so cc1psx is not
+       setting the flag from the cast's TREE_READONLY.  `volatile' is also 2.
+     * D_800814A0 AS A CONSTANT ADDRESS (the trick case 2 needs for
+       D_80013714) COSTS A WORD HERE: `*(u32 *)0x800814A0' on the load 18
+       rows / 813 words, on the store 24 / 813, on both 21 / 813.  A `u8 *'
+       local holding 0x80080000 with `+ 0x14A0' inside the index is 2 at 812
+       -- identical to the symbol, and no better.
+     * `u32 *a10 = &D_800814A0;' with the load and store through `*a10' is
+       also 2 at 812 words (the `addiu %lo' folds back into the load and the
+       store, so the address local is free) -- it does not move the residue.
+     * MOVING THE `t10 = D_800DD140;' ASSIGNMENT EARLIER THAN THE e10 CHAIN
+       IS A REGRESSION, NOT A FREE CHOICE: ahead of the func_8009A028 call
+       it is 31 rows at 810 words, and outside the `if' 29 rows at 811.  It
+       is free anywhere from just after that call to just before
+       `z = D_800814A0;' (six positions, all 2).
+     * all 64 combinations of where `u8 *t10' and `s32 z' are DECLARED, over
+       eight positions each in the declaration block: 2 everywhere, so the
+       declaration order is free and does not need preserving.
+     * which local holds the D_800814A0 value: a fresh `s32 z' 2, `x' 3,
+       `y' 7, `v' 17, `k' 26 at 813 words.  Widths of `z': s32 / u32 2,
+       u16 / u8 3, s16 26 at 814 words.  `t10' as `u8 *' 2, as `u8 **' 33
+       at 815 words.
+     * t10's assignment position (six places in the arm) and whether t10 is
+       used by the store, by the call's index, or by both: all 2.
+     * eight spellings of the D_800814A0 read-modify-write (`|=' as one
+       statement, `D_800814A0 = D_800814A0 | 0x8000', a local for the loaded
+       value, a local for the or'd value, `z |= 0x8000' in the middle,
+       `*(u32 *)&D_800814A0', `(&D_800814A0)[0]'): with the c store BEFORE
+       them all 2 (the dead basin), with the c store BETWEEN the load and the
+       store all 2-3, with the c store AFTER the store 803 words / 42 rows.
+     * the d+0x8A load as `((s16 *)d)[0x45]' or with `| 0x29C' folded into
+       the index, and the three `*(u8 **)(d + 0x60)' reads as
+       `((u8 **)d)[0x18]': 2 in every combination (measured on the 9-row
+       body, which shares case 10's structure), so none of those four casts
+       matters.
+     * THE d+0x2A CAST AND THE INDEX SUM ARE BOTH STILL LOAD-BEARING -- 20
+       candidates, four casts x five sums, re-measured ON THIS BODY:
+       `((s16 *)d)[0x15]' with the sum as written is the unique 2.  Same
+       cast, other sums: `(lh + D_80083228 + 0x100)' 11,
+       `(D_80083228 + (lh + 0x100))' 37 at 809 words,
+       `((D_80083228 + 0x100) + lh)' and `(0x100 + D_80083228 + lh)' 40 at
+       809 words.  `((u16 *)d)[0x15]' with the sum as written is 3 (NOT
+       identical, which the 2026-11-21 entry below claimed), and the two
+       flagless pointer casts are 43 rows at 805 and 808 words.
+     * `((u32 *)e10)[5]' for the +0x14 mask, `((s16 *)d)[0x45]' for the
+       d+0x8A load, `((u8 **)(base10 + 0x29C))[...]' for the e10 load, and
+       all three `*(u8 **)(d + 0x60)' reads (including func_8009A028's
+       argument) as `((u8 **)d)[0x18]': 2 in every case, so none of those
+       casts matters.  `(u32)base10 | 0x29C | (idx * 4)' is 20 rows at 813
+       words, so the `+ 0x29C' inside the index is load-bearing.
+     * A SEPARATE LOCAL `q10' FOR THE D_800E3DF0 ENTRY IS NOW WORTH 2 ROWS
+       AGAINST IT (4 rows vs 2), so the 2026-11-21 "e10 AGAIN, NOT A NEW
+       PSEUDO" entry still holds on this body -- it was neutral on the 9-row
+       body, which is one more reason to re-price a park's claims after every
+       structural change.
+   ON THE 11-ROW BODY (kept because each has a mechanism attached):
+     * A LOCAL COPY OF `c' FOR THE STORE AND THE CALL -- `cc = c;' with the
+       store, the call, or both through `cc', at ten statement positions:
+       all 11.  WITH A CANCELLED PAIR as well (`cc++; cc--;' at every
+       position after the assignment, one pair and two, 330 candidates): 290
+       of them 11 and 40 of them 17.  cse folds the copy away at every use,
+       because `cc' is provably `c'.  The $a0 spelling is NOT reachable this
+       way -- it comes from optimize_reg_copy_1 and therefore from the
+       STATEMENT ORDER, see above.
+     * HOISTING THE d+0x2A LOAD INTO A LOCAL to lengthen its quantity's life
+       (which does flip the priority: a fresh `s32'/`u32' local takes the lh
+       span from 3 insns to 18 and the PRI from 4000 to 571): `s32 jj' 13 at
+       best, `u32 jj' 14, `s16 jj' 43, `v' 25, `y' 16, `k' 51 -- over nine
+       insertion positions each.  The hoisted pseudo takes $t0 and collides
+       with D_800814A0's base.
+     * `do { } while (0);' OVER 138 WRAPPER PLACEMENTS -- every contiguous
+       run of case 10's eleven statements plus 72 two-wrapper combinations.
+       This is the n_refs lever: flow.c:441 starts `depth' at 1 and
+       NOTE_INSN_LOOP_BEG bumps it, and flow.c:2122 does
+       `reg_n_refs[regno] += loop_depth', so a wrapper DOUBLES the refs of
+       every pseudo inside it.  Wrapping statements i..6 takes the table
+       quantity to n_refs 9, PRI 6923, and gives EXACTLY the target's
+       register pair -- and still measures 26 rows at 814 words, because the
+       same doubling re-prices every other quantity in the arm.  Best
+       wrapper 26; most 31-64; eleven exceed 812 words.
+     * 192 assignments of the four scalar temp roles (case 2's amount,
+       case 9's func_80099090 result, case 9's p+0xC0 byte, case 10's rmw)
+       over {x, y, v, z}: nothing beat the split described above.
+     * 420 legal orders of the eight case-10 statements with the ARRAY-form
+       store: best 9 (this body's order), then 13, 16, 19-45.
 
    LEVERS THAT WERE WORTH A LOT AND ARE ALREADY IN THE BODY:
 
@@ -379,12 +588,14 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     u8 *n5;
     u8 *base9;
     u8 *base10;
+    u8 *t10;
     u8 *w;
     void *s;
     s16 k;
     s32 x;
     u32 y;
     s32 v;
+    s32 z;
     s16 out[4];
 
     g = (u8 *)&D_80083160;
@@ -679,18 +890,12 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
             e10 = *(u8 **)(base10 + *(s16 *)(d + 0x8A) * 4 + 0x29C);
             e10 = (u8 *)D_800E3DF0[e10[3] & 0x1F];
             *(u32 *)(e10 + 0x14) &= ~0x4000;
-            ((u8 **)c)[0xB] = D_800DD140;
             *(u16 *)(*(u8 **)(d + 0x60) - 0x2) |= 0x8000;
-            x = D_800814A0 | 0x8000;
-            D_800814A0 = x;
-            /* The array-typed cast is the only part of this arm that is not
-               an honest spelling: it is there so the d+0x2A load is an
-               ARRAY_REF and gets MEM_IN_STRUCT_P, which is what lets
-               true_dependence stop the D_800814A0 store depending on it. A
-               COMPONENT_REF on a real typedef for `d' would do the same and
-               would be the right form; this park has no witness for one.
-               Written `*(s16 *)(d + 0x2A)' the arm is 23 rows, not 11. */
-            func_80048A44(c, D_800DD140[((D_80083228 + ((s16 *)d)[0x15] + 0x100) >> 9) & 7], 0, 1);
+            t10 = D_800DD140;
+            z = D_800814A0;
+            *(u8 **)(c + 0x2C) = t10;
+            D_800814A0 = z | 0x8000;
+            func_80048A44(c, t10[((D_80083228 + ((s16 *)d)[0x15] + 0x100) >> 9) & 7], 0, 1);
             p[0x9B]++;
         }
         break;
