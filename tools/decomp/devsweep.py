@@ -37,6 +37,20 @@ sys.path.insert(0, HERE)
 from onefunc import find_definition
 import parkresidue as pr
 
+# LINE-BUFFER STDOUT. A sweep's findings are printed as it goes, but Python
+# block-buffers stdout when it is a file, so a run killed by `timeout' loses
+# everything still in the 8 KB buffer -- and these runs are long enough that
+# being killed is the NORMAL ending. On 2026-11-22 a 90-minute refsweep of
+# func_800ADE74 under `timeout' produced AN EMPTY LOG: SIGTERM discarded the
+# whole buffer, including every improvement it had found. The agent worked
+# around it with `python3 -u', which is correct but has to be remembered;
+# this makes it the default so a killed sweep still leaves its finds on disk.
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
+
 TOOL = "devsweep"
 DECL = re.compile(r"^(\s*)((?:const\s+)?[A-Za-z_][A-Za-z0-9_]*)\s+(\**)"
                   r"([A-Za-z_][A-Za-z0-9_]*)\s*(\[[^\]]*\])?\s*(=[^;]*)?;$")
