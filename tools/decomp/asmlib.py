@@ -13,8 +13,45 @@ Everything here is pure: no printing, no argv parsing.
 import os
 import re
 import subprocess
+import atexit
+import shutil
+import tempfile
 
 SP = os.environ.get('AZURE_SCRATCH', '/tmp/azure-decomp')
+
+# EVERY INTERMEDIATE GOES IN A PER-PROCESS DIRECTORY, AND THAT IS NOT
+# COSMETIC -- IT IS THE FIX FOR A WRONG MEASUREMENT.
+#
+# compile_asm and assemble used to name the .s and the .o from the SOURCE
+# BASENAME inside SP, and `build' derived the same name again. But the brief
+# REQUIRES a candidate copy to keep its unit's basename (ovlverify picks the
+# container ELF from it), and SP defaults to one shared `/tmp/azure-decomp'
+# whenever a caller does not export AZURE_SCRATCH. So any two concurrent
+# measurements of the same unit wrote the same two paths.
+#
+# On 2026-11-22 an agent measuring six IDENTICAL baseline candidates of
+# func_800B51C8 while a refsweep of the same park ran got `3, FAIL, FAIL,
+# FAIL, 3, 3' -- the `unrecognized opcode' / `symbol already defined' /
+# `junk at end of line' class, which is a half-written .s being assembled.
+# Worse, the same cause returned a PLAUSIBLE WRONG NUMBER: 830/56 for a
+# candidate that measures 832/51 serially. A wrong measurement from
+# parallelism is indistinguishable from a park's negative, so this had to
+# become impossible rather than something callers remember to avoid.
+#
+# mkdtemp under SP makes the collision unrepresentable no matter how sloppy
+# the caller's AZURE_SCRATCH hygiene is, and atexit keeps a sweep of ten
+# thousand candidates from leaving ten thousand object files behind.
+_PROC_DIR = None
+
+
+def procdir():
+    """A private directory for this process's compile intermediates."""
+    global _PROC_DIR
+    if _PROC_DIR is None:
+        os.makedirs(SP, exist_ok=True)
+        _PROC_DIR = tempfile.mkdtemp(prefix='proc%d.' % os.getpid(), dir=SP)
+        atexit.register(shutil.rmtree, _PROC_DIR, True)
+    return _PROC_DIR
 MASPSX = os.path.join(os.environ.get('MASPSX_DIR', 'vendor/maspsx'), 'maspsx.py')
 PROJ = os.environ.get(
     'AZURE_ROOT',
@@ -314,9 +351,8 @@ def compile_asm(src, cflags=(), unit=None):
 
     Raises CompileError if the compile fails or writes nothing.
     """
-    os.makedirs(SP, exist_ok=True)
     base = os.path.splitext(os.path.basename(src))[0]
-    s = os.path.join(SP, base + '.s')
+    s = os.path.join(procdir(), base + '.s')
     cc = cc1_for_unit(unit) if unit else 'tools/cdkgcc'
     r = subprocess.run([os.path.join(PROJ, cc)] + CFLAGS + list(cflags)
                        + ['-S', '-o', s, src], cwd=PROJ,
@@ -335,7 +371,7 @@ def assemble(asm, name, gasG=0, unit=None):
     a symbol whose `.extern SYM,size` size is in (0, G]. No unit is built that
     way any more; see the note on gas_g_for_unit above.
     """
-    o = os.path.join(SP, name + '.o')
+    o = os.path.join(procdir(), name + '.o')
     cmd = ['python3', MASPSX, '--aspsx-version=2.56', '--force-stdin',
            '--run-assembler', '--gnu-as-path=mips64-linux-gnu-as',
            '--use-comm-section', '-G%d' % (gasG or 8)]

@@ -27,7 +27,7 @@ if '--allow-stub' not in sys.argv:
         sys.exit(1)
 
 words, relocs = asmlib.build(src, gasG=0, cflags=('-G0',))
-o = os.path.join(asmlib.SP, os.path.splitext(os.path.basename(src))[0] + ".o")
+o = os.path.join(asmlib.procdir(), os.path.splitext(os.path.basename(src))[0] + ".o")
 syms = {}
 for ln in subprocess.run(["mips64-linux-gnu-nm","-n",o],capture_output=True,text=True).stdout.split("\n"):
     m = re.match(r"([0-9a-f]+) [Tt] (\S+)", ln)
