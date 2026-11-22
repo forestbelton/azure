@@ -314,7 +314,26 @@
    The fields marked "written only" have no observable signedness.  s16 is the
    assumption; if a residue lands on one of them, that is the first thing to
    vary and it costs nothing.
-*/
+
+   ====================================== 2026-11-21: PERMUTER SPENT AT 1 ROW
+
+   150 minutes, 4 jobs, 249108 candidates, score 250 -> 60, one find.
+   Measured against the park: `output-60-1' is 1 row / 358 words -- it TIES
+   and does not beat it.  Earlier runs' finds, re-measured on this body, are
+   63, 64 and 66 rows at the same word count despite having scored as
+   improvements (2530, 2575, 2590 against a base of 6375).
+
+   That is the metric divergence stated as sharply as this project has seen
+   it: a permuter score of 2530 is 66 rows and a score of 60 is 1 row, and
+   nothing in between is monotone.  `no find beats the park'.
+
+   All four sweeps were already clean here, so both automatic routes are now
+   spent.  The remaining row is the single instruction described above -- the
+   target rematerialises a dead pointer as `addiu $a1,$s2,-0x28' where this
+   body still has it live in $s0, and writing that subtraction directly costs
+   2 words by giving a global pseudo a conflict with $s2 that cascades a
+   quantity out to $s8.
+ */
 s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
 {
     Unk80083160 *g = &D_80083160;
