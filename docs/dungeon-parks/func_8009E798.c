@@ -1,4 +1,112 @@
-/* ======================================== 2026-11-21: 55 rows -> 1 (358/358)
+/* ============================ 2026-11-22: LANDED.  358/358 words, 0 differing
+
+   THE LAST ROW WAS A STALE NEGATIVE, AND THE FIX IS THE ONE THE PARK HAD
+   ALREADY WRITTEN DOWN AS REFUTED.
+
+   The residue was the second AddPrim's argument -- candidate `addu $a1, $s0,
+   $zero' against target `addiu $a1, $s2, -0x28'.  The park recorded
+   `second AddPrim written r - 0x28  ->  360 words / 128 rows', attributed to
+   an eighth callee-saved register.  Re-measured on the 1-row body itself, the
+   same change is 358 words and 0 aligned differences.  That recorded number
+   was true of an ANCESTOR body -- it predates one or more of the park's own
+   four changes (the rolling cursor, the POLY_F4 statement order, the `c'
+   assignment position, the s16 flag) -- and a 2-word regression reads as a
+   128-row catastrophe, so it looked like a refutation of the mechanism rather
+   than of the body it was tried on.
+
+   ONE EDIT, from the park's own candD body:
+     AddPrim(... , q)       ->    AddPrim(... , r - 0x28)
+   on the SECOND of the two adjacent AddPrim calls (the first takes `r').
+
+   MECHANISM -- FROM THE DUMPS, AND IT IS NOT AN ALLOCATION EFFECT AT ALL.
+   The park's diagnosis was that writing the subtraction "costs 2 words by
+   giving a global pseudo a conflict with $s2 that cascades a quantity out to
+   $s8".  On this body nothing of the kind happens.  Dumping both bodies
+   (tools/decomp/dump.sh on an onefunc standalone) and diffing:
+
+     .greg is IDENTICAL in the two.  Same `6 regs to allocate: 96 90 85 93 81
+     84', same conflict sets line for line, same `Hard regs used: 2 3 4 5 6 7
+     16 17 18 19 20 21 22 23 29 31' -- no reg 30, so no $s8 in either.  The
+     register dispositions differ ONLY by a renumbering from pseudo 230 up.
+     `q' is reg/v 89 in 16 ($s0), `r' is reg/v 90 in 18 ($s2) and the cursor
+     is reg/v 96 in 17 ($s1), in BOTH bodies.
+
+     The extra pseudo 230 is the renumbering, and combine deletes it.  Through
+     rtl, jump, cse, loop, cse2 and flow the landed body carries
+       (insn 576 (set (reg:SI 230) (plus:SI (reg/v:SI 90) (const_int -40))))
+     and a separate (set (reg:SI 5 a1) (reg:SI 230)).  In .combine both of
+     those are NOTE_INSN_DELETED and what is left is one insn,
+       (insn 580 (set (reg:SI 5 a1) (plus:SI (reg/v:SI 90) (const_int -40))))
+     -- the subtraction folded straight into the argument move, because the
+     temp has exactly one use and $a1 is call-clobbered.  Nothing new ever
+     reaches the allocator, which is why the change costs zero words.
+     The candidate's corresponding insn is (set (reg:SI 5 a1) (reg/v:SI 89)),
+     and 89 is in $s0, which is the `move a1,s0' we were staring at.
+
+     .lreg prices what actually moved, and it is one live range:
+       reg 89 (`q')  candidate: 39 uses across 239 insns, crosses 15 calls
+                     landed:    38 uses across 220 insns, crosses 14 calls
+       reg 90 (`r')  21 uses -> 22 uses, 96 insns and 8 calls in both
+       reg 96 (cur)  27 uses across 84 insns, unchanged
+     So `q' loses 19 insns of live range and one call crossing, `r' gains a
+     reference, and no allocation decision changes.
+
+   `q' is still genuinely live past the memcpy in BOTH bodies -- the target
+   itself reads `lbu $v0, 0x7($s0)' at 8009EB70 and writes `sb $v0, 0x7($s0)'
+   at 8009EB7C, so `q[0x7] |= 2' is addressed off `q' in $s0 in the target
+   too.  `q' simply is not the value the original source NAMES at that
+   AddPrim, and after `q[0x7] |= 2' nothing re-reads $s0.
+   The change is semantically the identity: `r == q + 0x28' holds at that
+   point (the cancelled `r++'/`r--' pair is net zero), so `r - 0x28' and `q'
+   are the same pointer.  It is a pure respelling with no behaviour change --
+   which is also why it was invisible to every automatic route.  Both
+   spellings are one instruction and 358 words, so no sweep's object diff and
+   no permuter score could see it, and the permuter duly TIED at 1 row.
+
+   WHY THE OTHER SPELLING OF THE SAME ADDRESS IS WRONG: at that point
+   `c == r + 0x28', so `c - 0x50' is the same address, and it measures
+   358 words / 1 row with `addiu $a1, $s1, -0x50'.  The target reaches the
+   argument from `r' in $s2, not from the cursor in $s1, so the source names
+   `r' there.  That is a fact about which local the original author wrote.
+
+   RE-MEASURED ON THE LANDED BODY (each one alone, standalone file, with a
+   baseline canary interleaved -- all 358 words unless stated):
+     the landed body                                   0 rows
+     second AddPrim `c - 0x50' instead of `r - 0x28'    1 row
+     second AddPrim `q' (the park's candD)              1 row
+     dropping __asm__("" : "=r"(r) : "0"(r))            80 rows
+     dropping __asm__("" : "=r"(q) : "0"(q))     359 words / 128 rows
+     dropping both                               359 words / 124 rows
+     dropping the cancelled `r++' `r--' pair            9 rows
+     dropping the `base' local                          0 rows -- EXACTLY
+       EQUAL, kept only for legibility
+   So all three of the park's long-standing devices are still load-bearing at
+   0 rows and none of them can be removed.
+
+   MERGE NOTE -- THE OLD HEADER'S "PROTOTYPE CHANGE" IS NOW STALE.  It says
+   csrc/ovl_dungeon.c:1515 declares `void func_8009E798()' and must be
+   rewritten.  That line no longer exists in csrc -- a previous merge removed
+   it -- so there is nothing to change and nothing to conflict with.  The
+   merge only ADDS the two DECLARATIONS lines to the top block and replaces
+   the INCLUDE_ASM.  The sole call site, `func_8004491C(n, (u32)func_8009E798)'
+   inside the landed func_8009ED30, re-measures 71/71 words 0 differing.
+   All 203 function definitions in the unit re-measure 0 differing with the
+   declaration and the body in place.
+
+   THE LESSON, which is the catalogue-worthy part: a park prices SINGLE
+   changes against the body of the day.  A lever that is worthless or harmful
+   alone, but necessary in combination, is recorded as a refutation.  Suspect
+   every recorded negative whose WORD COUNT is off, because a row count reads
+   a word-off prerequisite as a regression -- 360/128 here, and 136/6 on
+   func_8009F644 the same day.
+   ----------------------------------------------------------------------
+
+   PREVIOUS HEADERS FOLLOW, kept for the measurement record.  Their
+   "measured and rejected" lists are scoped to the bodies they were measured
+   on, and the `r - 0x28' entry in the first of them is the stale negative
+   described above.
+
+ ======================================== 2026-11-21: 55 rows -> 1 (358/358)
 
    ONE ROW LEFT, and it is the second AddPrim's argument:
      cand  266  8009EBC0  addu $a1, $s0, $zero      (q, still live)
@@ -333,7 +441,7 @@
    body still has it live in $s0, and writing that subtraction directly costs
    2 words by giving a global pseudo a conflict with $s2 that cascades a
    quantity out to $s8.
- */
+  */
 s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
 {
     Unk80083160 *g = &D_80083160;
@@ -435,7 +543,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     r--;
     r[0x1D] = r[0x25] += 0x40;
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r);
-    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, q);
+    AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, r - 0x28);
     *(u32 *)(c + 0x4) = 0x606060;
     *(s32 *)(c + 0x8) = *(s32 *)(c - 0x20);
     *(s32 *)(c + 0xC) = *(s32 *)(c - 0x18);
