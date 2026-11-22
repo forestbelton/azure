@@ -1,7 +1,8 @@
 /* ===========================================================================
    BEST MEASURED CANDIDATE for func_800ADE74, ovl_dungeon (1817 words).
 
-   2026-11-22, third session.   1817/1817 WORDS, 35 aligned rows
+   2026-11-22, fourth session.  1817/1817 WORDS, 30 aligned rows
+   was 2026-11-22, third:       1817/1817 words, 35 aligned rows
    was 2026-11-21, later:       1821/1817 words, 170 aligned rows
    was 2026-11-21, morning:     1817/1817 words, 255 rows -- but that word
                                 count was TWO CANCELLING ERRORS, see below
@@ -13,13 +14,147 @@
        python3 tools/decomp/onefunc.py func_800ADE74 --src <copy> --out one
        python3 tools/decomp/aligndiff.py one/ovl_dungeon.c func_800ADE74
 
-   THE WORD COUNT IS NOW HONEST: every word is accounted for, there is no
-   `+' row and no `-' row anywhere, and the first 274 words and the last 398
-   are byte-identical.  What is left is 35 rows in THREE register/schedule
-   clusters, listed at the bottom.
+   NOTE ovlverify's POSITIONAL count on this body says `35 differing' where
+   aligndiff says 30.  aligndiff is the honest figure (ovlverify compares word
+   N against word N, so a transposed pair misses twice).  Use aligndiff.
+
+   THE WORD COUNT IS HONEST: every word is accounted for, and the first 274
+   words and the last 398 are byte-identical.  What is left is 30 rows in
+   THREE register/schedule clusters, listed at the bottom.
 
    ===========================================================================
-   WHAT MOVED THIS SESSION, 170 -> 35 ROWS, IN SIX CHANGES
+   WHAT MOVED ON 2026-11-22 (FOURTH SESSION), 35 -> 30 ROWS, IN TWO CHANGES
+
+   Both came from the same question: decomp-permuter, run on the 35-row body,
+   found 32 rows by storing case 0x24's Chebyshev comparison into `r5' -- a
+   DEAD function-scope local whose real use is twenty switch arms away.  That
+   is an allocation artifact, not something an author wrote.  Chasing the
+   honest spelling of it produced both changes below, and a precise statement
+   of the lever.
+
+   (G) case 0x24's func_800A6E8C result goes into the arm's OWN scratch, and
+       that same scratch then holds the comparison.      35 -> 32 rows
+
+           -   if ((s16)func_800A6E8C(b, 0x12, &sp18, &sp1A) == 0)
+           -   {
+           -       break;
+           -   }
+           +   r9 = func_800A6E8C(b, 0x12, &sp18, &sp1A);
+           +   if ((s16)r9 == 0)
+           +   {
+           +       break;
+           +   }
+               ...
+           -   if (sp18 < sp1A)
+           +   r9 = sp18 < sp1A;
+           +   if (r9)
+               {
+                   mx = sp1A;
+               }
+
+       -3 rows, 0 words.  `r9' is a NEW local in case 0x24 only, in the same
+       idiom as r1..r8 ("a call result in a scratch, then test it"), so no
+       other arm is touched.  The three rows are a pure $v0/$v1 swap on the
+       two sign-extend temps of the comparison: the target has
+       `sll $v1,$v1,16 / sll $v0,$a0,16 / slt $v1,$v1,$v0 / beqz $v1' and the
+       35-row body had the two registers the other way round.
+
+       THE LEVER, STATED EXACTLY -- and this is the part worth keeping:
+       the comparison's value must land in a pseudo that flow makes a GLOBAL
+       allocno, i.e. one REFERENCED IN MORE THAN ONE BASIC BLOCK
+       (flow.c:2561).  A pseudo referenced only in the block that sets it is a
+       local_alloc quantity and gets $v0; a global allocno goes through
+       global_alloc and can come out $v1.  BOTH HALVES OF (G) ARE REQUIRED
+       AND NEITHER PAYS ALONE -- the call-into-`r9' alone is 35 and
+       `r9 = cond; if (r9)' alone (with the call left inline) is 35.
+
+       WHAT IS **NOT** THE LEVER, all measured on the 35-row body:
+         the FORM of the condition          -- every ternary and every
+            `if' shape is 35, byte-identical: `mx = (sp18 < sp1A) ? sp1A : mx',
+            `mx = (sp18 >= sp1A) ? sp18 : sp1A', `(sp18 > sp1A) ? ...',
+            `(sp18 < sp1A) ? sp1A : sp18', `(sp18 <= sp1A) ? sp1A : sp18',
+            `if (mx < sp1A) { mx = sp1A; }', `if (!(sp18 >= sp1A))',
+            `if (sp18 >= sp1A) {} else {...}', `(s16)'/`(s32)' casts on both
+            operands, and `if (sp18 < sp1A) { mx = dy; }'.
+         a FRESH local holding only the condition -- 35 at s32, s16, u8, u16,
+            s8 and u32, and 35 with `if (cc != 0)' as well.  A fresh local
+            used once is block-local, which is exactly why it cannot work.
+         the SET COUNT on the variable        -- a dead store `r5 = cond;' with
+            the plain `if' is 35; `r5 = 0;' is 35; `r5 = sp18;' is 35;
+            `r5++; r5--;' is 35; and `if ((r5 = sp18 < sp1A) != 0)' -- one
+            statement instead of two -- is 35.  So it is not reg_n_sets, not
+            reg_n_refs and not a cancelled pair.
+         a fresh local holding the MAX instead of the condition -- 1816/98,
+            1816/115, 1818/111, 1815/101.  All lose words.
+       Which variable you borrow decides the register, and only some win:
+       r4, r5, t1 and dx reach 32; r6, r7, t3, t5, t7, i, i2A, j reach 34;
+       aa, k, k2, h1 are 35; nn 36, r1 37, r8 38, n and ang 39, h2/h3 41,
+       ret 1816/47, r2 1816/49, r3 1816/52, and sp1C/sp1E/sp20 1818/98
+       (address-taken, so they are real memory traffic).  `r9' is preferred
+       over all of them because it is the arm's own variable and borrows
+       nothing.
+
+   (H) `t3', `t5' and `t7' are ONE scratch, and case 0x24's dy abs uses it.
+                                                        32 -> 30 rows
+
+           -   s32 t3;  s32 t5;  s32 t7;
+           +   s32 t3;
+           (t5 in case 0x29 and t7 in case 0x1B renamed to t3)
+
+           -   dy = b[0x25] - sp1A;
+           -   if (dy < 0)
+           -   {
+           -       dy = -dy;
+           -   }
+           +   t3 = b[0x25] - sp1A;
+           +   dy = (t3 < 0) ? -t3 : t3;
+               sp1A = dy;
+
+       -2 rows, 0 words, and two fewer declarations.  t3 (case 0x2C), t5
+       (case 0x29) and t7 (case 0x1B) were three names for one idiom in three
+       DISJOINT switch arms -- `t = (s16)func_800A0134(c, X); if (t < 0)
+       { t = -t; } if (t <op> 0x21 ...)' -- so unifying them is safe and is
+       the honest reading; case 0x24's dy abs then joins the same family.
+
+       WHY IT PAYS, read off the target's own asm at 800AF1C8..800AF1DC:
+
+           lbu  $v0, 0x25($s7)
+           sll  $v1, $v1, 16
+           subu $v0, $v0, $a1        <- the subtraction, in its own register
+           bgez $v0, .L800AF1E0
+           addu $a0, $v0, $zero      <- dy = that value, in the delay slot
+           negu $a0, $a0             <- and negated there
+
+       The target has TWO pseudos: the subtraction's result is what gets
+       TESTED, and `dy' is a separate register copied from it in the branch's
+       delay slot.  The 32-row body negated in place, one pseudo, and the
+       delay slot went to `mx = dx' instead.
+       THE TERNARY DIRECTION IS THE WHOLE THING, and it is the mirror image
+       of change (A) below:
+           dy = (t3 < 0) ? -t3 : t3;     30   <-- taken, does NOT fold
+           dy = (t3 >= 0) ? t3 : -t3;    53       folds to one `abs' insn
+       `x >= 0 ? x : -x' folds to a single `abs' RTL insn and `x < 0 ? -x : x'
+       does not, so on dx (change (A)) you want the FOLDING form and on dy you
+       want the NON-folding one.  THAT EXPLAINS THE dx/dy ASYMMETRY the
+       earlier headers recorded as an unexplained measurement.
+       Equally good at 30, same words: `t3 = sub; dy = t3; if (t3 < 0) dy =
+       -dy;', `if (t3 < 0) dy = -t3; else dy = t3;', and
+       `dy = t3 = sub; if (t3 < 0) dy = -dy;'.  The ternary is preferred as
+       the shortest.
+       MEASURED AND REJECTED for this slot, all on the 32-row body:
+         a FRESH s32 temp in the same two-pseudo shape    32 (no change)
+         fresh s16 36, fresh u16 1813/103
+         the same shape through r9, t1, t3, t5, r2..r6, j   32 (no change)
+         i/i2A 33, r8 35, nn 35, aa 36, ang 38, n 41
+         dropping `dy' and doing the abs in place on t3    47
+         `dy = (dy >= 0) ? dy : -dy;' (re-priced here)     38
+         `dy = 0 - dy;' inside the `if'                    32
+         the same two-pseudo treatment applied to dx       42
+         dx's abs rewritten as a symmetric `if'            42
+       So ONLY t3-the-shared-scratch pays, and only in the non-folding form.
+
+   ===========================================================================
+   WHAT MOVED ON 2026-11-21, 170 -> 35 ROWS, IN SIX CHANGES
 
    FOUR OF THE FIVE ARE THE SAME LEVER: a `return CONST' site that the
    original did NOT have.  This function's residue was dominated by
@@ -222,7 +357,9 @@
    opposite direction, and a device where the source change is ordinary C.
 
    ===========================================================================
-   RESIDUE THAT IS LEFT: 35 ROWS, 0 WORDS, THREE CLUSTERS
+   RESIDUE THAT IS LEFT: 30 ROWS, 0 WORDS, THREE CLUSTERS
+   (rows 275/280/391/398/405/555/557/558 = cluster III+IV, 8 rows;
+    rows 1229..1248 = cluster II, 8 rows; rows 1330..1418 = cluster I, 14.)
 
    (I) case 0x2A: a clean two-register swap.          14 rows, 0 words.
        Ours                      target
@@ -279,16 +416,93 @@
                       references" route to n_refs >= 8 does not exist here.
        `i2A' must stay its own variable.
 
-   (II) case 0x24's Chebyshev test.                   13 rows, 0 words.
+       2026-11-22 (fourth session).  THE ARITHMETIC ABOVE IS CONFIRMED on the
+       30-row body, read off a fresh .lreg: the pointer is now pseudo 1332,
+       `Register 1332 used 5 times across 44 insns', and r7 is still
+       `Register 119 used 6 times across 83 insns'.  greg's allocation order
+       lists `... 1202 81 568 1332 1551 130 800 119 118 ...', so 1332 is
+       indeed allocated before 119.  And allocno_compare's formula was read
+       off the compiler rather than remembered (global.c:588-610):
+
+           pri = (double)(floor_log2 (n_refs) * n_refs) / live_length
+                 * 10000 * allocno_size;        -- HIGHER goes first
+
+       -- the `* 10000' is what keeps the division from truncating to zero, so
+       the earlier header's float arithmetic was right.  pointer = 2272,
+       r7 = 1445.  Exact thresholds: r7 n_refs >= 8, OR r7 live_length <= 52,
+       OR pointer n_refs <= 3, OR pointer live_length >= 70.
+
+       NEWLY MEASURED AND REJECTED on the 30-row body:
+         ROUTE (b), shorten r7's live range by giving the loop bound its own
+         name -- `lim = (s16)r7;' once, then `i2A < lim' and `i2A != lim'.
+         THIS IS A DISASTER AT EVERY SPELLING and it is the clearest refutation
+         the cluster has: fresh s32 lim 1815/108, fresh s16 1818/104,
+         fresh u16 1815/107, fresh u8 1815/107, lim set at the guard
+         1814/111 (s32) and 1818/104 (s16), and through an existing local
+         1813/131..1815/107 across r1,r2,r3,r4,r5,r6,r8,t1,n,i,j,h1,h2,h3,k,k2.
+         Renaming ONLY the post-loop site is 1816/118..1817/44.
+         WHY: the target recomputes the sign extension at BOTH sites -- rows
+         1410 and 1416 are two separate `sll $v0,$s0,16' -- so `(s16)r7'
+         written twice is what the target has, and one `lim' deletes one of
+         them.  THE LOOP BOUND MUST STAY `(s16)r7' AT BOTH SITES.
+         ROUTE (a) via the guard: `if (r7 < 2 || r7 >= 9)' 1816/100,
+         `if (r7 - 2 < 0 || r7 - 2 >= 7)' 1816/100, `(u16)(r7 - 2) > 6'
+         byte-identical.  No honest spelling adds references to r7.
+         A SIZED DECLARATION FOR THE POINTER: `extern u8 D_80082E80[N];'
+         completing the incomplete array type, to try to make the address a
+         constant and delete the competing allocno outright -- BYTE-IDENTICAL
+         at N = 0x26, 0x27, 0x28, 0x40, 0x60, 0x100 and 0x400.  D_80082E80 is
+         out of the image, so -G0 materialises it symbolically whatever its
+         declared size.  (Measured in the onefunc standalone, where the
+         declaration block is local; csrc/ovl_dungeon_decls.h was not touched.)
+
+   (II) case 0x24's Chebyshev test.         WAS 13 rows; NOW 8, 0 words.
+       Changes (G) and (H) closed five of these.  What is left is `mx': the
+       target holds it in $s0 and we hold it in $a2, and rows 1229, 1231,
+       -1235, 1237, 1241, +1242, 1247 and 1248 all follow from that one fact.
+       RE-PRICED ON THE 30-ROW BODY and still refuted:
+         mx merged with each of the other 27 scalar locals (the park's old
+             52-candidate sweep was on the 36-row body): `aa' is 30 (no
+             change, both s16), k2 34, k 38, then ret 1816/96, sp1C 1816/97,
+             h1/h2/h3 1816/99..100, dy 1816/114, t3 1816/127, n 1816/128,
+             dx 1815/102, r9 1815/112 and everything else 1815/112..1814/127.
+         `register s16 mx __asm__("$16")' 34, $17 36, $18 78, $19 87, $20 95.
+         mx declared inside case 0x24's own block: 30, byte-identical.
+         mx at s32 1815/113, u32 1815/113, u16 1816/95, u8 34, s8 1818/94.
+       The paragraphs below are the old 13-row diagnosis and still read true
+       for the `mx' half of it.
        Instruction for instruction correct and the word count is right; the
        target has a real `addu $s0,$v1,$zero' for `mx = dx' at .L800AF1C0 and
        puts `sll $v1,$v1,16' in the following load-delay slot, where we keep
        mx in dx's register, leave a nop there, and copy later.  mx is $a2
        where the target has $s0; dx is $v1 and dy's abs $a0 in both.
-       `mx' IS IN A CALLEE-SAVED REGISTER IN THE TARGET, which by
-       global.c:925-932 needs allocno_calls_crossed != 0, and nothing in case
-       0x24 is live across a call after `mx = dx'.  BUT THAT IS NOT THE WHOLE
-       ANSWER, and two things the previous header asserted are wrong:
+       THIS NEXT CLAIM, CARRIED BY THREE HEADERS, IS BACKWARDS -- corrected
+       2026-11-22 by reading the code instead of the note.  It said "`mx' is
+       in a callee-saved register in the target, which by global.c:925-932
+       needs allocno_calls_crossed != 0".  What find_reg actually does
+       (global.c:924-929) is
+
+           if (accept_call_clobbered)      used1 = call_fixed_reg_set;
+           else if (allocno_calls_crossed[allocno] == 0)
+                                           used1 = fixed_reg_set;
+           else                            used1 = call_used_reg_set;
+
+       -- crossing NO call is the LEAST restrictive case: used1 is only the
+       fixed registers, so every callee-saved register is available.  Crossing
+       a call is what EXCLUDES the caller-saved ones.  So `mx' crossing no
+       call does not bar it from $s0 at all, and "give mx a call to cross" is
+       not the lever; do not spend compiles on it.
+       What actually decides it is the 0..31 scan (MIPS defines no
+       REG_ALLOC_ORDER, so lowest-numbered free register wins) together with
+       pass 0's extra exclusions:
+
+           used = used1 | ~regs_used_so_far | regs_someone_prefers[allocno]
+
+       For `mx' to reach $s0 (16) rather than $a2 (6), every register from 2
+       to 15 has to be conflicting or someone-preferred at that moment.  That
+       makes this a `regs_someone_prefers' residue -- the catalogue's "it only
+       helps when something actually PREFERS the register you want vacated".
+       Two further things the earlier headers asserted are wrong:
          * FORCING the registers does not reproduce the target's code.
            `register s16 mx __asm__("$16")' is 1816/100 on this body (and was
            1822/171 on the 1821/170 one); adding `dx' in $v1 and `dy' in $a0
@@ -333,6 +547,52 @@
        The trailing q7 block ALREADY has the target's order (`sp20 = r8;'
        then `*(s16 *)(c + 0x2A) = sp1E;') and matches there, so the two
        orders are not interchangeable and the current one is right.
+
+       2026-11-22 (fourth session).  THE BEST HYPOTHESIS THIS CLUSTER HAS HAD,
+       AND IT IS REFUTED.  Everything the target emits here is 16-bit --
+       `sh $v0,0x20($sp)' from the raw result, `sll $v1,$v1,16 / bltz' for the
+       test, `ori $v0,$v1,0x8000' for the or -- which is exactly what you get
+       if there is NO `rN' VARIABLE AT ALL and the value simply IS `sp20', an
+       s16 stack local, with cse keeping the stored value in $v1 instead of
+       reloading it.  That also explains the store reading $v0: with no `rN'
+       to copy into first, the store has no dependence to wait for and sched1
+       can lift it into the `lhu's load-delay slot.  All five sites have the
+       identical shape, so it was swept at all 31 non-empty subsets of
+
+           rN = call;  sp20 = rN;  if ((s16)rN <op> K) { ... rN | 0x8000 ... }
+        -> sp20 = call;             if (sp20 <op> K) { ... sp20 | 0x8000 ... }
+
+       (safe on value: sp20 is s16, and every use of rN is 16-bit or stored
+       through a u16, so the truncation is unobservable).  RESULT:
+         r4/case2a, r5/case2b, r8/q7tail -- BYTE-IDENTICAL, singly, in every
+             pair and all three together (30 rows, 1817 words).  Those three
+             `rN' variables are therefore unnecessary; they are kept only so
+             the five sites stay spelled alike.
+         r3/case1 -- 1816/48 at every combination.  LOSES A WORD.
+         r2/case0 -- 1809/66..1810/58 at every combination.  LOSES EIGHT.
+         both -- 1808/74.
+       So the hypothesis fails at EXACTLY the two sites the residue is about,
+       and `r2' and `r3' are load-bearing.  Cases 0 and 1 really do have a
+       register variable distinct from sp20; the residue is the scheduler's
+       choice of which pseudo the store reads, not the variable's existence.
+
+       ALSO NEWLY PRICED, the two assignment shapes that make sp20's store
+       read the raw call result while KEEPING rN (the header had only priced
+       the `sp20 = rN = f()' nesting, where the store still reads rN):
+             rN = sp20 = f();            r4 31, r5 37, r8 38, pairs 38..45,
+                                         r2 and r3 1816/44..1809/72
+             sp20 = f(); rN = sp20;      r4 31, r5 37, r8 38, pairs 38..53,
+                                         r2 1816/44, r3 1816/45
+       Every one is worse than the 30-row baseline at every subset of the five
+       sites.  `sp20 = rN;' as its own statement after the call is right.
+
+       CLASSIFY IT BEFORE SPENDING COMPILES: this is NOT a sched1 priority
+       tie, so sched.py will not settle it.  Our store cannot be hoisted into
+       the `lhu's load-delay slot because it has a real DEPENDENCE on the
+       `move $3,$2' that materialises r2, and the target's has none (it reads
+       $v0).  Any fix has to change which pseudo the store reads, and the two
+       source-level ways to do that -- drop rN, or chain the assignment in
+       either nesting -- are both priced above and both fail at cases 0 and 1.
 
    (IV) One single row: a `bnez' at target 405 whose destination is word 525
        where the target's is 574.  Both are entries into the same shared
@@ -405,6 +665,40 @@
 
    ===========================================================================
    SWEEPS RUN, AND WHAT THEY RETURNED
+
+   ON THE CURRENT 1817/30 BODY (2026-11-22, fourth session), with each sweep
+   given its OWN AZURE_SCRATCH -- all four under one scratch produced
+   `symbol func_800ADE74 is already defined' from concurrent compiles, which
+   looks exactly like a broken park and is not:
+       stmtsweep   base 30, "no safe move helps"           CLEAN (19 movable)
+       widthsweep  base 30, "no width change helps"        CLEAN
+       refsweep    49 names, 36686 insertion points        IN FLIGHT
+       devsweep    344 statements x 49 names = 17200/round IN FLIGHT
+   Both of the long two independently re-derived `base 30 rows, 1817/1817
+   words' on this body before sweeping, so the baseline is confirmed three
+   times over.  THEY WERE NOT FINISHED when the agent's run ended; logs at
+       /var/tmp/ade74e/logs/refsweep.log   /var/tmp/ade74e/logs/devsweep.log
+   launched with `python3 -u' (see below) and a 3-hour timeout.
+
+   BUDGET THESE TWO PROPERLY ON A FUNCTION THIS SIZE.  A candidate costs
+   ~0.26 s in the onefunc standalone here, not the ~0.09 s the procedure
+   quotes, so refsweep is ~160 MINUTES and devsweep ~75 minutes PER ROUND --
+   not "minutes".  A first attempt at 90 minutes under `timeout' was killed
+   mid-sweep and produced NOTHING AT ALL, because both tools buffer stdout to
+   a file in 8 KB blocks and their whole verdict is a few hundred bytes, which
+   SIGTERM then discards.  RUN THEM AS `python3 -u tools/decomp/refsweep.py'
+   so progress and findings survive a kill, and give them hours.
+   AND GIVE EACH SWEEP ITS OWN AZURE_SCRATCH: all four launched under one
+   scratch directory failed instantly with
+       {standard input}: Error: symbol `func_800ADE74' is already defined
+   from concurrent compiles sharing one `ovl_dungeon.s'.  That looks exactly
+   like a broken park -- parkcheck said 0 bad throughout -- and is not.
+   Note for the next session: the four-sweep objective change in commit
+   17f1b0d does NOT invalidate a clean result recorded on a WORD-EXACT park.
+   The old gate was `ww == tw and (rr, ww) < best' with best = (rows, w); when
+   w == tw that is exactly equivalent to the new `(abs(ww - tw), rr)' key.
+   The bug only bit a park whose words differed from the target -- which this
+   one was on 2026-11-21 (1826/1817) and is not now.
 
    On the 1823/160 body: 38010 CANCELLED-PAIR insertions -- `v++; v--;' for
        all 50 incrementable names at every legal statement position, the full
@@ -504,15 +798,34 @@
      does.  The alternative -- the pointer-cast form at all nineteen --
      measured 1825/228 against 1823/160 when it was last priced.  Kept, but
      this is the one shape in the body that is still not explained.
-   * `dx = (dx >= 0) ? dx : -dx;' next to `if (dy < 0) { dy = -dy; }' in the
-     SAME arm is an ugly asymmetry.  It is 10 rows and it is measured; making
-     the two match either way costs 10 or 20 rows (see change (A)).
+   * `dx = (dx >= 0) ? dx : -dx;' next to
+     `dy = (t3 < 0) ? -t3 : t3;' in the SAME arm.  THIS ASYMMETRY IS NOW
+     EXPLAINED rather than merely measured -- see change (H).  `x >= 0 ? x :
+     -x' folds to one `abs' RTL insn and `x < 0 ? -x : x' does not; dx wants
+     the folded form and dy wants the unfolded one, because the target tests
+     the subtraction's own register and copies into dy in the delay slot.
+     Making the two match either way costs 10 to 23 rows.
+   * `r9 = sp18 < sp1A;' followed by `if (r9)' in case 0x24.  A boolean in an
+     s32 scratch is not the prettiest C, but `r9' is the arm's own variable
+     and holds the arm's own call result two statements earlier, which is the
+     same idiom as r1..r8 everywhere else in this body.  It replaced a
+     permuter find that reused the DEAD `r5' from twenty arms away, and it is
+     the only shape found that reaches 32 without borrowing another arm's
+     variable.  The plain `if (sp18 < sp1A)' costs 3 rows -- see (G) for the
+     full list of what does not work.
    * `g22'.  A second pointer variable for one arm is what the register
      allocation demands (see (g)) and is an ordinary local, but the name is
      mine.  One shared `g' costs 5 rows.
+   * `r4', `r5' and `r8' are UNNECESSARY: dropping each of them and assigning
+     the call result straight to `sp20' is byte-identical (see residue (III)).
+     They are kept only so all five `sp20 = rN' sites read alike.  `r2' and
+     `r3' cannot go -- they cost 1 and 8 words.
    * NO DEVICES.  Not one `do { } while (0)', cancelled pair, duplicated arm,
      `__asm__' or redundant store, and no `goto'.  Two full cancelled-pair
-     sweeps and a devsweep say none helps.  Worth keeping true.
+     sweeps and a devsweep say none helps.  Worth keeping true.  Confirmed
+     again this session: `r5++; r5--;' at the one place a cancelled pair
+     would have been worth 3 rows is byte-identical, because cse2 folds the
+     pair before flow ever counts it.
 
    ===========================================================================
    STILL TRUE FROM THE EARLIER HEADERS, DO NOT RE-DERIVE
@@ -584,10 +897,9 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
     s32 r6;
     s32 r7;
     s32 r8;
+    s32 r9;
     s32 t1;
     s32 t3;
-    s32 t5;
-    s32 t7;
     s32 n;
     s32 nn;
     s16 aa;
@@ -1063,12 +1375,12 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                 g = *(u8 **)(D_800E3D7C + i * 4 + 0xAC);
                 if (g != NULL)
                 {
-                    t5 = (s16)func_800A0134(c, g);
-                    if (t5 < 0)
+                    t3 = (s16)func_800A0134(c, g);
+                    if (t3 < 0)
                     {
-                        t5 = -t5;
+                        t3 = -t3;
                     }
-                    if (t5 < 0x21 && (s16)func_800A41F0(g) != 0)
+                    if (t3 < 0x21 && (s16)func_800A41F0(g) != 0)
                     {
                         nd = *(u8 **)(g - 0x14);
                         if ((s16)func_8009FD40(nd, b) == 1 && func_800C7F68(g) == 0)
@@ -1238,7 +1550,8 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             {
                 break;
             }
-            if ((s16)func_800A6E8C(b, 0x12, &sp18, &sp1A) == 0)
+            r9 = func_800A6E8C(b, 0x12, &sp18, &sp1A);
+            if ((s16)r9 == 0)
             {
                 break;
             }
@@ -1250,13 +1563,11 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             dx = (dx >= 0) ? dx : -dx;
             mx = dx;
             sp18 = dx;
-            dy = b[0x25] - sp1A;
-            if (dy < 0)
-            {
-                dy = -dy;
-            }
+            t3 = b[0x25] - sp1A;
+            dy = (t3 < 0) ? -t3 : t3;
             sp1A = dy;
-            if (sp18 < sp1A)
+            r9 = sp18 < sp1A;
+            if (r9)
             {
                 mx = sp1A;
             }
@@ -1372,12 +1683,12 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                 g = *(u8 **)(D_800E3D7C + i * 4 + 0xAC);
                 if (g != NULL)
                 {
-                    t7 = (s16)func_800A0134(c, g);
-                    if (t7 < 0)
+                    t3 = (s16)func_800A0134(c, g);
+                    if (t3 < 0)
                     {
-                        t7 = -t7;
+                        t3 = -t3;
                     }
-                    if (t7 < 0x21 && (s16)func_800A41F0(g) != 0 &&
+                    if (t3 < 0x21 && (s16)func_800A41F0(g) != 0 &&
                         (s16)func_80042900((s8 *)g, 0xC) == 0)
                     {
                         nd = *(u8 **)(g - 0x14);
