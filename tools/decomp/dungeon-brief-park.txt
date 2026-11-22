@@ -604,6 +604,54 @@ func_8009A3D0 because `f`, the one name its whole residue was about, is a
 parameter. The current version does both; if you hand-roll a sweep, do the
 same.
 
+## A DUPLICATED-ARM DEVICE IS ONLY VALID IF ITS CONDITION IS DEFINITELY ASSIGNED
+
+devsweep proposes `if (v) { S; } else { S; }' to buy a free reference on `v'.
+**IT CANNOT SEE WHETHER `v' HAS A VALUE AT THAT POINT**, because a duplicated
+arm is the identity in its object-diff model whatever the condition reads. So
+every devsweep find needs the same gate-2 reading a permuter find does.
+
+On 2026-11-22 devsweep took func_800ADE74 from 30 rows to 23 with three such
+devices. TWO OF THE THREE CONDITIONS READ AN UNINITIALISED LOCAL -- `g' and
+`r7' are each assigned only in arms OTHER than the one the device sits in.
+Split out, the only safe one (`if (d)', d being a parameter) is a FOUR-ROW
+REGRESSION at 34, and the whole 7-row win rests on undefined behaviour:
+
+    if (d)  alone        34   <-- the only safe one, WORSE than nothing
+    if (g)  alone        29   (UB)
+    if (r7) alone        34   (UB)
+    if (g) + if (r7)     25   (UB x2)
+    all three            23   (UB x2)
+
+func_800C2824 had the same shape: an `if (q)' device worth 2 rows where `q' is
+not assigned on the reaching path, and the proof that it is the UB doing the
+work -- the same duplicated arm in a block that DOES assign `q' measures 42
+against 27.
+
+**So before measuring a duplicated-arm candidate, check that its condition
+variable is assigned on every path that reaches that statement.** Check it
+first, not after: it costs nothing to read and it saves measuring a family
+that cannot be landed. And do not leave such a body in the park, even
+commented out -- a later session can land it by accident. Record it in prose
+with its split table, which is what that park now does.
+
+## partsweep.py -- THE PARTITION SPACE, WHICH NO OTHER SWEEP VARIES
+
+    python3 tools/decomp/partsweep.py FUNC [--body PATH] [--max N]
+
+Added 2026-11-22, because two of that day's three biggest single changes were
+PARTITION moves -- a decision about WHICH LOCALS SHARE ONE NAME -- and the
+parks held a stale negative for each. refsweep varies cancelled pairs,
+devsweep wrappers, stmtsweep positions, widthsweep widths; none of them
+touches this, so the only way it had ever been searched was by hand.
+
+It groups locals by the EXPRESSION assigned to them and enumerates partitions
+of the (region, local) sites. Read its docstring for what it deliberately does
+NOT do: it never merges sites holding DIFFERENT values, because that is legal
+only when their live ranges are provably disjoint and it cannot prove that.
+Cross-value merges -- which is where func_800C2824's two wins actually came
+from -- stay with the permuter and its gate 2.
+
 ## IF YOU RUN THE PERMUTER, THREE GATES BEFORE YOU BELIEVE A FIND
 
     python3 tools/decomp/permimport.py FUNC      # snapshots the park NOW
