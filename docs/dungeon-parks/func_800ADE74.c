@@ -672,13 +672,65 @@
    looks exactly like a broken park and is not:
        stmtsweep   base 30, "no safe move helps"           CLEAN (19 movable)
        widthsweep  base 30, "no width change helps"        CLEAN
-       refsweep    49 names, 36686 insertion points        IN FLIGHT
-       devsweep    344 statements x 49 names = 17200/round IN FLIGHT
-   Both of the long two independently re-derived `base 30 rows, 1817/1817
-   words' on this body before sweeping, so the baseline is confirmed three
-   times over.  THEY WERE NOT FINISHED when the agent's run ended; logs at
+       refsweep    49 names, 36686 insertion points        CLEAN
+                   -- "final 30 rows, 1817/1817 words / no cancelled pair
+                      helps".  That is the THIRD full cancelled-pair sweep of
+                      this function to come back empty.
+       devsweep    344 statements x 49 names = 17200/round
+                   -- reached 23 rows at 1817 words in three rounds AND IT IS
+                      NOT LANDABLE.  See the next block.  All four tools
+                      independently re-derived `base 30 rows, 1817/1817 words'
+                      on this body first, so the baseline is confirmed four
+                      times over.
+
+   ===========================================================================
+   DEVSWEEP'S 23-ROW FIND IS BUILT ON UNDEFINED BEHAVIOUR.  DO NOT LAND IT.
+
+   devsweep (2026-11-22, on the 30-row body) reported 30 -> 23 rows at 1817
+   words, "verified against the real unit", with three duplicated-arm devices:
+
+       if (d)  { func_800A9A0C(c); }        else { func_800A9A0C(c); }
+       if (g)  { ang = n; }                 else { ang = n; }
+       if (r7) { q7 = func_800A3D18(b, c, 2); }
+                                            else { q7 = func_800A3D18(b, c, 2); }
+
+   TWO OF THE THREE TESTS READ AN UNINITIALISED LOCAL:
+     * `ang = n;' is inside CASE 0x2A's loop, and case 0x2A never assigns `g'
+       -- every assignment to `g' is in a different switch arm, so reaching
+       this statement means `g' was never written.
+     * the `q7 = func_800A3D18' site is in the trailing code AFTER the switch,
+       reachable by `break' from about twenty arms, and `r7' is assigned ONLY
+       in case 0x2A.
+   `if (d)' is the only safe one -- `d' is a parameter.
+   devsweep cannot see any of this: its objective is an object diff, and a
+   duplicated arm is identity in its model whatever the condition reads.
+
+   SPLIT, each device alone and in every combination, on the 30-row body:
+       if (d)   alone                    34   <-- the ONLY SAFE one, and it is
+                                               a FOUR-ROW REGRESSION
+       if (g)   alone                    29   (UB)
+       if (r7)  alone                    34   (UB)
+       if (g) + if (r7)                  25   (UB x2)
+       if (d) + if (g)                   27   (UB)
+       if (d) + if (r7)                  38   (UB)
+       all three                         23   (UB x2)
+   So EVERY row of the improvement depends on at least one uninitialised read,
+   and the safe part of the find is worse than doing nothing.  Substituting a
+   variable that IS live at the `ang = n;' site, on top of `if (d)': b 39,
+   c 39, sp1E 39, e 43, f 43, k2 43, i 82, j 298, a 1818/42.  Nothing honest
+   is anywhere near 30.
+
+   THE PARK BODY THEREFORE STAYS AT THE HONEST 30 ROWS, and "NO DEVICES"
+   below stays true.  Recorded here so the next session does not re-find this
+   and land it; devsweep will report it again on any body close to this one.
+   RULE: a duplicated-arm find is only valid if its CONDITION is a variable
+   that is definitely assigned on every path reaching that statement.  Check
+   that before measuring anything, not after.
+
+   Logs for the two long sweeps, both run with `python3 -u':
        /var/tmp/ade74e/logs/refsweep.log   /var/tmp/ade74e/logs/devsweep.log
-   launched with `python3 -u' (see below) and a 3-hour timeout.
+   devsweep's device body: /var/tmp/ade74e/s_devsweep/devsweep/func_800ADE74/best.c
+   (deliberately NOT copied into this park -- it is UB).
 
    BUDGET THESE TWO PROPERLY ON A FUNCTION THIS SIZE.  A candidate costs
    ~0.26 s in the onefunc standalone here, not the ~0.09 s the procedure
@@ -821,11 +873,14 @@
      They are kept only so all five `sp20 = rN' sites read alike.  `r2' and
      `r3' cannot go -- they cost 1 and 8 words.
    * NO DEVICES.  Not one `do { } while (0)', cancelled pair, duplicated arm,
-     `__asm__' or redundant store, and no `goto'.  Two full cancelled-pair
-     sweeps and a devsweep say none helps.  Worth keeping true.  Confirmed
+     `__asm__' or redundant store, and no `goto'.  THREE full cancelled-pair
+     sweeps now say none helps, the third on this very body ("no cancelled
+     pair helps", 36686 insertion points).  Worth keeping true.  Confirmed
      again this session: `r5++; r5--;' at the one place a cancelled pair
      would have been worth 3 rows is byte-identical, because cse2 folds the
-     pair before flow ever counts it.
+     pair before flow ever counts it.  And the one devsweep find that DOES
+     beat this body -- 23 rows -- is undefined behaviour twice over and its
+     safe part is a 4-row regression; see "DEVSWEEP'S 23-ROW FIND" above.
 
    ===========================================================================
    STILL TRUE FROM THE EARLIER HEADERS, DO NOT RE-DERIVE
