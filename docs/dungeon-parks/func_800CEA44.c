@@ -1,6 +1,6 @@
-/* PARK: func_800CEA44, 242 of 242 words, 13 aligned differences.
+/* PARK: func_800CEA44, 242 of 242 words, 3 aligned differences.
 
-   ====================================== 2026-11-21 (session 2): 112 rows -> 13
+   ====================================== 2026-11-21 (session 2): 112 rows -> 3
 
    The body was REWRITTEN.  WORD COUNT IS NOW EXACT and all nineteen remaining
    rows are REGISTER NAMES -- no instruction is missing, spurious or in the
@@ -114,36 +114,51 @@
        extra references and longer live range, which is what finally gets the
        guard's `tb` off $a0.
 
+   (11) `rm = D_800E2970; t = rm + k * 0x14;` -- THE SYMBOL IS ITS OWN LOCAL,
+       exactly like (4) and (7).  13 -> 5 rows.  It closes cluster (A) whole:
+       with the address in its own variable the chain comes out k in $v1, the
+       *20 in $v0 and the symbol in a third register, which is what the target
+       has.  Found by decomp-permuter (run 2, output-30-1) and SPLIT OUT of
+       that find: the find also carried `new_var = (s16 *)(p + 0xC)` hoisted
+       above the `if (k >= 0)` and an `if (1)` wrapper, and each of those
+       measures 13 on its own -- i.e. worth nothing.  The whole find and this
+       one statement both measure 5.
+
+   (12) `j = func_800A6D30(); ... + (j & 0x1E)` -- MASK AT THE USE, not at the
+       assignment.  5 -> 3 rows.  `j = func_800A6D30() & 0x1E;` puts the
+       masked value in $a0 where the target reuses $v0 (`andi $v0, $v0, 0x1E`
+       straight on the return register).  `j = func_800A6D30(); j = j & 0x1E;`
+       as two statements measures 5, and dropping `j` entirely --
+       `r = *(u8 **)(g + 0x18) + (func_800A6D30() & 0x1E);` -- measures 11,
+       because `j` is also the store temp from (10).
+
    ------------------------------------------------------------------ residue
 
-   13 rows, 242/242 words, and every one of them is a REGISTER NAME -- no
-   instruction is missing, spurious or out of order.
+   THREE ROWS, 242/242 words, and all three are REGISTER NAMES:
 
-   (A) 0x800CEB18..0x800CEB34, 8 rows.  The `(s16)k * 0x14 + D_800E2970`
-       chain.  Target: k in $v1, the *20 chain in $v0, the symbol in $t0.
-       Here: k in $v0, the chain in $v1, and the symbol REUSES $v0 after k
-       dies.  The target spends a third register, and $t0 is also the
-       register reload used for k's `lhu` -- so in the original the
-       D_800E2970 address pseudo is very likely ALSO rematerialised by reload
-       out of its REG_EQUIV rather than allocated (exactly what `b` does in
-       this body: `.greg` gives it no disposition because reg_equiv_constant
-       is set).  Here it is an ordinary block-local quantity and local_alloc
-       hands it $v0.  Four spellings of the `t` computation
-       (`&D_800E2970_s[k]`, `(u8 *)(D_800E2970_s + k)`, `&D_800E2970[k*0x14]`,
-       `(s32)k * 0x14`) and both orders against `i = 0xF;` all measure the
-       same, so it is not a source-level choice in that statement.
+     0x800CEB78  addu $s0, $v0, $a0   vs  addu $s0, $a0, $v0
+     0x800CEC58  sltu $v0, $a0, $v0   vs  sltu $a0, $a0, $v0
+     0x800CEC5C  bnez $v0, ...        vs  bnez $a0, ...
 
-   (B) 0x800CEB78, 1 row.  `addu $s0, $a0, $v0` (t[2] first) against this
-       body's `addu $s0, $v0, $a0`.  `c = t[2] + c;`, `c = c + t[2];`,
-       `c += t[2];`, `c = t[2] + y2;` with a separate local, and swapping the
-       two add statements ALL measure the same -- the operand order does not
-       follow the source here.
+   The second and third are one decision: the guard's `sltu` destination.
+   Both source registers already match ($a0 = the value stored at o+0x18,
+   $v0 = the limit); gcc reuses a dying source for the result and picks the
+   lower-numbered one, $v0, while the target reuses $a0.  The first is the
+   operand order of `c = t[2] + c;`, which does not follow the source: eight
+   spellings (`c = c + t[2]`, `c += t[2]`, `a` and `c` swapped, `(s32)t[2]`,
+   `d2 = t[2]` into its own local, `d0`/`d2` for both) all measure 3.
 
-   (C) 0x800CEAE4 / 0x800CEAF0, 2 rows, and 0x800CEC58 / 0x800CEC5C, 2 rows.
-       What is left of the `tb` cluster after (10): `j` takes $a0 at the roll
-       where the target has $v0, and the guard's `sltu` writes $v0 here and
-       $a0 there.  These two are the same allocation decision seen at its two
-       ends.
+   ALL FOUR SWEEPS ARE CLEAN ON THE 3-ROW BODY, re-run after every change
+   above with a private fast harness on the onefunc standalone (~0.15 s a
+   candidate -- this unit is 5745 lines, so the repo tools compile the whole
+   unit at ~25 s a candidate and a full refsweep does not finish):
+     cancelled pairs, every local x every statement      1403 cands, none < 3
+     do-while(0) + duplicated arm, every local x stmt    1334 cands, none < 3
+     declared widths, every local and the parameter        46 cands, none < 3
+     adjacent-statement swaps, every same-indent pair      37 cands, none < 3
+     declaration ORDER, every local to every position     506 cands (run on
+       the 19-row body; pseudo number is the LAST tie-break in both
+       allocno_compare and qty_compare_1, and it changed nothing anywhere)
 
    MEASURED AND REJECTED (rows / words, on the body named):
      on the 112-row park body:
@@ -175,6 +190,23 @@
        `s = func_800A1618(r[0], 1);` after `y = r[1];`       37 / 240
        `s++; s--;` after func_800A1618 (x DOES get $s5, but
          `s` overshoots $s4 and takes $s3 off `i`)           37 / 240
+     on the 3-row body:
+       `c = c + t[2]`, `c += t[2]`, `(s32)t[2] + c`, the two adds
+         swapped, `d2 = t[2]` and `d0`/`d2` into their own locals   all 3
+       `if (*(u32 *)(o + 0x18) >= tb[o[0x11]])`, `if (j >= ...)`,
+         `if (tb[o[0x11]] <= j)` for the guard                      all 3
+       `lim = tb[o[0x11]];` into its own local                          3
+     on the 5-row body:
+       `j = func_800A6D30(); j = j & 0x1E;` as two statements            5
+       `r = j + *(u8 **)(g + 0x18);`                                     5
+       `r = *(u8 **)(g + 0x18) + (func_800A6D30() & 0x1E);` (no `j`)     11
+       `a`/`n`/`i`/`x`/`c`/`y`/a fresh local as the store temp
+         instead of `j`                            18/16/11/21/39/38/11
+       no store temp at all                                             11
+       deleting `c++; c--;`                                             10
+       `x` instead of `(s16)x`                                     20 / 241
+       the permuter's `new_var = (s16 *)(p + 0xC)` hoist alone            13
+       the permuter's `if (1)` wrapper alone                             13
      on the 13-row body:
        deleting `c++; c--;`                                  18 / 242
        `x` instead of `(s16)x` at the three calls            28 / 241
@@ -199,8 +231,8 @@
          and `t = ...` before `i = 0xF;`                     19 / 242 (same)
        deleting `c++; c--;`                                  24 / 242
 
-   THE ONE DEVICE LEFT: `c++; c--;` after `c = t[2] + c;`, worth 5 rows
-   (13 -> 18) at the same word count.  It is four more references to `c` and compiles to
+   THE ONE DEVICE LEFT: `c++; c--;` after `c = t[2] + c;`, worth 7 rows
+   (3 -> 10) at the same word count.  It is four more references to `c` and compiles to
    nothing; without it the two `lbu`s and `addiu $a3, $sp, 0x10` schedule in
    the wrong order (0x800CEB68..0x800CEB78).  I did not find the honest
    statement that supplies those references.
@@ -242,6 +274,7 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
     u8 *g2;
     u8 *e;
     u8 *t;
+    u8 *rm;
     u8 *r;
     u8 *o;
     u8 *g;
@@ -276,15 +309,16 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                     return;
                 }
                 g = (u8 *)&D_80083460;
-                j = func_800A6D30() & 0x1E;
-                r = *(u8 **)(g + 0x18) + j;
+                j = func_800A6D30();
+                r = *(u8 **)(g + 0x18) + (j & 0x1E);
                 x = r[0];
                 y = r[1];
                 s = func_800A1618(x, 1);
                 if (s != NULL)
                 {
                     i = 0xF;
-                    t = D_800E2970 + k * 0x14;
+                    rm = D_800E2970;
+                    t = rm + k * 0x14;
                     while (1)
                     {
                         a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1));
