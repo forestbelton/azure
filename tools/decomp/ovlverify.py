@@ -384,7 +384,15 @@ def main():
                                  unit=overlay_for(args.funcs[0]))
     # Recover each function's extent from the object's symbol table: objdump
     # gives one flat .text, so the candidate has to be cut at the symbols.
-    o = os.path.join(asmlib.SP,
+    # asmlib.procdir(), NOT asmlib.SP: e6ff081 moved compile intermediates
+    # into a private per-process mkdtemp so concurrent measurements of the
+    # same unit could not clobber each other's .s/.o. This line kept building
+    # the OLD path, so `nm' read nothing, `syms' came back empty and EVERY
+    # function reported "not defined in <src>" whatever its body -- i.e. the
+    # fix for one silent wrong answer introduced another. Caught by the f644b
+    # agent within the hour. procdir() is per process and this runs in the
+    # same process as asmlib.build above, so it names the object just built.
+    o = os.path.join(asmlib.procdir(),
                      os.path.splitext(os.path.basename(args.src))[0] + ".o")
     syms = {}
     for ln in subprocess.run(["mips64-linux-gnu-nm", "-n", o],
