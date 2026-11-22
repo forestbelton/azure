@@ -80,6 +80,26 @@ serial run before a parallel burst, and re-measure any surprising result
 serially before you believe it.** Several of this block's stale negatives may
 have this shape.
 
+**AND A SECOND CAUSE OF THE SAME THING WAS FOUND AND FIXED ON 2026-11-22, SO
+MEASURE SERIALLY ANYWAY UNTIL YOU TRUST YOUR OWN SETUP.** `compile_asm' and
+`assemble' named the .s and the .o from the SOURCE BASENAME inside
+`AZURE_SCRATCH', which defaults to one shared `/tmp/azure-decomp'. Since this
+brief REQUIRES your copy to keep the unit's basename, two concurrent
+measurements of the same unit wrote the same two paths. An agent measuring six
+IDENTICAL baseline candidates of func_800B51C8 while a refsweep of the same
+park ran got `3, FAIL, FAIL, FAIL, 3, 3' -- the `unrecognized opcode' /
+`symbol already defined' / `junk at end of line' class -- and, worse, the same
+cause returned a PLAUSIBLE WRONG NUMBER of 830/56 for a candidate that
+measures 832/51 serially. Intermediates now go in a private `mkdtemp' per
+process (asmlib.py, `procdir'), so this particular collision is gone.
+
+That fix does not retire the habit that caught it. **INTERLEAVE A BASELINE
+CANARY BETWEEN CANDIDATES IN ANY BATCH YOU RUN, and discard the whole batch if
+a canary does not read the baseline.** It is one extra measurement per handful,
+it is the only thing that distinguishes a corrupted number from a real
+negative, and the agent who invented the protocol is the reason the bug above
+is fixed rather than still costing us parks.
+
 **AND SET `AZURE_SCRATCH`.** `asmlib.compile_asm` derives its intermediate
 `.s`/`.o` path from the source file's BASENAME inside `$AZURE_SCRATCH`
 (default `/tmp/azure-decomp`). Because the basename has to be `ovl_dungeon.c`
