@@ -74,10 +74,23 @@ segments:
   # margin is what makes a blind sweep over 26 MB possible. docs/dungeon-map.md
   # has the resulting map; the short version is that +0x2a3000 is a real code
   # overlay whose jump table into 0x8001d4xx is a jump table into ITSELF, and
-  # that file 0x9bd800..0x135e000 holds ~195 banked overlays of 0x6000 bytes
-  # each, stored as seven relinked copies -- one per RAM slot -- which
-  # func_800A0B94 in this very overlay loads with
-  # `dest = 0x80170800 - i * 0x6000`, `nsec = 0xC`.
+  # that 0x995000..0x12ed000 holds 47 banked overlays of 0x6000 bytes each,
+  # stored as seven relinked copies -- one per RAM slot.
+  #
+  # COUNTED 2026-11-22, replacing the "~195 banked overlays" and the "at most
+  # 118 distinct" this note and codemap.py's sweep reported: both were sweep
+  # BOUNDS, and both were too high, because a sector-granular window over a
+  # family of relinked copies splits families and because a fingerprint taken
+  # over the full 0x6000 counts the mastering filler past an object's end.
+  # The count comes from the loaders instead, which are landed C:
+  # func_800A0B94 in this overlay reads bank (a, i) from
+  # `LBA = (a - 1) * 84 + i * 12 + 0x4340` to `dest = 0x80170800 - i * 0x6000`,
+  # `nsec = 0xC`, and func_800A982C reads a second family from
+  # `LBA = (a - 1) * 12 + 0x607F` to a FIXED 0x80024000, one copy each.
+  # dungeon.bin starts at LBA 12310, so both become file offsets, and all 329
+  # predicted banks pin at the slot address the formula computes.
+  # tools/decomp/dungeon_objects.py enumerates them; 116 objects, 304,495
+  # distinct words, stored as 1,573,372.
   #
   # rodata first, code from +0xa3d40 (gcc -G8 data-before-functions).
   #

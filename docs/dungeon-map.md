@@ -1,15 +1,16 @@
 # Where the code is in DUNGEON.BIN
 
 The container is 27,813,888 bytes (0x1A86800), sha1 `27f9fcc3...`, and until
-2026-11-09 exactly one of its code overlays was mapped. It has at least four
-more families, and about two hundred further code objects.
+2026-11-09 exactly one of its code overlays was mapped. It holds **116 more
+code objects**, stored as 399 copies.
 
 **Fixed findings only**, like docs/overlays.md: offsets, load addresses and
 object counts are properties of the image. How much of it is decompiled is not
 recorded here -- `tools/decomp/progress.py` and `tools/decomp/guard.py` are the
-authority.
+authority, and `tools/decomp/dungeon_objects.py` re-derives every number below
+from the image.
 
-## Why the old answer was wrong
+## Why the old answer was wrong, twice
 
 `splat/dungeon.bin.yaml` used to say "there is only ONE code overlay in this
 container", on this evidence: assuming the 0x80088760 base at the other seek
@@ -20,33 +21,60 @@ or 0x8016e800 scores nothing at the 0x80088760 base **because the base is
 wrong**, so a low score there is not evidence of absence. The prologue vote --
 counting a block's own `jal` targets that land on its own `addiu $sp,$sp,-N`
 prologues -- can only rank candidate bases for a span you already suspect.
-Used as a search it has no power, and that is how ~195 banked overlays came to
+Used as a search it has no power, and that is how the banked overlays came to
 be filed as texture records.
 
-## The test that does work
+`tools/decomp/codemap.py` replaced that test and found the code (see below).
+But a sweep is still a search: its window is sector granular, so a family
+stored as seven relinked copies smears across deltas 0x6000 apart, and the
+object count it reported was a **bound** -- "212 hits, at most 118 distinct" --
+not a count. The bound was 2.5x too high.
 
-`tools/decomp/codemap.py` scores a delta on whether internal `jal` targets land
-**two words after a `jr $ra`**. cc1psx emits functions back to back, so those
-two words are the previous function's return and its delay slot, and the word
-after them is a function start -- which is the only thing a `jal` inside a
-linked object may target. On the dungeon overlay:
+**The count comes from the loaders, not from a sweep.** The dungeon overlay is
+decompiled, so the two functions that read code out of this container are
+readable C and both compute their LBA arithmetically. Subtracting the
+container's start LBA turns each formula into a list of file offsets, and every
+one of them can then be checked instead of guessed.
+
+## The test that found the code in the first place
+
+`codemap.py` scores a delta on whether internal `jal` targets land **two words
+after a `jr $ra`**. cc1psx emits functions back to back, so those two words are
+the previous function's return and its delay slot, and the word after them is a
+function start -- which is the only thing a `jal` inside a linked object may
+target. On the dungeon overlay:
 
 | test | correct delta | runner-up |
 |---|---|---|
 | prologue vote | 1484 | 374 |
 | function-start | 456 of 456 (100%) | 4% |
 
-That margin is what makes a blind sweep over 26 MB possible. It assumes nothing
-about the load address beyond "it is in RAM", and nothing about size, alignment
-or layout.
-
     python3 tools/decomp/codemap.py data/dungeon/dungeon.bin --distinct
     python3 tools/decomp/codemap.py data/dungeon/dungeon.bin --pin 0xa3d40 0xf7700
 
 A sweep hit is sector-granular: read it as "code is in here", then pin the exact
-ends with `--pin`, the way the text-end note in the yaml does it.
+ends with `--pin`.
 
 ## The map
+
+| | objects | copies | distinct words |
+|---|---|---|---|
+| 1. the dungeon overlay | 1 | 1 | 85,616 (split, landed) |
+| 2. `func_800A0B94`'s banks | 47 | 7 each | 181,252 |
+| 3. `func_800A0B94`'s fixed `a == 0x31` | 1 | 1 | 12,097 |
+| 4. `func_800A982C`'s 0x80024000 objects | 66 | 1 each | 93,021 |
+| 5. the 0x80016000 overlay | 1 | 2 | 9,451 |
+| 6. the 0x80020000 overlay | 1 | 1 | 8,674 |
+| 7. the head block | -- | -- | dead residue, see below |
+
+**304,495 words of distinct code are not yet split**, stored as 1,573,372
+words -- a 5.2x duplication factor. For scale, the whole project through
+2026-11-22 is 215,893 words.
+
+None of it is shared with `town.bin` or `main.bin`, and almost none of it is
+already written: by opcode stream, 3.5% of the banked family and 0.2% of the
+0x80024000 family match a function landed anywhere in the project. This is
+reading, not renaming.
 
 ### 1. The dungeon overlay -- SPLIT, in the build, byte-identical
 
@@ -65,67 +93,110 @@ split. Both ends were re-checked before the boundary moved: the word at
 at +0xf76fc. `make containers` is byte-identical with the corrected boundary and
 func_800894A0 now has a listing of its own.
 
-### 2. The banked per-slot overlays -- ~195 objects, the bulk of the work
+The overlay's CD read is 187 sectors, 0xa3000..0x100800 (docs/town-map.md §1),
+so about 0x9100 bytes of the overlay's own data follow the text end.
 
-File **0x9bd800..0x135e000** (a 9.63 MB span) holds code objects of **0x6000
-bytes each**, stored as **seven relinked copies** -- one per RAM slot. Slot
-bases descend by 0x6000 across roughly 0x8014b000..0x80175800; copy *i* sits
-0x6000 lower in RAM and 0x6000 further on in the file, and groups repeat at a
-0x2A000 stride (7 x 0x6000).
+### 2. The per-slot banks -- 47 objects, 329 copies, the bulk of the work
 
-`func_800A0B94`, in the dungeon overlay itself, is the loader:
+`func_800A0B94` (`csrc/ovl_dungeon_8009F644.c`) is the loader, and its
+descriptor is three lines of landed C:
 
-    dest = 0x80170800 - i * 0x6000
-    nsec = 0xC                              (12 sectors = 0x6000 bytes)
-    LBA  = 0x4340 + 84 * (floor - 1) + 12 * i
+    w = 0xC;                                   /* 12 sectors = 0x6000 bytes */
+    t = D_80170800 - s[3] * 0x6000;            /* s[3] is the slot, 0..6 */
+    n = (a - 1) * 84 + (m = s[3] * 12 + 0x4340);
 
-then `func_8003F6D4` / `func_8003E4FC` kind 6 -- the CD queue's
-`{nsec << 23 | dest, LBA}` descriptors (see tools/scan-img.py). 84 = 7 * 12, so
-a floor's seven resources are consecutive.
+`dungeon.bin` starts at **LBA 12310** -- the overlay load table at 0x80080C40
+reads LBA 12636 for dungeon.bin+0xa3000 -- so bank (a, i) is at file
+**(0x4340 + 84(a-1) + 12i - 12310) * 0x800** and loads at **0x80170800 -
+0x6000i**. 84 = 7 * 12, so one object's seven copies are consecutive on the
+disc and a group starts every 0x2A000.
 
-Three independent confirmations that these are code and that the copies are
-relinked, not merely similar:
+**All 329 predicted banks pin at the slot address the formula computes**
+(`dungeon_objects.py --verify`), most of them at 100% of their internal
+targets. The grid is code for **a = 1..45, 55 and 57**; the other rows up to
+a = 72 hold texture records, and the head word is what separates them -- every
+object in both families begins with a pointer to its own entry function, in its
+own load window, at a word that is `addiu $sp, $sp, -N`.
 
-1. **A single bank pins at 100%.** 0xe2d000..0xe33000 gives vram
-   0x80170800..0x80176800 at 22/22 internal targets, runner-up 10%; the next
-   bank, 0xe33000..0xe39000, gives 0x8016a800 at 22/22. Pinned as one 363 KB
-   span instead, the same region smears across deltas 0x6000 apart and peaks at
-   54% -- which is what a sequence of relinked copies looks like to a test that
-   assumes one base.
-2. **The word diff between adjacent banks is the relink.** Of 6144 words,
-   5839 are identical, 93 differ by exactly 0x6000 (relocated pointer words)
-   and 176 by 0x1800 -- which is 0x6000 >> 2, the `jal` target field.
-3. **Each bank's first word points to its own entry function**, which is what
-   the loader returns (`lw $s4, 0x0($s1)`). At 0xe2d000 that word is
-   0x80170890, and file 0xe2d090 is `addiu $sp, $sp, -0x40`. The head words run
-   0x80170890 / 0x8016a890 / 0x80164890 / 0x8015e890 / 0x80158890 across
-   consecutive banks -- base + 0x90 every time.
+File **0x995000..0x12ed000**, 47 groups of 0x2A000.
 
-**Only one copy of each object is work.** A sweep at sector granularity reports
-212 hits and at most 118 distinct objects by a relink-invariant fingerprint
-(immediates, jump targets and relocated pointer words masked out); families of
-up to six copies are observed directly. 118 is an **upper bound** -- the hit
-offsets are sector-granular and not all phase-aligned to bank starts, which
-splits some families. Pinning exact bank starts across the region is the one
-piece of this map still to do, and it is what turns the bound into a count.
+Three things the earlier reading of this family got wrong:
 
-### 3. The 0x80016000 low-RAM overlay
+* **The entry offset is not 0x90.** It is per-object and ranges from +0x54 to
+  +0x1564; +0x90 was one family's value read as the rule.
+* **Text does not begin at the entry.** 13 of the 47 have functions *below*
+  the entry pointer, reached only through the header's pointer tables, so
+  splitting from the entry loses them.
+* **The relink is visible and total.** Between adjacent copies of one object
+  200 to 300 of 6144 words differ, every one of them a relocation: `jal` fields
+  by 0x1800 per slot, pointer words by 0x6000 per slot, and `lui`/`addiu` pairs
+  by the corresponding high/low halves. Everything after the object's own end
+  is mastering filler and differs for no reason; a fingerprint taken over the
+  full 0x6000 therefore reports copies as distinct, which is the other half of
+  why 118 was too high.
 
-File **+0x2a3000**, base **0x80016000** (delta 0x7FD73000), pins at **62/62
-(100%)**, runner-up 6%. Sweep extent 0x29f800..0x2b0800.
+Within the family the duplication is 1.13x by word: 1,628 functions over the 47
+objects collapse to 1,348 distinct. The shared part is a small statically
+linked library -- one 466-word routine in three variants appears in 39 of the
+47, and an 81-word routine in 46 of them.
+
+### 3. `a == 0x31`, the one fixed-address bank
+
+The same loader special-cases two kinds out of the grid:
+
+    a == 0x31: nsec 0x18, dest 0x8016A800, LBA 0x569C   -> file 0x1343000
+    a == 0x38: nsec 0x24, dest 0x80164800, LBA 0x56B1   -> file 0x1358800
+
+The first is a 48th object, 0xC000 long, pinning 35/36 at 0x8016A800 and
+sharing no prefix with any of the 47. 153 functions, 12,097 words. It covers
+slots 1 and 2 at once, which is why it is not in the grid.
+
+The second is **not code**: no delta puts a `jal` target on a function start
+anywhere in its 0x12000, in any 0x2000 sub-window. It is a 72 KB image
+resource that happens to be read by the same call.
+
+### 4. The 0x80024000 objects -- 66 of them, one copy each
+
+`func_800A982C` (`csrc/ovl_dungeon_800A4B88.c`) is the second loader:
+
+    q = (s32 *)0x80024000;
+    t = (a - 1) * 12 + 0x607F;
+    func_8003F6D4(0xC, q, D_800E58B0, t);
+
+0xC sectors again, but a **fixed** destination -- so there is one copy of each,
+no relink, and the whole family is work. File **0x1834800..0x19e5000** at a
+0x6000 stride, a = 1..46, 49, 51..56, 58..63, 65..70, 72. 589 functions, 95,570
+words; 555 distinct, so this family barely repeats itself, and it shares only
+four functions with the banked family.
+
+These are much smaller objects than the banks -- text runs 0x800 to 0x3300
+bytes -- with the same shape: a header of pointers, then text.
+
+**This family is what §4 of the old map saw.** "Five smaller objects at
+0x1975000, 0x197b800, 0x199f000, 0x19c9000 and 0x19db000, all basing near
+0x80020800" were five sweep windows that each straddle the start of a grid
+object: a window beginning 0x3800 before an object that loads at 0x80024000
+pins at 0x80020800, which is exactly what was reported.
+
+### 5. The 0x80016000 overlay, stored twice
+
+File **0x2a3000**, base **0x80016000** (delta 0x7FD73000), pins at **62/62
+(100%)**, runner-up 6%. 75 functions, 9,451 words; text 0x2a31d8..0x2ac584.
 
 This is the blob the yaml dismissed as "pointers into 0x8001d4xx, so it belongs
 to the low-RAM region that main.bin's overlay occupies". Those pointers are a
 switch jump table, and under the pinned delta they point **into this object
-itself** (0x8001d4fc maps to file 0x2aa4fc). Its first real prologue is at
-+0x2a3078.
+itself** (0x8001d4fc maps to file 0x2aa4fc).
 
-There is a byte-identical copy at **+0x51e800** (38,144 bytes compared).
+The copy at **+0x51e800** is byte-identical over **0x30000 bytes**
+(0x2a3000..0x2d3000 == 0x51e800..0x54e800) -- a far longer run than the 38,144
+bytes first compared.
 
-### 4. The 0x80020000 overlay -- same slot as main.bin's, different code
+### 6. The 0x80020000 overlay -- same slot as main.bin's, different code
 
-File ~**0x1829800..0x1833800**, base **0x80020000** (delta 0x7E7F5000), pins at
-**94/108 (87%)**.
+File **0x182b000..0x1834800**, base **0x80020000** (delta 0x7E7F5000), pins at
+**94/108 (87%)**. 157 functions, 8,674 words; text 0x182b064..0x18337ec, which
+runs up to the first object of the 0x80024000 family at 0x1834800.
 
 0x80020000 is where main.bin's memory-card overlay loads
 (`csrc/ovl_main_80020000.c`), but this is **not** that object: 13% byte
@@ -133,34 +204,44 @@ equality over the first 0x8000, and main.bin's overlay text head does not occur
 anywhere in dungeon.bin. So the two are mutually exclusive occupants of one
 low-RAM slot, exactly as town's and dungeon's overlays are of 0x80088760.
 
-Five smaller objects follow at 0x1975000, 0x197b800, 0x199f000, 0x19c9000 and
-0x19db000, all basing near 0x80020800 with 10-13 internal targets each.
+### 7. The head block -- real code, and nothing loads it
 
-### 5. The head region -- real code, base UNRESOLVED
+File **0x7804..0xbdd4**, 32 functions, 2,631 words. **It is dead build
+residue, and it should not be split.**
 
-File roughly **0x7800..0xf000**, inside what the yaml declares `[0x0, bin]`.
+Three measurements say so, and they replace the "base UNRESOLVED" the previous
+version of this file ended on.
 
-It is certainly code. `0x7804` is a clean prologue followed by saved registers,
-an angle counter wrapping at 0x1000, and `jal 0x8006dd28`; `0x8000` carries the
-`div` / `bnez` / `break 0x7` / `break 0x6` sequence that is gcc's
-divide-by-zero and INT_MIN/-1 trap pair, which cannot arise by chance. Of its
-27 distinct call targets in the resident engine, **18 land exactly two words
-after a `jr $ra` in slus_006.14** -- checked against the real image, not
-inferred.
+1. **It is nine copies of a family the overlay already contains.** Every one of
+   its 32 functions falls into a four-function group repeated nine times, and
+   the groups match landed overlay code by opcode stream: the 53-word member at
+   0.944 against `func_800D4BD4`, the 66-word member at 0.839 against
+   `func_800D4FC8`/`func_800D5460`, the ~110-word member at 0.902-0.926 against
+   `func_800D5294`/`func_800D4DE8`. Those are the node-burst effect spawners in
+   `csrc/ovl_dungeon_800CABA8.c`. The block is nine more instances of the same
+   source.
+2. **The handler each instance calls does not exist on this disc.** The nine
+   groups call 0x8010ae28, 0x8010b30c, 0x8010b864, 0x8010bd54, 0x8010c274,
+   0x8010c7a8, 0x8010cd00, 0x8010d230 and 0x8010d810 -- one each, with four
+   arguments set up, so they are real calls. 0x8010xxxx is above the dungeon
+   overlay's last byte (0x800DCE60). Searching all four containers for a delta
+   that puts those nine addresses on function starts, and again for one that
+   puts them on prologues, reaches 5 of 9 at best. The code they call was
+   linked into a build whose overlay was larger and is not shipped.
+3. **It sits in the shared preamble.** `town.bin` and `main.bin` are
+   byte-identical over their first 0xb000 and dungeon.bin diverges from them at
+   exactly 0x7800 (docs/town-map.md §2); 0xc000..0xe800 is byte-identical to
+   `town.bin` again. The block was written over part of a 22-sector preamble
+   that is VAB sound data no descriptor reads.
 
-It also calls **22 addresses inside the main dungeon overlay**
-(0x800894A0..0x800DCE60), so it is resident at the same time as that overlay and
-therefore cannot load at 0x80088760.
-
-**Its own base is not determined.** It makes no self-calls that the
-function-start test can use, so there is nothing for the test to score; the best
-delta over the span explains 17 of 36 "internal" targets (47%) and would place
-the block inside the resident engine, so it is wrong. The ten remaining targets
-cluster in 0x800ff814..0x8010d810 at a suspiciously uniform ~0x500 spacing and
-do not resolve to function starts at any delta, so they are probably record
-fields that decode as `jal` rather than real calls. Finding this one's base
-needs a different anchor -- a function-pointer table elsewhere that names it, or
-a CD-ROM log seek for the offset.
+**Two claims the previous version made about this block were artifacts of
+scanning data as code.** It does *not* call 22 addresses inside the dungeon
+overlay: restricted to words inside real function bodies, the block has 16
+distinct `jal` targets -- seven in the resident engine
+(0x8003a7c4, 0x8003cf18, 0x80040a18, 0x8006dc5c, 0x8006dd28, 0x8006f508,
+0x800750e0) and the nine above. The 0x8008axxx and 0x800bxxxx "targets" were
+words in the pointer tables between the groups, and the tables from 0xbdd4 on
+are town-overlay content that both containers carry at the same offsets.
 
 ## The trap in this container
 
@@ -168,7 +249,11 @@ a CD-ROM log seek for the offset.
 `82xx` has top byte 0x82, so the word's opcode field is 0x20 -- `lb` -- and an
 instruction-validity sieve reports 100% over a block of pure text. Two sectors
 of the string table at +0xd800 and +0xe000 read as "100% valid, looks like
-code"; they are the character-name block, 81% identical to the one town.bin
+code"; they are the character-name block, byte-identical to the one `town.bin`
 carries at the same offset. Density alone over-reports code here. The
 function-start test is not fooled, because text produces no self-consistent
 delta, which is the other reason to prefer it.
+
+The second form of the same trap is quieter: **a word that decodes as `jal` is
+not a call unless it is inside a function.** Both wrong claims in §7 came from
+sweeping `jal` targets over a span that was 60% data.
