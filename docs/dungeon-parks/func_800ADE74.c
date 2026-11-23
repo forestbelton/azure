@@ -2,7 +2,14 @@
    BEST MEASURED CANDIDATE for func_800ADE74,
    csrc/ovl_dungeon_800A4B88.c (1817 words).
 
-   2026-11-22, SIXTH session.   1817/1817 WORDS, 23 aligned rows
+   2026-11-22, SEVENTH session. 1817/1817 WORDS, 16 aligned rows
+                                (residue (1) CLOSED, cluster II CLOSED.
+                                 WHAT IS LEFT IS cluster I's 14 rows plus
+                                 TWO NEW rows, 15 and 20, which are the price
+                                 of change (N) -- see below.)
+   was 2026-11-22, seventh (b): 1817/1817 words, 17 aligned rows
+   was 2026-11-22, seventh (a): 1817/1817 words, 20 aligned rows
+   was 2026-11-22, sixth:       1817/1817 words, 23 aligned rows
                                 (27 before the prototype block below; see
                                  "THE CARVE REGRESSION")
    was 2026-11-22, fifth:       1817/1817 words, 30 aligned rows
@@ -26,6 +33,355 @@
    THE WORD COUNT IS HONEST: every word is accounted for, and the first 276
    words and the last 398 are byte-identical.  What is left is 23 rows:
    3 isolated `andi'-for-`addu' rows, 6 rows of cluster II and 14 of cluster I.
+
+   ===========================================================================
+   CLUSTER I, 2026-11-22 (SEVENTH SESSION): THE SIXTH SESSION'S PROOF WAS
+   SOLVING A TWO-WAY PROBLEM AND IT IS A **FOUR-WAY** ONE.  THE REQUIREMENT IS
+   NOW AN EXACT PRIORITY ORDERING, AND THREE OF ITS FOUR LINKS ARE REFUTED.
+
+   The sixth session's proof compared `r7' (allocno 119) only against the
+   D_80082E80 pointer (1338) and concluded that r7 must be allocated first.
+   THAT IS NECESSARY AND NOT SUFFICIENT, and this session demonstrated it by
+   ACHIEVING IT: merging `mx' into `r7' took 119 to `used 11 times across 98
+   insns' -- priority 3367 against the pointer's 2272 -- and greg's order
+   duly became `... 111 155 128 891 119 295 432 1208 81 570 1338 ...', with
+   119 BEFORE 1338.  r7 still came out $s2 and cluster I did not move one row.
+
+   WHY: a FOURTH allocno holds $s0 in our build and the sixth session never
+   named it.  `i2A' is allocno 111, `Register 111 used 9 times across 61
+   insns; crosses 2 calls', and it is allocated FIRST of the four and takes
+   $s0; the pointer then shares $s0 with it because 111 and 1338 do NOT
+   conflict (111's conflict list is `81 82 88 111 119 125 126 128 1375 1386
+   1426' and has no 1338 in it -- the pointer dies at 800AF384 and i2A is born
+   at 800AF38C).  The target's assignment is r7 $s0, `ang' $s1, pointer $s2,
+   i2A $s2; ours is i2A $s0, pointer $s0, `ang' $s1, r7 $s2.
+
+   THE FOUR PRIORITIES, off `.lreg' and `.greg' on this body, with
+   global.c:588-610's `pri = floor_log2(n_refs) * n_refs / live_length
+   * 10000':
+       i2A      111   9 refs / 61 insns / 2 calls      4426
+       ang      128   9 refs / 70 insns / 3 calls      3857
+       pointer 1338   5 refs / 44 insns / 2 calls      2272  (44 is ALREADY
+                                                              doubled -- see
+                                                              the sixth
+                                                              session's note)
+       r7       119   6 refs / 83 insns / 3 calls      1446
+   find_reg takes the lowest free register in a 0..31 scan, and all four cross
+   a call so all four are confined to the callee-saved registers.  Enumerating
+   the orders gives exactly ONE that produces the target's assignment:
+
+       r7 -> 16, then ang -> 17 (conflicts r7), then i2A -> 18 (conflicts r7
+       and ang), then pointer -> 18 (conflicts r7 and ang, does NOT conflict
+       i2A, so it shares 18).
+
+   Every other order fails, and the two near misses are worth recording
+   because both have been measured:
+       r7, i2A, ang, pointer  ->  r7 16, i2A 17, ang 18, pointer 17.  ang and
+           the pointer are then BOTH wrong, which is precisely what the sixth
+           session saw when it pinned r7: `register s32 r7 __asm__("$16")' is
+           18 rows on this body (16 without it), four of r7's rows match and
+           six others break, and the park's note that `the pointer and ang
+           swap into $s1/$s2' is this order.
+       i2A, ang, pointer, r7  ->  the body we have.
+
+   SO THE REQUIREMENT IS   pri(r7) > pri(ang) > pri(i2A),   i.e. TWO
+   inversions, not one.  Numerically, with ang left alone at 3857:
+       r7   needs floor_log2(R)*R > 32.0 at live_length 83, so R >= 11 refs
+            (3*11 = 33); 8 is not enough (3*8 = 24), which retires the sixth
+            session's "r7 n_refs >= 8" route even on its own terms.
+       i2A  needs live_length > 70, or n_refs <= 7 (floor_log2(7)*7/61 = 2295).
+   AND A BLOCKING ALLOCNO CANNOT SUBSTITUTE FOR EITHER.  The sixth session's
+   "create a quantity Q" route is closed by the ORDER rather than by the
+   conflict sets: any Q that takes $s0 before i2A pushes i2A to 17 and `ang'
+   to 18, and `ang' MUST be 17.  Two blockers taking 16 and 17 push `ang' to
+   19.  No blocking scheme can produce the one good order, because in that
+   order r7 is allocated FIRST and nothing may hold $s0 at all.
+
+   AND THE ENUMERATION IS CONFIRMED BY PINNING, WHICH IS THE SHARPEST
+   STATEMENT THIS RESIDUE HAS EVER HAD.  On the 16-row body:
+       nothing pinned                                   16
+       register s32 r7  __asm__("$16")                   18
+       register s32 ang __asm__("$17")                   24
+       r7 $16 AND ang $17                                13
+       r7 $16, ang $17 AND i2A __asm__("$18")            13  (no change -- so
+            once r7 is $s0 and ang is $s1, i2A and the pointer go to $s2 BY
+            THEMSELVES, exactly as the good order predicts)
+   With r7 $16 and ang $17 ALL FOURTEEN cluster-I rows match -- 1330, 1332,
+   1334, 1337, 1338, 1347, 1348, 1350, 1360, 1410, 1411, 1413, 1416, 1418 --
+   and the thirteen that remain are rows 15 and 20 plus ELEVEN NEW ONES at
+   1400..1418 which are the PINNING's own damage: gcc 2.7.2 uses an
+   `__asm__'-declared local AS the destination of the sign extensions that
+   read it (`sll s1,s1,0x10 / sra s1,s1,0x10' for `aa = (s16)ang', and
+   `sll s0,s0,0x10 / sra s0,s0,0x10' for the final `(s16)r7') instead of a
+   scratch pseudo.  SO THE WHOLE OF THIS FUNCTION'S REMAINING RESIDUE IS TWO
+   FACTS: `r7' in $s0 with `ang' in $s1, and the parameter load's delay slot.
+   An allocator that produced the first would leave the function at 2 rows.
+   (The pinning is NOT landable -- it is an asm device, and gcc's mishandling
+   of it above is its own reason not to trust it as anything but a probe.)
+
+   MEASURED THIS SESSION AND REJECTED:
+       mx merged into r7 (11 refs / 98 insns, pri 3367)      cluster I
+                                                             unchanged, 33
+       `aa' deleted and both its uses written `(s16)ang' -- two more
+            loop-depth references on `ang', intended to lift 3857 past 4426
+                                                   1818/97, LOSES A WORD
+       `aa' kept and only ONE of its uses written `(s16)ang'   1818/97
+       `register s32 r7 __asm__("$16")' on the 16-row body     18
+   The `aa' route is the only honest way found to add references to `ang', and
+   it deletes a word the target has (the target's `sra $v1,$v0,16' at
+   800AF464 IS `aa = (s16)ang' and it must be a variable), so `ang' is as
+   fixed as `r7'.  THE CLUSTER REMAINS CLOSED, now with a complete
+   enumeration rather than a two-way comparison.
+
+   ===========================================================================
+   WHAT MOVED ON 2026-11-22 (SEVENTH SESSION), 17 -> 16 ROWS: CLUSTER II IS
+   CLOSED.  `mx' IS THE PARAMETER `e'.
+
+   (N) case 0x24's Chebyshev maximum lives in the PARAMETER `e', not in a
+       variable of its own.                 17 -> 16 rows, 0 words, and all
+                                            THREE of cluster II's rows go.
+
+           -   s16 mx;                 (declaration deleted)
+           -   mx = dx;                     +   e = dx;
+           -   mx = sp1A;                   +   e = sp1A;
+           -   if (mx == 1)                 +   if ((s16)e == 1)
+
+       Rows 1235, 1247 and 1248 -- `move a2,v1' / `move a2,a0' /
+       `sll v0,a2,0x10' against the target's `addu $s0,$v1,$zero' /
+       `addu $s0,$a0,$zero' / `sll $v0,$s0,16' -- ALL MATCH.  `e' is dead from
+       the `func_800A19E4' call onwards, so case 0x24 may use it as a scratch;
+       it is a parameter, so it is definitely assigned, and nothing in this is
+       undefined behaviour.
+
+       THE PROOF THAT CAME FIRST, AND IT IS WHY THE PARTNER HAD TO BE `e'.
+       `mx' reaching $s0 needs EVERY hard register from 2 to 15 excluded at
+       find_reg's 0..31 scan (global.c:955-990; MIPS defines no
+       REG_ALLOC_ORDER).  Three routes exist and only one is reachable:
+         * hard_reg_conflicts -- impossible for $t0..$t9.  The function's
+           `Hard regs used' line is `2 3 4 5 6 7 16..23 29 30 31', so nothing
+           is ever live in $8..$15 and no conflict with them can be created.
+         * regs_someone_prefers -- EMPTY for `mx'.  prune_preferences
+           (global.c:869-884) unions the preferences of LOWER-priority
+           CONFLICTING allocnos only, and `mx' (allocno 131) conflicts with
+           81, 82 and 130 alone, all three of which are HIGHER priority.
+         * allocno_calls_crossed != 0, which switches `used1' from
+           `fixed_reg_set' to `call_used_reg_set' (global.c:925-929) and
+           excludes 2..15 in one step.  THIS IS THE ONLY ROUTE, so `mx' MUST
+           CROSS A CALL.  The fifth session's corrected reading of
+           global.c:924 was right about the code -- crossing no call is the
+           LEAST restrictive case -- and that is exactly why a short-lived
+           non-call-crossing quantity can never reach $s0.
+       AND THE PARTNER MUST ALSO BE **HImode**.  Merging `mx' into an SImode
+       local that crosses a call does put the value in $s0 and then loses more
+       than it wins, because `mx = dx' becomes a plain SImode copy and gcc
+       folds the abs straight into it:
+           ours    bgez $v0 / move $s0,$v0 / negu $s0,$s0 / sh $s0,0x18($sp)
+           target  bgez $v1 / nop / negu $v1,$v1 / addu $s0,$v1,$zero
+                                                 / sh $v1,0x18($sp)
+       With an s16/u16 partner `mx = dx' is a TRUNCATION, not a copy, so the
+       two pseudos cannot be folded together and the separate `addu' survives.
+       Measured on the 17-row body, with the 16-bit compare restored as
+       `if ((s16)X == 1)' so the candidate does not simply lose the `sll/sra':
+           e   (u16 parameter, crosses 2 calls)      16   <-- taken
+           r6  31   i2A 31   r9  32   r7  33   r8  33   i   33   j   33
+           nn  33   r4  35   r1  36   ang 36   r5  37   t1  40   t3  48
+           d   (u16 parameter, arrives in $a3)  1816/29
+           t4  1818/90   n 1818/110   r2 1813/47   r3 1816/50
+       WITHOUT the cast -- which is how the fifth and sixth sessions swept it
+       -- every one of these loses the two words of the 16-bit compare, and
+       that is why that whole table read as a refutation: `mx_as_r7' is
+       1815/98 uncast and 1817/33 cast.  RE-PRICE A MERGE SWEEP WITH THE
+       CONVERSION THE NARROWER VARIABLE WAS DOING, or the words hide the rows.
+       HOW `e' WAS FOUND, from the dumps rather than by sweeping: `.lreg'
+       lists exactly three HImode allocnos that cross a call --
+           Register 83  used 2 times across 24 insns; crosses 2 calls; 2 bytes
+           Register 85  used 2 times across 23 insns; crosses 2 calls; 2 bytes
+           Register 88  used 7 times across 1189 insns; crosses 110 calls
+       -- 85 is `e', 83 is `d' and 88 is `ret'.  `ret' is $fp and `d' arrives
+       in $a3, so `e' is the only one of the three already sitting in $s0, and
+       the only HImode call-crossing allocno in the function that is dead
+       inside the switch.  THE RULE WORTH KEEPING: when a residue needs a
+       specific callee-saved register for a short-lived value, read `.lreg'
+       for the allocnos that ALREADY have the mode and the calls-crossed count
+       you need and merge into one of those.  Do not sweep all the locals:
+       the answer here was a PARAMETER, which no merge sweep in six sessions
+       had included.
+
+       THE PRICE, AND IT IS THE WHOLE OF WHAT IS NEW IN THE RESIDUE: rows 15
+       and 20.  `e' is the fifth parameter and arrives on the stack, so the
+       function loads it once at entry; extending its live range into case
+       0x24 lengthens its dependence chain and sched1 moves that load from the
+       SECOND load-delay slot at the top of the function into the FIRST:
+           ours    800ADEB0 lhu s0,96(sp)          target  nop
+           ours    800ADEC4 nop                    target  lhu $s0, 0x60($sp)
+       Both are load-delay slots and the word count does not move.  Nothing
+       else in the first 1228 words differs now.
+
+   ===========================================================================
+   WHAT MOVED ON 2026-11-22 (SEVENTH SESSION), 20 -> 17 ROWS: RESIDUE (1) IS
+   CLOSED, AND THE SECOND SET IS **PROVED NECESSARY** RATHER THAN SWEPT.
+
+   (M) THE CALL RESULT GOES INTO A FRESH SCRATCH `u2', sp20 AND rN ARE BOTH
+       COPIED FROM IT, AND `u2' IS GIVEN A SECOND SET AFTERWARDS.
+                                  20 -> 17 rows, 0 words.  ONE ROW PER SITE,
+                                  fully additive, at all three sites.
+
+           -   sp20 = func_800A384C(c, q2, (u8 *)&sp1E, 0);
+           -   *(s16 *)(c + 0x2A) = sp1E;
+           -   r2 = (u16)sp20;
+           +   u2 = func_800A384C(c, q2, (u8 *)&sp1E, 0);
+           +   sp20 = u2;
+           +   *(s16 *)(c + 0x2A) = sp1E;
+           +   r2 = u2;
+           +   u2++;
+           +   u2--;
+
+       plus one new declaration `s32 u2;'.  The same shape at case 1 (r3) and
+       at case 2 (r4, which has no `c + 0x2A' store between).  Measured:
+           site 0 alone 19   site 1 alone 19   site 2 alone 19
+           0+1 18   0+2 18   1+2 18   all three 17
+       -- so each site is worth exactly one row and they are independent, the
+       same additivity change (I) had.
+
+       WHAT IT FIXES.  Rows 277, 393 and 556, which were
+           ours  andi $v1, $v0, 0xFFFF      target  addu $v1, $v0, $zero
+       and which change (I) had left as the price of getting the sp20 store to
+       read the raw return register.  Now BOTH facts hold at once: the store
+       reads $v0 and the second pseudo is a plain SImode copy.
+
+       THE MECHANISM, AND WHY THE SECOND SET IS NOT A GUESS.  The target is
+           jal func_800A384C / addu $a3,$zero,$zero
+           lhu  $v1, 0x1E($sp)
+           sh   $v0, 0x20($sp)      <- sp20, from the RAW return register
+           sh   $v1, 0x2A($s5)
+           addu $v1, $v0, $zero     <- r2, a plain copy, and $v0 is DEAD after
+           sll  $v0, $v1, 16 / bltz $v0 / nop / j / ori $v0,$v1,0x8000
+       $v0 is dead after the copy, so the copy is NOT forced by liveness.  It
+       is forced by WHO ALLOCATES WHAT: the call-value pseudo is block-local,
+       so local_alloc ties its quantity to hard reg 2 through
+       `qty_phys_copy_sugg' and it IS $v0; `r2' is referenced in three basic
+       blocks, so flow.c:2561 makes it a global allocno, `reg_qty' is -1 and
+       local-alloc.c's `combine_regs' refuses to tie the copy; global_alloc
+       then has to give it something other than $v0, because the sign-extend
+       temp that local_alloc already placed there conflicts.  So
+       `addu $v1,$v0,$zero' is what gcc emits for `r2 = <a block-local pseudo
+       holding the call value>' -- provided the copy survives cse.
+
+       AND IT DOES NOT SURVIVE cse UNLESS THE SOURCE PSEUDO IS SET AGAIN.
+       `cse_insn' records `(set (reg r2) (reg u2))' by inserting r2 into u2's
+       quantity, and `canon_reg' then rewrites every later reference to r2 as
+       `qty_first_reg' of that quantity, which is `u2' -- the register set
+       first.  r2 becomes dead and flow deletes the copy.  Within one basic
+       block the ONLY thing that invalidates u2's quantity is a SET of u2, so
+       a second set after `r2 = u2;' is not a device chosen by sweeping: it is
+       the single necessary condition, and that is why every honest spelling
+       below fails.  The pair `u2++; u2--;' supplies it and combine cancels
+       the two `addiu' (1817 words, unchanged), which is the catalogue's
+       cancelled-pair device used for the one thing it is actually for.
+       EVERY BREAKER MEASURES THE SAME 19 at site 0: `u2++; u2--;', `u2++;'
+       alone, `u2 = 0;', `u2 = 1;', `u2 = -1;', `u2 = r2;', `u2 = sp1E;', and
+       `u2 = 0;' placed before the `c + 0x2A' store.  The pair is kept because
+       it is the catalogued spelling and provably emits nothing.
+       A `do { r2 = u2; } while (0);' wrapper instead of a second set is
+       1815/54 -- the loop-depth device is NOT a substitute for the set.
+
+       MEASURED AND REJECTED, all on the 20-row body, all at site 0, and all
+       of them are the honest spellings (no second set):
+           u2 = f(); sp20 = u2; store; r2 = u2;        1809/57  <- the park's
+                                     own "fresh temp" note, re-measured
+           u2 = f(); store; sp20 = u2; r2 = u2;        21
+           u2 = f(); sp20 = u2; r2 = u2; store;        1809/57
+           r1 = f(); sp20 = r1; store; r2 = r1;        1809/57
+           r1 = f(); store; sp20 = r1; r2 = r1;        1815/56
+           r1 = f(); sp20 = r1; r2 = r1; store;        1809/57
+           r1 = f(); sp20 = r1; store; r2 = r1 | 0;    1809/57
+           sp20 = f(); store; r2 = sp20;               1816/35
+           sp20 = f(); store; r2 = (s32)sp20;          1816/35
+           r2 = sp20 = f(); store;                     1816/35
+           r2 = f(); sp20 = r2; store;                 1809/57
+           r2 = f(); store; sp20 = r2;                 21
+           r2 = 0; r2 = f(); sp20 = r2; store;         1809/57
+           r2 = 0; sp20 = f(); store; r2 = sp20;       1816/35
+           sp20 = f(); store; r2 = sp20; with r2 at s16    1809/57
+                                         with r2 at u16    1809/57
+           r2 = f(); sp20 = r2; store; with r2 at s16  1809/57
+           the temp spelled as an EXISTING local instead of a fresh `u2',
+              WITH the second set: i 1818/30, j 1818/30, r1 1818/30
+              -- so the temp must be a variable of its own, and that is why
+              refsweep could never find this: it only inserts pairs on names
+              that already exist.
+           `u2 = 0x800B;' as a REAL second set, then used in the `< 0' arm
+                                                       1817/109
+       inverting case 0's test (`if ((s16)r2 >= 0) { ... return 1; }' first)
+       is 20, byte-identical, on the 20-row body.
+
+   ===========================================================================
+   WHAT MOVED ON 2026-11-22 (SEVENTH SESSION), 23 -> 20 ROWS, IN ONE CHANGE
+   AND IT CLOSES CLUSTER II DOWN TO THREE PURE-REGISTER ROWS.
+
+   (L) case 0x24's dy SUBTRACTION GETS ITS OWN VARIABLE `t4', AND THEN THE
+       FOLDED (`>= 0 ? x : -x') dy abs IS THE ONE THAT WINS.
+                                               23 -> 20 rows, 0 words.
+
+           -   t3 = b[0x25] - sp1A;
+           -   dy = (t3 < 0) ? -t3 : t3;
+           +   t4 = b[0x25] - sp1A;
+           +   dy = (t4 >= 0) ? t4 : -t4;
+       plus one new declaration `s32 t4;'.
+
+       BOTH HALVES ARE REQUIRED AND NEITHER PAYS ALONE.  The folded abs on
+       `t3' is 48 rows (the sixth session's number) and the non-folded abs on
+       a fresh `t4' is 23 (byte-identical to the park).  Together: 20.
+
+       WHY THE 48 WAS NEVER A CLUSTER-II RESIDUE AT ALL.  The sixth session
+       read the 48 as "the right schedule with every register wrong" and spent
+       the session trying to fix `mx' and `dx'.  Reading the 48-row aligndiff
+       ROW BY ROW instead shows that only 16 of those 48 rows are in case 0x24.
+       FIFTEEN of them are at rows 785..789, 907..911 and 1442..1446 -- the
+       OTHER THREE `t3' sites, in cases 0x2C, 0x29 and 0x1B, which MATCH on the
+       park body and break when case 0x24's use of `t3' changes:
+           ours   sra v1,v0,0x10 / bgez v1 / slti v0,v1,33 / negu v1,v1 / slti
+           target sra $v0,$v0,16 / bgez $v0 / nop         / negu $v0,$v0 / slti
+       Change (H) had made `t3', `t5' and `t7' ONE variable across four switch
+       arms, so `t3' is a single global allocno with a single hard register;
+       the folded form in case 0x24 pushes that register from $v0 to $v1 and
+       all three other sites go with it.  Giving case 0x24 its own `t4' makes
+       case 0x24's temp a BLOCK-LOCAL quantity again, leaves `t3' in $v0 at
+       the three arms that already matched, and lets the folded schedule stand
+       on its own.
+       RULE WORTH KEEPING: when a change inside one switch arm regresses a
+       body by much more than that arm can hold, COUNT THE DIFFERING ROWS BY
+       ADDRESS before diagnosing the arm.  A shared scratch local is one
+       allocno, so a spelling change in one arm is a register change in every
+       other arm that shares the name.  (H)'s unification is still right for
+       the three `(s16)func_800A0134' sites -- it is worth 2 rows there -- but
+       case 0x24 was never part of that family.
+
+       WHAT THE FOLDED FORM BUYS, and it is the sixth session's reading,
+       confirmed: the folded `x >= 0 ? x : -x' is a single `abs' RTL insn, so
+       there is NO basic-block split at the dy abs, block B runs through the
+       Chebyshev comparison, and sched1 puts the sp18 widening in the `lbu's
+       load-delay slot.  On the 20-row body rows 1229..1248 are
+       BYTE-IDENTICAL to the target EXCEPT the three rows that read or write
+       `mx' (1235, 1247, 1248), and `dx' is in $v1 and `t4' in $v0 exactly as
+       the target has them -- no pinning, no device.
+
+       THE WHOLE SWEEP, on the folded body, of WHICH VARIABLE holds the dy
+       subtraction (each spelled `V = b[0x25] - sp1A; dy = (V >= 0) ? V : -V;'):
+           t4 (FRESH s32)                20   <-- taken
+           aa                            25
+           r9, t1, r1, r4, r5, r6, r7,
+              r8, i, i2A, j, dy          33
+           nn                            37
+           n, ang                        40
+           r2                            1813/47
+           r3                            1816/50
+           t3 (the park's own name)      48
+           ret                           1813/99
+       and the non-folded abs on `t4' is 23, byte-identical to the park.
+       So a FRESH variable is not merely as good as borrowing one here -- it is
+       five rows better than the best borrowed one, which is the opposite of
+       what cluster II's own history (changes (G) and (H)) would predict.
 
    ===========================================================================
    WHAT MOVED ON 2026-11-22 (SIXTH SESSION), 30 -> 23 ROWS, IN THREE CHANGES
@@ -731,7 +1087,37 @@
    opposite direction, and a device where the source change is ordinary C.
 
    ===========================================================================
-   RESIDUE THAT IS LEFT: 25 ROWS, 0 WORDS
+   RESIDUE THAT IS LEFT (2026-11-22, SEVENTH SESSION): 16 ROWS, 0 WORDS
+
+     rows 15 and 20   the `lhu $s0,0x60($sp)' parameter load in the wrong
+                      load-delay slot -- the price of change (N), 2 rows.
+                      SPELLING-PROOF: byte-identical under every spelling of
+                      the two statements above it (`*(u16 *)(c + 0x46) |=',
+                      the long `= .. | ..' form either way round, `if
+                      (D_80013714 & 8)' bare, an empty-then `else', `ret = 2'
+                      moved after the `|= 0x4000', and a cancelled pair or a
+                      dead set on `e' or `d' after the func_800A19E4 call).
+                      AND THE DIAGNOSIS: sched.c's `adjust_priority' /
+                      `birthing_insn_p' (sched.c:2513-2592) raises a set's
+                      priority to `max_priority' only when
+                      `reg_n_sets[dest] == 1'; sched1 is a BACKWARD list
+                      scheduler, so the bump moves the insn LATER in the
+                      emitted stream, which is where the target has it.  With
+                      `e' holding the maximum it has three sets and loses the
+                      bump.  IF THAT IS THE WHOLE STORY IT ALSO PROVES THE
+                      TARGET'S `e' HAS EXACTLY ONE SET -- i.e. the original's
+                      maximum lived in some other HImode call-crossing
+                      variable -- but the experiment that would settle it
+                      cannot be run: every second set of `e' that does not
+                      lengthen its live range (`e++; e--;', `e = 0;') is gone
+                      before flow counts sets, and measures 17, byte-identical.
+     rows 1330..1418  cluster I, 14 rows, the $s0/$s2 swap.  CLOSED with the
+                      four-way priority enumeration above.
+   Residue (1) and clusters II, III and IV are CLOSED.  Every other word of
+   the function is byte-identical to the target.
+
+   ===========================================================================
+   THE OLDER RESIDUE SECTION: 25 ROWS, 0 WORDS
    (rows 277/393/556 = residue (1), 3 rows -- see change (I) above;
     rows 1229..1248 = cluster II, 8 rows; rows 1330..1418 = cluster I, 14.)
    Clusters III and IV ARE CLOSED by changes (I) and (J).  Their paragraphs
@@ -1257,6 +1643,26 @@
    ===========================================================================
    SWEEPS RUN, AND WHAT THEY RETURNED
 
+   2026-11-22, SEVENTH SESSION.  The three quick sweeps were run on the 17-row
+   body (i.e. after changes (L) and (M), before (N)) and ALL THREE ARE CLEAN,
+   each re-deriving `base 17 rows, 1817/1817 words' first:
+       stmtsweep   22 movable assignment(s), "no safe move helps"
+       widthsweep  "no width change helps"
+       partsweep   "no partition helps".  Note the two groups it now reports:
+                   `b[0x24]' -> {dx, sp18} and `dx' -> {mx, sp18}; after
+                   change (N) the second is {e, sp18}.
+   refsweep and devsweep were launched on the 20-row body and were still
+   running when the session ended -- their logs are
+       /tmp/claude-1000/agent-ade74h/logs/refsweep20.log
+       /tmp/claude-1000/agent-ade74h/logs/devsweep20.log
+   and their baseline is TWO ROWS WORSE than this park, so re-launch them on
+   this body rather than reading those logs as negatives for it.
+   NEXT SESSION'S BEST SHOT IS THE PERMUTER ON THIS BODY.  The residue is now
+   two facts and fourteen of the sixteen rows are ONE of them (`r7' in $s0 and
+   `ang' in $s1), which is a program-shape question about case 0x2A that no
+   sweep varies -- and the permuter's object diff will see every one of those
+   fourteen rows, so a find there is immediately legible.
+
    2026-11-22, SIXTH SESSION.  stmtsweep, widthsweep and partsweep were run
    on the 26-row body and again on the 25-row body, and ALL SIX RUNS ARE
    CLEAN:
@@ -1490,6 +1896,9 @@
      does.  The alternative -- the pointer-cast form at all nineteen --
      measured 1825/228 against 1823/160 when it was last priced.  Kept, but
      this is the one shape in the body that is still not explained.
+   * (SETTLED BY CHANGE (L): BOTH CONDITIONAL NEGATES IN case 0x24 ARE NOW
+     WRITTEN THE SAME, FOLDING WAY, `(x >= 0) ? x : -x'.  The paragraph below
+     is the sixth session's and its suspicion was right.)
    * `dx = (dx >= 0) ? dx : -dx;' next to
      `dy = (t3 < 0) ? -t3 : t3;' in the SAME arm, AND I AM NOW FAIRLY SURE IT
      IS WRONG -- the original almost certainly wrote both the same way.  See
@@ -1515,10 +1924,32 @@
      the call result straight to `sp20' is byte-identical (see residue (III)).
      They are kept only so all five `sp20 = rN' sites read alike.  `r2' and
      `r3' cannot go -- they cost 1 and 8 words.
-   * NO DEVICES.  Not one `do { } while (0)', cancelled pair, duplicated arm,
-     `__asm__' or redundant store, and no `goto'.  THREE full cancelled-pair
-     sweeps now say none helps, the third on this very body ("no cancelled
-     pair helps", 36686 insertion points).  Worth keeping true.  Confirmed
+   * THREE CANCELLED PAIRS, AND THE `NO DEVICES' CLAIM IS NO LONGER TRUE.
+     `u2++; u2--;' at each of the three sites of change (M).  It is the
+     catalogue's cancelled pair, it compiles to nothing (combine folds the two
+     `addiu'; 1817 words either way), and it is there for ONE reason which is
+     PROVED rather than swept: within a basic block the only thing that stops
+     cse rewriting `r2' back to `u2' and deleting the copy gcc emitted for
+     `r2 = u2' is a SET of `u2'.  See change (M).  Every other breaker --
+     `u2++;' alone, `u2 = 0;', `u2 = 1;', `u2 = -1;', `u2 = r2;',
+     `u2 = sp1E;' -- measures identically, so the pair is chosen only because
+     it is the spelling the catalogue already names.  Removing all three
+     restores the honest 17-row body.
+   * `e', THE FIFTH PARAMETER, IS REUSED AS case 0x24's MAXIMUM.  See change
+     (N).  It is legal and defined (`e' is a parameter, and it is dead from
+     the func_800A19E4 call onwards), it closes all three of cluster II's
+     rows, and it is almost certainly NOT what the original said -- it costs
+     rows 15 and 20 and the residue note above argues the target's `e' has one
+     set.  IT IS KEPT BECAUSE 16 < 17 AND NOTHING ELSE REACHES $s0.  To get
+     the honest 17-row body back: re-add `    s16 mx;' to the declarations and
+     change `e = dx;', `e = sp1A;' and `if ((s16)e == 1)' back to `mx = dx;',
+     `mx = sp1A;' and `if (mx == 1)'.  Four lines.
+   * NO OTHER DEVICES.  No `do { } while (0)', no duplicated arm, no
+     `__asm__', no redundant store and no `goto'.  THREE full cancelled-pair
+     sweeps said none helps on the bodies they were run on -- and note that
+     none of them could ever have found change (M), because refsweep only
+     inserts pairs on names that ALREADY EXIST and `u2' had to be created
+     first.  Confirmed
      again this session: `r5++; r5--;' at the one place a cancelled pair
      would have been worth 3 rows is byte-identical, because cse2 folds the
      pair before flow ever counts it.  And the one devsweep find that DOES
@@ -1625,13 +2056,14 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
     s32 r9;
     s32 t1;
     s32 t3;
+    s32 t4;
+    s32 u2;
     s32 n;
     s32 nn;
     s16 aa;
     s32 ang;
     s32 dx;
     s32 dy;
-    s16 mx;
     ret = 2;
     ((u16 *)c)[0x23] |= 0x4000;
     if ((D_80013714 & 8) != 0)
@@ -1747,9 +2179,12 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                 {
                     break;
                 }
-                sp20 = func_800A384C(c, q2, (u8 *)&sp1E, 0);
+                u2 = func_800A384C(c, q2, (u8 *)&sp1E, 0);
+                sp20 = u2;
                 *(s16 *)(c + 0x2A) = sp1E;
-                r2 = (u16)sp20;
+                r2 = u2;
+                u2++;
+                u2--;
                 if ((s16)r2 < 0)
                 {
                     *(u16 *)(c + 0x46) = 0x800B;
@@ -1811,9 +2246,12 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                 {
                     break;
                 }
-                sp20 = func_800A384C(c, q4, (u8 *)&sp1E, 0);
+                u2 = func_800A384C(c, q4, (u8 *)&sp1E, 0);
+                sp20 = u2;
                 *(s16 *)(c + 0x2A) = sp1E;
-                r3 = (u16)sp20;
+                r3 = u2;
+                u2++;
+                u2--;
                 if ((s16)r3 < 4)
                 {
                     *(u16 *)(c + 0x46) = 0x800B;
@@ -1878,8 +2316,11 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
                         o = *(u8 **)(D_800814A8 + 0x60);
                         if (o != NULL && (*(s32 *)(o + 0x14) & 0x2000) == 0)
                         {
-                            sp20 = func_800A40ACw(c, func_8009CD58(o, 7, 0));
-                            r4 = (u16)sp20;
+                            u2 = func_800A40ACw(c, func_8009CD58(o, 7, 0));
+                            sp20 = u2;
+                            r4 = u2;
+                            u2++;
+                            u2--;
                             if ((s16)r4 >= 0)
                             {
                                 *(u16 *)(c + 0x46) = r4 | 0x8000;
@@ -2288,17 +2729,17 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             dx = b[0x24];
             dx = dx - sp18;
             dx = (dx >= 0) ? dx : -dx;
-            mx = dx;
+            e = dx;
             sp18 = dx;
-            t3 = b[0x25] - sp1A;
-            dy = (t3 < 0) ? -t3 : t3;
+            t4 = b[0x25] - sp1A;
+            dy = (t4 >= 0) ? t4 : -t4;
             sp1A = dy;
             r9 = sp18 < sp1A;
             if (r9)
             {
-                mx = sp1A;
+                e = sp1A;
             }
-            if (mx == 1)
+            if ((s16)e == 1)
             {
                 *(u16 *)(c + 0x46) = 0x8009;
                 return 5;
