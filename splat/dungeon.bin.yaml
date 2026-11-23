@@ -349,7 +349,34 @@ segments:
     exclusive_ram_id: dng_slot
     symbol_name_format: b03_$VRAM
     subsegments:
+      # THE JUMP TABLE CARVE, 2026-11-23 -- the pilot for all 116 objects.
+      #
+      # This leading subsegment is 0x54 bytes and only the first EIGHT are
+      # data: 0x80170854 and 0x80170A28, a two-entry function-pointer table.
+      # The other 0x4c are two COMPILER-GENERATED JUMP TABLES --
+      # jtbl_b03_80170808 (12 entries, func_b03_80170E54's) and
+      # jtbl_b03_80170838 (7 entries, func_b03_80172A24's) -- so they belong
+      # to the C unit, not to a data blob.
+      #
+      # While both functions were INCLUDE_ASM, declaring the whole thing
+      # `data' was byte-identical and cost nothing. It stops being free the
+      # moment either function lands: cc1psx then emits its own table into
+      # .rodata, the linker appends it past the code, and dungeon.bin comes
+      # out 0x30 bytes longer per landed member. That is exactly what batch 5
+      # hit -- 0x120 too long across func_b03_80170E54's six-member family,
+      # with the built code loading 0x80173C80 where the ROM loads 0x80170808.
+      # `ovlverify' reports 0 differing throughout, because it measures a
+      # function's own words and never its rodata.
+      #
+      # ALIGNMENT: the tables sit at rodata-relative 0x0 and 0x30, both 0 mod
+      # 8, so the `.align 3' cc1psx writes before every compiled table is a
+      # no-op for both and no `subalign' is needed here. That is luck, not a
+      # rule -- see the resident overlay's six carves above for what a 4-mod-8
+      # table costs.
+      #
+      # `.rodata' WITH the dot, because csrc/ovl_dng_b03.c exists.
       - [0x9e9000, data]
+      - [0x9e9008, .rodata, ovl_dng_b03]
       - [0x9e9054, c, ovl_dng_b03]
       - [0x9ec474, data]
   - [0x9ec480, bin]
@@ -393,6 +420,7 @@ segments:
     symbol_name_format: b07_$VRAM
     subsegments:
       - [0xa91000, data]
+      - [0xa91008, .rodata, ovl_dng_b07]
       - [0xa91054, c, ovl_dng_b07]
       - [0xa94938, data]
   - [0xa94940, bin]
@@ -436,6 +464,7 @@ segments:
     symbol_name_format: b11_$VRAM
     subsegments:
       - [0xb39000, data]
+      - [0xb39008, .rodata, ovl_dng_b11]
       - [0xb39054, c, ovl_dng_b11]
       - [0xb3c1b8, data]
   - [0xb3c1c0, bin]
@@ -458,6 +487,7 @@ segments:
     symbol_name_format: b13_$VRAM
     subsegments:
       - [0xb8d000, data]
+      - [0xb8d008, .rodata, ovl_dng_b13]
       - [0xb8d054, c, ovl_dng_b13]
       - [0xb90504, data]
   - [0xb90510, bin]
@@ -480,6 +510,7 @@ segments:
     symbol_name_format: b15_$VRAM
     subsegments:
       - [0xbe1000, data]
+      - [0xbe1008, .rodata, ovl_dng_b15]
       - [0xbe1084, c, ovl_dng_b15]
       - [0xbe4e34, data]
   - [0xbe4e40, bin]
@@ -555,6 +586,7 @@ segments:
     symbol_name_format: b22_$VRAM
     subsegments:
       - [0xd07000, data]
+      - [0xd07008, .rodata, ovl_dng_b22]
       - [0xd0706c, c, ovl_dng_b22]
       - [0xd0c5c4, data]
   - [0xd0c5d0, bin]
@@ -620,6 +652,7 @@ segments:
     symbol_name_format: b28_$VRAM
     subsegments:
       - [0xe03000, data]
+      - [0xe03008, .rodata, ovl_dng_b28]
       - [0xe03054, c, ovl_dng_b28]
   - [0xe06d10, bin]
   - name: ovl_dng_b29
@@ -694,6 +727,7 @@ segments:
     symbol_name_format: b35_$VRAM
     subsegments:
       - [0xf29000, data]
+      - [0xf29008, .rodata, ovl_dng_b35]
       - [0xf29054, c, ovl_dng_b35]
       - [0xf2c528, data]
   - [0xf2c530, bin]
@@ -799,6 +833,7 @@ segments:
     symbol_name_format: b45_$VRAM
     subsegments:
       - [0x10cd000, data]
+      - [0x10cd008, .rodata, ovl_dng_b45]
       - [0x10cd054, c, ovl_dng_b45]
       - [0x10d0464, data]
   - [0x10d0470, bin]
@@ -863,6 +898,7 @@ segments:
     symbol_name_format: s02_$VRAM
     subsegments:
       - [0x183a800, data]
+      - [0x183a828, .rodata, ovl_dng_s02]
       - [0x183a84c, c, ovl_dng_s02]
   - [0x183c0f0, bin]
   - name: ovl_dng_s03
@@ -873,6 +909,7 @@ segments:
     symbol_name_format: s03_$VRAM
     subsegments:
       - [0x1840800, data]
+      - [0x1840808, .rodata, ovl_dng_s03]
       - [0x1840820, c, ovl_dng_s03]
   - [0x1841480, bin]
   - name: ovl_dng_s04
@@ -894,6 +931,7 @@ segments:
     symbol_name_format: s05_$VRAM
     subsegments:
       - [0x184c800, data]
+      - [0x184c808, .rodata, ovl_dng_s05]
       - [0x184c81c, c, ovl_dng_s05]
       - [0x184d82c, data]
   - [0x184d830, bin]
@@ -916,6 +954,7 @@ segments:
     symbol_name_format: s07_$VRAM
     subsegments:
       - [0x1858800, data]
+      - [0x1858808, .rodata, ovl_dng_s07]
       - [0x1858820, c, ovl_dng_s07]
       - [0x18595e8, data]
   - [0x18595f0, bin]
@@ -927,6 +966,7 @@ segments:
     symbol_name_format: s08_$VRAM
     subsegments:
       - [0x185e800, data]
+      - [0x185e808, .rodata, ovl_dng_s08]
       - [0x185e820, c, ovl_dng_s08]
       - [0x185f288, data]
   - [0x185f290, bin]
@@ -938,6 +978,7 @@ segments:
     symbol_name_format: s09_$VRAM
     subsegments:
       - [0x1864800, data]
+      - [0x1864808, .rodata, ovl_dng_s09]
       - [0x1864820, c, ovl_dng_s09]
   - [0x18655f0, bin]
   - name: ovl_dng_s10
@@ -970,6 +1011,7 @@ segments:
     symbol_name_format: s12_$VRAM
     subsegments:
       - [0x1876800, data]
+      - [0x1876808, .rodata, ovl_dng_s12]
       - [0x1876820, c, ovl_dng_s12]
   - [0x1877810, bin]
   - name: ovl_dng_s13
@@ -1013,6 +1055,7 @@ segments:
     symbol_name_format: s16_$VRAM
     subsegments:
       - [0x188e800, data]
+      - [0x188e858, .rodata, ovl_dng_s16]
       - [0x188e87c, c, ovl_dng_s16]
       - [0x188fafc, data]
   - [0x188fb00, bin]
@@ -1046,6 +1089,7 @@ segments:
     symbol_name_format: s19_$VRAM
     subsegments:
       - [0x18a0800, data]
+      - [0x18a0808, .rodata, ovl_dng_s19]
       - [0x18a0850, c, ovl_dng_s19]
       - [0x18a1fcc, data]
   - [0x18a1fd0, bin]
@@ -1057,6 +1101,7 @@ segments:
     symbol_name_format: s20_$VRAM
     subsegments:
       - [0x18a6800, data]
+      - [0x18a6808, .rodata, ovl_dng_s20]
       - [0x18a6864, c, ovl_dng_s20]
       - [0x18a8b24, data]
   - [0x18a8b30, bin]
@@ -1068,6 +1113,7 @@ segments:
     symbol_name_format: s21_$VRAM
     subsegments:
       - [0x18ac800, data]
+      - [0x18ac808, .rodata, ovl_dng_s21]
       - [0x18ac850, c, ovl_dng_s21]
   - [0x18aec70, bin]
   - name: ovl_dng_s22
@@ -1078,6 +1124,7 @@ segments:
     symbol_name_format: s22_$VRAM
     subsegments:
       - [0x18b2800, data]
+      - [0x18b2808, .rodata, ovl_dng_s22]
       - [0x18b2828, c, ovl_dng_s22]
       - [0x18b3b08, data]
   - [0x18b3b10, bin]
@@ -1089,6 +1136,7 @@ segments:
     symbol_name_format: s23_$VRAM
     subsegments:
       - [0x18b8800, data]
+      - [0x18b8808, .rodata, ovl_dng_s23]
       - [0x18b8824, c, ovl_dng_s23]
       - [0x18b9608, data]
   - [0x18b9610, bin]
@@ -1100,6 +1148,7 @@ segments:
     symbol_name_format: s24_$VRAM
     subsegments:
       - [0x18be800, data]
+      - [0x18be808, .rodata, ovl_dng_s24]
       - [0x18be820, c, ovl_dng_s24]
       - [0x18bf478, data]
   - [0x18bf480, bin]
@@ -1111,6 +1160,7 @@ segments:
     symbol_name_format: s25_$VRAM
     subsegments:
       - [0x18c4800, data]
+      - [0x18c4808, .rodata, ovl_dng_s25]
       - [0x18c4828, c, ovl_dng_s25]
       - [0x18c5a14, data]
   - [0x18c5a20, bin]
@@ -1133,6 +1183,7 @@ segments:
     symbol_name_format: s27_$VRAM
     subsegments:
       - [0x18d0800, data]
+      - [0x18d0808, .rodata, ovl_dng_s27]
       - [0x18d0850, c, ovl_dng_s27]
       - [0x18d208c, data]
   - [0x18d2090, bin]
@@ -1144,6 +1195,7 @@ segments:
     symbol_name_format: s28_$VRAM
     subsegments:
       - [0x18d6800, data]
+      - [0x18d6808, .rodata, ovl_dng_s28]
       - [0x18d6824, c, ovl_dng_s28]
       - [0x18d863c, data]
   - [0x18d8640, bin]
@@ -1155,6 +1207,7 @@ segments:
     symbol_name_format: s29_$VRAM
     subsegments:
       - [0x18dc800, data]
+      - [0x18dc808, .rodata, ovl_dng_s29]
       - [0x18dc824, c, ovl_dng_s29]
       - [0x18de5f8, data]
   - [0x18de600, bin]
@@ -1166,6 +1219,7 @@ segments:
     symbol_name_format: s30_$VRAM
     subsegments:
       - [0x18e2800, data]
+      - [0x18e2808, .rodata, ovl_dng_s30]
       - [0x18e2824, c, ovl_dng_s30]
   - [0x18e4290, bin]
   - name: ovl_dng_s31
@@ -1187,6 +1241,7 @@ segments:
     symbol_name_format: s32_$VRAM
     subsegments:
       - [0x18ee800, data]
+      - [0x18ee828, .rodata, ovl_dng_s32]
       - [0x18ee83c, c, ovl_dng_s32]
   - [0x18f0100, bin]
   - name: ovl_dng_s33
@@ -1197,6 +1252,7 @@ segments:
     symbol_name_format: s33_$VRAM
     subsegments:
       - [0x18f4800, data]
+      - [0x18f4828, .rodata, ovl_dng_s33]
       - [0x18f4844, c, ovl_dng_s33]
   - [0x18f5900, bin]
   - name: ovl_dng_s34
@@ -1207,6 +1263,7 @@ segments:
     symbol_name_format: s34_$VRAM
     subsegments:
       - [0x18fa800, data]
+      - [0x18fa808, .rodata, ovl_dng_s34]
       - [0x18fa820, c, ovl_dng_s34]
       - [0x18fb9a8, data]
   - [0x18fb9b0, bin]
@@ -1249,6 +1306,7 @@ segments:
     symbol_name_format: s38_$VRAM
     subsegments:
       - [0x1912800, data]
+      - [0x1912828, .rodata, ovl_dng_s38]
       - [0x191284c, c, ovl_dng_s38]
   - [0x1914170, bin]
   - name: ovl_dng_s39
@@ -1259,6 +1317,7 @@ segments:
     symbol_name_format: s39_$VRAM
     subsegments:
       - [0x1918800, data]
+      - [0x1918838, .rodata, ovl_dng_s39]
       - [0x191885c, c, ovl_dng_s39]
       - [0x191ae68, data]
   - [0x191ae70, bin]
@@ -1281,6 +1340,7 @@ segments:
     symbol_name_format: s41_$VRAM
     subsegments:
       - [0x1924800, data]
+      - [0x1924838, .rodata, ovl_dng_s41]
       - [0x192485c, c, ovl_dng_s41]
   - [0x1926f60, bin]
   - name: ovl_dng_s42
@@ -1313,6 +1373,7 @@ segments:
     symbol_name_format: s44_$VRAM
     subsegments:
       - [0x1936800, data]
+      - [0x1936808, .rodata, ovl_dng_s44]
       - [0x1936824, c, ovl_dng_s44]
   - [0x1938310, bin]
   - name: ovl_dng_s45
@@ -1323,6 +1384,7 @@ segments:
     symbol_name_format: s45_$VRAM
     subsegments:
       - [0x193c800, data]
+      - [0x193c808, .rodata, ovl_dng_s45]
       - [0x193c848, c, ovl_dng_s45]
       - [0x193d774, data]
   - [0x193d780, bin]
@@ -1334,6 +1396,7 @@ segments:
     symbol_name_format: s46_$VRAM
     subsegments:
       - [0x1942800, data]
+      - [0x1942858, .rodata, ovl_dng_s46]
       - [0x194286c, c, ovl_dng_s46]
       - [0x1944338, data]
   - [0x1944340, bin]
@@ -1355,6 +1418,7 @@ segments:
     symbol_name_format: s51_$VRAM
     subsegments:
       - [0x1960800, data]
+      - [0x1960848, .rodata, ovl_dng_s51]
       - [0x196085c, c, ovl_dng_s51]
   - [0x1961ee0, bin]
   - name: ovl_dng_s52
@@ -1376,6 +1440,7 @@ segments:
     symbol_name_format: s53_$VRAM
     subsegments:
       - [0x196c800, data]
+      - [0x196c808, .rodata, ovl_dng_s53]
       - [0x196c81c, c, ovl_dng_s53]
       - [0x196db3c, data]
   - [0x196db40, bin]
@@ -1387,6 +1452,7 @@ segments:
     symbol_name_format: s54_$VRAM
     subsegments:
       - [0x1972800, data]
+      - [0x1972808, .rodata, ovl_dng_s54]
       - [0x197281c, c, ovl_dng_s54]
   - [0x1973180, bin]
   - name: ovl_dng_s55
@@ -1397,6 +1463,7 @@ segments:
     symbol_name_format: s55_$VRAM
     subsegments:
       - [0x1978800, data]
+      - [0x1978808, .rodata, ovl_dng_s55]
       - [0x1978824, c, ovl_dng_s55]
       - [0x197aef8, data]
   - [0x197af00, bin]
@@ -1408,6 +1475,7 @@ segments:
     symbol_name_format: s56_$VRAM
     subsegments:
       - [0x197e800, data]
+      - [0x197e808, .rodata, ovl_dng_s56]
       - [0x197e81c, c, ovl_dng_s56]
       - [0x1981b28, data]
   - [0x1981b30, bin]
@@ -1419,6 +1487,7 @@ segments:
     symbol_name_format: s58_$VRAM
     subsegments:
       - [0x198a800, data]
+      - [0x198a868, .rodata, ovl_dng_s58]
       - [0x198a87c, c, ovl_dng_s58]
       - [0x198d178, data]
   - [0x198d180, bin]
@@ -1430,6 +1499,7 @@ segments:
     symbol_name_format: s59_$VRAM
     subsegments:
       - [0x1990800, data]
+      - [0x1990808, .rodata, ovl_dng_s59]
       - [0x199086c, c, ovl_dng_s59]
       - [0x19927c4, data]
   - [0x19927d0, bin]
@@ -1451,6 +1521,7 @@ segments:
     symbol_name_format: s61_$VRAM
     subsegments:
       - [0x199c800, data]
+      - [0x199c808, .rodata, ovl_dng_s61]
       - [0x199c81c, c, ovl_dng_s61]
       - [0x199d87c, data]
   - [0x199d880, bin]
@@ -1473,6 +1544,7 @@ segments:
     symbol_name_format: s63_$VRAM
     subsegments:
       - [0x19a8800, data]
+      - [0x19a8808, .rodata, ovl_dng_s63]
       - [0x19a881c, c, ovl_dng_s63]
       - [0x19a9aa4, data]
   - [0x19a9ab0, bin]
@@ -1484,6 +1556,7 @@ segments:
     symbol_name_format: s65_$VRAM
     subsegments:
       - [0x19b4800, data]
+      - [0x19b4848, .rodata, ovl_dng_s65]
       - [0x19b485c, c, ovl_dng_s65]
   - [0x19b5b30, bin]
   - name: ovl_dng_s66
@@ -1494,6 +1567,7 @@ segments:
     symbol_name_format: s66_$VRAM
     subsegments:
       - [0x19ba800, data]
+      - [0x19ba808, .rodata, ovl_dng_s66]
       - [0x19ba81c, c, ovl_dng_s66]
       - [0x19bb264, data]
   - [0x19bb270, bin]
@@ -1515,6 +1589,7 @@ segments:
     symbol_name_format: s68_$VRAM
     subsegments:
       - [0x19c6800, data]
+      - [0x19c6808, .rodata, ovl_dng_s68]
       - [0x19c6820, c, ovl_dng_s68]
       - [0x19c7854, data]
   - [0x19c7860, bin]
@@ -1526,6 +1601,7 @@ segments:
     symbol_name_format: s69_$VRAM
     subsegments:
       - [0x19cc800, data]
+      - [0x19cc808, .rodata, ovl_dng_s69]
       - [0x19cc820, c, ovl_dng_s69]
       - [0x19cebcc, data]
   - [0x19cebd0, bin]
@@ -1537,6 +1613,7 @@ segments:
     symbol_name_format: s70_$VRAM
     subsegments:
       - [0x19d2800, data]
+      - [0x19d2808, .rodata, ovl_dng_s70]
       - [0x19d281c, c, ovl_dng_s70]
       - [0x19d383c, data]
   - [0x19d3840, bin]
@@ -1548,6 +1625,7 @@ segments:
     symbol_name_format: s72_$VRAM
     subsegments:
       - [0x19de800, data]
+      - [0x19de848, .rodata, ovl_dng_s72]
       - [0x19de864, c, ovl_dng_s72]
   - [0x19e1150, bin]
   - [0x1a86800]

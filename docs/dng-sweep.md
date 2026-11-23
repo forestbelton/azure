@@ -547,3 +547,117 @@ can land and still not be able to ship, and the brief should say so.
 gone unchecked. No park had been written yet, which is the only reason it cost
 nothing -- a checker that silently stops covering a directory is exactly the
 kind of thing that is discovered too late. It scans both now.
+
+# THE JUMP TABLE SPLIT, 2026-11-23
+
+The batch-5 failure above is fixed for 52 of the 116 objects, and
+`func_b03_80170E54` is landed in three units with all four containers
+byte-identical. What follows is what the fix is, how far it reaches, and
+exactly what blocks the rest, because the remainder is blocked by splat and
+not by anything in this repo.
+
+## What the fix is
+
+A carved segment's leading subsegment was declared `data`. For 106 of the 116
+it is not a data blob: after a short prefix of real data (usually two words of
+function pointers) it is the unit's COMPILER-GENERATED JUMP TABLES, running
+contiguously to the code start. So it belongs to the C unit:
+
+    - [0x9e9000, data]                      # the two function pointers
+    - [0x9e9008, .rodata, ovl_dng_b03]      # the jump tables
+    - [0x9e9054, c, ovl_dng_b03]
+
+`.rodata` WITH the dot, because the sibling C file exists.
+
+With that, `spimdisasm` writes each table into its own function's listing
+while the function is `INCLUDE_ASM` -- verifiably, `func_b03_80172A24.s` now
+opens with a `.section .rodata` block defining `jtbl_b03_80170838` -- and
+cc1psx emits the table once the function lands. Either way it lands at its ROM
+address instead of being appended past the code.
+
+`tools/decomp/dngrodata.py` does the analysis and the edit. It validates the
+region AGAINST THE ROM, not against splat's output: every word in the proposed
+`.rodata` must be an address inside that unit's own code, which is what a run
+of jump table entries is and what a string or a float pool is not. A first cut
+read `dlabel`s out of the listings instead and reported that every segment
+owned no tables -- the dlabels only exist AFTER the split, so its contiguity
+check passed vacuously on all 116.
+
+## Alignment, which is what makes this cheap here
+
+cc1psx writes `.align 3` before every table it compiles, so a table at a
+4-mod-8 offset RELATIVE TO ITS UNIT'S RODATA START gains four bytes of pad the
+reference does not have. That is what forced six separate carves in the
+resident overlay (see the comments in `splat/dungeon.bin.yaml`).
+
+Here every one of the 106 segments has its first table at 0 mod 8 absolutely,
+so no `subalign` is needed, and in 104 of them every other table is 0 mod 8
+relative to the first. The two exceptions are `ovl_dng_lo16`
+(jtbl at 0x80016034) and `ovl_dng_b31f` (0x8016a8b4). Splitting those needs a
+matching `c` split at the owning function, because cc1psx emits a unit's
+rodata in FUNCTION ORDER and the two boundaries have to name the same
+function. Until that function lands its table comes from asm with no `.align`
+and costs nothing, so the tool holds them back and names them.
+
+## How far it reaches: 52 of 116
+
+    229 functions own a jump table
+     63 are stubs in a split unit    -> landable now
+    163 are stubs in an unsplit unit -> still blocked
+      3 landed (func_b03_80170E54 and two of its family)
+
+The 51 the tool split are the segments whose rodata is NOTHING BUT tables.
+The other 53 have non-table rodata between the tables -- b05 is the pattern:
+two words of data, `jtbl_b05_80170808` (0x30), then 0x20 bytes of packed
+halfwords at `D_b05_80170838`, then `jtbl_b05_80170858`, then two more 8-byte
+blobs before the code.
+
+## WHY THE OTHER 53 ARE BLOCKED, AND IT IS SPLAT
+
+Declaring b05's subsegment `.rodata` makes the link fail:
+
+    undefined reference to `D_b05_80170838'
+    undefined reference to `D_b05_80170874'
+    undefined reference to `D_b05_8017087C'
+
+From `splat/segtypes/common/rodata.py`:
+
+    if self.sibling is not None or not options.opts.pair_rodata_to_text:
+        return None
+
+Migration to a text subsegment is OFF for a rodata subsegment that HAS a
+sibling C file, which is exactly our configuration. A jump table survives
+that, because spimdisasm writes a function's OWN rodata into its listing. A
+symbol that is merely REFERENCED by a function and not owned by it -- which is
+what these blobs are -- is written NOWHERE, and the link fails.
+
+The documented lever for this is `force_not_migration:True` in
+`symbol_addrs`, and **it cannot be used here.** All 116 objects share VRAM
+0x80170800 under one `exclusive_ram_id: dng_slot`; `symbol_addrs` is keyed by
+VRAM, so there is no way to say "b05's symbol at 0x80170838" and not the
+other 115 segments' symbols at the same address. Tested: the entries were
+written, splat parsed them, and not one standalone `.s` was produced in any
+unit. That is the whole reason the carve needed `symbol_name_format` per
+segment in the first place, and it cuts the other way here.
+
+Two routes remain for those 53, neither attempted:
+
+* **Write the blob as real C data in the unit** -- `const` arrays emitted into
+  `.rodata` in function order. No splat change at all, and these blobs are
+  small (0x8 to 0x20 bytes). It is ordinary decomp work and the build gate
+  checks it. This is the cheaper route and probably the right one.
+* **Teach splat per-segment symbol scoping**, or carve each affected segment's
+  rodata so no non-table symbol falls inside it. The second is impossible as
+  stated: one C object has ONE `.rodata` section and it cannot be placed at
+  two addresses.
+
+## Operational notes
+
+* `tools/decomp/dngunsplice.py` returns a landed body to its `INCLUDE_ASM`
+  stub, which is what made it safe to take `func_b03_80170E54`'s family out of
+  batch 5 and put it back here.
+* A `switch` over five or more dense cases is still unlandable in the 64
+  unsplit objects. The brief should say so before an agent spends a run on one.
+* `make splat` after a yaml change does NOT invalidate the objects: remove
+  `build/csrc` before rebuilding, or a stale `.o` links against the old
+  listings and the failure looks like a phantom undefined symbol.
