@@ -1,6 +1,8 @@
 #include "common.h"
 #include "ovl_dungeon_decls.h"
 
+extern u8 D_800E1C3A[];
+
 /* dungeon.bin's overlay, translation unit 3 of 4: func_800CABA8 to the next
  * boundary.  THE SPLIT IS FORCED BY JUMP-TABLE ALIGNMENT, not by size --
  * see splat/dungeon.bin.yaml for the offsets and why each one is where it
@@ -2472,7 +2474,248 @@ s32 func_800CE748(u8 *p)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800CABA8", func_800CEA44);
+/* 242 words, 0 differing.  A three-state machine on the halfword at `p + 0x6`.
+   State 0 spends the D_800E3648 slot for room `*(s16 *)(p + 0xC)`: for each
+   of its `*(s8 *)(e + 2)` charges it rolls a random pair out of D_80083460's
+   +0x18 table, asks func_800A1618 for a template, then tries up to sixteen
+   random tiles inside the D_800E2970 room record for one that func_8009A350
+   reports with no 0xB700 flag, and spawns there through the function pointer
+   func_800A0B94 RETURNS -- the `jalr $v0`, called with (0, (u8)a, (u8)c,
+   -0x400).  It then drains the spawn's +0x18 budget through func_800A1D4C and
+   stamps +0x9A/+0x8C/+0x1C/+0x92.  State 1 counts down +0x4 and plays the
+   message; the default state counts down, clears the slot and sets the two
+   0x8000 request bits.
+
+   THE LAST TWO LEVERS, both register names with every instruction already in
+   place, and both derived from the compiler rather than swept for -- all five
+   repo sweeps (part/width/stmt/dev/ref) come back empty on the 3-row body AND
+   on the 2-row body.
+
+   (A) `c0 = func_800A6DA4(...); ... c = t[2] + c0;` -- THE SUM'S DESTINATION
+   MUST NOT BE ONE OF ITS OPERANDS.  optabs.c:412-434 swaps a commutative
+   optab's operands when
+     ((target == 0 || REG_P (target))
+        ? ((REG_P (op1) && ! REG_P (op0)) || target == op1)
+        : rtx_equal_p (op1, target)) || GET_CODE (op0) == CONST_INT
+   -- "try to make the first operand a register; even better, try to make it
+   the same as the target".  With one accumulator `c`, `c = t[2] + c;` hits
+   `target == op1` and expand emits `(plus c t[2])`, which is exactly what
+   `c = c + t[2];` gives with no swap: so BOTH orders of one variable produce
+   `addu $s0, $v0, $a0` and eight spellings all measured the same 3 rows.
+   Giving the second func_800A6DA4 result its own local makes `target` a third
+   pseudo, the swap does not fire, and the target's `addu $s0, $a0, $v0`
+   appears.  3 rows -> 2.  (`c = c0 + t[2];` puts the operands back the wrong
+   way round; the device must stay on `c`, not move to `c0` -- 22 rows.)
+
+   (B) `j = *(u32 *)(o + 0x18) < tb[o[0x11]]; if (j == 0)` -- THE GUARD'S
+   `sltu` DESTINATION IS A GLOBAL-ALLOC DECISION, AND A BLOCK-LOCAL CANNOT
+   REACH $a0.  Written as a plain `if (tb[o[0x11]] <= *(u32 *)(o + 0x18))`
+   the comparison result is a fresh block-local pseudo; block_alloc
+   (local-alloc.c:1404) walks the operands 1..n calling
+   combine_regs(operand[i], operand[0]) and takes the first that wins, and
+   combine_regs (:1791) refuses operand 1 at its very first test because
+   `j` is a global allocno (`reg_qty < 0`; local-alloc.c:469 needs
+   reg_basic_block >= 0 and `j` is also read at the loop top).  The tie
+   therefore falls to operand 2, the limit -- a block-local -- and the result
+   takes ITS register: `sltu $v0, $a0, $v0`.  Untying it does not help, and
+   neither does moving the value into a block-local of its own: MIPS defines
+   no REG_ALLOC_ORDER, so find_free_reg hands an unsuggested block-local
+   quantity $v0, then $v1, then $a0, and the store temp just swaps registers
+   with `tb` (10 rows, `sltu $v1, $v1, $v0`).  docs/matching-levers.md,
+   "BREAKING combine_regs' TIE IS NOT THE SAME AS MOVING THE REGISTER": to
+   reach an $aN a value needs BOTH halves -- multi-block, so it is a
+   global-alloc allocno at all, and conflicting with $v0.  Storing the
+   comparison into `j` gives it both for free, because `j` already has them
+   (`.greg`: `98 conflicts: ... 95 ... 2 29`, and `98 in 4`), and the one
+   `sltu` then writes $a0 because its destination IS `j`.  2 rows -> 0.
+   `j = (u32)j < tb[o[0x11]];` with `if (j == 0)` or `if (!j)` is the same
+   object; `j = tb[o[0x11]] <= *(u32 *)(o + 0x18); if (j)` costs a word and 11
+   rows (the `<=` needs an extra `xori`), and `a`/`c`/`x`/`n` in place of `j`
+   measure 15/26/8/13 because only `j`'s allocno has the $v0 conflict.
+
+   `j` IS DEAD AT BOTH REUSES: it is `func_800A6D30() & 0x1E` from the top of
+   the same iteration and is reassigned every iteration, so using it first as
+   the o+0x18 store temp and then as the guard's boolean is safe, and the
+   stored value round-trips bit-exactly through s32.
+
+   THE FRAME IS 0x48 BECAUSE `k` IS A SPILLED HImode PSEUDO.  `w` sits at 0x10
+   and `k` at 0x18 with six bytes between them: `(s16)k` is a PARADOXICAL
+   subreg (mips.md's extendhisi2 is `gen_lowpart (SImode, ...)`), so
+   scan_paradoxical_subregs (reload1.c:3772) sets reg_max_ref_width[k] = 4 and
+   alter_reg passes align == -1 to assign_stack_local, which rounds the slot
+   up to 8 at BIGGEST_ALIGNMENT -- vars 16, frame 0x48.  That is also why the
+   reload is `lhu` + `sll 16` + `sra 16` and both ends use $t0.  `(void)&k`
+   makes `k` an ordinary addressable 2-byte local and loses all of it (~23
+   rows of prologue/epilogue offsets).  AND IT ONLY SURVIVES WHILE
+   `g = (u8 *)&D_80083460;` IS WRITTEN BEFORE THE func_800A6D30 CALL: with `g`
+   written after, the symbol+0x18 folds to two words instead of three, the
+   `while (n >= 0)` body gets small enough for loop.c:1730's
+   `threshold * savings * m->lifetime >= insn_count` to flip, and
+   `(s16)k * 0x14` is hoisted out of the loop, undoing the spill.  6 words.
+
+   ONE LOCAL PER SITE for D_800E3648 (b/e, b2/e2, b3/e3) and D_80083460
+   (g, g2): one variable is one pseudo spanning three basic blocks, which
+   global_alloc gives a callee-saved register so the symbol's `addiu` writes
+   $s0 at every site; the target materialises it into a dead temp each time.
+   Shared: 81 rows.  Same finding as func_800CB170 above.
+
+   `rm = D_800E2970; t = rm + k * 0x14;` -- the symbol is its own local for the
+   same reason, 8 rows.  `tb` + `tb1` are two pseudos because the target has
+   two: the `tb1 = tb` copy survives cse only inside the `if`, where the `do`
+   body's label has two predecessors and resets cse's table.
+
+   BOTH func_800A6DA4 CALLS BEFORE EITHER `t[...]` LOAD: a load cannot be
+   scheduled across a call, so `a = call() + t[0];` reads t[0] between the two
+   calls.  17 rows.  `(s16)x` at the three post-spawn calls folds to a plain
+   move (num_sign_bit_copies on a `lbu` is 24, so combine's
+   simplify_shift_const kills the sll/sra pair) and nothing after combine
+   deletes copies; plain `x` is 1 row worse, `(u8)x` leaves an `andi`.
+
+   THE ONE DEVICE: `c++; c--;` after `c = t[2] + c0;`, worth 7 rows at the
+   same word count -- four more references to `c`, no instructions.  Without
+   it the two `lbu`s and `addiu $a3, $sp, 0x10` schedule in the wrong order
+   (0x800CEB68..0x800CEB78).  No honest statement was found that supplies
+   those references. */
+void func_800CEA44(u8 *p, UnkVec *v, u32 q)
+{
+    u8 *b;
+    u8 *b2;
+    u8 *b3;
+    u8 *e2;
+    u8 *e3;
+    u8 *g2;
+    u8 *e;
+    u8 *t;
+    u8 *rm;
+    u8 *r;
+    u8 *o;
+    u8 *g;
+    u32 *tb;
+    u32 *tb1;
+    s32 n;
+    s32 j;
+    s16 i;
+    u16 w;
+    s16 k;
+    s32 a;
+    s32 c;
+    s32 c0;
+    s32 x;
+    s32 y;
+    u8 *s;
+
+    if (*(s16 *)(p + 0x6) == 0)
+    {
+        k = D_80082EA6;
+        if (k >= 0)
+        {
+            b = D_800E3648;
+            e = b + *(s16 *)(p + 0xC) * 4;
+            n = *(s8 *)(e + 2);
+            while (n >= 0)
+            {
+                if (func_8003FA44(3) == 0)
+                {
+                    b2 = D_800E3648;
+                    e2 = b2 + *(s16 *)(p + 0xC) * 4;
+                    e2[2] = e2[2] - n;
+                    return;
+                }
+                g = (u8 *)&D_80083460;
+                j = func_800A6D30();
+                r = *(u8 **)(g + 0x18) + (j & 0x1E);
+                x = r[0];
+                y = r[1];
+                s = func_800A1618(x, 1);
+                if (s != NULL)
+                {
+                    i = 0xF;
+                    rm = D_800E2970;
+                    t = rm + k * 0x14;
+                    while (1)
+                    {
+                        a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1));
+                        c0 = func_800A6DA4(0, (u16)(*(u16 *)(t + 6) - 1));
+                        a = a + t[0];
+                        c = t[2] + c0;
+                        c++;
+                        c--;
+                        if (func_8009A350((u8)a - 1, (u8)c, 0, &w) != 0 && (w & 0xB700) == 0)
+                        {
+                            break;
+                        }
+                        i--;
+                        if (i < 0)
+                        {
+                            break;
+                        }
+                    }
+                    if (i >= 0)
+                    {
+                        D_800E2968 = 1;
+                        o = ((u8 * (*)(s32, s32, s32, s32)) func_800A0B94((s16)x, s, 1))(
+                            0, (u8)a, (u8)c, -0x400);
+                        if (o != NULL)
+                        {
+                            func_800A152C((s16)x, 1);
+                            func_80042640((Unk42710 *)o, (s16)x);
+                            o[0x43] = func_800A6D30();
+                            tb = D_800835E4;
+                            o[0x12] = 0;
+                            j = tb[y];
+                            *(u32 *)(o + 0x18) = j;
+                            tb++;
+                            j = *(u32 *)(o + 0x18) < tb[o[0x11]];
+                            if (j == 0)
+                            {
+                                tb1 = tb;
+                                do
+                                {
+                                    func_800A1D4C(o, 0);
+                                } while (tb1[o[0x11]] <= *(u32 *)(o + 0x18));
+                            }
+                            o[0x9A] = 0x16;
+                            *(u32 *)(o + 0x1C) &= 0xF7FBFFFF;
+                            *(u32 *)(o + 0x8C) = 0;
+                            *(u16 *)(o + 0x92) -= 0x200;
+                        }
+                    }
+                }
+                n--;
+            }
+        }
+        *(s16 *)(p + 0x4) = 0xA;
+        *(u16 *)(p + 0x6) += 1;
+    }
+    else if (*(s16 *)(p + 0x6) == 1)
+    {
+        *(u16 *)(p + 0x4) -= 1;
+        if (*(s16 *)(p + 0x4) < 0)
+        {
+            func_800997FC(D_800E1C3A);
+            func_800419EC(0xC, 0x18);
+            func_800A56E0(0x602);
+            *(s16 *)(p + 0x4) = 0x10;
+            *(u16 *)(p + 0x6) += 1;
+        }
+    }
+    else
+    {
+        *(u16 *)(p + 0x4) -= 1;
+        if (*(s16 *)(p + 0x4) < 0)
+        {
+            func_8004437C(0, 1);
+            func_80053DA8(0x200);
+            b3 = D_800E3648;
+            e3 = b3 + *(s16 *)(p + 0xC) * 4;
+            g2 = (u8 *)&D_80083460;
+            *(u32 *)e3 = 0;
+            *(u16 *)(g2 + 0xA) -= 1;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+    }
+}
 
 /* Charge one of the 4-byte D_800E3648 slots and spawn the node that spends
    it. THE ROW POINTER IS `base + index`, NOT AN ARRAY REF: `&D_800E3648[i*4]`
