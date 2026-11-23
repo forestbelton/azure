@@ -1,6 +1,12 @@
 #include "common.h"
 #include "ovl_dungeon_decls.h"
 
+extern u8 D_800E1640[];
+void func_800C27F0();
+void func_800C0180();
+void func_800CEF54();
+void func_800C2824(u8 *p, u8 *b, u8 *c);
+
 /* dungeon.bin's overlay, translation unit 2 of 4: func_800C2824 to the next
  * boundary.  THE SPLIT IS FORCED BY JUMP-TABLE ALIGNMENT, not by size --
  * see splat/dungeon.bin.yaml for the offsets and why each one is where it
@@ -36,7 +42,241 @@ void func_800BD184(s16 i);
 s32 func_800BF7FC(u8 *p, u8 *q, s16 k, s32 r);
 s32 func_800C22EC(u8 *p, u8 *q, s16 k, s32 r);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800C2824", func_800C2824);
+/* The +0x10 handler of the 0x12-state dungeon actor dispatched off its +0x04
+   word: state 0 arms the sprite from the mover's own +0x08 record and falls
+   into state 1's colour fade, state 2 clears the actor's slot in the two
+   0x80010980 tables and runs the kill effect, states 3 and 16 drive
+   func_800BBA40 and state 17 does the delayed kill. 278 words, 0 differing.
+   Opened at 285 words / 84 aligned rows and closed over six sessions. The
+   full measured record -- 203 pointer-site partitions, 552 declaration
+   moves, all 24 stack-pair store orders, the 81-body case-16 x tail grid and
+   two compiler-source closures that each turned out to bound the wrong
+   mechanism -- was in docs/dungeon-parks/func_800C2824.c.
+
+   CASE 2's STORE IS A CONSTANT BASE, NOT A SYMBOL. The target's
+   `lui $a0, %hi(D_80010A93)' / `addu $v0, $v0, $a0' /
+   `sb $zero, %lo(D_80010A93)($v0)' is the constant 0x80010000 -- low half
+   zero, so a bare `lui' -- with 0xA93 inside the INDEX EXPRESSION, where it
+   becomes the store's displacement. splat prints that displacement
+   symbolically because 0x80010A93 is in its symbol list. Nothing in this
+   compiler folds a symbol's `%lo' into an address that carries a REGISTER
+   index, so every symbol spelling spends an `addiu %lo' the target does not
+   have -- twenty-three of them were measured at 279 words, and the constant
+   base is 278. The 0x80010000 must be a POINTER VARIABLE, because written as
+   one integer the front end folds it back to 0x80010A93 and the base costs a
+   full `lui'/`ori' pair: 8 rows at 279 words in all four folded spellings.
+   And the base must be declared BEFORE the 0x80010980 store, not after, or
+   the two `lui's come out in the wrong order for 17 rows.
+
+   CASE 16's 0x88 LOAD IS HOISTED INTO `a', WHICH IS 32 BITS WIDE. The target
+   issues both loads before the `D_800DF55C' store, which needs the store
+   written last, which needs the 0x88 load out of the argument list so sched1
+   cannot sink it past the store. Hoisted into an `s16' local that costs two
+   words -- PROMOTE_MODE leaves an HImode local HImode in the tree, so it
+   loads with `lhu' and pays a `sll'/`sra' pair to reach func_800BBA40's
+   `s16' parameter: 12 rows at 280 words. A 32-bit local read through
+   `*(s16 *)' loads with `lh' and needs no conversion: 6 rows at 278. `a' is
+   case 2's and case 17's 0x3000/0x300 flag, already multi-block, and
+   measures the same as a fresh `s32'.
+
+   AND CASE 16's `addu $t0, $v0, $zero' IS A PRE-COPY USE OF AN ANONYMOUS
+   TEMP. `r's load off `n3' is what keeps the copy: combine deletes a copy
+   whose source has exactly one use, so the `-0x14' load before `e3 = n3'
+   is what makes `e3 = n3' survive as an insn. `n3' is block-local and gets
+   $v0 from `find_free_reg', `e3' is multi-block -- it carries case 3's
+   D_800E3D7C value -- and gets $t0 from global_alloc, and `combine_regs'
+   (local-alloc.c:1791) refuses to tie them because `reg_qty[e3] < 0'. Move
+   the copy above `r's load and cse's `qty_first_reg' preference for a user
+   variable collapses the two names into one: 6 rows, i.e. exactly the
+   no-copy body. Store from `n3' instead of `e3' and case 3 is dragged to
+   $a2 with it: 15 rows.
+
+   STRUCTURE THAT MUST NOT BE SIMPLIFIED, each ablation measured on the
+   10-row body: case 3's tail is written TWICE with its own `f3'/`f17' rather
+   than reached by a `goto', and a single shared `f' is 25 rows at 284 words;
+   case 17's D_800DF560 read-modify-write is SPLIT so its load precedes the
+   `f' chain, and un-splitting it is 18; `w0' and `r0' are split out of `w'
+   and `r' for case 0, worth 10 and 2 rows; case 2's and case 17's four
+   argument locals must stay four, and inlining either pair costs 4; case 3's
+   `*(u8 **)p' is its own `n2' and merging it back into `e3' is 3; `ba's
+   cancelled pair is the sched.c:440 REG_EQUIV lever and removing it is 7;
+   the four stack-pair stores must be in the order `rc[0]; rc[1]; wh[0];
+   wh[1];', which is 10 where nothing else is under 14; and `s32 rc[2];' must
+   stay immediately after `s32 j;', because moving it anywhere costs 7. */
+void func_800C2824(u8 *p, u8 *b, u8 *c)
+{
+    u8 *q0;
+    u8 *q2;
+    u8 *q17;
+    u8 *q17b;
+    u8 *r;
+    u8 *r0;
+    s32 i;
+    s32 j;
+    s32 rc[2];
+    s16 wh[2];
+    s32 a;
+    s32 x2;
+    s32 y2;
+    s32 x17;
+    s32 y17;
+    u32 f3;
+    u32 f17;
+    u8 v;
+    u16 hv;
+    u16 w;
+    u16 w0;
+    u8 *ba;
+    u8 *e3;
+    u8 *n2;
+    u8 *n3;
+
+    switch (*(s16 *)(p + 0x4))
+    {
+    case 0:
+        if ((*(u32 *)(*(u8 **)p + 0x14) & 0x4000) == 0)
+        {
+            *(s16 *)(p + 0x4) = 0x10;
+            return;
+        }
+        rc[0] = 0x1800340;
+        rc[1] = 0x400040;
+        wh[0] = 0x360;
+        wh[1] = 0x1B8;
+        func_800B8FC8(*(u8 **)p, rc, (s32 *)wh, 1, 2);
+        q0 = *(u8 **)p - 0x20;
+        func_80044A50(q0);
+        func_800BC318(q0);
+        r0 = *(u8 **)(q0 + 0x8);
+        w0 = *(u16 *)(r0 + 0x2);
+        *(u16 *)(b + 0x2) = w0;
+        *(u16 *)(b + 0xE) = w0;
+        w = *(u16 *)(r0 + 0x6);
+        *(u16 *)(b + 0x6) = w;
+        *(u16 *)(b + 0x12) = w;
+        w = *(u16 *)(r0 + 0xA);
+        *(u16 *)(b + 0xA) = w;
+        *(u16 *)(b + 0x16) = w;
+        func_8004491C(p - 0x20, (u32)func_800CEF54);
+        *(u16 *)(c + 0x10) = 0x20;
+        *(u8 **)(c + 0x8) = (u8 *)&D_800DF4A4;
+        *(s32 *)(c + 0xC) = 0x808080;
+        *(u16 *)(c + 0x1E) = 0x1000;
+        *(u16 *)(c + 0x1C) = 0x1000;
+        *(u16 *)(c + 0x14) |= 0xC;
+        *(u16 *)(p + 0x6) = 0x10;
+        func_800A56E0(1);
+        *(u16 *)(p + 0x4) += 1;
+    case 1:
+        v = c[0xC];
+        v = v - (s32)v / *(s16 *)(p + 0x6);
+        c[0xC] = v;
+        c[0xE] = v;
+        c[0xD] = v;
+        w = *(u16 *)(p + 0x6) - 1;
+        *(u16 *)(p + 0x6) = w;
+        if ((s32)(w << 16) <= 0)
+        {
+            *(u16 *)(p + 0x4) += 1;
+        }
+        return;
+    default:
+        return;
+    case 2:
+        i = func_800A32A4(*(u8 **)p);
+        if (i != 0)
+        {
+            j = func_800A6620(i, 0);
+            if (j < 0x40)
+            {
+                u8 *bb = (u8 *)0x80010000;
+
+                *(u8 *)(bb + j * 0x54 + 0xA93) = 0;
+                *(u32 *)(0x80010980 + j * 4) = 0;
+            }
+        }
+        if ((s16)func_80042900(*(u8 **)p, 0x1B) == 0)
+        {
+            q2 = *(u8 **)p;
+            r = *(u8 **)(q2 - 0x14);
+            x2 = r[0x24];
+            y2 = r[0x25];
+            a = 0x3000;
+            if ((*(u32 *)(q2 + 0x1C) & 0x2000) != 0)
+            {
+                a = 0x300;
+            }
+            func_8009A3D0(x2, y2, a);
+        }
+        func_8009A028(*(u8 **)p);
+        func_80099844(*(u8 **)p, &D_800E1640);
+        *(u16 *)(p + 0x4) += 1;
+        return;
+    case 3:
+        ba = D_80082E80;
+        ba++;
+        ba--;
+        e3 = *(u8 **)&D_800E3D7C;
+        e3++;
+        e3--;
+        D_800DF55C = e3;
+        if (func_800BBA40(ba[0x24], ba[0x25], *(u16 *)(e3 + 0x88), &D_800DF45C, 0x2800, 0x208020,
+                          (u32)func_800C0180) != 0)
+        {
+            n2 = *(u8 **)p;
+            *(u16 *)(n2 - 0x2) |= 0x8000;
+            f3 = D_800814A0 | 0x8000;
+            D_800814A0 = f3;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 = f3;
+        }
+        break;
+    case 16:
+        n3 = *(u8 **)p;
+        r = *(u8 **)(n3 - 0x14);
+        e3 = n3;
+        a = *(s16 *)(e3 + 0x88);
+        D_800DF55C = e3;
+        if (func_800BBA40(r[0x24], r[0x25], a, &D_800DF45C, 0x2800, 0x208020,
+                          (u32)func_800C27F0) != 0)
+        {
+            *(u16 *)(p + 0x6) = 0x3C;
+            *(u16 *)(p + 0x4) += 1;
+            return;
+        }
+        break;
+    case 17:
+        w = *(u16 *)(p + 0x6) - 1;
+        *(u16 *)(p + 0x6) = w;
+        if ((s32)(w << 16) <= 0)
+        {
+            func_800A32A4(*(u8 **)p);
+            if ((s16)func_80042900(*(u8 **)p, 0x1B) == 0)
+            {
+                q17 = *(u8 **)p;
+                r = *(u8 **)(q17 - 0x14);
+                x17 = r[0x24];
+                y17 = r[0x25];
+                a = 0x3000;
+                if ((*(u32 *)(q17 + 0x1C) & 0x2000) != 0)
+                {
+                    a = 0x300;
+                }
+                func_8009A3D0(x17, y17, a);
+            }
+            func_8009A028(*(u8 **)p);
+            q17b = *(u8 **)p;
+            *(u16 *)(q17b - 0x2) |= 0x8000;
+            hv = *(u16 *)(D_800DF560 + 0x1E);
+            f17 = D_800814A0 | 0x8000;
+            D_800814A0 = f17;
+            *(u16 *)(D_800DF560 + 0x1E) = hv | 0x8000;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 = f17;
+        }
+        break;
+    }
+}
 
 /* THE NODE IS A `u8 *`, NOT AN `UnkNode *`. With `UnkNode *n` and
    `n->unk_10 = (u32)func_800C2824;` the node pseudo loses $a0 to the
