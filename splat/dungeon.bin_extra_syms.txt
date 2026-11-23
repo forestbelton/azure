@@ -20,3 +20,30 @@
    "A SYMBOL PLUS A CONSTANT OFFSET IS ONE %hi TO cse; TWO SYMBOLS ARE TWO". */
 
 D_800DF37A = 0x800DF37A;
+
+/* THE TWO RODATA ISLANDS THE CARVE NAMED AS FUNCTIONS, 2026-11-23.
+
+   splat/dungeon.bin.yaml records that b31f and lo20 carry rodata ISLANDS
+   between their functions and that the function after each island loses its
+   own symbol.  This is the other half of that cost, and it is a LATENT
+   failure: the committed tree does not relink.
+
+   At each of these two addresses spimdisasm emits `dlabel func_<tag>_<vram>`
+   -- the carve's function name, on a DATA label -- while the code that
+   reaches the address gets splat's data spelling, `D_<tag>_<vram>`.  The two
+   names never meet and the dungeon link dies on `undefined reference to
+   D_b31f_80174674'.  Nothing catches it until something re-runs splat, which
+   is why it survived the carve's own byte-identical build: the listings that
+   were on disk then had been written by an earlier run.
+
+   A grep for `^dlabel func_' over the carved listing directories finds
+   exactly these two, so this list is complete as carved.  (Do not write that
+   glob with its trailing slash-star here: the star-slash ENDS THIS COMMENT,
+   ld parses the rest of the prose as script and says only `syntax error'.)  The real fix is a rodata
+   subsegment for each of the two objects, which the yaml already says they
+   are worth; until somebody reads them, an absolute symbol costs nothing --
+   the bytes themselves are emitted by the INCLUDE_ASM at that VMA, exactly as
+   for D_800DF37A above. */
+
+D_b31f_80174674 = 0x80174674;
+D_lo20_8001E814 = 0x8001E814;
