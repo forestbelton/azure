@@ -1,11 +1,20 @@
 /* ===========================================================================
-   BEST MEASURED CANDIDATE for func_800ADE74,
-   csrc/ovl_dungeon_800A4B88.c (1817 words).
+   **THIS BODY LANDS.**  func_800ADE74, csrc/ovl_dungeon_800A4B88.c,
+   1817/1817 words, 0 differing, 0 aligned rows.
 
-   2026-11-22, EIGHTH session.  1817/1817 WORDS, 2 aligned rows.
+   2026-11-22, NINTH session.   1817/1817 WORDS, **0 ALIGNED ROWS**.
+                                Rows 15 and 20 AND cluster II's three are
+                                closed TOGETHER by change (P) below -- the
+                                maximum lives in a local `mx' that is given a
+                                CALL CROSSING, so the parameter `e' keeps its
+                                single set.  All 159 of the unit's checkable
+                                functions are 0 differing with this spliced
+                                in, func_800ADDA0 included (53/53) as long as
+                                no forward declaration is added.
+   was 2026-11-22, EIGHTH:      1817/1817 words, 2 aligned rows
                                 CLUSTER I IS CLOSED -- ALL FOURTEEN ROWS --
                                 by two free-reference chains, see change (O).
-                                What is left is rows 15 and 20 only.
+                                What was left was rows 15 and 20 only.
    was 2026-11-22, seventh:     1817/1817 words, 16 aligned rows
                                 (residue (1) CLOSED, cluster II CLOSED.
                                  WHAT IS LEFT IS cluster I's 14 rows plus
@@ -30,15 +39,93 @@
        python3 tools/decomp/onefunc.py func_800ADE74 --src <copy> --out one
        python3 tools/decomp/aligndiff.py one/ovl_dungeon.c func_800ADE74
 
-   ON THIS BODY THE TWO COUNTS AGREE: ovlverify's positional count and
-   aligndiff's aligned count are BOTH 2, because the two differing words are
-   a straight swap in place and nothing is transposed.  (They disagreed on
-   the sixth session's body -- 27 against 23 -- so keep using aligndiff:
-   ovlverify compares word N against word N and a transposed pair misses
-   twice.)
+   ON THIS BODY BOTH COUNTS ARE ZERO: every one of the 1817 words is
+   byte-identical to the target, under ovlverify's masked count and under
+   aligndiff's aligned count alike.
 
-   THE WORD COUNT IS HONEST: every word is accounted for, and everything
-   except words 15 and 20 is byte-identical to the target.
+   ===========================================================================
+   WHAT MOVED ON 2026-11-22 (NINTH SESSION), 2 -> 0 ROWS.  THE MAXIMUM GETS A
+   CALL CROSSING OF ITS OWN, SO IT NO LONGER HAS TO BORROW THE PARAMETER'S.
+
+   (P) case 0x24's Chebyshev maximum lives in a LOCAL `mx' that is INITIALISED
+       FROM `e' BEFORE THE func_800A19E4 CALL and kept alive across case
+       0x24's own two calls by one combine-folded free reference.
+                                               2 -> 0 rows, 0 words.
+
+           +   s16 mx;                   (declaration)
+           +   mx = (s16)e;              immediately before the
+               func_800A19E4((s32)b, c, (s16)d, (s16)e, f);   call
+           -   e = dx;                   +   mx = mx + dx - mx;
+           -   e = sp1A;                 +   mx = sp1A;
+           -   if ((s16)e == 1)          +   if (mx == 1)
+
+       BOTH NEW STATEMENTS ARE REQUIRED AND NEITHER PAYS ALONE.  `mx = (s16)e'
+       with a plain `mx = dx' is 3 rows, BYTE-IDENTICAL to a fresh `s16 mx'
+       with no initialiser at all -- the init is dead, and flow deletes it
+       before it can lengthen anything.  `mx = mx + dx - mx' without the init
+       is not a candidate at all, because it would read an uninitialised local.
+
+       WHY IT WORKS, and it is the same find_reg fact the eighth session's
+       residue section states, now SATISFIED instead of refuted.  The maximum
+       reaches $s0 only when its allocno crosses a call, because `used1'
+       becomes `call_used_reg_set' only then (global.c:924-929) and neither of
+       the other two routes can exclude $t0..$t9: `~regs_used_so_far' cannot,
+       since global.c:332-349 marks every call_used register as already used
+       unconditionally, and a hard conflict cannot, since nothing in this
+       function is ever live in $t0..$t9.  case 0x24 has no call after the
+       maximum is computed, so the maximum's allocno has to be BORN EARLIER --
+       and a value is only live across a call if it is READ after it.
+       `mx = (s16)e' supplies the birth and the free reference supplies the
+       read.  `mx + dx - mx' is `dx' exactly, combine folds it back and emits
+       nothing (1817 words either way), but flow runs ONCE BEFORE combine
+       (toplev.c:3463 against :3488), so flow sees `mx' live from before the
+       func_800A19E4 call, through the switch, across func_800A6E8C and
+       func_800A0818, to that read.  `.lreg' then prices `mx' as a
+       call-crosser, find_reg's 0..31 scan skips 2..15, and rows 1235, 1247
+       and 1248 -- 800AF1C0 `addu $s0,$v1,$zero', 800AF1F0 `addu $s0,$a0,$zero'
+       and 800AF1F4 `sll $v0,$s0,16' -- all match.
+       AND ROWS 15 AND 20 GO WITH IT FOR FREE, because `e' now has exactly ONE
+       set: its parameter load keeps `birthing_insn_p's bump to `max_priority'
+       (sched.c:2512) and stays in the SECOND load-delay slot, 800ADEC4, where
+       the target has it.  The eighth session's either/or is dissolved rather
+       than decided -- the two facts never had to hold of the SAME allocno.
+
+       THE FORM OF THE FREE REFERENCE MATTERS, and the failures say why.  A
+       value-preserving chain on `mx' alone -- `mx = mx + mx - mx' at any
+       length, `mx++; mx--;', `mx += 0', `mx = (mx << 1) - mx' -- is
+       BYTE-IDENTICAL at 3 rows wherever it is put, because cse propagates the
+       copy, the chain collapses to `mx = <init>' and the init is then dead.
+       The reference has to be folded into the statement that gives `mx' its
+       REAL value, so that what survives is `mx = dx' and nothing is dead:
+           mx = mx + dx - mx;     0   <-- taken
+           mx = dx + mx - mx;     0   (identical)
+           mx = mx + mx + dx - mx - mx;   0
+           mx = mx - mx + dx;     3   (cse folds `mx - mx' to 0 first)
+           mx = dx; sp18 = dx + mx - mx;  3
+           dx = dx + mx - mx; mx = dx;   32
+       THE INIT'S POSITION, measured: immediately before the func_800A19E4
+       call 0, immediately after it 0, at the top of the `else' 1818/7, in the
+       entry block next to `ret = 2' 1819/9.  The init's SOURCE: `(s16)e' 0,
+       `(s16)d' 3, `k' 3, `c[0x12]' 3 -- so it has to be `e', which is the one
+       16-bit value whose own live range already reaches the call.
+       NEITHER CHAIN CAN OVERFLOW: `dx' is an absolute value of
+       `b[0x24] - sp18' with `b[0x24]' in [0,255] and `sp18' an `s16', so it
+       is under 0x8100, `mx' is an `s16', and `mx + dx' is computed in `int'.
+       `mx = mx + dx - mx' is `mx = dx' on every value, truncation included.
+
+       THE ROUTE THAT ALSO WORKS AND IS TWO ROWS SHORT, recorded because it is
+       the complete statement of why `e' is not the answer: WIDEN `u8 k'.
+       `k' is the one other value the target holds in $s0 across a call
+       (800AE084, across func_80042900), and it is dead inside the switch, so
+       `u16 k' with `switch ((u8)k)' and the maximum in `k' closes cluster II
+       AND rows 15 and 20 -- it is 4 rows, and all four are at 800AE0B4..C0,
+       where `k != 0' needs an `andi $v0,$s0,0xFFFF' the target does not have.
+       combine's `set_nonzero_bits_and_sign_copies' ORs over every set of the
+       pseudo, so once `k = dx' is one of them its high bits are unknown and
+       the mask is forced.  Nine spellings of that test and both widths were
+       priced and every one is 4 or worse.  `s16 k2' widened the same way is
+       free on its own and 3 with the maximum -- its call crossing does not
+       reach case 0x24.
 
    ===========================================================================
    WHAT MOVED ON 2026-11-22 (EIGHTH SESSION), 16 -> 2 ROWS: CLUSTER I FELL.
@@ -2427,6 +2514,68 @@
      site does.  Adding one would change that landed call.
    * CASE 0x2A'S LOOP COUNTER MUST BE ITS OWN VARIABLE: `i2A' must stay.
    * declaration-order search, 80 random reorderings: no effect at all.
+   ===========================================================================
+   THE COMMENT BLOCK TO LAND ABOVE THE BODY IN csrc/ovl_dungeon_800A4B88.c
+   (kept here so it survives a scratch-directory cleanup; it is also built
+   into the merge script)
+
+   func_800ADE74 -- the dungeon actor's per-frame decision.
+   1817/1817 words, 0 differing.  NINE sessions; the last two rows and the
+   three in the neighbouring basin were ONE question, and `mx' below is the
+   answer to both at once.
+
+   THE ONE SPELLING FACT.  case 0x24's Chebyshev maximum has to be in $s0, and
+   find_reg reaches $s0 only for a quantity whose `used1' is
+   `call_used_reg_set' -- i.e. one that CROSSES A CALL (global.c:924-929).  No
+   other route exists: $t0..$t9 can never be excluded by `~regs_used_so_far',
+   because global.c:332-349 puts EVERY call-used register into
+   `regs_used_so_far' unconditionally, and they can never be hard-conflicted
+   either, since nothing in this function is ever live in them.  But case 0x24
+   contains no call after the maximum is computed, so the maximum's variable
+   has to be BORN EARLIER.  Two statements do that and both are required:
+
+       mx = (s16)e                  in front of the func_800A19E4 call
+       mx = mx + dx - mx            in case 0x24, in place of `mx = dx'
+
+   The first gives `mx' a live range that starts before the switch; the second
+   is the catalogue's combine-folded free reference -- mathematically
+   `mx = dx', and it emits nothing -- whose READ of `mx' keeps that range alive
+   across case 0x24's func_800A6E8C and func_800A0818 calls.  flow then prices
+   `mx' as a call-crosser, find_reg hands it $s0, and rows 800AF1C0, 800AF1F0
+   and 800AF1F4 close.  Without the free reference the init is dead and flow
+   deletes it: `mx = (s16)e' plus a plain `mx = dx' is 3 rows, byte-identical
+   to having neither.
+
+   WHY NOT THE PARAMETER `e' ITSELF, which also reaches $s0 and which the
+   eighth session's body used: with the maximum in it `e' has three sets, so
+   sched.c:2512's `birthing_insn_p' stops raising its parameter load to
+   `max_priority' and the load leaves the 800ADEC4 load-delay slot for
+   800ADEB0 -- 2 rows, and no spelling of the maximum gets `e' back to one set.
+   All 34 other scalars were priced for the maximum: `e' 2, `aa' and a fresh
+   s16 3, `ret' 4 -- it is call-crossing but lives in $fp -- `h1' 7, then 9
+   and worse.  Widening `u8 k', the one other value the target really does
+   hold in $s0 across a call, and putting the maximum there closes BOTH
+   clusters and leaves 4 rows, because `k != 0' then needs an `andi 0xFFFF'
+   the target does not have.
+
+   THE OTHER THREE DEVICES ARE LOAD-BEARING AT EXACTLY THESE SIZES, re-measured
+   on this body: drop the `r7' chain 19 rows, drop the `ang' chain 14, shorten
+   either by one term 19 and 10, drop the three `u2++/u2--' pairs 1808 words
+   and 54 rows.  The two chains buy the allocation ORDER case 0x2A needs --
+   pri(r7) > pri(ang) > pri(i2A), which is what puts r7 in $s0 and ang in $s1
+   -- and the pairs give `u2' the second set that stops cse rewriting
+   `r2 = u2' back to `u2' and deleting the copy gcc emits for it.  Neither
+   chain can overflow: `r7' is in [2, 8] after its guard, `ang' is a `u16'
+   load, `mx' is `s16' and `dx' is a non-negative absolute value under 0x8100,
+   and all three chains read only definitely-assigned variables.
+
+   NOTE: func_800ADE74 IS DELIBERATELY NOT FORWARD-DECLARED IN THIS UNIT.  Its
+   only in-unit caller, the landed func_800ADDA0 above, reaches it through an
+   implicit `int f()', which SIGN-extends its two `s16' arguments the way the
+   target does.  A real prototype zero-extends them instead and costs
+   func_800ADDA0 52 words and 50 differing rows, while func_800ADE74 measures
+   identically either way.
+
    =========================================================================== */
 
 /* THE FOURTEEN PROTOTYPES THE THIRD CARVE TOOK AWAY.  Every one of these
@@ -2506,6 +2655,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
     s32 ang;
     s32 dx;
     s32 dy;
+    s16 mx;
     ret = 2;
     ((u16 *)c)[0x23] |= 0x4000;
     if ((D_80013714 & 8) != 0)
@@ -2554,6 +2704,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             *(u16 *)(c + 0x46) = 0x800B;
             return 2;
         }
+        mx = (s16)e;
         func_800A19E4((s32)b, c, (s16)d, (s16)e, f);
         if ((*(s32 *)(c + 0x1C) & 0x2410) == 0x2000)
         {
@@ -3171,7 +3322,7 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             dx = b[0x24];
             dx = dx - sp18;
             dx = (dx >= 0) ? dx : -dx;
-            e = dx;
+            mx = mx + dx - mx;
             sp18 = dx;
             t4 = b[0x25] - sp1A;
             dy = (t4 >= 0) ? t4 : -t4;
@@ -3179,9 +3330,9 @@ s32 func_800ADE74(u8 *a, u8 *b, u8 *c, u16 d, u16 e, u8 *f)
             r9 = sp18 < sp1A;
             if (r9)
             {
-                e = sp1A;
+                mx = sp1A;
             }
-            if ((s16)e == 1)
+            if (mx == 1)
             {
                 *(u16 *)(c + 0x46) = 0x8009;
                 return 5;
