@@ -987,6 +987,50 @@ void func_b43_80173A9C(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80173AD4);
 
+/* 0x24 bytes of this bank's own rodata, between its jump tables,
+   read by func_b43_80173AD4. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b43_80170854[] = {
+    0x81,
+    0x40,
+    0x82,
+    0x97,
+    0x82,
+    0x85,
+    0x82,
+    0x8E,
+    0x82,
+    0x94,
+    0x81,
+    0x40,
+    0x82,
+    0x82,
+    0x82,
+    0x85,
+    0x82,
+    0x92,
+    0x82,
+    0x93,
+    0x82,
+    0x85,
+    0x82,
+    0x92,
+    0x82,
+    0x8B,
+    0x81,
+    0x44,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80173C5C);
 
 /* 14 words, 0 differing. */

@@ -781,6 +781,46 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_80172698);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_80172870);
 
+/* 0x20 bytes of this bank's own rodata, between its jump tables,
+   read by func_b26_80173614. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b26_80170854[] = {
+    0x81,
+    0x40,
+    0x82,
+    0x95,
+    0x82,
+    0x93,
+    0x82,
+    0x85,
+    0x82,
+    0x84,
+    0x81,
+    0x40,
+    0x82,
+    0x88,
+    0x82,
+    0x99,
+    0x82,
+    0x90,
+    0x82,
+    0x8E,
+    0x82,
+    0x8F,
+    0x82,
+    0x93,
+    0x82,
+    0x89,
+    0x82,
+    0x93,
+    0x81,
+    0x44,
+    0x00,
+    0x5C,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_80172D24);
 
 /* A bare forwarder: one call, nothing in the delay slot, no argument set up

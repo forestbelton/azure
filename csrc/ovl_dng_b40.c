@@ -891,6 +891,106 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_801727EC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_801729A0);
 
+/* 0x20 bytes of this bank's own rodata, between its jump tables,
+   read by func_b40_80173C20. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b40_80170854[] = {
+    0x81,
+    0x40,
+    0x82,
+    0x89,
+    0x82,
+    0x93,
+    0x81,
+    0x40,
+    0x82,
+    0x90,
+    0x82,
+    0x93,
+    0x82,
+    0x99,
+    0x82,
+    0x83,
+    0x82,
+    0x88,
+    0x82,
+    0x85,
+    0x82,
+    0x84,
+    0x81,
+    0x7C,
+    0x82,
+    0x95,
+    0x82,
+    0x90,
+    0x81,
+    0x44,
+    0x00,
+    0x00,
+};
+
+/* 0x34 bytes of this bank's own rodata, between its jump tables,
+   read by func_b40_80173C20. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b40_80170874[] = {
+    0x81,
+    0x40,
+    0x82,
+    0x92,
+    0x82,
+    0x85,
+    0x82,
+    0x96,
+    0x82,
+    0x85,
+    0x82,
+    0x81,
+    0x82,
+    0x8C,
+    0x82,
+    0x85,
+    0x82,
+    0x84,
+    0x81,
+    0x40,
+    0x82,
+    0x89,
+    0x82,
+    0x94,
+    0x82,
+    0x93,
+    0x81,
+    0x40,
+    0x82,
+    0x94,
+    0x82,
+    0x92,
+    0x82,
+    0x95,
+    0x82,
+    0x85,
+    0x81,
+    0x40,
+    0x82,
+    0x90,
+    0x82,
+    0x8F,
+    0x82,
+    0x97,
+    0x82,
+    0x85,
+    0x82,
+    0x92,
+    0x81,
+    0x44,
+    0x00,
+    0xFF,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_80172FE4);
 
 /* A bare forwarder: one call, nothing in the delay slot, no argument set up

@@ -298,6 +298,30 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016E300);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016E434);
 
+/* 0x10 bytes of this bank's own rodata, between its jump tables,
+   read by func_b31f_8016E138. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b31f_8016A858[] = {
+    0x01,
+    0xF4,
+    0x08,
+    0xF8,
+    0x08,
+    0xF9,
+    0x06,
+    0x07,
+    0xF8,
+    0xF8,
+    0x01,
+    0xF2,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016E528);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016EB14);
@@ -553,6 +577,78 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172CC8);
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172DFC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172F44);
+
+/* 0x18 bytes of this bank's own rodata, between its jump tables,
+   read by func_b31f_80171168. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b31f_8016A87C[] = {
+    0x00,
+    0xF5,
+    0x00,
+    0xF5,
+    0x01,
+    0xF5,
+    0x0B,
+    0xF5,
+    0xF5,
+    0xFD,
+    0x08,
+    0xF8,
+    0x00,
+    0xF2,
+    0x08,
+    0xF2,
+    0xF8,
+    0xF5,
+    0xFD,
+    0xEB,
+    0xFF,
+    0xF4,
+    0xFA,
+    0x08,
+};
+
+/* 0x20 bytes of this bank's own rodata, between its jump tables,
+   read by func_b31f_80171A10, func_b31f_801730AC. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b31f_8016A894[] = {
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+};
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_801730AC);
 

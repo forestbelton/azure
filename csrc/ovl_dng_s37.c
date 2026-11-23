@@ -126,4 +126,20 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_800251F0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_80025360);
 
+/* 0x8 bytes of this bank's own rodata, between its jump tables,
+   read by func_s37_80025360. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_s37_80024048[] = {
+    0x40,
+    0x03,
+    0x00,
+    0x01,
+    0x60,
+    0x00,
+    0x54,
+    0x00,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_800255B4);

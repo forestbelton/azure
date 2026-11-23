@@ -640,6 +640,70 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_80172494);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_80172A40);
 
+/* 0x14 bytes of this bank's own rodata, between its jump tables,
+   read by func_b38_801740F4. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b38_80170854[] = {
+    0x81,
+    0x40,
+    0x82,
+    0x92,
+    0x82,
+    0x8F,
+    0x82,
+    0x81,
+    0x82,
+    0x92,
+    0x82,
+    0x85,
+    0x82,
+    0x84,
+    0x81,
+    0x44,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
+/* 0xc bytes of this bank's own rodata, between its jump tables,
+   read by func_b38_80174260. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b38_80170868[] = {
+    0x00,
+    0x10,
+    0x00,
+    0x0C,
+    0x00,
+    0x10,
+    0x00,
+    0x18,
+    0x00,
+    0x14,
+    0x00,
+    0x00,
+};
+
+/* 0x8 bytes of this bank's own rodata, between its jump tables,
+   read by func_b38_80174260. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b38_80170874[] = {
+    0x00,
+    0x10,
+    0x00,
+    0x18,
+    0x00,
+    0x10,
+    0x00,
+    0x08,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_80172F00);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_80173294);

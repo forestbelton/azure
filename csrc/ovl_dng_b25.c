@@ -322,6 +322,50 @@ void func_b25_80174238(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
+/* 0x24 bytes of this bank's own rodata, between its jump tables,
+   read by func_b25_8017450C. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b25_8017088C[] = {
+    0x10,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x00,
+    0x0D,
+    0x00,
+    0x00,
+    0x00,
+    0x10,
+    0x00,
+    0xF3,
+    0xFF,
+    0x0D,
+    0x00,
+    0xF0,
+    0xFF,
+    0x00,
+    0x00,
+    0xF3,
+    0xFF,
+    0xF3,
+    0xFF,
+    0x00,
+    0x00,
+    0xF0,
+    0xFF,
+    0x0D,
+    0x00,
+    0xF3,
+    0xFF,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_8017450C);
 
 /* A one-call forwarder with a tail store: func_800AB538 takes this
@@ -557,6 +601,222 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_801754F0);
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80175594);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80175BE0);
+
+/* 0x10 bytes of this bank's own rodata, between its jump tables,
+   read by func_b25_80175CD8. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b25_80170940[] = {
+    0x82,
+    0x61,
+    0x82,
+    0x95,
+    0x82,
+    0x94,
+    0x81,
+    0x44,
+    0x81,
+    0x44,
+    0x81,
+    0x44,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
+/* 0x38 bytes of this bank's own rodata, between its jump tables,
+   read by func_b25_80175CD8. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b25_80170950[] = {
+    0x82,
+    0x68,
+    0x82,
+    0x94,
+    0x81,
+    0x66,
+    0x82,
+    0x93,
+    0x81,
+    0x40,
+    0x82,
+    0x89,
+    0x82,
+    0x8D,
+    0x82,
+    0x90,
+    0x82,
+    0x8F,
+    0x82,
+    0x93,
+    0x82,
+    0x93,
+    0x82,
+    0x89,
+    0x82,
+    0x82,
+    0x82,
+    0x8C,
+    0x82,
+    0x85,
+    0x81,
+    0x40,
+    0x82,
+    0x94,
+    0x82,
+    0x8F,
+    0x81,
+    0x40,
+    0x82,
+    0x8D,
+    0x82,
+    0x81,
+    0x82,
+    0x8B,
+    0x82,
+    0x85,
+    0x81,
+    0x40,
+    0x82,
+    0x89,
+    0x82,
+    0x94,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
+/* 0xc bytes of this bank's own rodata, between its jump tables,
+   read by func_b25_80175CD8. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b25_80170988[] = {
+    0x82,
+    0x97,
+    0x82,
+    0x89,
+    0x82,
+    0x94,
+    0x82,
+    0x88,
+    0x81,
+    0x40,
+    0x00,
+    0x00,
+};
+
+/* 0x24 bytes of this bank's own rodata, between its jump tables,
+   read by func_b25_80175CD8. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b25_80170994[] = {
+    0x81,
+    0x66,
+    0x82,
+    0x93,
+    0x81,
+    0x40,
+    0x82,
+    0x83,
+    0x82,
+    0x95,
+    0x82,
+    0x92,
+    0x82,
+    0x92,
+    0x82,
+    0x85,
+    0x82,
+    0x8E,
+    0x82,
+    0x94,
+    0x81,
+    0x40,
+    0x82,
+    0x8C,
+    0x82,
+    0x85,
+    0x82,
+    0x96,
+    0x82,
+    0x85,
+    0x82,
+    0x8C,
+    0x81,
+    0x44,
+    0x00,
+    0x00,
+};
+
+/* 0x38 bytes of this bank's own rodata, between its jump tables,
+   read by func_b25_80175CD8. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b25_801709B8[] = {
+    0x82,
+    0x6D,
+    0x82,
+    0x8F,
+    0x81,
+    0x40,
+    0x82,
+    0x8D,
+    0x82,
+    0x8F,
+    0x82,
+    0x92,
+    0x82,
+    0x85,
+    0x81,
+    0x40,
+    0x82,
+    0x86,
+    0x82,
+    0x8C,
+    0x82,
+    0x8F,
+    0x82,
+    0x8F,
+    0x82,
+    0x92,
+    0x82,
+    0x93,
+    0x81,
+    0x40,
+    0x82,
+    0x81,
+    0x82,
+    0x82,
+    0x82,
+    0x8F,
+    0x82,
+    0x96,
+    0x82,
+    0x85,
+    0x81,
+    0x40,
+    0x82,
+    0x99,
+    0x82,
+    0x8F,
+    0x82,
+    0x95,
+    0x81,
+    0x49,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80175CD8);
 

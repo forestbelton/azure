@@ -144,7 +144,7 @@ extern u8 D_801759D8[];
 
 extern u8 D_801759A0[];
 
-extern u8 D_b10_80170854[];
+extern const u8 D_b10_80170854[];
 extern s32 D_8008346C;
 void func_800A2B04(UnkVec *, s32, s32);
 s32 func_800A56E0(s32);
@@ -1505,6 +1505,90 @@ s32 func_b10_80174BE4(u8 *p, UnkVec *v, u8 *s)
         s = (u8 *)n->unk_0C;
     }
 }
+
+/* 0x20 bytes of this bank's own rodata, between its jump tables,
+   read by func_b10_8017442C, func_b10_80174898. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b10_80170854[] = {
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+};
+
+/* 0x24 bytes of this bank's own rodata, between its jump tables,
+   read by func_b10_80174C70, func_b10_80174F24. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b10_80170874[] = {
+    0x10,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x00,
+    0x0D,
+    0x00,
+    0x00,
+    0x00,
+    0x10,
+    0x00,
+    0xF3,
+    0xFF,
+    0x0D,
+    0x00,
+    0xF0,
+    0xFF,
+    0x00,
+    0x00,
+    0xF3,
+    0xFF,
+    0xF3,
+    0xFF,
+    0x00,
+    0x00,
+    0xF0,
+    0xFF,
+    0x0D,
+    0x00,
+    0xF3,
+    0xFF,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80174C70);
 

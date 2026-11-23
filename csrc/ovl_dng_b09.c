@@ -125,7 +125,7 @@ typedef struct UnkDng708A4SP
 } UnkDng708A4SP;
 extern u8 D_80174E3C[];
 extern u8 D_80174E04[];
-extern u8 D_b09_80170884[];
+extern const u8 D_b09_80170884[];
 extern s32 D_8008346C;
 void func_800A2B04(UnkVec *, s32, s32);
 s32 func_800A56E0(s32);
@@ -1068,6 +1068,46 @@ void func_b09_80172F74(u8 *p, void *b, void *c, void *d)
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b09", func_b09_80172FD8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b09", func_b09_80173230);
+
+/* 0x20 bytes of this bank's own rodata, between its jump tables,
+   read by func_b09_801745BC, func_b09_80174A28. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b09_80170884[] = {
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0x01,
+    0x00,
+    0xFF,
+    0xFF,
+};
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b09", func_b09_80173964);
 

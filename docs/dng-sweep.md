@@ -661,3 +661,77 @@ Two routes remain for those 53, neither attempted:
 * `make splat` after a yaml change does NOT invalidate the objects: remove
   `build/csrc` before rebuilding, or a stale `.o` links against the old
   listings and the failure looks like a phantom undefined symbol.
+
+## The const-data route finished it: 105 of 116
+
+The 53 segments the first pass could not split are down to one, and 224 of the
+229 jump-table functions are landable where 63 were. Three things were wrong
+with the first pass's reasoning, and the third is the one worth remembering.
+
+**1. The byte heuristic over-rejected by 31.** It asked whether every word in
+the proposed `.rodata` was an address inside the unit's own code. 31 segments
+failed on a word that was `0x00000000` -- a NULL entry for an unreachable
+case INSIDE a jump table, which a run of tables is perfectly free to contain.
+The test is now empirical and asks the question the LINKER will ask: is there
+a data symbol in this region that the code REFERENCES? That is exactly the
+set that would come out undefined, and it is 47 symbols across 22 units, not
+85 blobs across 53.
+
+**2. The blobs are small and ordinary.** 43 of the 47 are 4 to 32 bytes of
+packed halfwords between two tables. They go into the unit as
+
+    const u8 D_b05_80170838[] = { 0x00, 0x10, ... };
+
+`const` is not cosmetic: without it the array goes to `.data` and the linker
+puts it outside the segment's declared `.rodata`. They are spelled as BYTES
+because a `lwl`/`lwr` pair is all the reference witnesses -- nothing here
+claims to know they are halfwords. Two units already had a landed body
+declaring the symbol `extern u8`, which conflicts with a `const` definition;
+those declarations were corrected and all 51 landed functions in those two
+units re-verified at `0 differing`.
+
+**3. ORDER IS THE WHOLE THING, AND GETTING IT WRONG LOOKS LIKE WRONG DATA.**
+cc1psx emits a unit's rodata in FUNCTION ORDER, so a `const` array declared
+between two functions lands between their jump tables -- which is where these
+blobs sit in the ROM. Each blob is therefore anchored to the owner of the
+NEXT table after it and inserted before that function.
+
+Inserting them one at a time reverses any group that shares an anchor: each
+insert lands immediately above the anchor, so the LAST one written ends up
+closest to it. `ovl_dng_b10`'s two blobs went in as 0x874 then 0x854 and the
+container came out THE RIGHT SIZE with 0x185 bytes of rodata swapped. A
+wrong-size failure points at padding or a missing symbol; a right-size
+failure with swapped content is an ordering bug, and it is worth reading it
+that way immediately. One insert per anchor, ascending inside it.
+
+### `--prune` is a separate pass because the question cannot be asked earlier
+
+Four of the 47 blobs -- `D_s18_80024074`, `D_s37_80024050`,
+`D_s40_80024038`, `D_s42_80024064` -- are ones spimdisasm considers their
+function's OWN and writes into its listing. A `const` array for one of those
+is a double definition, and the assembler reports it as
+`symbol D_s18_80024074 is already defined` pointing at `include/labels.inc`
+rather than at anything a person wrote.
+
+Whether a symbol gets migrated depends on the subsegment being `.rodata`, so
+while `--const` runs the answer is still no for every symbol. The order is:
+
+    python3 tools/decomp/dngrodata.py --apply    # the segments needing nothing
+    splat split splat/dungeon.bin.yaml
+    python3 tools/decomp/dngrodata.py --const    # const arrays + their splits
+    splat split splat/dungeon.bin.yaml
+    python3 tools/decomp/dngrodata.py --prune    # drop what splat emits itself
+    rm -rf build/csrc && make check && make containers
+
+### What is left
+
+`ovl_dng_lo16` alone, holding two jump-table stubs. Its `jtbl_80016034` is 4
+mod 8 relative to a rodata start of 0x80016000, so cc1psx's `.align 3` would
+pad it by four bytes; splitting it needs a matching `c` split at the owning
+function, because the rodata and code boundaries have to name the same one.
+`ovl_dng_b31f`'s 4-mod-8 table (0x8016a8b4) is in a unit that IS split now --
+safe, because a table whose function is still `INCLUDE_ASM` comes from asm
+with no `.align` at all. It will need the same carve when that function lands,
+and `dngrodata.py` reports both by name on every run.
+
+`func_b03_80170E54`'s whole six-member family is landed.

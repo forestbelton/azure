@@ -102,20 +102,63 @@ def tables(unit):
     return out
 
 
-def all_entries_are_code(off, end, vram, start, code_vram, text_end):
-    """True if every word in [off, end) is an address in this unit's code.
+def splat_emits(unit, sym):
+    """True if splat already defines `sym` in one of the unit's listings.
 
-    The check that the region really is nothing but jump tables, made against
-    the ROM rather than against splat's output so it holds before the split.
-    A table's entries are addresses inside its own function, so every word in
-    a run of tables lies in the segment's text. Anything else there -- a
-    string, a float pool, a const array -- fails this and the segment is left
-    for a human.
+    MUST BE ASKED AFTER THE SPLIT. spimdisasm writes a rodata symbol into a
+    function's listing when it considers the function to OWN it, and whether
+    it does cannot be known before the subsegment is `.rodata'. Four of the
+    47 blobs turned out to be owned that way -- D_s18_80024074,
+    D_s37_80024050, D_s40_80024038, D_s42_80024064 -- and writing a `const'
+    array for one of those is a DOUBLE definition, which the assembler
+    reports as `symbol D_s18_80024074 is already defined' from a line in
+    include/labels.inc rather than from anything a person wrote.
+    """
+    for f in glob.glob(os.path.join(PROJ, "asm", "nonmatchings", unit, "*.s")):
+        if re.search(r"dlabel %s\b" % re.escape(sym), open(f).read()):
+            return True
+    return False
+
+
+def data_refs(unit, lo, hi):
+    """{sym: {function}} for every D_* symbol the unit references in [lo, hi).
+
+    THIS, NOT A BYTE HEURISTIC, IS THE TEST. A first cut asked whether every
+    word in the proposed `.rodata` was an address inside the unit's own code,
+    and rejected 53 segments. 31 of those were false: the offending word was
+    0x00000000, a NULL entry for an unreachable case INSIDE a jump table, and
+    a run of tables is perfectly free to contain one.
+
+    What actually blocks a segment is a data symbol in the region that the
+    CODE REFERENCES. splat creates `D_<tag>_<vram>` only where something
+    points at it, migration to a text subsegment is off for a rodata
+    subsegment with a sibling C file, and a symbol referenced by a function
+    but not owned by it is then emitted nowhere -- so the link fails with
+    `undefined reference'. Asking which symbols are referenced answers exactly
+    the question the linker will ask.
+    """
+    out = {}
+    for f in glob.glob(os.path.join(PROJ, "asm", "nonmatchings", unit, "*.s")):
+        txt = open(f).read()
+        for m in re.finditer(r"%[hl][io]\((D_\w+_([0-9A-Fa-f]{8}))\)", txt):
+            v = int(m.group(2), 16)
+            if lo <= v < hi:
+                out.setdefault(m.group(1), set()).add(
+                    os.path.basename(f)[:-2])
+    return out
+
+
+def region_words(off, end, vram, start, code_vram, text_end):
+    """(ok, offset, word) -- every word is a table entry or a NULL entry.
+
+    Kept as a SECOND check behind data_refs, because an unreferenced blob is
+    still a blob: nothing would define it either, it just fails later and
+    less clearly. A word here must be an address in this unit's code, or zero.
     """
     b = rom()
     for p in range(off, end, 4):
         w = int.from_bytes(b[p:p + 4], "little")
-        if not (code_vram <= w < text_end):
+        if w != 0 and not (code_vram <= w < text_end):
             return False, p, w
     return True, None, None
 
@@ -150,12 +193,19 @@ def plan(text):
         code_vram = code - s["start"] + s["vram"]
         text_end = ((text_end_off - s["start"] + s["vram"]) if text_end_off
                     else code_vram + 0x40000)
-        ok, at, w = all_entries_are_code(off, code, s["vram"], s["start"],
-                                         code_vram, text_end)
+        refs = data_refs(s["name"], first, code_vram)
+        if refs:
+            skip.append((s["name"], "%d referenced rodata symbol(s) in the "
+                                    "region -- needs const C data first: %s"
+                         % (len(refs), ", ".join(sorted(refs)))))
+            continue
+        ok, at, w = region_words(off, code, s["vram"], s["start"],
+                                 code_vram, text_end)
         if not ok:
             skip.append((s["name"], "%#x in the proposed .rodata is %#010x, "
-                                    "not an address in this unit's code -- "
-                                    "needs reading by hand" % (at, w)))
+                                    "neither an address in this unit's code "
+                                    "nor zero -- needs reading by hand"
+                         % (at, w)))
             continue
         bad = sorted(v for v in tb if (v - first) % 8)
         todo.append((s, off, bad, len(tb)))
@@ -188,11 +238,224 @@ def apply(text, todo):
     return text, n
 
 
+
+def table_owner(unit, vram):
+    """The function whose listing carries the jump table at `vram`."""
+    want = "_%08X" % vram
+    for f in glob.glob(os.path.join(PROJ, "asm", "nonmatchings", unit, "*.s")):
+        txt = open(f).read()
+        if re.search(r"jtbl_\w+%s\b" % want, txt, re.I):
+            return os.path.basename(f)[:-2]
+    return None
+
+
+def blob_plan(seg, lo, hi, tbl, refs):
+    """[(sym, vram, size, anchor function, before?)] in address order.
+
+    The ORDER MATTERS AND IT IS THE FUNCTION ORDER. cc1psx emits a unit's
+    rodata in the order it compiles, so a `const' array declared between two
+    functions lands between their jump tables -- which is exactly where these
+    blobs sit in the ROM. So each blob is anchored to the owner of the NEXT
+    table after it and inserted before that function; a blob after the last
+    table is inserted after the owner of the one before it.
+    """
+    syms = {int(k.split("_")[-1], 16): k for k in refs}
+    bounds = sorted(set(list(tbl) + list(syms) + [hi]))
+    out = []
+    for v in sorted(syms):
+        end = next(b for b in bounds if b > v)
+        later = [t for t in sorted(tbl) if t > v]
+        if later:
+            out.append((syms[v], v, end - v, table_owner(seg["name"], later[0]),
+                        True))
+        else:
+            earlier = [t for t in sorted(tbl) if t < v]
+            out.append((syms[v], v, end - v,
+                        table_owner(seg["name"], earlier[-1]), False))
+    return out
+
+
+def const_text(sym, off, size, readers):
+    b = rom()[off:off + size]
+    rows = "\n".join("    " + ", ".join("0x%02X" % c for c in b[i:i + 8]) + ","
+                      for i in range(0, size, 8))
+    return ("/* %#x bytes of this bank's own rodata, between its jump tables,\n"
+            "   read by %s. Spelled as BYTES because that is all the\n"
+            "   reference witnesses, and `const' because without it the array\n"
+            "   goes to .data and the linker puts it outside this segment's\n"
+            "   declared .rodata. */\n"
+            "const u8 %s[] = {\n%s\n};\n"
+            % (size, ", ".join(sorted(readers)), sym, rows))
+
+
+def anchor_span(text, func):
+    """(start, end) of `func`'s stub line or its definition, in `text`."""
+    m = re.search(r'(?m)^INCLUDE_ASM\("[^"]*",\s*%s\);[ \t]*$'
+                  % re.escape(func), text)
+    if m:
+        return m.span()
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import dngclone
+    body, span = dngclone.definition(text, func)
+    if body is None:
+        raise SystemExit("%s: no stub and no definition to anchor on" % func)
+    return span
+
+
+def write_consts(seg, plan):
+    """Insert every blob's `const` array into the unit, and fix declarations."""
+    path = os.path.join(PROJ, "csrc", seg["name"] + ".c")
+    text = open(path).read()
+    # A LANDED body in this unit may already declare the symbol
+    # `extern u8 D_x[]'. Defining it `const u8' then conflicts, so the
+    # declaration is corrected in the same pass -- and the caller re-verifies
+    # that unit's functions, because changing a declaration can move code.
+    fixed = []
+    for sym, _v, _n, _a, _b in plan:
+        pat = re.compile(r"(?m)^extern\s+(?:const\s+)?u8\s+%s\[\];[ \t]*$"
+                         % re.escape(sym))
+        if pat.search(text):
+            text = pat.sub("extern const u8 %s[];" % sym, text)
+            fixed.append(sym)
+    # ONE INSERT PER ANCHOR, THE BLOBS INSIDE IT IN ASCENDING ADDRESS ORDER.
+    # Inserting them one at a time reverses any group that shares an anchor:
+    # each `before' insert lands immediately above the anchor, so the LAST
+    # one written ends up closest to it. b10's two blobs went in as 0x874
+    # then 0x854 and the container came out the right size with 0x185 bytes
+    # of rodata swapped -- the kind of failure that looks like wrong CONTENT
+    # and is really wrong ORDER.
+    groups = {}
+    for sym, v, n, anchor, before in plan:
+        off = v - seg["vram"] + seg["start"]
+        groups.setdefault((anchor, before), []).append(
+            (v, const_text(sym, off, n, _READERS[sym])))
+    ins = []
+    for (anchor, before), items in groups.items():
+        items.sort()
+        ins.append((anchor, before, "\n".join(t for _v, t in items),
+                    min(v for v, _t in items)))
+    # Back to front across DIFFERENT anchors, so an earlier span stays valid.
+    for anchor, before, body, _v in sorted(ins, key=lambda x: -x[3]):
+        a, b = anchor_span(text, anchor)
+        if before:
+            text = text[:a] + body + "\n" + text[a:]
+        else:
+            text = text[:b] + "\n\n" + body + text[b:]
+    open(path, "w").write(text)
+    return sum(len(v) for v in groups.values()), fixed
+
+
+_READERS = {}
+
+
+def prune(only=None):
+    """Remove every `const` array that duplicates a symbol splat now emits.
+
+    A SEPARATE PASS, BECAUSE THE QUESTION CANNOT BE ASKED EARLIER. Whether
+    spimdisasm writes a rodata symbol into its function's listing depends on
+    the subsegment being `.rodata', so `--const' runs while the answer is
+    still no for every symbol. Run `--const', re-run splat, then run this.
+    Leaving a duplicate in place fails the assemble, not the link, and the
+    message names include/labels.inc rather than anything hand-written:
+    `symbol D_s18_80024074 is already defined'.
+    """
+    gone = []
+    for f in sorted(glob.glob(os.path.join(PROJ, "csrc", "ovl_dng_*.c"))):
+        unit = os.path.basename(f)[:-2]
+        if only and unit not in only:
+            continue
+        text = open(f).read()
+        for sym in re.findall(r"(?m)^const u8 (D_\w+)\[\]", text):
+            if not splat_emits(unit, sym):
+                continue
+            pat = re.compile(
+                r"(?:/\*[^*]*(?:\*(?!/)[^*]*)*\*/\n)?"
+                r"const u8 %s\[\] = \{[^}]*\};\n+" % re.escape(sym))
+            text, n = pat.subn("", text, count=1)
+            if n:
+                gone.append((unit, sym))
+        open(f, "w").write(text)
+    for u, sym in gone:
+        print("pruned %-16s %s (splat emits it)" % (u, sym))
+    print("%d duplicate const array(s) removed" % len(gone))
+
+
+def blocked(text):
+    """[(seg, first table offset, {sym: readers}, tables, lo, hi)]."""
+    out = []
+    for s in segments(text):
+        if any(t == ".rodata" for _, t, _ in s["subs"]):
+            continue
+        tb = tables(s["name"])
+        code = [int(a, 16) for a, t, _u in s["subs"] if t == "c"]
+        if not tb or not code:
+            continue
+        code = code[0]
+        first = min(tb)
+        off = first - s["vram"] + s["start"]
+        if off < s["start"] or off >= code:
+            continue
+        hi = code - s["start"] + s["vram"]
+        refs = data_refs(s["name"], first, hi)
+        if refs:
+            out.append((s, off, refs, tb, first, hi))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--apply", action="store_true",
+                    help="add the .rodata subsegments that need nothing else")
+    ap.add_argument("--const", action="store_true",
+                    help="write the const C arrays for the blocked units AND "
+                         "add their .rodata subsegments")
+    ap.add_argument("--prune", action="store_true",
+                    help="remove const arrays that duplicate a symbol splat "
+                         "emits; run after --const and a re-run of splat")
+    ap.add_argument("--only", help="comma-separated unit names, for --const")
     a = ap.parse_args()
     text = open(YAML).read()
+
+    if a.prune:
+        prune(set(a.only.split(",")) if a.only else None)
+        return
+
+    if a.const:
+        want = set(a.only.split(",")) if a.only else None
+        done = 0
+        for s, off, refs, tb, lo, hi in blocked(text):
+            if want and s["name"] not in want:
+                continue
+            _READERS.clear()
+            _READERS.update(refs)
+            plan_ = blob_plan(s, lo, hi, tb, refs)
+            # Skip any blob splat already defines for us (see splat_emits).
+            plan_ = [p for p in plan_ if not splat_emits(s["name"], p[0])]
+            if not plan_:
+                print("%-16s nothing to write: splat emits every blob"
+                      % s["name"])
+            missing = [p[0] for p in plan_ if p[3] is None]
+            if missing:
+                print("SKIP %-16s no owning function for %s"
+                      % (s["name"], ", ".join(missing)))
+                continue
+            n, fixed = write_consts(s, plan_)
+            # and give the segment its .rodata subsegment
+            lead = s["subs"][0]
+            old = "      - [%s, %s]\n" % (lead[0], lead[1])
+            line = "      - [%#x, .rodata, %s]\n" % (off, s["name"])
+            blk = s["block"]
+            newblk = blk.replace(old, old + line, 1) if int(lead[0], 16) != off \
+                else blk.replace(old, line, 1)
+            text = text.replace(blk, newblk, 1)
+            print("%-16s %d const array(s)%s" % (s["name"], n,
+                  (", declaration(s) made const: " + ", ".join(fixed))
+                  if fixed else ""))
+            done += 1
+        open(YAML, "w").write(text)
+        print("\n%d unit(s) given const rodata and a .rodata subsegment" % done)
+        return
+
     todo, skip = plan(text)
     print("%-16s %5s %12s  %s" % ("unit", "tbls", "rodata at", "note"))
     for s, off, bad, ntb in todo:
@@ -207,8 +470,8 @@ def main():
         if "already" not in why and "owns no" not in why:
             print("  NOTE %s: %s" % (name, why))
     if not a.apply:
-        print("(analysis only; pass --apply to edit %s)"
-              % os.path.relpath(YAML, PROJ))
+        print("(analysis only; pass --apply to edit %s, --const for the "
+              "blocked units)" % os.path.relpath(YAML, PROJ))
         return
     text, n = apply(text, todo)
     open(YAML, "w").write(text)

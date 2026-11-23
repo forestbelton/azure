@@ -1304,6 +1304,122 @@ void func_b32_801741FC(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80174234);
 
+/* 0x10 bytes of this bank's own rodata, between its jump tables,
+   read by func_b32_80174234. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b32_8017089C[] = {
+    0x81,
+    0x40,
+    0x82,
+    0x93,
+    0x82,
+    0x94,
+    0x82,
+    0x8F,
+    0x82,
+    0x8C,
+    0x82,
+    0x85,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+};
+
+/* 0xc bytes of this bank's own rodata, between its jump tables,
+   read by func_b32_80174234. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b32_801708AC[] = {
+    0x82,
+    0x89,
+    0x82,
+    0x94,
+    0x82,
+    0x85,
+    0x82,
+    0x8D,
+    0x81,
+    0x40,
+    0x00,
+    0x00,
+};
+
+/* 0x4 bytes of this bank's own rodata, between its jump tables,
+   read by func_b32_80174234. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b32_801708B8[] = {
+    0x81,
+    0x49,
+    0x00,
+    0x00,
+};
+
+/* 0x34 bytes of this bank's own rodata, between its jump tables,
+   read by func_b32_80174234. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b32_801708BC[] = {
+    0x81,
+    0x40,
+    0x82,
+    0x83,
+    0x82,
+    0x8F,
+    0x82,
+    0x95,
+    0x82,
+    0x8C,
+    0x82,
+    0x84,
+    0x82,
+    0x8E,
+    0x81,
+    0x66,
+    0x82,
+    0x94,
+    0x81,
+    0x40,
+    0x82,
+    0x93,
+    0x82,
+    0x94,
+    0x82,
+    0x85,
+    0x82,
+    0x81,
+    0x82,
+    0x8C,
+    0x81,
+    0x40,
+    0x82,
+    0x94,
+    0x82,
+    0x88,
+    0x82,
+    0x85,
+    0x81,
+    0x40,
+    0x82,
+    0x89,
+    0x82,
+    0x94,
+    0x82,
+    0x85,
+    0x82,
+    0x8D,
+    0x81,
+    0x44,
+    0x00,
+    0x00,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80174428);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80174978);

@@ -755,6 +755,62 @@ void func_b36_80172750(u8 *p, void *b, void *c, void *d)
     }
 }
 
+/* 0x14 bytes of this bank's own rodata, between its jump tables,
+   read by func_b36_801727B4. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b36_80170838[] = {
+    0x00,
+    0x00,
+    0x00,
+    0x08,
+    0x80,
+    0x00,
+    0x20,
+    0x00,
+    0x00,
+    0x08,
+    0x80,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x08,
+    0x80,
+    0x00,
+    0x00,
+    0x00,
+};
+
+/* 0x14 bytes of this bank's own rodata, between its jump tables,
+   read by func_b36_801727B4. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b36_8017084C[] = {
+    0x20,
+    0x00,
+    0x00,
+    0x08,
+    0x40,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x08,
+    0x80,
+    0x00,
+    0x10,
+    0x00,
+    0x00,
+    0x00,
+    0x80,
+    0x00,
+    0x00,
+    0x00,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b36", func_b36_801727B4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b36", func_b36_80172F5C);

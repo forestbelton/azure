@@ -356,7 +356,258 @@ void func_b05_80170A58(u8 *p, UnkVec *b, u8 *c)
     *(u16 *)(c + 0x14) |= 0x40;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b05", func_b05_80170E84);
+/* The +0x8C handler at the head of this bank's actor machine -- the relinked
+   twin of the resident overlay's func_800D8C64
+   (csrc/ovl_dungeon_800D50FC.c), which func_b03_80170854 above arms. Four
+   early exits on the D_80083462 flag word and d+0x1C's bits, the +0x9A state
+   byte set to 0xE, the facing re-dress from the bank-local byte tables, and
+   then the walk. 338 words, 0 differing.
+
+   RELINK DELTAS FROM func_800D8C64, read off the listing:
+     * the three facing re-dresses go through func_80047784 on a BYTE table
+       (`>> 9 & 7', one `lbu') where the resident has func_8003DB94 on a
+       POINTER table (`>> 7 & 0x1C', a `lw') -- the relink the whole block
+       shows;
+     * THREE tables, not one: the d[0x25]==0 arm COMPARES c+0x2C against
+       D_80174860 and stores D_80174858, func_800AA924 and func_800AA6B4 take
+       D_80174858 and D_80174830 where the resident passes NULL, and the two
+       `state 0xE' dresses use D_80174820;
+     * func_800D904C / func_800DA660 become func_b05_801713CC /
+       func_b05_80173F28;
+     * the 0x80000 arm does NOT carry the resident's
+       `p+0x90 = 0' / `p+0x98 &= ~1' / `b->unk_14 = 0' opener (343 words, 73
+       aligned differences with them), and the final guard chain has THREE
+       tests, not four -- the resident's `(*(u16 *)(p + 0x98) & 1)' is absent
+       (343 words, 52 aligned differences with it);
+     * the `d[0x6D] > 0' arm's `func_800D92C0(p, b, c, d)' call is replaced by
+       an INLINED dispatch: the D_80082EA4 tile test, the 0x8000/0x4000 bits
+       of d+0x46, and a switch over `*(u16 *)(d + 0x46) & 0x3FFF' whose 12
+       cases land in four arms. Cases 4, 10 and 11 fall to `default' and need
+       no label of their own (0 differing either way), and case 12's arm is
+       the `== 0x11' test's own `else', written as a `case' label inside the
+       nested `if' (a `goto' out of the `if' to the func_800AAF00 arm is also
+       0).
+
+   THREE SPELLINGS ARE LOAD-BEARING.
+
+   (1) THE func_b05_80171624 TAIL IS WRITTEN OUT AT ALL THREE SITES, NOT
+   `goto'-ED, AND THAT IS WHAT FIXES $s0/$s1. jump2's cross-jumping folds the
+   three copies back to one block, but flow has already counted their
+   references -- and `c' needs exactly one of them to win an `allocno_compare'
+   race it otherwise loses by 0.007. Shared through a `goto walk' label the
+   body is still 338 words but 62 aligned differences, every one of them `p'
+   and `c' exchanging $s0 and $s1. Read out of `-da':
+
+     pseudo 82 = c   35 refs / 500 insns   priority 3500
+     pseudo 268      5 refs /  28 insns    priority 3571   (the D_80082E80
+                                                            pointer local in
+                                                            the d[0x6D] <= 0
+                                                            block)
+
+   268 conflicts with `c' and `d' but NOT with `p', so whichever of 268 and
+   `c' global-alloc reaches first takes $s0 and the other takes $s1 -- and
+   `p', which conflicts with neither 268 nor $s0's holder, then shares 268's
+   register. With the tail duplicated `c' is 37 refs over 512 insns, priority
+   3613, sorts ahead of 268, and the map comes out c/p/d/b = $s0/$s1/$s2/$s3,
+   which is the target's.
+
+   (2) ONE TABLE LOCAL PER DRESS SITE, NOT ONE SHARED. A single `e' across all
+   three is 338 words / 2 aligned differences: the shared pseudo spans the
+   whole function, so local-alloc stops tying the `high' to its `lo_sum' at
+   the d[0x25]==0 site and the pair comes out `lui $v0' / `addiu $a1, $v0'
+   where the target has `lui $a1' / `addiu $a1, $a1'. Dropping the local at
+   THAT site entirely and writing D_80174858 out twice is also 0.
+
+   (3) ARM B's D_800814A8 MUST BE A POINTER LOCAL ASSIGNED BEFORE THE d+0x2A
+   STORE. The target fills the `lw's load-delay slot with that `sh', which
+   needs the store to sit BETWEEN the `lw' and the `lbu':
+     `*(s16 *)(d + 0x2A) = func_800A0818(...)' with the test written inline
+       -- 339 words, 16 differing: the store comes first, the pointer takes
+       $v0 behind it, and the `lw' delay goes unfilled;
+     the call result in `m' and a BYTE local `k = *(u8 *)(D_800814A8+0x9A)'
+       before the store -- 339 words, 13 differing: the `lw' moves ahead of
+       the store but the `lbu' is part of the same expression, so the store
+       lands after both;
+     the call result in `m' and a POINTER local `w = (u8 *)D_800814A8' before
+       the store -- 338 words, 0.
+   `m' is free at `s16' as well as `s32' (both 0).
+
+   `--raw' is 79 differing and all 79 are relocations -- 22 `jal's, 9 `j's and
+   48 `%hi'/`%lo' halves -- so no masked word hides a constant address.
+   func_b05_801713CC, func_b05_80171F94 and func_b05_801720AC are called here
+   and defined below, so each needs a declaration above. 6 copies
+   (dngfam.py). */
+void func_b05_80170E84(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+    s32 v;
+    u16 x;
+    u8 *e;
+    u8 *e2;
+    u8 *e3;
+    s32 m;
+    u8 *w;
+
+    if ((D_80083462 & 0x1000) != 0)
+    {
+        p[0x9A] = 0xE;
+        func_b05_801713CC(p, b, c, d);
+        return;
+    }
+    if (d[0x25] == 0)
+    {
+        func_800AA79C(p, b, c, d);
+        if (*(u8 **)(c + 0x2C) != D_80174860)
+        {
+            e = D_80174858;
+            *(u8 **)(c + 0x2C) = e;
+            func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        return;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x200) != 0)
+    {
+        if (*(u8 **)(c + 0x2C) == D_80174860)
+        {
+            p[0x9A] = 0xD;
+            p[0x9B] = 1;
+            *(u32 *)(p + 0x8C) = 0;
+            *(s32 *)(d + 0x1C) &= ~0x40000;
+            return;
+        }
+        if (func_800AA924(p, b, c, D_80174858) != 0)
+        {
+            return;
+        }
+    }
+    if ((D_80083462 & 0x2000) == 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if (p[0x9A] != 0xE)
+        {
+            e2 = D_80174820;
+            if (*(u8 **)(c + 0x2C) != e2)
+            {
+                *(u8 **)(c + 0x2C) = e2;
+                func_80047784(c, e2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            }
+            p[0x9A] = 0xE;
+        }
+        *(u16 *)(p + 0x98) &= ~0xC;
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, D_80174830) != 0)
+        {
+            return;
+        }
+        if ((*(s32 *)(d + 0x1C) & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            func_b05_80173F28(p, (u8 *)b, c, d);
+            return;
+        }
+        if ((s16)func_800A1C58(d) != 0)
+        {
+            func_800AAB10(p, b, c, d);
+        }
+    }
+    n = func_8009FB34(c[0x24], c[0x25]);
+    c[0x26] = n;
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x20) != 0)
+        {
+            func_800A9A0C(d);
+            return;
+        }
+        if (*(u16 *)(c + 0x24) == D_80082EA4)
+        {
+            func_b05_80171624(p, b, c, d);
+            return;
+        }
+        if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+        {
+            if ((D_80083462 & 0x2000) != 0 &&
+                (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+            {
+                return;
+            }
+            if ((s16)func_b05_801720AC(p, b, c, 0) == 0)
+            {
+                return;
+            }
+            *(u16 *)(d + 0x46) |= 0x4000;
+            if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+            {
+                func_b05_80171624(p, b, c, d);
+                return;
+            }
+        }
+        switch (*(u16 *)(d + 0x46) & 0x3FFF)
+        {
+        case 8:
+        case 9:
+            if ((s16)func_b05_80171DD0(p, b, c, d) != 0)
+            {
+                return;
+            }
+            func_b05_80171F94(p, b, c, d);
+            return;
+        case 5:
+        case 6:
+        case 7:
+            m = func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+            w = (u8 *)D_800814A8;
+            *(s16 *)(d + 0x2A) = m;
+            if (w[0x9A] != 0x11)
+            {
+            case 12:
+                func_800A9A0C(d);
+                return;
+            }
+        case 1:
+        case 2:
+        case 3:
+            func_800AAF00(p, b, c, (s32)D_80174848, func_b05_80170E84);
+            return;
+        default:
+            func_b05_80171624(p, b, c, d);
+            return;
+        }
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) == 0)
+    {
+        if ((s8)n < 0 || (D_800E2970_s[(s8)n].unk_0C & 2) == 0)
+        {
+            if ((v & 0x430) == 0)
+            {
+                if ((s16)func_8009FD7C(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25]) != 0)
+                {
+                    *(s16 *)(d + 0x2A) =
+                        func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+                }
+            }
+        }
+    }
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((*(u16 *)(c + 0x14) & 0x40) != 0)
+    {
+        return;
+    }
+    e3 = D_80174820;
+    if (*(u8 **)(c + 0x2C) == e3)
+    {
+        return;
+    }
+    *(u8 **)(c + 0x2C) = e3;
+    func_80047784(c, e3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+}
 
 /* The banked room script's step-the-walk handler, the relinked twin of the
    landed func_b07_80171570 in csrc/ovl_dng_b07.c (itself the resident
@@ -1144,7 +1395,79 @@ void func_b05_801726D4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
+/* 0x20 bytes of this bank's own rodata, between its jump tables,
+   read by func_b05_80172288. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b05_80170838[] = {
+    0x00,
+    0x10,
+    0x00,
+    0x10,
+    0x94,
+    0x11,
+    0xAC,
+    0x0D,
+    0x00,
+    0x10,
+    0x00,
+    0x10,
+    0x48,
+    0x0D,
+    0xC0,
+    0x12,
+    0xD8,
+    0x0E,
+    0x30,
+    0x11,
+    0x00,
+    0x10,
+    0x00,
+    0x10,
+    0x88,
+    0x13,
+    0x48,
+    0x0D,
+    0x94,
+    0x11,
+    0xD8,
+    0x0E,
+};
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b05", func_b05_801728C4);
+
+/* 0x8 bytes of this bank's own rodata, between its jump tables,
+   read by func_b05_801733BC. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b05_80170874[] = {
+    0x40,
+    0x03,
+    0x00,
+    0x01,
+    0x40,
+    0x00,
+    0x80,
+    0x00,
+};
+
+/* 0x8 bytes of this bank's own rodata, between its jump tables,
+   read by func_b05_80174228. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b05_8017087C[] = {
+    0x40,
+    0x03,
+    0x00,
+    0x01,
+    0x40,
+    0x00,
+    0x40,
+    0x00,
+};
 
 /* The banked twin of the resident overlay's func_800B2CA0
    (csrc/ovl_dungeon_800A4B88.c:9260): the same three-state lunge switched on

@@ -1141,6 +1141,46 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_801735E8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_801737C8);
 
+/* 0x20 bytes of this bank's own rodata, between its jump tables,
+   read by func_b27_80174BEC. Spelled as BYTES because that is all the
+   reference witnesses, and `const' because without it the array
+   goes to .data and the linker puts it outside this segment's
+   declared .rodata. */
+const u8 D_b27_80170854[] = {
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x02,
+    0x00,
+    0x02,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0xFE,
+    0xFF,
+    0x02,
+    0x00,
+    0xFF,
+    0xFF,
+    0x00,
+    0x00,
+    0xFE,
+    0xFF,
+    0xFE,
+    0xFF,
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0x02,
+    0x00,
+    0xFE,
+    0xFF,
+};
+
 /* The banked room script's three-state glide, switching on p + 0x9B:
    state 0 seeds the velocity from the D_8006CCD8 / D_8006CCE8 facing pair,
    state 1 decays it, state 2 steers onto the tile centre and installs
