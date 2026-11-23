@@ -14,6 +14,13 @@
    declares it. func_800B45E0's park asks for the same line. */
 extern u8 D_80044C54[];
 
+/* A SECOND `extern' OF D_80083160 UNDER ITS OWN ASSEMBLER NAME, so that the
+   head of func_800B51C8 can read `unk_00' through a SYMBOL_REF cse cannot
+   equate with the one `gg' holds -- see the comment above that function. Same
+   declaration device and the same `_b' suffix as `D_80013716_b' in
+   ovl_dungeon_decls.h, and docs/matching-levers.md:16649. */
+extern Unk80083160 D_80083160_b __asm__("D_80083160");
+
 s16 func_800A48F0(s8 *p, s8 kind, s8 c);
 void func_800A7030(s16 x, s16 y);
 void func_800B1320(u8 *p, s16 a, s16 b);
@@ -644,7 +651,420 @@ void func_800B5168(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800B45E0", func_800B51C8);
+/* func_800B51C8 -- 834/834 words, 0 differing.  The 32-slot overlay-sprite
+   renderer: it walks i = 0..0x1F over the parallel tables D_800E3648 and
+   D_800E39C8 and emits one POLY_FT4 per part of each live slot into the
+   scratchpad display list.  Its template is the landed func_800C6B40.
+
+   THE HEAD'S TWO `unk_00' READS GO THROUGH A SECOND `extern' OF D_80083160,
+   `D_80083160_b', AND THAT IS THE LAST WORD OF THIS FUNCTION.  With a single
+   declaration cse puts the `(high (symbol_ref D_80083160))' of the head's MEM
+   and the one `gg = &D_80083160' needs into ONE pseudo and pays a reg-reg copy
+   for it -- `lui $v1' / `move $t0, $v1' / `lw $v0, %lo($v1)' -- where the
+   target spends a SECOND `lui'.  Both shapes are four words, which is why this
+   body sat word-exact at three aligned rows through 744 statement orderings,
+   sixteen `gg' spellings and four clean sweeps: no statement POSITION reaches
+   a cse decision, because `cse.c' has no HIGH special case in its record path
+   and the sharing inside one extended basic block is unconditional.  What is
+   needed is a second SCOPE, and an `__asm__' alias is the only spelling that
+   gives one: cc1psx stores a user-specified assembler name with a `*' prefix,
+   so the `.rtl' dump carries `(symbol_ref "*D_80083160")' beside
+   `(symbol_ref "D_80083160")', and cse's `canon_hash' and `rtx_equal_p' --
+   both of which compare a SYMBOL_REF by the IDENTITY of its string, not by
+   strcmp -- see two different symbols.  The emitted relocation is
+   `%hi(D_80083160)' / `%lo(D_80083160)' with a zero addend either way, so the
+   assembled bytes are the target's.
+
+   THE SITE IS THE MEM, NOT THE POINTER, and that is the whole of it.  Measured
+   on this body, against the 834-word target:
+
+     alias on BOTH head reads (this body)                     834 /  0
+     alias on the `0x8D0' read only                           836 / 12
+     alias on the `p->unk_20' read only                       836 / 14
+     alias on the head reads AND `cv[]'                       833 / 13
+     alias on `gg' only                                       833 / 13
+     `gg = (Unk80083160 *)((u8 *)D_80083164 - 4)' (a distinct
+       symbol with the same linked bytes), head bare          833 / 13
+     alias on `gg', `gg' moved above `cv[]', `cv[]' read
+       through `gg'                                           835 /  4
+     a second pointer local for `cv[]' under the alias, head
+       and `gg' bare                                          834 / 13
+     head under the alias, a second pointer local for `cv[]'  834 /  0
+
+   The two 833s are one word SHORT: with the head's reads and `cv[]' on one
+   symbol, the head's own `lo_sum' insn survives as the `cv[]' base
+   (`addiu $v0, $v0, %lo' feeding `lhu 0xC4($v0)') and the preamble gets three
+   words where the target has four.  The 835 is one word LONG: `gg's
+   expand-time `(high)' insn then survives to global_alloc, reload's
+   rematerialisation copies from it instead of emitting its own `lui', and the
+   result is `lui' / `lui' / `move' / `addiu'.
+
+   THESE EIGHT SPELLINGS ARE LOAD-BEARING AND NONE OF THEM IS A DEVICE:
+
+   * `u8 *c' DOES NOT EXIST.  Every part-list access is written off `e', so the
+     inner loops have one biv; `c = e + 4' made `c' a second biv and
+     combine_givs took the LAST giv discovered as the base, moving it to
+     `e + 6'.  The candidate's $s2-relative offsets must stay exactly
+     {-2,-1,0,2,4,5,6,7} with `addiu $s2, $s3, 0x4' as the base in BOTH arms.
+     FRAGILE: a later `e'-relative reference in either arm moves that base.
+   * `md'/`ms'/`f0'/`f1' ARE INITIALISED HONESTLY.  They were once
+     self-initialising (`void *md = md;'), which dropped the four `lui'/`ori'
+     pairs at 800B51DC..800B5204 and left the body 7 words short.
+   * THE SHADOW PASS'S RotTransPers TAKES `f0'/`f1', NOT `&p->unk_90'.
+     800B5B78 is `addu $a2, $fp, $zero' -- a copy out of the constant
+     registers -- which gives f0 and f1 four references each, lifts them past
+     `s' in allocno_compare, and spills `s' to its incoming 0x90($sp) home
+     slot, which is what the target does.  The OTHER call keeps the long
+     spelling: 800B569C is `addiu $a2, $s1, %lo(D_1F800090)'.
+   * `s16 b' IS DECLARED INSIDE EACH ARM'S `if ((e[0] & 0x20) == 0)' BLOCK.
+     At function scope `b' is assigned in both arms, so it is a multi-block
+     pseudo, `reg_qty[b] < 0', and combine_regs refuses to tie the SImode sum
+     to it -- the sum takes the `lhu' temp's $v0 instead.  Per-arm it is
+     block-local and the target's `addu $v1, $v1, $v0' / `sh $v1, 0x8A' /
+     `sh $v1, 0x82' come out in both arms at once.  `s32 b' is 830 words.
+   * `i = 0;' IS A STATEMENT at the head of the post-call block, with
+     `for (; i < 0x20; i++)', and `gg = &D_80083160;' is the LAST of that
+     block.  All 720 orderings of {i, md, ms, f0, f1, gg} were measured and
+     `i-md-ms-f0-f1-gg' is unique; the declaration-initialiser form pays
+     nothing.
+   * THE TWO `>= 0x100' TESTS IN ARM A READ BACK THE FIELDS JUST STORED.
+     Re-reading `e[8] + e[10]' costs four words: the intervening stores
+     through `p' are MEM_IN_STRUCT_P and may alias, so cse cannot re-use the
+     two `lbu'.
+   * BOTH POST-CLAMP TESTS PUT THE OPERAND THE TARGET LOADS FIRST ON THE LEFT
+     (`q[0x8] > q[0x20]', not `q[0x20] < q[0x8]'), because operand 0 of a
+     comparison is expanded first.
+   * `sv.vz << 16 >> 16' AT THE func_800BCB04 CALL, not `(s16)sv.vz': the cast
+     of an addressable s32 stack local that was just stored folds to a single
+     `lh 0x58($sp)', where the target sign-extends the register and puts the
+     `sw' in the call's delay slot.
+
+   The remaining devices are the two `a++; a--;' pairs, one per arm, worth
+   nine rows between them; there is no device-free substitute for them that
+   was found.  `r->unk_10 = p->unk_04;' sits ABOVE the `e == NULL' test on
+   purpose -- the target runs it in the delay slot of `beqz $s3' and re-uses
+   the `lhu 0x12($s0)' from the line before.  The array is subscripted at
+   every site (`D_800E39C8[i].'): a pointer local makes the first touch a
+   POINTER VALUE rather than a MEM and emits its `sll' before its `lui'. */
+s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
+{
+    MATRIX m;
+    u16 cv[3];
+    VECTOR sv;
+    Unk453E0SP *p = (Unk453E0SP *)0x1F800000;
+    void *md;
+    void *ms;
+    void *f0;
+    void *f1;
+    u8 *q;
+    u8 *e;
+    s32 i;
+    s16 a;
+    Unk80083160 *gg;
+
+    *(u8 **)((u8 *)p + 0x18) = *(u8 **)(D_80083160_b.unk_00 + 0x8D0);
+    p->unk_20 = D_80083160_b.unk_00 + 0xB0;
+    p->unk_8C = 0;
+    p->unk_84 = 0;
+    p->unk_7C = 0;
+    p->unk_74 = 0;
+    cv[0] = D_80083160.unk_C4;
+    cv[1] = D_80083160.unk_C6;
+    cv[2] = D_80083160.unk_C8;
+    func_80064AE0(&m);
+    i = 0;
+    md = (void *)0x1F8000D0;
+    ms = (void *)0x1F800050;
+    f0 = (void *)0x1F800090;
+    f1 = (void *)0x1F800094;
+    gg = &D_80083160;
+    for (; i < 0x20; i++)
+    {
+        if ((D_800E3648_s[i].unk_03 & 0x80) != 0 && (D_800E296C & 8) == 0)
+        {
+            continue;
+        }
+        if (D_800E3648_s[i].unk_01 == 0)
+        {
+            continue;
+        }
+        if (D_800E3648_s[i].unk_00 == 0)
+        {
+            continue;
+        }
+        if ((D_800E39C8[i].unk_14 & 0x40) != 0)
+        {
+            func_800478B8((u8 *)&D_800E39C8[i]);
+        }
+        p->unk_00 = (D_800E39C8[i].unk_06 << 6) + 0x20;
+        p->unk_02 = (D_800E39C8[i].unk_07 << 6) + 0x20;
+        p->unk_04 = D_800E39C8[i].unk_12;
+        D_800E39C8[i].unk_10 = p->unk_04;
+        e = (u8 *)D_800E39C8[i].unk_08;
+        if (e == NULL)
+        {
+            continue;
+        }
+        if ((D_800E39C8[i].unk_14 & 0x100) != 0)
+        {
+            p->unk_30.w = 0x2000;
+            p->unk_34.w = 0x2000;
+            p->unk_38.w = 0x2000;
+            p->unk_100 = 0;
+            p->unk_102 = 0;
+            p->unk_104 = 0;
+            p->unk_E4 = p->unk_00;
+            p->unk_E8 = (s16) * (u16 *)&p->unk_02;
+            p->unk_EC = (s16) * (u16 *)&p->unk_04;
+            func_80065820(&p->unk_100, md);
+            func_80064840(&m, md, ms);
+            func_80064BC0(ms, &p->unk_30);
+            func_80064D80(ms);
+            func_80064CF0(ms);
+            for (;;)
+            {
+                if ((e[0] & 0x20) == 0)
+                {
+                    s16 b;
+
+                    p->unk_08.w = e[8];
+                    p->unk_10.w = e[10];
+                    if (p->unk_08.w + p->unk_10.w >= 0x100)
+                    {
+                        p->unk_10.w = p->unk_10.w - 1;
+                    }
+                    p->unk_0C.w = e[9];
+                    p->unk_14.w = e[11];
+                    if (p->unk_0C.w + p->unk_14.w >= 0x100)
+                    {
+                        p->unk_14.w = p->unk_14.w - 1;
+                    }
+                    a = (s8)e[2];
+                    p->unk_80 = a;
+                    a++;
+                    a--;
+                    p->unk_70 = a;
+                    a = a + p->unk_10.h;
+                    p->unk_88 = a;
+                    p->unk_78 = a;
+                    b = (s8)e[3];
+                    q = *(u8 **)((u8 *)p + 0x18);
+                    *(u8 **)((u8 *)p + 0x18) = q + 0x28;
+                    p->unk_7A = b;
+                    p->unk_72 = b;
+                    b = b + p->unk_14.h;
+                    p->unk_8A = b;
+                    p->unk_82 = b;
+                    p->unk_C0 = func_80065590(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
+                                              (void *)(q + 0x08), (void *)(q + 0x10),
+                                              (void *)(q + 0x18), (void *)(q + 0x20),
+                                              f0, f1);
+                    if ((u32)p->unk_C0 < 0x1E0 &&
+                        (((u16)(*(u16 *)(q + 0x08) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x0A) + 0x20) < 0x121) |
+                         ((u16)(*(u16 *)(q + 0x10) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x12) + 0x20) < 0x121) |
+                         ((u16)(*(u16 *)(q + 0x18) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x1A) + 0x20) < 0x121) |
+                         ((u16)(*(u16 *)(q + 0x20) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x22) + 0x20) < 0x121)) != 0)
+                    {
+                        p->unk_10.w += p->unk_08.w;
+                        p->unk_14.w += p->unk_0C.w;
+                        p->unk_0C.w <<= 8;
+                        p->unk_14.w <<= 8;
+                        *(u16 *)(q + 0x0E) = *(u16 *)(e + 6);
+                        *(u16 *)(q + 0x0C) = p->unk_0C.h + p->unk_08.h;
+                        *(u16 *)(q + 0x14) = p->unk_0C.h + p->unk_10.h;
+                        *(u16 *)(q + 0x16) = *(u16 *)(e + 4);
+                        *(u16 *)(q + 0x1C) = p->unk_14.h + p->unk_08.h;
+                        *(u16 *)(q + 0x24) = p->unk_14.h + p->unk_10.h;
+                        *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
+                        func_800666F4(q);
+                        q[0x7] |= 2;
+                        func_8006658C(p->unk_20 + p->unk_C0 * 4, q);
+                    }
+                }
+                if (*(s8 *)e < 0)
+                {
+                    break;
+                }
+                e += 0xC;
+            }
+            func_80064D80(&m);
+            func_80064CF0(&m);
+        }
+        else
+        {
+            p->unk_E4 = 0;
+            p->unk_E8 = 0;
+            p->unk_EC = 0;
+            p->unk_C0 = func_80065420(p, &p->unk_B8, &p->unk_90, &p->unk_94);
+            D_8006CD30.unk_1C = p->unk_C0 * 4;
+            p->unk_C0 = p->unk_C0 - 4;
+            if ((u32)p->unk_C0 >= 0x1E0)
+            {
+                continue;
+            }
+            p->unk_B8 = p->unk_B8 - 0xA0;
+            p->unk_BA = p->unk_BA - 0x78;
+            p->unk_100 = s->unk_16 + ((s16)cv[0] >> 1);
+            p->unk_104 = *(u16 *)((u8 *)gg + 0xB8) + (s->unk_1A - cv[1]);
+            p->unk_102 = s->unk_18;
+            func_80065820(&p->unk_100, md);
+            func_80064840(&D_8006CD30, md, ms);
+            func_80064D80(ms);
+            func_80064CF0(ms);
+            for (;;)
+            {
+                if ((e[0] & 0x20) == 0)
+                {
+                    s16 b;
+
+                    p->unk_08.w = e[8];
+                    p->unk_0C.w = e[9];
+                    p->unk_10.w = e[10];
+                    p->unk_14.w = e[11];
+                    a = (s8)e[2];
+                    p->unk_80 = a;
+                    a++;
+                    a--;
+                    p->unk_70 = a;
+                    a = a + p->unk_10.h;
+                    p->unk_88 = a;
+                    p->unk_78 = a;
+                    b = (s8)e[3];
+                    p->unk_7A = b;
+                    p->unk_72 = b;
+                    b = b + p->unk_14.h;
+                    p->unk_8A = b;
+                    p->unk_82 = b;
+                    func_800654B0(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88, &p->unk_F0,
+                                  &p->unk_F4, &p->unk_F8, &p->unk_FC, f0,
+                                  f1);
+                    q = *(u8 **)((u8 *)p + 0x18);
+                    *(u8 **)((u8 *)p + 0x18) = q + 0x28;
+                    *(u16 *)(q + 0x08) = p->unk_F0 + p->unk_B8;
+                    *(u16 *)(q + 0x0A) = p->unk_F2 + p->unk_BA;
+                    *(u16 *)(q + 0x10) = p->unk_F4 + p->unk_B8;
+                    *(u16 *)(q + 0x12) = p->unk_F6 + p->unk_BA;
+                    *(u16 *)(q + 0x18) = p->unk_F8 + p->unk_B8;
+                    *(u16 *)(q + 0x1A) = p->unk_FA + p->unk_BA;
+                    *(u16 *)(q + 0x20) = p->unk_FC + p->unk_B8;
+                    *(u16 *)(q + 0x22) = p->unk_FE + p->unk_BA;
+                    if ((((u16)(*(u16 *)(q + 0x08) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x0A) + 0x20) < 0x121) |
+                         ((u16)(*(u16 *)(q + 0x10) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x12) + 0x20) < 0x121) |
+                         ((u16)(*(u16 *)(q + 0x18) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x1A) + 0x20) < 0x121) |
+                         ((u16)(*(u16 *)(q + 0x20) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x22) + 0x20) < 0x121)) != 0)
+                    {
+                        q[0x3] = 9;
+                        p->unk_10.w += p->unk_08.w - 1;
+                        if ((p->unk_10.w & 0x100) != 0)
+                        {
+                            p->unk_10.w -= 1;
+                        }
+                        p->unk_14.w += p->unk_0C.w - 1;
+                        if ((p->unk_14.w & 0x100) != 0)
+                        {
+                            p->unk_14.w -= 1;
+                        }
+                        p->unk_0C.w <<= 8;
+                        p->unk_14.w <<= 8;
+                        *(u16 *)(q + 0x0C) = p->unk_0C.h + p->unk_08.h;
+                        *(u16 *)(q + 0x0E) = *(u16 *)(e + 6);
+                        *(u16 *)(q + 0x14) = p->unk_0C.h + p->unk_10.h;
+                        *(u16 *)(q + 0x16) = *(u16 *)(e + 4);
+                        *(u16 *)(q + 0x1C) = p->unk_14.h + p->unk_08.h;
+                        *(u16 *)(q + 0x24) = p->unk_14.h + p->unk_10.h;
+                        if (*(s16 *)(q + 0x8) > *(s16 *)(q + 0x20))
+                        {
+                            q[0x14] -= 1;
+                            q[0x24] -= 1;
+                        }
+                        if (*(s16 *)(q + 0xA) > *(s16 *)(q + 0x22))
+                        {
+                            q[0x1D] -= 1;
+                            q[0x25] -= 1;
+                        }
+                        *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
+                        q[0x7] = 0x2C;
+                        if ((D_800E296C & 8) != 0 && (D_800E3648_s[i].unk_03 & 0x80) != 0)
+                        {
+                            q[0x7] = 0x2E;
+                        }
+                        func_8006658C(p->unk_20 + p->unk_C0 * 4, q);
+                        if ((q[0x7] & 2) == 0)
+                        {
+                            func_80064D80(&m);
+                            func_80064CF0(&m);
+                            sv.vz = (s16) * (u16 *)&p->unk_04 - 4;
+                            p->unk_04 = func_800BCB04(*(u16 *)&p->unk_00, *(u16 *)&p->unk_02,
+                                                      sv.vz << 16 >> 16);
+                            p->unk_C0 = func_80065420(p, &p->unk_B8, f0, f1);
+                            D_8006CD30.unk_1C = p->unk_C0 * 4;
+                            p->unk_C0 = p->unk_C0 - 3;
+                            p->unk_B8 = p->unk_B8 - 0xA0;
+                            p->unk_BA = p->unk_BA - 0x78;
+                            sv.vz = ((sv.vz - (s16) * (u16 *)&p->unk_04) << 5) + 0x1000;
+                            if (sv.vz < 0)
+                            {
+                                sv.vz = 0;
+                            }
+                            p->unk_102 = 0;
+                            sv.vx = sv.vz;
+                            sv.vy = sv.vz / 2;
+                            p->unk_100 = -(s16)cv[0];
+                            p->unk_104 = *(u16 *)((u8 *)gg + 0xB8) - cv[1];
+                            func_80065820(&p->unk_100, md);
+                            func_80064840(&D_8006CD30, md, ms);
+                            func_80064BC0(ms, &sv);
+                            func_80064D80(ms);
+                            func_80064CF0(ms);
+                            q = *(u8 **)((u8 *)p + 0x18);
+                            *(u8 **)((u8 *)p + 0x18) = q + 0x28;
+                            p->unk_70 = p->unk_70 + 6;
+                            p->unk_78 = p->unk_78 + 6;
+                            func_800654B0(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
+                                          &p->unk_F0, &p->unk_F4, &p->unk_F8, &p->unk_FC,
+                                          f0, f1);
+                            *(u16 *)(q + 0x08) = p->unk_F0 + p->unk_B8;
+                            *(u16 *)(q + 0x0A) = p->unk_F2 + p->unk_BA;
+                            *(u16 *)(q + 0x10) = p->unk_F4 + p->unk_B8;
+                            *(u16 *)(q + 0x12) = p->unk_F6 + p->unk_BA;
+                            *(u16 *)(q + 0x18) = p->unk_F8 + p->unk_B8;
+                            *(u16 *)(q + 0x1A) = p->unk_FA + p->unk_BA;
+                            *(u16 *)(q + 0x20) = p->unk_FC + p->unk_B8;
+                            *(u16 *)(q + 0x22) = p->unk_FE + p->unk_BA;
+                            q[0x3] = 9;
+                            *(u32 *)(q + 0x0C) = p->unk_0C.w + p->unk_08.w + 0x7FC00000;
+                            *(u32 *)(q + 0x14) = p->unk_0C.w + p->unk_10.w + (*(s16 *)(e + 4) << 16);
+                            *(u16 *)(q + 0x1C) = p->unk_14.h + p->unk_08.h;
+                            *(u16 *)(q + 0x24) = p->unk_14.h + p->unk_10.h;
+                            if (*(s16 *)(q + 0x8) > *(s16 *)(q + 0x20))
+                            {
+                                q[0x14] -= 1;
+                                q[0x24] -= 1;
+                            }
+                            if (*(s16 *)(q + 0xA) > *(s16 *)(q + 0x22))
+                            {
+                                q[0x1D] -= 1;
+                                q[0x25] -= 1;
+                            }
+                            *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
+                            q[0x7] = 0x2C;
+                            func_8006658C(p->unk_20 + p->unk_C0 * 4, q);
+                        }
+                    }
+                }
+                if (*(s8 *)e < 0)
+                {
+                    break;
+                }
+                e += 0xC;
+            }
+            func_80064D80(&m);
+            func_80064CF0(&m);
+        }
+    }
+    *(u8 **)(gg->unk_00 + 0x8D0) = *(u8 **)((u8 *)p + 0x18);
+    return 0;
+}
 
 /* Step one tile along the eight-way direction in `dir` and claim the spot
    there. TWO OF THE THREE `return -1`s SHARE THE EXIT: written as three early
