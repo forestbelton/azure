@@ -428,8 +428,20 @@ build/$(MAIN): $(OFILES) build/$(MAIN).ld
 	@echo ""
 	@$(CHECK) build/$(MAIN) data/main/$(MAIN) --yaml splat/$(SLUS).yaml
 
+# --no-check-sections, 2026-11-22. This container's code is 116 objects that
+# SHARE RAM BY DESIGN: 47 of them load at 0x80170800 (func_800A0B94's slot 0)
+# and 66 at 0x80024000 (func_800A982C's fixed destination), so their VMA ranges
+# genuinely overlap and ld's default check is a false alarm -- the same thing
+# an OVERLAY block would say, except splat generates the script. The first one
+# split tripped it against the preceding `bin` segment, which has no VMA of its
+# own and so runs on from the overlay's end across 27 MB.
+#
+# Nothing about the output depends on VMA: every section is placed by LMA
+# through splat's AT(..._ROM_START), and `objcopy -O binary` lays the file out
+# by LMA. The authority is unchanged -- tools/check.py still compares the
+# result to data/dungeon/dungeon.bin byte for byte.
 build/$(DUNGEON): $(OFILES) build/$(DUNGEON).ld splat/$(DUNGEON)_extra_syms.txt
-	$(LD) $(LDFLAGS) \
+	$(LD) $(LDFLAGS) --no-check-sections \
 		--script=build/$(DUNGEON).ld \
 		--script=splat/$(DUNGEON)_undefined_funcs_auto.txt \
 		--script=splat/$(DUNGEON)_undefined_syms_auto.txt \

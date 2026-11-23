@@ -243,4 +243,61 @@ segments:
       - [0xe5448, c, ovl_dungeon_800CABA8]
       - [0xef99c, c, ovl_dungeon_800D50FC]
   - [0xf7700, bin]
+  # THE FIRST OF THE BANKED OBJECTS, 2026-11-22. docs/dungeon-map.md section 2
+  # has the family: func_800A0B94 reads bank (a, i) from
+  # LBA (a-1)*84 + i*12 + 0x4340 to dest 0x80170800 - i*0x6000, 0xC sectors,
+  # and dungeon.bin starts at LBA 12310. This is a = 1, i = 0 -- the first
+  # object of the family and the first of its seven relinked copies.
+  #
+  # ONLY SLOT 0 IS SPLIT. The six copies at 0x99b000, 0x9a1000, 0x9a7000,
+  # 0x9ad000, 0x9b3000 and 0x9b9000 are the SAME object relinked 0x6000 lower
+  # each time; splitting them too would be six more namespaces for one body of
+  # code. They stay `bin` and the container still rebuilds byte-identical,
+  # because a bin segment is dumped and relinked verbatim.
+  #
+  # symbol_name_format IS NOT OPTIONAL HERE. Every object of this family loads
+  # at 0x80170800, so 47 of them would generate the same `func_801708E8` and
+  # collide in dungeon.bin's single link. The per-segment format gives this one
+  # `func_b01_801708E8`. It is the ROM case only -- `symbol_name_format_no_rom`
+  # is left alone on purpose, because out-of-segment references (the resident
+  # engine's func_8003A7C4 and the like) have no segment at all and fall
+  # through to the global format, which is what keeps them shared across every
+  # object instead of being aliased 47 times in
+  # splat/dungeon.bin_undefined_funcs_auto.txt.
+  #
+  # exclusive_ram_id puts this object in its own RAM space, so a reference to
+  # 0x801708E8 from inside it resolves to ITS function and not to whichever
+  # other object splat happened to scan first.
+  #
+  # The layout is data / text / data, measured rather than assumed:
+  #   +0x0000..+0x00e8  58 pointer words into this object's own text -- the
+  #                     dispatch table every object in both families starts
+  #                     with. The word at +0x00e4 is 0x80173a08, a pointer.
+  #   +0x00e8..+0x38e0  text. +0x00e8 is `27bdffe8`. THE TEXT DOES NOT START
+  #                     AT THE ENTRY POINTER: the head word is 0x80170bb0,
+  #                     +0x3b0, and the functions below it are reached only
+  #                     through the dispatch table. 13 of the 47 are like this,
+  #                     so splitting from the entry would lose them.
+  #   +0x38e0..+0x39c4  byte tables, then 19 more pointer words -- two of them
+  #                     (0x800a9c10, 0x800acbe4) into the dungeon overlay, so
+  #                     this object is resident alongside it.
+  #   +0x39c4..+0x6000  mastering filler. It differs between the seven copies
+  #                     where everything above it differs only by the relink,
+  #                     which is how the object's end was found.
+  #
+  # The segment ends at 0x9989d0 -- +0x39c4 rounded up to 16 -- because splat
+  # emits `__romPos = ALIGN(__romPos, 16)` after a code segment and a boundary
+  # off that grid pads the container. The same rule the overlay's own note and
+  # town.bin's record.
+  - name: ovl_dng_b01
+    type: code
+    start: 0x995000
+    vram: 0x80170800
+    exclusive_ram_id: dng_b01
+    symbol_name_format: b01_$VRAM
+    subsegments:
+      - [0x995000, data]
+      - [0x9950e8, c, ovl_dng_b01]
+      - [0x9988e0, data]
+  - [0x9989d0, bin]
   - [0x1a86800]
