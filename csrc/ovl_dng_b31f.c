@@ -65,6 +65,14 @@ extern u8 D_b31f_801746D4[];
 
 extern u8 D_b31f_80174A7C[];
 
+u8 *func_800A04F0_r(u8 *p, s32 x, s32 y, s16 dir) __asm__("func_800A04F0");
+s16 func_800A0134(u8 *a, u8 *b);
+s32 func_b31f_8016C720(u8 *p, UnkVec *b, u8 *c, u8 *d);
+s16 func_800A2CB8(u8 *a, u8 *b);
+s32 func_800A2B5C(void *d);
+s32 func_800C7930(u8 *a, u8 *b, s16 c, s32 e);
+u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A908);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A928);
@@ -108,7 +116,75 @@ void func_b31f_8016C698(u8 *p, UnkVec *b, u8 *c, u8 *d)
     p[0x9D] = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016C720);
+/* Can the record step onto the slot it is facing, and if so close on it:
+   func_b04_80172270 (csrc/ovl_dng_b04.c) with its D_80175140 re-dress and
+   func_80047784 call removed and d[0x85] set to 4 rather than 0 -- so the
+   whole func_800A04F0 / func_800A2CB8 / func_800A0134 / func_800A2B5C
+   interrogation, the func_800C7930 push, state 0x11 and the func_8009C93C
+   re-aim are that function's verbatim. 99 words, 0 differing, first compile.
+   Three of the twin's facts were carried over unmeasured because of that:
+   the 8-byte `unused' local that makes the frame 0x40, the shared `-1' exit
+   living in the SECOND func_800A2B5C test, and func_800A04F0 coming through
+   the unit's `_r' alias with an `s16' fourth parameter.
+
+   THIS UNIT'S FORWARD DECLARATION OF THIS FUNCTION HAD TO BE WIDENED from
+   `s32 func_b31f_8016C720(u8 *p, void *b, void *c, u8 *d)' to the real
+   `(u8 *p, UnkVec *b, u8 *c, u8 *d)'. Its only caller, func_b15_801721D8
+   below, passes `void *' arguments that convert implicitly, so no call site
+   changed; every landed body in this unit was re-verified afterwards and all
+   are still 0 differing, func_b15_801721D8's 466 words included.
+   THIS COPY'S OWN CONSTANT: 0x4 -> 0x6.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+s32 func_b31f_8016C720(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *t;
+    s32 unused[2];
+
+    d[0x71] &= 0x7F;
+    g = (u8 *)&D_80083460;
+    if ((*(u16 *)(g + 0x2) & 0x2000) != 0)
+    {
+        goto fail;
+    }
+    t = func_800A04F0_r(d, c[0x24], c[0x25], *(s16 *)(d + 0x2A));
+    if ((s16)func_800A2CB8(d, t) == 0)
+    {
+        return 0;
+    }
+    if ((*(u16 *)(g + 0x2) & 0x2000) != 0)
+    {
+        goto fail;
+    }
+    if ((*(u16 *)(d + 0x46) & 0x8000) == 0 && (*(u16 *)(g + 0x2) & 0x8) != 0)
+    {
+        goto fail;
+    }
+    if ((u16)(0x40 + -func_800A0134(t, d)) > 0x80)
+    {
+        return 0;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        goto fail;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+    fail:
+        return -1;
+    }
+    p[0x9A] = 0x11;
+    p[0x9B] = 0;
+    *(s32 *)(p + 0x8C) = 0;
+    d[0x84] = 0x7C;
+    d[0x85] = 6;
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    return 1;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016C8AC);
 
@@ -538,7 +614,33 @@ s32 func_b31f_80171704(u8 *p, UnkVec *v)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_801718E4);
+/* One frame of a fading burst, and a leaf: func_800D5CA0
+   (csrc/ovl_dungeon_800D50FC.c) byte for byte, with nothing relinked -- the
+   only symbol it touches outside itself is D_800814A0, which is resident.
+   Integrate the mover, halve each of its three velocities, scale the three
+   colour bytes by the remaining life over the original life, copy the colour
+   word forward, and when the life runs out raise the node's and the engine's
+   0x8000 flags. The three `srl 31'/`addu'/`sra 1' triples are the signed
+   `/= 2'; `>>= 1' would drop the correction. 75 words, 0 differing, first
+   compile. func_b15_80170F2C below installs it as its step function. */
+void func_b31f_801718E4(u8 *p, UnkVec *v)
+{
+    v->unk_00 += v->unk_0C;
+    v->unk_04 += v->unk_10;
+    v->unk_08 += v->unk_14;
+    v->unk_0C /= 2;
+    v->unk_10 /= 2;
+    v->unk_14 /= 2;
+    p[4] = p[0] * *(s16 *)(p + 0x32) / *(s16 *)(p + 0x34);
+    p[5] = p[1] * *(s16 *)(p + 0x32) / *(s16 *)(p + 0x34);
+    p[6] = p[2] * *(s16 *)(p + 0x32) / *(s16 *)(p + 0x34);
+    *(s32 *)(p + 0x8) = *(s32 *)(p + 0x4);
+    if (--*(s16 *)(p + 0x32) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80171A10);
 

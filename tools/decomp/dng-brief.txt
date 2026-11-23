@@ -122,6 +122,37 @@ That prints a first draft against `ctx.c`'s type context. Read
 `docs/m2c-pitfalls.md` before you trust it. Get it compiling, then measure,
 then work the residue.
 
+## RUN `xsibs.py` FIRST. IT ANSWERS "HAS THIS ALREADY BEEN WRITTEN" IN ONE GO.
+
+    python3 tools/decomp/xsibs.py @UNIT@ --min-words 40 --ratio 0.70 --top 60
+
+It compares each of the unit's stubs against every function LANDED ANYWHERE
+in the project -- read out of the reference images, so it does not need a
+listing to have survived -- on the opcode stream with registers, immediates
+and jump targets masked. That is exactly what survives a relink.
+
+Two agents independently reported this as the single most useful first
+command, so it is now the first thing the brief tells you to do. The table
+above already names a twin and a ratio where one exists; `xsibs` is how you
+find the rest, and how you confirm those.
+
+**A RATIO IS A LEAD, NOT A PROMISE, AND A MISS IS NOT A VERDICT.** 0.9x means
+a starting body with deltas to read off your own listing, not an answer. And
+when `xsibs` finds NOTHING, that is useful too -- it says go straight to plain
+decompilation rather than hunting. But before you accept a miss:
+
+**A FUNCTION WITH NO WHOLE-BODY TWIN CAN STILL HAVE A LANDED TWIN FOR ITS
+FIRST EIGHTY WORDS.** `func_b02_80173560` came back empty at ratio 0.40 and
+its state 0 is the landed `func_b14_8017293C`'s head verbatim;
+`func_b02_80174AD4`'s entire prologue is `func_800B8FC8`'s. Both landed. The
+way to find that is to grep the CALLEE SET -- pick four or five
+`func_800xxxxx` your listing calls and find a landed body that calls the same
+ones in the same order:
+
+    grep -ln "func_800A9A0C" csrc/ovl_dungeon*.c csrc/ovl_dng_*.c
+
+Shape similarity cannot see a partial match. The callee set can.
+
 ## FIND THE RESIDENT TWIN FIRST. IT IS USUALLY THE WHOLE ANSWER.
 
 This is the single most useful fact about this block. The banked room scripts

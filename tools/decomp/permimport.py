@@ -160,17 +160,19 @@ def main():
             print("permimport: %s does not mention %s" % (source, func))
             return 1
     else:
-        park = os.path.join(PROJ, "docs/near-misses", func + ".c")
-        if not os.path.exists(park):
-            alt = os.path.join(PROJ, "docs/dungeon-parks", func + ".c")
-            if os.path.exists(alt):
-                park = alt
-            else:
-                print("permimport: no park source at %s and none at %s -- pass "
-                      "--source FILE to permute a candidate that has never been "
-                      "parked" % (os.path.relpath(park, PROJ),
-                                  os.path.relpath(alt, PROJ)))
-                return 1
+        # THREE park directories, not two. docs/dng-parks/ was created with
+        # the carve of DUNGEON.BIN's 116 objects and this only knew the first
+        # two, so the first carved park handed to the permuter was refused by
+        # name -- the same gap parkcheck.py had, found the same way, by a park
+        # finally being written there.
+        cands = [os.path.join(PROJ, d, func + ".c") for d in
+                 ("docs/near-misses", "docs/dungeon-parks", "docs/dng-parks")]
+        park = next((c for c in cands if os.path.exists(c)), None)
+        if park is None:
+            print("permimport: no park source at any of %s -- pass --source "
+                  "FILE to permute a candidate that has never been parked"
+                  % ", ".join(os.path.relpath(c, PROJ) for c in cands))
+            return 1
 
 
     d = os.path.join(PROJ, "nonmatchings", func)
@@ -193,7 +195,11 @@ def main():
     # compile.sh already passes -Icsrc, so the carved units' shared
     # declaration header resolves by name. Synthesise the preamble here rather
     # than making every caller remember to do it by hand.
-    if "/dungeon-parks/" in park.replace(os.sep, "/"):
+    # A dng-parks file has exactly the shape of a dungeon-parks one -- header
+    # comment, DECLARATIONS block, bare function -- so it needs the same
+    # synthesised preamble.
+    if any(k in park.replace(os.sep, "/")
+           for k in ("/dungeon-parks/", "/dng-parks/")):
         raw = io.open(park, encoding="utf-8", errors="replace").read()
         # parkresidue.decls_of is the ONE parser for a park's declarations, and
         # it has to be: the parks spell the block three different ways

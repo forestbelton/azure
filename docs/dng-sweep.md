@@ -859,3 +859,71 @@ yield still, but the budget is what binds now.
 
 The brief says this plainly rather than repeating the old "a 31-word body
 deserves the same fight" line, which is no longer true of anything left.
+
+# Batch 7, and what the twin map changed
+
+    agent  unit         landed  parked  clones  words
+    h11    ovl_dng_b09     3       2       3    1,064
+    h12    ovl_dng_b02     4       -       4    1,614
+    h14    ovl_dng_b15     6       -       7    1,319
+    h15    ovl_dng_b11     1       -       5    1,302
+    h13    ovl_dng_s20     2       2       -    (still running)
+
+55.0% -> 56.0% with four of five integrated. **`ovl_dng_b11.c` is the first of
+the 116 carved objects with no stubs left.**
+
+Two measured parks, both from h11 and both honest about being one thing away:
+`func_b09_80170A84` at 6 aligned differences (one load pair's output order)
+and `func_b09_801745BC` at 19 (one missing register-to-register copy and the
+18 renames it causes). Both name the permuter as the next step, which is
+right: it is the dispatcher's budget and this is what it is for.
+
+## THE TWIN MAP: 45% of the "plain decompilation" is not plain
+
+h11's report named `tools/decomp/xsibs.py`, which the brief had never
+mentioned. It compares a unit's stubs against every function LANDED ANYWHERE
+in the project -- read out of the reference images, so it needs no surviving
+listing -- on the opcode stream with registers, immediates and jump targets
+masked. Running it across all 115 units with stubs takes 2.5 minutes and says:
+
+    458 stubs have a landed near-sibling at ratio >= 0.70
+     94,863 words -- 45% of the 212,075 words I had just called 1:1 work
+
+And ten resident functions carry most of it:
+
+    func_800D92C0   47 stubs  21,743 words
+    func_800DA014   43         10,654
+    func_800DA398   45          9,074
+    func_800D991C   35          7,809
+    func_800D8728   26          7,024
+    func_800D904C   45          6,414
+
+So the previous section's inflection was half wrong. Replication by BYTE
+IDENTITY is spent -- 6.2% recoverable, and `dngfam` is right about that. But
+replication by SHAPE is not: these are the same functions relinked with
+per-bank deltas big enough to change the word count, which is exactly what
+`dngfam`'s hex normalisation cannot see and what an opcode-stream ratio can.
+
+### What that changes
+
+* **Batch selection.** `dngpick.py` ranks by `copies * words` over all stubs;
+  batch 8 instead merges that with the twin map and prefers a strong twin on
+  equal yield. Family-only picked 5,797 words of yield, twin-only 4,442, the
+  merge 8,124.
+* **The brief leads with `xsibs` now**, and each function in the task table
+  arrives with its twin and ratio already named. Two agents independently
+  called it their most useful first command and it was not in the brief.
+* **A miss is not a verdict.** h12 had two functions `xsibs` found nothing for
+  at ratio 0.40 and landed both: `func_b02_80173560`'s state 0 is the landed
+  `func_b14_8017293C`'s head and `func_b02_80174AD4`'s whole prologue is
+  `func_800B8FC8`'s. Shape similarity cannot see a partial match; the callee
+  set can. That is in the brief too.
+
+### The obvious next lever, not taken yet
+
+The work clusters by TWIN, not by unit -- 47 stubs across 47 banks are all
+relinks of `func_800D92C0`. An agent given ten of those would land the first
+and take the rest as deltas, which is the compounding h14 saw inside one unit
+but an order of magnitude bigger. It needs one agent to hold several unit
+copies at once, which the brief and `dngland` both assume away. That is the
+change to make if these batches stop paying.

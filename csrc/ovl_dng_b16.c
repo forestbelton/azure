@@ -98,13 +98,106 @@ s32 func_800A2B5C(void *d);
 s32 func_800C7930(u8 *a, u8 *b, s16 c, s32 e);
 u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e);
 
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170878);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170A58);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80171014);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80171574);
+/* The banked room script's walk step with a same-tile short circuit, the
+   relinked twin of func_b02_8017169C (csrc/ovl_dng_b02.c) -- itself the
+   trimmed form of the resident func_800D904C (csrc/ovl_dungeon_800D50FC.c):
+   no func_8009A66C call, no `(s16)t == 3' arm, func_800A0818 called AFTER
+   func_8009A21C with the `x'/`y' locals straight, and the D_b16_8017420C
+   dress carrying only the `!=' arm. The one thing this copy adds over that
+   twin is an arm that is in none of its five relinked siblings: when the
+   cursor's path byte pair already equals c + 0x24/0x25 the step is skipped
+   and p + 0x92 / d + 0x88 are slid by 0x20 instead. 132 words, 0 differing.
+
+   THE d + 0x88 READ MUST BE HOISTED INTO `w' AHEAD OF THE p + 0x92 STORE.
+   Written as three read-modify-writes in listing order the target's
+   `lhu 0x88($s0)' cannot move up into the delay slot of `lhu 0x92($s2)':
+   $s2 is `p' and $s0 is `d', so the scheduler will not lift a load across a
+   store through the other pointer, and the slot takes a nop -- 133 words,
+   87 differing (every word after it shifted). With `w' the two loads are
+   adjacent in the RTL before either store and the slot fills, which is the
+   whole one-word delta. */
+void func_b16_80171574(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 n;
+    s32 w;
+    s32 x;
+    s32 y;
+
+    if (*(s8 *)(d + 0x71) > 0 && d[0x71] > *(s16 *)(d + 0x8A))
+    {
+        if (*(u8 **)(c + 0x2C) != D_b16_8017420C)
+        {
+            *(u8 **)(c + 0x2C) = D_b16_8017420C;
+            func_80047784(c, D_b16_8017420C[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        if (c[0x24] == *(d + *(s16 *)(d + 0x8A) + 0x74) && c[0x25] == *(d + *(s16 *)(d + 0x8A) + 0x7C))
+        {
+            w = *(u16 *)(d + 0x88) - 0x20;
+            *(s16 *)(p + 0x92) = *(u16 *)(p + 0x92) + 0x20;
+            *(s16 *)(d + 0x88) = w;
+            *(s16 *)(d + 0x8A) = *(u16 *)(d + 0x8A) + 1;
+        }
+        else
+        {
+            x = c[0x24];
+            y = c[0x25];
+            func_8009A3D0(x, y, (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+            c[0x24] = *(d + *(s16 *)(d + 0x8A) + 0x74);
+            c[0x25] = *(d + *(s16 *)(d + 0x8A) + 0x7C);
+            *(s16 *)(d + 0x8A) = *(u16 *)(d + 0x8A) + 1;
+            func_8009A21C(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+            *(s16 *)(d + 0x2A) = func_800A0818(x, y, c[0x24], c[0x25], (u16 *)(p + 0x98));
+        }
+        p[0x9A] = 0xF;
+        *(s32 *)(p + 0x8C) = 0;
+        *(u32 *)(d + 0x1C) |= 0x40000000;
+        if ((D_80083462 & 0x80) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 8;
+            n = d[0x71];
+            if (n > 0)
+            {
+                *(s16 *)(p + 0x96) = 8 / n;
+            }
+        }
+    }
+}
 
 /* The banked room script's walk step, the relinked twin of the resident
    overlay's func_800D92C0 (csrc/ovl_dungeon_800D50FC.c) with three extra

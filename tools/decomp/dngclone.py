@@ -715,11 +715,23 @@ def vary_consts(body, pairs, limit=12):
             continue
         new, need = news[0], len(news)
         hits = _sites(body, ok, old)
-        if len(hits) < need:
-            unsure.append(f"{old:#x} differs at {need} site(s) but appears "
-                          f"only {len(hits)} time(s) in the code")
+        if not hits:
+            unsure.append(f"{old:#x} differs at {need} site(s) but does not "
+                          f"appear in the code at all")
             continue
-        combos = list(itertools.combinations(hits, need))[:limit]
+        if need >= len(hits):
+            # MORE ASM SITES THAN C OCCURRENCES IS NORMAL AND UNAMBIGUOUS.
+            # One C access can carry the immediate twice: `*(s32 *)(p + 0xA8)
+            # += b->unk_14' is a load AND a store. func_b11_80172258 spells
+            # 0xA8 four times and its listing has five, so an earlier
+            # count-match rule refused all four members of the family. When
+            # every differing site outnumbers the spellings, every spelling
+            # moves -- that is what "differs at all of them" means.
+            combos = [tuple(hits)]
+        else:
+            # Fewer differing sites than spellings: which ones is not knowable
+            # from a value, so hand the caller every placement to verify.
+            combos = list(itertools.combinations(hits, need))[:limit]
         choices.append([[(m, new, kind) for m, kind in combo]
                         for combo in combos])
         tilde = any(k == "tilde" for _, k in hits)
@@ -727,7 +739,7 @@ def vary_consts(body, pairs, limit=12):
                      + (f" (as ~{~old:#x} -> ~{~new:#x})" if tilde else "")
                      + (f" at {need} of {len(hits)} sites"
                         if len(hits) > need else
-                        f" at {need} sites" if need > 1 else ""))
+                        f" at all {len(hits)} sites" if len(hits) > 1 else ""))
     if unsure:
         return [], unsure
 

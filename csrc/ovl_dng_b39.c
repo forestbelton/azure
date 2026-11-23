@@ -99,6 +99,9 @@ extern u8 D_80175288[];
 extern s32 D_8008346C;
 extern u8 *D_800E3DE8;
 
+extern u8 D_80175278[];
+extern u8 D_80175280[];
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_801708A4);
 
 /* The banked room script's per-frame actor driver, the relinked twin of the
@@ -813,7 +816,146 @@ void func_b39_8017279C(u8 *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80172834);
+/* The relinked twin of the landed func_800D991C in
+   csrc/ovl_dungeon_800D50FC.c: a three-state "knocked back and falling"
+   handler whose shared tail runs once the +0x96 countdown expires. 217 words,
+   0 differing, on the first compile against that twin. Six copies in the
+   family, so 1,302 words of yield.
+
+   The twin's two load-bearing spellings are carried over unchanged and are
+   the reason this compiled clean, so they are repeated here: the FIRST
+   numerator must be three statements -- `u = c[0x24] << 6;
+   w = b2 - 0x20; u -= w;` -- or combine folds the subtract into the shift and
+   the `lbu' sinks below the `lh'; and the SECOND numerator must stay two
+   statements, because there the `lh' has the mflo bubble to fall into. No
+   alternative spelling was measured here; it landed first time.
+
+   Seven measured deltas from the resident original, all read off this
+   listing:
+     - the accumulator is +0xA8, not the resident's +0xA4;
+     - the fall seed is 0xFFEE0000, not 0xFFF00000, and the per-frame step is
+       0x40000, not 0x48000;
+     - the resident's single D_800E262C POINTER table pushed through
+       func_8003DB94 becomes TWO bank-local BYTE tables pushed through
+       func_80047784 (`>> 9 & 7', one `lbu'): D_80175278 in state 0 and
+       D_80175280 in state 2;
+     - state 0 gains a leading `(*(u16 *)(c + 0x14) & 0x6000)' gate, and
+       failing it `break's out of the switch to the countdown rather than
+       falling through;
+     - the tail gains a `(v & 0x2000)' arm that clears bit 15 of
+       `*(u16 *)(d + 0x46)', so the resident's THREE NESTED `if's become
+       `if / else if / if'. The `else' is what puts the `andi $v0, $v1, 0x410'
+       in the `beqz' delay slot; an `&&' chain would still be folded by
+       fold_truthop into one `(v & 0x22410) != 0x20000' test;
+     - the re-installed handler is this bank's func_b39_80170F6C.
+
+   The states FALL THROUGH into one another and each bumps +0x9B separately;
+   the countdown and everything after it is the code following the switch,
+   which state 2 reaches by `break'. The listing has no `.section .rodata'
+   block, so this function owns no jump table -- the switch is a compare
+   chain (`beq', `slti', `beq') because the three labels are dense but too
+   few.
+   THIS COPY'S OWN CONSTANT: 0xa8 -> 0xa0 at all 4 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b39_80172834(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 u;
+    s32 w;
+    s32 v;
+    u16 x;
+    u16 y;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x6000) == 0)
+        {
+            break;
+        }
+        *(u8 **)(c + 0x2C) = D_80175278;
+        func_80047784(c, D_80175278[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(u16 *)(p + 0x98) |= 8;
+        b->unk_14 = 0xFFEE0000;
+        *(s32 *)(d + 0x1C) &= ~0x8000000;
+        *(s32 *)(p + 0xa0) = 0;
+        p[0x9B] += 1;
+    case 1:
+        *(s32 *)(p + 0x90) -= *(s32 *)(p + 0xa0);
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            u = c[0x24] << 6;
+            w = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            u -= w;
+            b->unk_0C = (u << 16) / *(s16 *)(p + 0x96);
+            w = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - w) << 16) / *(s16 *)(p + 0x96);
+            *(s32 *)(p + 0xa0) += b->unk_14;
+            b->unk_14 += 0x40000;
+        }
+        *(s32 *)(p + 0x90) += *(s32 *)(p + 0xa0);
+        if (*(s16 *)(p + 0x96) < 2)
+        {
+            *(s32 *)(p + 0x90) = 0;
+            *(u16 *)(p + 0x98) &= ~8;
+            *(s32 *)(d + 0x1C) |= 0x8000000;
+            p[0x9B] += 1;
+        }
+    case 2:
+        if ((*(s32 *)(d + 0x1C) & 0x8000000) != 0)
+        {
+            *(u16 *)(p + 0x98) &= ~8;
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            *(u8 **)(c + 0x2C) = D_80175280;
+            func_80047784(c, D_80175280[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            p[0x9B] += 1;
+        }
+        break;
+    }
+
+    if ((*(s16 *)(p + 0x96) -= 1) > 0)
+    {
+        return;
+    }
+    b->unk_14 = 0;
+    b->unk_10 = 0;
+    b->unk_0C = 0;
+    func_800A2B04(b, c[0x24], c[0x25]);
+    func_800AD594(d, 4);
+    func_800A4ACC(d);
+    g = (u8 *)&D_80083460;
+    if (*(s16 *)(g + 0x8) != 0)
+    {
+        *(u16 *)(g + 0x8) -= 1;
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) != 0)
+    {
+        y = *(u16 *)(d + 0x46);
+        if ((y & 0x8000) != 0)
+        {
+            *(u16 *)(d + 0x46) = y & 0x7FFF;
+        }
+    }
+    else if ((v & 0x410) == 0)
+    {
+        if ((v & 0x20000) != 0)
+        {
+            *(s16 *)(d + 0x2A) =
+                func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+        }
+    }
+    if ((s16)func_800AD9B4(c, d) > 0)
+    {
+        *(u32 *)(p + 0x8C) = (u32)func_b39_80170F6C;
+        func_800A9A04(d);
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming
