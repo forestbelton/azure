@@ -21,6 +21,15 @@ Units excluded by default:
     one-member, so there is no cheap work there either.
   * anything named with --busy, for a unit an agent still holds.
 
+ANYTHING THAT JOINS TWO OF THIS PROJECT'S "REMAINING WORK" VIEWS MUST
+FILTER THROUGH `dngfam.stubs()`. They do not agree: `dngfam` reads csrc's
+INCLUDE_ASM lines and is the authority; `xsibs.py` reads
+asm/nonmatchings/<unit>/, which splat regenerates for LANDED functions too.
+An analysis that fed xsibs' output straight into a batch plan reported 458
+twinned stubs where there were 419, and 94,863 words where there were 44,220,
+because it was counting functions landed in batch 1. This tool starts from
+stub_rows(), which starts from stubs().
+
 Usage:
     python3 tools/decomp/dngpick.py [-n 5] [--budget 850] [--busy u1,u2]
 """

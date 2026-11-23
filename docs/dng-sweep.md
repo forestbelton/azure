@@ -927,3 +927,50 @@ and take the rest as deltas, which is the compounding h14 saw inside one unit
 but an order of magnitude bigger. It needs one agent to hold several unit
 copies at once, which the brief and `dngland` both assume away. That is the
 change to make if these batches stop paying.
+
+## CORRECTION to the twin map figures above
+
+**The numbers in the previous section are wrong and the error was mine.**
+`xsibs.py` reads the stub side out of `asm/nonmatchings/<unit>/`, and splat
+regenerates a listing for every function in a segment -- including the ones
+already LANDED. I did not filter its output against `dngfam.stubs()`, so the
+map counted work already done. `func_b01_80172800` is in it and has been a
+definition in `csrc/ovl_dng_b01.c` since batch 1.
+
+Filtered to actual stubs:
+
+                      claimed        actual
+    stubs with a twin   458            419
+    words            94,863         44,220
+    share of the rest    45%            18%
+
+    >=0.95        34 stubs   2,631 words
+    0.88-0.95     50         4,224
+    0.78-0.88    180        23,952
+    0.70-0.78    155        13,413
+
+A second, smaller error in the same analysis, in the other direction: the
+first run passed `--min-words 40`, so 299 stubs under 40 words came back
+twinless by construction. h17 landed two 22-word functions off a resident
+twin the map had told me did not exist. Re-running with `--min-words 8` is
+what produced the 419.
+
+**What survives the correction.** The direction was right and the size was
+not: shape replication is real and worth selecting on -- 419 stubs is 28% of
+what is left, and the 264 at ratio >= 0.78 are a materially faster class of
+work than the rest. Batch 8's dispatch is unaffected, because its function
+list was built by iterating the STUB set and looking twins up, not by
+iterating the map; only the labels and these statistics were wrong.
+
+**What does not survive.** "45% of the plain decompilation is not plain" was
+an overstatement. 82% of the remaining words have no shape template at
+ratio 0.70, and the ten-resident-functions-carry-most-of-it claim was
+inflated the same way -- `func_800D92C0`'s 47 stubs are 20 stubs once the
+landed ones come out. The twin-cluster lever at the end of that section is
+still the right next move, but it is worth roughly half what I said.
+
+**The lesson for the tooling.** Every one of these tools has a notion of
+"remaining work" and they do not agree: `dngfam` reads `csrc/`'s INCLUDE_ASM
+lines (the authority), `xsibs` reads the listing directory, `guard.py` reads
+both. Anything that joins two of them has to filter through `dngfam.stubs()`
+first. `dngpick.py` does; my ad-hoc analysis did not.
