@@ -456,14 +456,24 @@ def needed_decls(decls, body):
     A typedef or struct definition is kept unconditionally: it is a type, so
     the body refers to it by a name this cannot see. Both tests run on
     `decl_code`, not the raw statement, because of the comment above it.
+
+    AND THE SEARCH RUNS ON THE BODY'S CODE, NOT ITS COMMENT. A landed body's
+    header names its twin -- "TWIN: the landed carved sibling
+    func_b03_80171DA0" -- and matching that pulled the twin's declaration into
+    every clone of the family. 32 declarations of another bank's function
+    ended up across 28 units that way: harmless to the link, since an unused
+    declaration emits nothing, and wrong in every other way, and they are
+    exactly the sort of thing a later agent reads and believes. Same lesson as
+    `code_mask` in vary_consts: a comment is prose, not a reference.
     """
+    code = "".join(c for c, keep in zip(body, code_mask(body)) if keep)
     out = []
     for d in decls:
         if is_type_decl(d):
             out.append(d)
             continue
         m = DECLARED.search(decl_code(d))
-        if m and re.search(r"\b%s\b" % re.escape(m.group(1)), body):
+        if m and re.search(r"\b%s\b" % re.escape(m.group(1)), code):
             out.append(d)
     return out
 
@@ -505,6 +515,7 @@ def add_body(text, member, body, decls):
     return splice(insert_decls(text, decls), member, body)
 
 
+TAGGED_LOCAL = re.compile(r"^func_(?!80)[A-Za-z0-9]+_[0-9A-Fa-f]{8}$")
 NUM = re.compile(r"\b(0[xX][0-9a-fA-F]+|\d+)\b")
 # An instruction's text with every numeric literal blanked, so two copies that
 # differ only in an immediate compare equal.
@@ -592,12 +603,23 @@ def _sites(body, ok, old):
         v = int(m.group(1), 0)
         if v == old:
             out.append((m, "plain"))
-        elif old < 0 and v == ~old:
-            j = m.start(1) - 1
-            while j >= 0 and body[j] in " \t":
-                j -= 1
-            if j >= 0 and body[j] == "~":
-                out.append((m, "tilde"))
+            continue
+        if old >= 0:
+            continue
+        j = m.start(1) - 1
+        while j >= 0 and body[j] in " \t":
+            j -= 1
+        if j < 0:
+            continue
+        if v == ~old and body[j] == "~":
+            out.append((m, "tilde"))
+        elif v == -old and body[j] == "-":
+            # `dx - 0x10' is `addiu -0x10' in the listing. The C literal is
+            # POSITIVE and the sign is an operator, so the search for -0x10
+            # found nothing and three members of func_b06_80174214's family
+            # were refused with "appears only 0 times in the code". The
+            # operator is part of the match: see _apply.
+            out.append((m, "minus"))
     return out
 
 
@@ -609,6 +631,19 @@ def _apply(body, picks):
     the picks are disjoint by construction.
     """
     for m, val, kind in sorted(picks, key=lambda x: -x[0].start(1)):
+        if kind == "minus":
+            # The sign lives in the OPERATOR, so flip it with the value:
+            # -0x10 -> +0x10 rewrites `dx - 0x10' as `dx + 0x10'. The match
+            # is extended back over the `-' and the space before it so the
+            # whole thing is replaced at once.
+            j = m.start(1) - 1
+            while j >= 0 and body[j] in " \t":
+                j -= 1
+            assert body[j] == "-"
+            sign = "-" if val < 0 else "+"
+            body = (body[:j] + sign + body[j + 1:m.start(1)]
+                    + _tok(m.group(1), abs(val)) + body[m.end(1):])
+            continue
         v = val if kind == "plain" else ~val
         body = body[:m.start(1)] + _tok(m.group(1), v) + body[m.end(1):]
     return body
@@ -739,7 +774,34 @@ def probe_member(text, unit, member, body, decls):
     return ok, (cand if ok else None), msg
 
 
-def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
+def local_callee_sigs(rep_text, rep_body):
+    """{sym: prototype} for bank-local callees the REP'S OWN UNIT DEFINES.
+
+    A CLONE NEEDS DECLARATIONS THE REPRESENTATIVE NEVER DID. If a callee is
+    defined ABOVE the representative in its own unit, no declaration is
+    required there and `needed_decls` has nothing to carry. In the target unit
+    the renamed callee may be defined BELOW the insertion point, or still be
+    an INCLUDE_ASM stub, and the compile then fails with
+    `func_s01_80024024' undeclared -- naming a symbol that exists, in a file
+    nobody wrote by hand. Four members of func_b06_80174214's family failed
+    that way on `func_b06_80173E94', which ovl_dng_b06.c defines earlier.
+
+    The prototype comes from the definition, which is the authority, and is
+    renamed with the rest of the body.
+    """
+    code = "".join(c for c, k in zip(rep_body, code_mask(rep_body)) if k)
+    out = {}
+    for sym in set(re.findall(r"\bfunc_[A-Za-z0-9]+_[0-9A-Fa-f]{8}\b", code)):
+        if not TAGGED_LOCAL.match(sym):
+            continue
+        sig = def_signature(rep_text, sym)
+        if sig:
+            out[sym] = sig
+    return out
+
+
+def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run,
+               local_sigs=None):
     """Clone every member of one family that lives in ONE unit, in sequence.
 
     THE MEMBERS OF A FAMILY ARE NOT ONE PER UNIT. func_b01_801735D4's family
@@ -773,7 +835,15 @@ def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
                 continue
         else:
             bodies = [body]
-        decls = reconcile_decls([rename(d, smap)[0] for d in rep_decls], text)
+        want = list(rep_decls)
+        # A callee the rep's unit defines above it (see local_callee_sigs):
+        # add the renamed prototype unless THIS unit defines it too and the
+        # definition comes first, which reconcile_decls then settles.
+        for sym, sig in (local_sigs or {}).items():
+            img = smap.get(sym)
+            if img and img != member:
+                want.append(sig)
+        decls = reconcile_decls([rename(d, smap)[0] for d in want], text)
         # SEVERAL CANDIDATE SPELLINGS, and the verifier picks. vary_consts
         # returns one body per placement of an immediate that occurs more
         # often in the code than it differs in the listing; trying them in
@@ -815,6 +885,7 @@ def main():
     if rep_body is None:
         raise SystemExit(f"{rep} is not defined in {src} -- land it first")
     rep_decls = needed_decls(decl_block(rep_text), rep_body)
+    local_sigs = local_callee_sigs(rep_text, rep_body)
 
     # `landed=True` BECAUSE THE REPRESENTATIVE IS ALREADY LANDED by the time
     # this runs -- dngland.py writes it into csrc/ and then calls this. The
@@ -842,7 +913,7 @@ def main():
     good = bad = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.j) as ex:
         futs = [ex.submit(clone_unit, rep, rep_body, rep_decls, u, ms,
-                          args.dry_run)
+                          args.dry_run, local_sigs)
                 for u, ms in by_unit.items()]
         for f in concurrent.futures.as_completed(futs):
             for m, ok, msg in f.result():

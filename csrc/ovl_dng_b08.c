@@ -17,7 +17,6 @@ s32 func_8009A180(u8 *, u8 *);
 void func_800A9A04(u8 *);
 void func_b08_80173F20(u8 *p, u8 *b, u8 *c, u8 *d);
 extern void (*D_80173CEC[])(u8 *, UnkVec *, u8 *, u8 *);
-s32 func_b03_80171DA0(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 extern u8 D_8006CCF8[];
 extern void (*D_80174C94[])(u8 *, UnkVec *, u8 *, u8 *);

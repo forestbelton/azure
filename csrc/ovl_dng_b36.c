@@ -30,7 +30,6 @@ void func_800A9A04(u8 *);
 void func_b36_80174278(u8 *p, u8 *b, u8 *c, u8 *d);
 extern void (*D_80173CEC[])(u8 *, UnkVec *, u8 *, u8 *);
 s32 func_8009A180(u8 *a, u8 *b);
-s32 func_b03_80171DA0(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 extern u8 D_8006CCF8[];
 extern void (*D_80174AF4[])(u8 *, UnkVec *, u8 *, u8 *);
@@ -82,7 +81,7 @@ s32 func_800AC480();
 s32 func_800AC010();
 
 s32 func_800ABDBC();
-void func_b36_80170E94();
+void func_b36_80170E94(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 s32 func_800AB778();
 
@@ -103,6 +102,48 @@ extern u8 D_80083498[];
 extern u8 D_80045340[];
 s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
 void func_b36_80170A68(u8 *p, UnkVec *b, u8 *c);
+
+s16 func_8009FD7C(s16 x1, s16 y1, s16 x2, s16 y2);
+s32 func_b36_80171DFC(u8 *p, UnkVec *b, u8 *c, u8 *d);
+extern u16 D_80082EA4;
+extern UnkDngRoom2970 D_800E2970_s[] __asm__("D_800E2970");
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+extern u8 D_80174ACC[];
+extern u8 D_80174A84[];
+extern u8 D_80174AC4[];
+s32 func_800AA924(u8 *p, void *b, u8 *c, u8 *t);
+s16 func_8009FB34(u16 x, u16 y);
+s16 func_800A1C58(u8 *p);
+s32 func_800AAB10(u8 *p, void *b, u8 *c, u8 *d);
+void func_800AAF00(u8 *a, UnkVec *b, u8 *c, s32 t, void (*h)());
+void func_b36_801713F8(u8 *p, UnkVec *b, u8 *c, u8 *d);
+void func_b36_80171FC0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+s32 func_b36_801721F8(u8 *a, void *b, void *c, s32 d);
+void func_b36_801720D8(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 u8 *func_b36_80170894(s16 a, u16 b, u16 c, s16 d)
 {
@@ -331,7 +372,216 @@ void func_b36_80170A68(u8 *p, UnkVec *b, u8 *c)
     *(u16 *)(c + 0x14) |= 0x40;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b36", func_b36_80170E94);
+/* The banked room script's main actor handler and the bank's default +0x8C
+   continuation: the three early bails, the D_b36_80174A7C facing-table swap,
+   and then the twelve-way dispatch on `*(u16 *)(d + 0x46) & 0x3FFF'.
+   345 words, 0 differing. Landed on the first compile. 5 copies (dngfam.py).
+
+   IT OWNS A JUMP TABLE: jtbl_b36_80170808, 12 entries, in this unit's
+   .rodata. Read off the listing, index = (that mask) - 1, the entries are
+   cases 1 2 3 -> the func_800AAF00 arm, 4 -> default, 5 6 7 -> the
+   func_800A0818 re-aim arm, 8 -> the func_b36_80171DFC arm, 9 -> the
+   func_b36_801720D8 arm, 10 11 -> default, 12 -> the func_800A9A0C arm.
+   Cases 4, 10 and 11 carry no label of their own.
+
+   TWIN: the landed carved sibling func_b03_80170E54 in csrc/ovl_dng_b03.c,
+   338 words, NOT the resident original -- it has already absorbed the relink.
+   THIS IS THAT BODY PLUS SEVEN WORDS: b03 shares one arm between cases 8 and
+   9, and here case 9 is an arm of its own that calls func_b36_801720D8 and
+   returns, which is exactly the 338 -> 345 delta (4 argument moves, the
+   `jal', the `j' and its `nop'). Everything else is a rename:
+   D_80173CDC -> D_80174AD4, D_80173CD4 -> D_80174ACC,
+   D_b03_80173C7C -> D_b36_80174A7C, D_80173C84 -> D_80174A84,
+   D_80173CCC -> D_80174AC4, and the callees func_b03_8017139C ->
+   func_b36_801713F8, func_b03_801715F4 -> func_b36_8017163C,
+   func_b03_80173A30 -> func_b36_80174278, func_b03_8017207C ->
+   func_b36_801721F8, func_b03_80171DA0 -> func_b36_80171DFC,
+   func_b03_80171F64 -> func_b36_80171FC0.
+
+   The `case 12:' label inside the `if (w[0x9A] != 0x11)' body and the
+   fallthrough from cases 5/6/7 into cases 1/2/3 are b03's and are
+   load-bearing: that is how the target reaches .Lb27_801721F4 from two
+   places and .Lb27_80172208 from the 0x11 test.
+
+   `--raw' is 81 differing and every one is a relocation -- 23 `jal's, 10
+   `j's and 48 `%hi'/`%lo' halves (including the two that take this
+   function's own address for the func_800AAF00 arm) -- so no masked word is
+   hiding a constant address. func_b36_801713F8, func_b36_80171FC0,
+   func_b36_801721F8 and func_b36_801720D8 are all defined or stubbed below,
+   so each needed a declaration above. */
+void func_b36_80170E94(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+    s32 v;
+    u16 x;
+    u8 *e;
+    u8 *e2;
+    u8 *e3;
+    s32 m;
+    u8 *w;
+
+    if ((D_80083462 & 0x1000) != 0)
+    {
+        p[0x9A] = 0xE;
+        func_b36_801713F8(p, b, c, d);
+        return;
+    }
+    if (d[0x25] == 0)
+    {
+        func_800AA79C(p, b, c, d);
+        if (*(u8 **)(c + 0x2C) != D_80174AD4)
+        {
+            e = D_80174ACC;
+            *(u8 **)(c + 0x2C) = e;
+            func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        return;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x200) != 0)
+    {
+        if (*(u8 **)(c + 0x2C) == D_80174AD4)
+        {
+            p[0x9A] = 0xD;
+            p[0x9B] = 1;
+            *(u32 *)(p + 0x8C) = 0;
+            *(s32 *)(d + 0x1C) &= ~0x40000;
+            return;
+        }
+        if (func_800AA924(p, b, c, D_80174ACC) != 0)
+        {
+            return;
+        }
+    }
+    if ((D_80083462 & 0x2000) == 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if (p[0x9A] != 0xE)
+        {
+            e2 = D_b36_80174A7C;
+            if (*(u8 **)(c + 0x2C) != e2)
+            {
+                *(u8 **)(c + 0x2C) = e2;
+                func_80047784(c, e2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            }
+            p[0x9A] = 0xE;
+        }
+        *(u16 *)(p + 0x98) &= ~0xC;
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, D_80174A84) != 0)
+        {
+            return;
+        }
+        if ((*(s32 *)(d + 0x1C) & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            func_b36_80174278(p, (u8 *)b, c, d);
+            return;
+        }
+        if ((s16)func_800A1C58(d) != 0)
+        {
+            func_800AAB10(p, b, c, d);
+        }
+    }
+    n = func_8009FB34(c[0x24], c[0x25]);
+    c[0x26] = n;
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x20) != 0)
+        {
+            func_800A9A0C(d);
+            return;
+        }
+        if (*(u16 *)(c + 0x24) == D_80082EA4)
+        {
+            func_b36_8017163C(p, b, c, d);
+            return;
+        }
+        if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+        {
+            if ((D_80083462 & 0x2000) != 0 &&
+                (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+            {
+                return;
+            }
+            if ((s16)func_b36_801721F8(p, b, c, 0) == 0)
+            {
+                return;
+            }
+            *(u16 *)(d + 0x46) |= 0x4000;
+            if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+            {
+                func_b36_8017163C(p, b, c, d);
+                return;
+            }
+        }
+        switch (*(u16 *)(d + 0x46) & 0x3FFF)
+        {
+        case 8:
+            if ((s16)func_b36_80171DFC(p, b, c, d) != 0)
+            {
+                return;
+            }
+            func_b36_80171FC0(p, b, c, d);
+            return;
+        case 9:
+            func_b36_801720D8(p, b, c, d);
+            return;
+        case 5:
+        case 6:
+        case 7:
+            m = func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+            w = (u8 *)D_800814A8;
+            *(s16 *)(d + 0x2A) = m;
+            if (w[0x9A] != 0x11)
+            {
+            case 12:
+                func_800A9A0C(d);
+                return;
+            }
+        case 1:
+        case 2:
+        case 3:
+            func_800AAF00(p, b, c, (s32)D_80174AC4, func_b36_80170E94);
+            return;
+        default:
+            func_b36_8017163C(p, b, c, d);
+            return;
+        }
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) == 0)
+    {
+        if ((s8)n < 0 || (D_800E2970_s[(s8)n].unk_0C & 2) == 0)
+        {
+            if ((v & 0x430) == 0)
+            {
+                if ((s16)func_8009FD7C(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25]) != 0)
+                {
+                    *(s16 *)(d + 0x2A) =
+                        func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+                }
+            }
+        }
+    }
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((*(u16 *)(c + 0x14) & 0x40) != 0)
+    {
+        return;
+    }
+    e3 = D_b36_80174A7C;
+    if (*(u8 **)(c + 0x2C) == e3)
+    {
+        return;
+    }
+    *(u8 **)(c + 0x2C) = e3;
+    func_80047784(c, e3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+}
 
 /* The banked room script's step-the-walk handler, the relinked twin of the
    resident overlay's func_800D904C in csrc/ovl_dungeon_800D50FC.c: advance

@@ -88,6 +88,16 @@ extern s16 D_800DCF5E;
 extern s16 D_801742E0;
 s32 func_800453E0(u8 *, UnkVec *, u8 *, s16);
 
+s32 func_80042900(s8 *, s8);
+void func_80042B68(s8 *, s8);
+s16 func_8009FD40(u8 *, u8 *);
+void func_800AA79C(u8 *, void *, u8 *, u8 *);
+
+extern u8 D_8017423C[];
+s32 func_800A2B5C(void *d);
+s32 func_800C7930(u8 *a, u8 *b, s16 c, s32 e);
+u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170878);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170A58);
@@ -379,7 +389,56 @@ void func_b16_80171784(u8 *p, void *b, void *c, u8 *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80171ECC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80172090);
+/* The banked room script's unconditional "same slot" entry: past the single
+   D_80083462 0x2000 gate and the two func_800A2B5C tests, put the actor into
+   state 0x17, swap the D_8017423C facing table into the slot's +0x2C and
+   re-aim through func_8009C93C. 73 words, 0 differing, on the first compile.
+
+   The twin is the 70-word func_b03_80171F64 (csrc/ovl_dng_b03.c); read its
+   comment for the mechanism, which all held here -- the `(s16)' on both
+   func_800A2B5C tests, no leftover aggregate local (the 0x30 frame is exactly
+   the five saves plus func_8009C93C's 0x18 outgoing area), `d[0x6D] -= 1'
+   BEFORE the func_8009C93C call and the +0x84/+0x85 pair AFTER it, and the
+   p + 0x9A, p + 0x8C, p + 0x9B store order.
+
+   Three deltas from that twin, all read off the listing: the state byte is
+   0x17 rather than 0x11, the facing table is this bank's D_8017423C, and
+   there is an extra `*(u16 *)(p + 0x98) |= 8;' between `d[0x6D] -= 1;' and
+   the func_8009C93C call -- the three words at .Lb02_8017230C.
+   THIS COPY'S OWN CONSTANT: 0x17 -> 0x11.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b16_80172090(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x11;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    e = D_8017423C;
+    *(u8 **)(c + 0x2C) = e;
+    func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    *(u16 *)(p + 0x98) |= 8;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    d[0x84] = 0x7C;
+    d[0x85] = 0;
+}
 
 /* THE PARAMETER COPY HAS TO LEAVE THE PROLOGUE'S UNSCHEDULABLE PREFIX. The
    target saves and copies its four parameters in the order $s1, $s2, $s3,
@@ -650,7 +709,166 @@ void func_b16_80172D18(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80172D50);
+/* The banked room script's three-state tail of the handler installed at
+   p + 0x8C, switching on the state index at p + 0x9B: state 0 re-dresses the
+   renderable from the D_8017425C facing table, state 1 is the long refusal
+   chain, state 2 hands the actor back to func_b16_80171014. 241 words,
+   0 differing, on the first compile.
+
+   THE TWIN IS func_b03_80173358 (csrc/ovl_dng_b03.c), not the 213-word
+   func_b01_80173AAC / func_b16_80173114 pair: like func_b03_80173358 this
+   copy opens state 1 with a func_80042900 test rather than the d[0x25] one,
+   carries the func_800AA79C arm behind the g + 0x2 0x2008 gate, closes state
+   1 with the D_80082E80 / func_8009FD40 / func_800A6D30 window and the second
+   func_80042900 test, and writes the dress/flag/bump tail out TWICE -- once
+   in the first test's `== 0' arm and once after `again:' -- which gcc
+   cross-jumps into the single block at the target's .Lb02_80174134. Read that
+   comment for the mechanism: `&D_80083460' as separate pointer locals per
+   arm, and the facing table named directly at every site.
+
+   Four deltas from that twin, all read off the listing. The tail's flag
+   update is `*(s32 *)(d + 0x1C) |= 0x40000' and it sits BEFORE the c + 0x14
+   0x8000 gate, unconditionally, where func_b03_80173358 has `&= ~0x200'
+   inside the gate -- that is func_b01_80173AAC's constant in
+   func_b03_80173358's position. The 0x80000 arm has the same six-word block
+   func_b01_80173AAC has between func_800AA888 and the bank-local tail call,
+   p + 0x92 reduced by p + 0xA2 as halfwords then p + 0xA2 and p + 0x9E
+   cleared, and the tail call is this unit's already-landed func_b16_80173468.
+   State 2 changes no flag word at all. And in the tail the two bumps are in
+   the opposite order to the twin's -- `p[0x9B] += 1' first, then
+   `*(u16 *)(k + 0xA) += 1' -- which is the order the `sb 0x9B' / `lhu 0xA'
+   pair appears in at .Lb02_80174194. */
+void func_b16_80172D50(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *h;
+    u8 *k;
+    u8 *k2;
+    u8 *m;
+    u8 *e;
+    s32 v;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        *(u8 **)(c + 0x2C) = D_8017425C;
+        func_80047784(c, D_8017425C[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0xA) -= 1;
+        p[0x9B] += 1;
+        return;
+    case 1:
+        if ((s16)func_80042900((s8 *)d, 1) == 0)
+        {
+            *(u8 **)(c + 0x2C) = D_80174264;
+            func_80047784(c, D_80174264[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7],
+                          0);
+            *(s32 *)(d + 0x1C) |= 0x40000;
+            if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+            {
+                *(u32 *)(p + 0x8C) = (u32)func_b16_80171014;
+                return;
+            }
+            p[0x9B] += 1;
+            k = (u8 *)&D_80083460;
+            *(u16 *)(k + 0xA) += 1;
+            return;
+        }
+        g = (u8 *)&D_80083460;
+        if ((*(u16 *)(g + 0x2) & 0x1000) != 0)
+        {
+            return;
+        }
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, NULL) != 0)
+        {
+            return;
+        }
+        if (d[0x25] == 0)
+        {
+            if ((*(u16 *)(g + 0x2) & 0x2008) != 0)
+            {
+                return;
+            }
+            func_800AA79C(p, b, c, d);
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0)
+        {
+            return;
+        }
+        v = *(s32 *)(d + 0x1C);
+        if ((v & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if ((v & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            *(u16 *)(p + 0x92) -= *(u16 *)(p + 0xA2);
+            *(s16 *)(p + 0xA2) = 0;
+            *(s16 *)(p + 0x9E) = 0;
+            func_b16_80173468(p, (u8 *)b, c, d);
+            return;
+        }
+        if (*(s8 *)(d + 0x6D) == 0)
+        {
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0 &&
+            (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+        {
+            return;
+        }
+        func_800A9A0C(d);
+        func_800A9A04(d);
+        if ((s16)func_80042900((s8 *)d, 1) != 0)
+        {
+            e = D_80082E80;
+            if (*(s8 *)(c + 0x26) != *(s8 *)(e + 0x26) || *(s8 *)(c + 0x26) < 0)
+            {
+                if ((s16)func_8009FD40(e, c) >= 2)
+                {
+                    goto again;
+                }
+            }
+            if ((func_800A6D30() & 7) == 0)
+            {
+                func_80042B68((s8 *)d, 1);
+            }
+        }
+    again:
+        if ((s16)func_80042900((s8 *)d, 1) != 0)
+        {
+            return;
+        }
+        *(u8 **)(c + 0x2C) = D_80174264;
+        func_80047784(c, D_80174264[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(s32 *)(d + 0x1C) |= 0x40000;
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u32 *)(p + 0x8C) = (u32)func_b16_80171014;
+            return;
+        }
+        p[0x9B] += 1;
+        k2 = (u8 *)&D_80083460;
+        *(u16 *)(k2 + 0xA) += 1;
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        m = (u8 *)&D_80083460;
+        *(u16 *)(m + 0xA) -= 1;
+        *(u32 *)(p + 0x8C) = (u32)func_b16_80171014;
+        return;
+    }
+}
 
 /* The banked room script's three-state tail of the handler installed at
    p + 0x8C, switching on the state index at p + 0x9B: state 0 re-dresses the

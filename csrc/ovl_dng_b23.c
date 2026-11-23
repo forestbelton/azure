@@ -79,8 +79,6 @@ s32 func_800AB538();
 
 s32 func_800AD058();
 
-s32 func_b03_80171DA0(u8 *p, UnkVec *b, u8 *c, u8 *d);
-
 extern u8 D_80174EF8[];
 s32 func_800AA6B4(u8 *, UnkVec *, u8 *, u8 *);
 s32 func_800A2C34(u8 *);

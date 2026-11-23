@@ -9,7 +9,6 @@ s32 func_8009A180(u8 *, u8 *);
 void func_800A9A04(u8 *);
 void func_b39_80174250(u8 *p, u8 *b, u8 *c, u8 *d);
 extern void (*D_80173CEC[])(u8 *, UnkVec *, u8 *, u8 *);
-s32 func_b03_80171DA0(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern Unk80083462 D_80083460;
 void func_80047784(u8 *p, s32 b, s32 c);
 
@@ -93,7 +92,6 @@ s32 func_800AB1C0();
 void func_800AD594(u8 *, s32);
 void func_800A4ACC(u8 *);
 
-void func_b05_80173F28(u8 *p, u8 *b, u8 *c, u8 *d);
 void func_800A2B04(UnkVec *, s32, s32);
 u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
 s32 func_800A56E0(s32);

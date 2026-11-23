@@ -165,6 +165,36 @@ way it is 74 differences out -- three functions have needed references ADDED,
 that one needed them REMOVED. Put your own numbers in your comment, not the
 twin's.
 
+## IF YOUR LISTING OPENS WITH `.section .rodata`, IT OWNS A JUMP TABLE
+
+Look at the top of each listing. If it starts with a `.section .rodata` block
+defining a `jtbl_<tag>_xxxxxxxx` before the `.section .text`, that function's
+`switch` compiles to a JUMP TABLE and the table is part of your unit's rodata.
+
+**That is now supported and it was not until 2026-11-23.** 105 of the 116
+carved objects have a `.rodata` subsegment of their own, so cc1psx emits your
+table at the ROM's address. Before that it appended a second copy past the
+code and the container came out longer -- while `ovlverify` reported
+`0 differing`, because it measures a function's own words and never its
+rodata. `docs/dng-sweep.md` has the whole story.
+
+What it means for you:
+
+* **Write the `switch` as a `switch`.** The table's entries tell you which
+  cases share an arm; `tools/decomp/dngfam.py` is not involved, just read the
+  `.word`s at the top of your own listing. Cases that fall to `default` need
+  no label of their own.
+* **SAY IN YOUR REPORT THAT THE FUNCTION OWNS A TABLE**, and give the entry
+  list. I check the container, you cannot, and a table is the one thing a
+  clean `ovlverify` can still be wrong about.
+* The one object still unsupported is `ovl_dng_lo16`. If that is your unit and
+  a function of yours owns a table, park it and say so rather than fighting it.
+
+A unit may also carry `const u8 D_<tag>_xxxxxxxx[] = { ... }` arrays near its
+functions. Those are its rodata between the tables, they are deliberate, and
+their POSITION IN THE FILE IS LOAD-BEARING -- cc1psx emits rodata in function
+order. Do not move one, do not reorder them, and do not make one `static`.
+
 ## Where the callees are already written
 
 The resident dungeon overlay is 100% decompiled. Anything your function calls

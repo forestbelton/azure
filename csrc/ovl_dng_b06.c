@@ -103,13 +103,96 @@ extern s16 D_800DCF5E;
 extern s16 D_8017591C;
 s32 func_800453E0(u8 *, UnkVec *, u8 *, s16);
 
+typedef struct UnkDng74334SP
+{
+    u8 pad_00[0xC];
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    Unk3DBD0W unk_18;
+    u8 pad_1C[0x8];
+    u8 *unk_24;
+    u16 unk_28;
+    u8 pad_2A[0xA];
+    VECTOR unk_34;
+    u8 pad_44[0x10];
+    MATRIX unk_54;
+    MATRIX unk_74;
+    u8 pad_94[0x10];
+    SVECTOR unk_A4;
+    u8 pad_AC[0x4];
+    SVECTOR unk_B0[4];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng74334SP;
+void func_b06_80174334(u8 *p, UnkVec *v, UnkSlot *s, s16 d);
+s32 func_80069EF8();
+void func_b06_801740E4();
+extern u8 D_8017587C[];
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_8017087C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_80170BB8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_8017140C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_80171964);
+/* The banked room script's path-step advance, the twin of func_b35_801714D8
+   (csrc/ovl_dng_b35.c) and of the resident overlay's func_800D904C: past the
+   d + 0x71 / d + 0x8A step gates, dress the renderable from D_b06_8017586C,
+   retire the current waypoint through func_8009A3D0, take the next pair out
+   of d + 0x74 / d + 0x7C, and re-aim with func_8009A21C and func_800A0818.
+   110 words, 0 differing, on the first compile, and WITH NO NEW DECLARATIONS
+   -- D_b06_8017586C, D_80083228, D_80083462, func_80047784, func_8009A3D0,
+   func_8009A21C and func_800A0818 were all already in this unit.
+
+   Three deltas from those twins, all read off the listing. There is no
+   func_8009A66C call and no `(s16)t == 3' arm, so `p[0x9A] = 0xF' is
+   unconditional. func_800A0818 is called AFTER func_8009A21C, not before it,
+   and its first two arguments are the `x'/`y' locals straight -- which is why
+   this copy needs none of the phantom-zero device func_b35_801714D8 and
+   func_800D904C both carry. And the D_b06_8017586C dress has only the `!=' arm;
+   func_800D904C's `else if' on the c + 0x14 0x6000 bits is absent. */
+void func_b06_80171964(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 n;
+    s32 x;
+    s32 y;
+
+    if (*(s8 *)(d + 0x71) > 0 && d[0x71] > *(s16 *)(d + 0x8A))
+    {
+        if (*(u8 **)(c + 0x2C) != D_b06_8017586C)
+        {
+            *(u8 **)(c + 0x2C) = D_b06_8017586C;
+            func_80047784(c, D_b06_8017586C[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        x = c[0x24];
+        y = c[0x25];
+        func_8009A3D0(x, y, (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        c[0x24] = *(d + *(s16 *)(d + 0x8A) + 0x74);
+        c[0x25] = *(d + *(s16 *)(d + 0x8A) + 0x7C);
+        *(s16 *)(d + 0x8A) = *(u16 *)(d + 0x8A) + 1;
+        func_8009A21C(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        *(s16 *)(d + 0x2A) = func_800A0818(x, y, c[0x24], c[0x25], (u16 *)(p + 0x98));
+        *(u32 *)(d + 0x1C) |= 0x40000000;
+        p[0x9A] = 0xF;
+        *(s32 *)(p + 0x8C) = 0;
+        if ((D_80083462 & 0x80) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 8;
+            n = d[0x71];
+            if (n > 0)
+            {
+                *(s16 *)(p + 0x96) = 8 / n;
+            }
+        }
+    }
+}
 
 /* The banked room script's walk step, the relinked twin of the resident
    overlay's func_800D92C0 (csrc/ovl_dungeon_800D50FC.c) with three extra
@@ -486,7 +569,59 @@ s32 func_b06_80172264(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_80172428);
+/* State 0x11's entry: clear the record's +0x71 top bit, and unless the
+   D_80083462 0x2000 gate is up or func_800A2B5C reports the record busy,
+   step it forward through func_800C7930, then -- if it is still not busy --
+   mark state 0x11/0, clear the +0x8C word, hang the bank-local D_8017587C
+   facing table off the renderable's +0x2C, re-key the sprite through
+   func_80047784, spend one of the record's +0x6D charges and re-aim with
+   func_8009C93C, raise the owner's +0x98 0x8 bit and set the +0x84 timer to
+   0x7C.  74 words, 0 differing.
+
+   The twin is csrc/ovl_dng_b33.c's func_b33_80171FCC (113 words), which is
+   this function with a func_800A04F0/func_800A2CB8 reach test, a second
+   D_80083460 gate and a `return -1` chain in front of it; the whole of this
+   function's gate chain, the func_80047784 byte-table index and the
+   `d[0x6D] -= 1;` BEFORE the func_8009C93C call are taken from it unchanged
+   and re-measured here.  This one is `void` -- the target leaves $v0 dead at
+   every exit -- so the three gates are plain `return;`s sharing the
+   epilogue and none of the twin's return-value plumbing appears.
+
+   ONE SPELLING FACT, and it is a store order: `*(s32 *)(p + 0x8C) = 0;`
+   comes BETWEEN `p[0x9A] = 0x11;` and `p[0x9B] = 0;`.  Written the twin's
+   way, with the +0x8C word last of the three, the word count and every
+   opcode are already right and the `sw $zero, 0x8C($s1)` sits one slot late
+   -- 74 words, 2 aligned differences. */
+void func_b06_80172428(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x11;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    e = D_8017587C;
+    *(u8 **)(c + 0x2C) = e;
+    func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    *(u16 *)(p + 0x98) |= 0x8;
+    d[0x84] = 0x7C;
+    d[0x85] = 0;
+}
 
 /* THE PARAMETER COPY HAS TO LEAVE THE PROLOGUE'S UNSCHEDULABLE PREFIX. The
    target saves and copies its four parameters in the order $s1, $s2, $s3,
@@ -974,13 +1109,288 @@ s32 func_b06_80173E94(u8 *p, UnkVec *v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_801740E4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_80174214);
+/* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
+   each axis by a fresh func_80069EF8() & 0x1F and the caller's own offset
+   less 0x10, then park func_b06_801740E4 as the step and
+   func_b06_80173E94 as the draw, with `b` at the payload's +0x14, `d` at
+   +0x32 and `c` at +0x8.  72 words, 0 differing.  The twin is
+   csrc/ovl_dungeon_800D50FC.c's func_800D6AD4 -- the same 0x211 spawner
+   without the jitter.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_80174334);
+   THE THREE STACK OFFSETS ARE `s16` AND THE SUBTRACTION WEARS AN `(s16)`
+   CAST, and both halves of that are load-bearing:
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_8017489C);
+   * `s32 dx/dy/dz` is 66 words and 71 differing.  An `s32` stack parameter
+     keeps its incoming MEM as its rtl and is rematerialised with a
+     `lw 0x48($sp)` at its single use; the promoted `s16` goes through a
+     pseudo, which register allocation then parks in $s2/$s3/$s4.  The six
+     missing words are those three registers' save/restore pairs.  (Same
+     mechanism, opposite sign, as func_800D6AD4's own note.)
+   * `s16` with a bare `(dx - 0x10)` is 74 words and 20 aligned differences:
+     fold's associate step splits `(X + jitter) + (dx + -0x10)` into
+     `(X + jitter + dx) + -0x10` and the `addiu` lands on the running sum
+     instead of on the parameter.  The NOP_EXPR the cast leaves blocks that
+     split, which is the whole of the remaining 20 rows -- with it the
+     `andi` falls into the `lhu`'s load-delay slot and the destination's
+     `lw 0x8($s0)` moves ahead of the first `addu` on its own. */
+void func_b06_80174214(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
+{
+    UnkNode *n;
+    u8 *p;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_801748F0);
+    n = func_8003FD64(0x211, a);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_b06_801740E4;
+        *(s16 *)((u8 *)n->unk_08 + 0x2) =
+            *(u16 *)((u8 *)a->unk_08 + 0x2) + (func_80069EF8() & 0x1F) + (s16)(dx - 0x10);
+        *(s16 *)((u8 *)n->unk_08 + 0x6) =
+            *(u16 *)((u8 *)a->unk_08 + 0x6) + (func_80069EF8() & 0x1F) + (s16)(dy - 0x10);
+        *(s16 *)((u8 *)n->unk_08 + 0xA) =
+            *(u16 *)((u8 *)a->unk_08 + 0xA) + (func_80069EF8() & 0x1F) + (s16)(dz - 0x10);
+        p = (u8 *)n + 0x20;
+        *(s16 *)(p + 0x14) = b;
+        *(s16 *)(p + 0x32) = d;
+        func_8004491C(n, (u32)func_b06_80173E94);
+        *(u32 *)(p + 0x8) = c;
+    }
+}
+
+/* One gouraud-textured billboard quad per tag-chain node: compose the slot's
+   rotation with the camera matrix in the 0x1F800000 scratchpad, RotAverage4
+   the four SVECTORs taken off the payload's +0x64..+0x7B into the POLY_GT4 at
+   the +0x8D0 cursor, and -- when the OT index is in range and at least one
+   corner is on screen -- build its UV/CLUT/TPAGE words out of the slot's own
+   +0x10/+0x12 overrides and hang the quad on the OT row.  0x34 bytes of
+   cursor, which is what a POLY_GT4 costs.  346 words, 0 differing.
+
+   The twin is csrc/ovl_dungeon_800D50FC.c's func_800D6170 (400 words, the
+   ladder strip): same signature, same scratchpad layout, same
+   PushMatrix/RotMatrix/ReadRotMatrix/CompMatrix/ScaleMatrix/SetTransMatrix/
+   SetRotMatrix chain, same `- d - 6`, and the same four on-screen tests.
+   Two of its three spelling facts hold here and were re-measured:
+
+   * THE SCALE VECTOR IS ONE CHAINED ASSIGNMENT, which emits +0x3C, +0x38,
+     +0x34 in that order.
+   * THE FOUR ON-SCREEN TESTS ARE `|`, NOT `||` -- each `or` sits in the next
+     term's branch delay slot.
+
+   AND ONE OF THEM IS INVERTED: `&m` DOES *NOT* GO THROUGH A POINTER LOCAL
+   here.  func_800D6170 needs `MATRIX *mp = &m;` for its 400th word; this
+   function has no loop, the two `addiu $a0, $sp, 0x28` are what the target
+   has, and a pointer local would make them a single $s register copy.  Write
+   `ReadRotMatrix(&m); CompMatrix(&m, ...)` directly.  (The twin's `q[4]`
+   declaration order does not arise -- `m` is the only stack local, so it
+   sits at $sp+0x28 above RotAverage4's six-word outgoing argument area.)
+
+   THE UV SCALARS ARE SET ARM B'S WAY AND ARITHMETIC'D ARM A'S WAY.  The four
+   `sw` of e[8..0xB] into +0x0C/+0x10/+0x14/+0x18 are
+   csrc/ovl_dungeon_800B45E0.c func_800B51C8's SECOND arm (straight stores,
+   no pre-correction), while the `+=` / `& 0x100` / `<<= 8` block inside the
+   on-screen test is its FIRST arm; the +0x100 correction moved from before
+   RotAverage4 to after it.  Both halves relink +4 from func_800B51C8's
+   offsets, which is the same +4 the whole scratchpad carries.
+
+   THE ONE THING FOUGHT FOR: `e = (u8 *)s->unk_08;` COMES BEFORE
+   `sp->unk_28 = s->unk_14;`.  Written the other way round the body is 348
+   words and 3 aligned differences -- both MEMs are MEM_IN_STRUCT_P and
+   varying, so sched1 keeps the dependence, the `lw $s3, 0x8($s5)` cannot
+   reach the `lhu 0x14($s5)`'s load-delay slot and a `nop` is emitted on each
+   side of the store.  Reading `e` first puts the load where the target has
+   it with no alias question to answer.  (docs/matching-levers.md, "A LOAD'S
+   DELAY SLOT CROSSES A STORE ONLY WHEN *BOTH* POINTER-SIDE MEMs CARRY
+   MEM_IN_STRUCT_P" -- here the exemption is unreachable, so the cure is
+   source order rather than a spelling.)
+
+   `u16 unk_28` AND NOT THE TWIN'S `s16`: this function reads the field back
+   three times (`& 0x100`, `& 0x8`, `& 0x4`) and the target's loads are
+   `lhu`.  The scratchpad is therefore this unit's own typedef.
+
+   The two OT links are `addPrim` -- P_TAG bitfield stores, which a
+   hand-written `|` cannot produce -- exactly as in the twin.
+
+   raw 16 against the masked 0: 1 HI16 + 2 LO16 on D_80083160, R_MIPS_26 on
+   the ten library calls, and three on .text for the clut/tpage blocks' own
+   forward `j`s.  The ten 0x1F8000xx addresses carry no relocation on either
+   side and come out byte-identical: cse replaces each one's `lui` with a
+   copy of the $s2 that already holds 0x1F800000, which is the `move`/`ori`
+   pair the listing shows. */
+void func_b06_80174334(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
+{
+    UnkDng74334SP *sp = (UnkDng74334SP *)0x1F800000;
+    Unk80083160 *g;
+    MATRIX m;
+    u8 *q;
+    u8 *e;
+    u8 f;
+
+    g = &D_80083160;
+    sp->unk_24 = g->unk_00 + 0xB0;
+    sp->unk_74.t[0] = *(s16 *)((u8 *)v + 0x2);
+    sp->unk_74.t[1] = *(s16 *)((u8 *)v + 0x6);
+    sp->unk_74.t[2] = *(s16 *)((u8 *)v + 0xA);
+    s->unk_14 |= 0x8000;
+    PushMatrix();
+    sp->unk_34.vx = sp->unk_34.vy = sp->unk_34.vz = 0x2000;
+    sp->unk_A4.vx = s->unk_16;
+    sp->unk_A4.vz = s->unk_1A;
+    sp->unk_A4.vy = s->unk_18;
+    RotMatrix(&sp->unk_A4, &sp->unk_74);
+    ReadRotMatrix(&m);
+    CompMatrix(&m, &sp->unk_74, &sp->unk_54);
+    ScaleMatrix(&sp->unk_54, &sp->unk_34);
+    SetTransMatrix(&sp->unk_54);
+    SetRotMatrix(&sp->unk_54);
+    e = (u8 *)s->unk_08;
+    sp->unk_28 = s->unk_14;
+    sp->unk_0C.w = e[8];
+    sp->unk_10.w = e[9];
+    sp->unk_14.w = e[10];
+    sp->unk_18.w = e[11];
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q + 0x34;
+    sp->unk_B0[0].vx = *(u16 *)(p + 0x64);
+    sp->unk_B0[1].vx = *(u16 *)(p + 0x6A);
+    sp->unk_B0[2].vx = *(u16 *)(p + 0x70);
+    sp->unk_B0[3].vx = *(u16 *)(p + 0x76);
+    sp->unk_B0[0].vy = *(u16 *)(p + 0x66);
+    sp->unk_B0[1].vy = *(u16 *)(p + 0x6C);
+    sp->unk_B0[2].vy = *(u16 *)(p + 0x72);
+    sp->unk_B0[3].vy = *(u16 *)(p + 0x78);
+    sp->unk_B0[0].vz = *(u16 *)(p + 0x68);
+    sp->unk_B0[1].vz = *(u16 *)(p + 0x6E);
+    sp->unk_B0[2].vz = *(u16 *)(p + 0x74);
+    sp->unk_B0[3].vz = *(u16 *)(p + 0x7A);
+    sp->unk_100 = RotAverage4(&sp->unk_B0[0], &sp->unk_B0[1], &sp->unk_B0[2], &sp->unk_B0[3],
+                              (s32 *)(q + 0x8), (s32 *)(q + 0x14), (s32 *)(q + 0x20),
+                              (s32 *)(q + 0x2C), &sp->unk_D0, &sp->unk_D4) -
+                  d - 6;
+    if ((u32)sp->unk_100 < 0x1E0)
+    {
+        if (((u16)(*(u16 *)(q + 0x8) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0xA) + 0x20) < 0x121) |
+            ((u16)(*(u16 *)(q + 0x14) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x16) + 0x20) < 0x121) |
+            ((u16)(*(u16 *)(q + 0x20) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x22) + 0x20) < 0x121) |
+            ((u16)(*(u16 *)(q + 0x2C) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x2E) + 0x20) < 0x121))
+        {
+            s->unk_14 &= 0x7FFF;
+            sp->unk_14.w += sp->unk_0C.w;
+            if ((sp->unk_14.w & 0x100) != 0)
+            {
+                sp->unk_14.w -= 1;
+            }
+            sp->unk_18.w += sp->unk_10.w;
+            if ((sp->unk_18.w & 0x100) != 0)
+            {
+                sp->unk_18.w -= 1;
+            }
+            sp->unk_10.w <<= 8;
+            sp->unk_18.w <<= 8;
+            if (s->unk_12 != 0)
+            {
+                if ((sp->unk_28 & 0x100) != 0)
+                {
+                    *(u16 *)(q + 0xE) = s->unk_12;
+                }
+                else
+                {
+                    *(u16 *)(q + 0xE) = s->unk_12 + *(u16 *)(e + 0x6);
+                }
+            }
+            else
+            {
+                *(u16 *)(q + 0xE) = *(u16 *)(e + 0x6);
+            }
+            *(u16 *)(q + 0xC) = sp->unk_10.h + sp->unk_0C.h;
+            *(u16 *)(q + 0x18) = sp->unk_10.h + sp->unk_14.h;
+            if (s->unk_10 != 0)
+            {
+                *(u16 *)(q + 0x1A) = s->unk_10 + (*(u16 *)(e + 0x4) & 0xFF9F);
+            }
+            else
+            {
+                *(u16 *)(q + 0x1A) = *(u16 *)(e + 0x4);
+            }
+            *(u16 *)(q + 0x24) = sp->unk_18.h + sp->unk_0C.h;
+            *(u16 *)(q + 0x30) = sp->unk_18.h + sp->unk_14.h;
+            if (*(s16 *)(q + 0x8) > *(s16 *)(q + 0x2C))
+            {
+                q[0x18] -= 1;
+                q[0x30] -= 1;
+            }
+            if (*(s16 *)(q + 0xA) > *(s16 *)(q + 0x2E))
+            {
+                q[0x25] -= 1;
+                q[0x31] -= 1;
+            }
+            *(s32 *)(q + 0x4) = *(s32 *)(p + 0x4);
+            *(s32 *)(q + 0x10) = *(s32 *)(p + 0x8);
+            *(s32 *)(q + 0x1C) = *(s32 *)(p + 0xC);
+            *(s32 *)(q + 0x28) = *(s32 *)(p + 0x10);
+            SetPolyGT4((POLY_GT4 *)q);
+            f = e[1];
+            s->unk_0C[3] = f;
+            if ((sp->unk_28 & 0x8) != 0)
+            {
+                if ((sp->unk_28 & 0x4) != 0)
+                {
+                    s->unk_0C[3] = f | 0x2;
+                }
+                else
+                {
+                    s->unk_0C[3] = f & 0xFD;
+                }
+            }
+            q[0x7] |= s->unk_0C[3];
+            addPrim(sp->unk_24 + sp->unk_100 * 4, q);
+        }
+    }
+    PopMatrix();
+}
+
+/* Walk the tag chain from `p` and hand every node to func_b06_80174334 with a
+   zero fourth argument.  21 words, 0 differing, first compile.
+
+   The twin is func_b06_80173E08 two listings up in THIS unit -- the same
+   walk with a different per-node call -- and csrc/ovl_dungeon_800D50FC.c's
+   func_800D67B0 is the resident original, identical down to the
+   `s = (UnkSlot *)n->unk_0C;` cast.  Nothing was fought for; the loop is a
+   `for (;;)` with the NULL test in the middle, which is what puts the
+   `addiu $s0, $a2, 0x20` in the `beqz`'s delay slot. */
+s32 func_b06_8017489C(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    UnkNode *n;
+
+    for (;;)
+    {
+        func_b06_80174334(p, v, s, 0);
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            return 0;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *)n->unk_0C;
+    }
+}
+
+/* Spend one frame of the payload's +0x1A life counter and, when it runs out,
+   raise the 0x8000 kill bit both in the node's -0x2 flags and in
+   D_800814A0.  17 words, 0 differing, first compile.
+
+   The twin is csrc/ovl_dungeon_800D50FC.c's func_800D5CA0, whose tail is
+   this function verbatim with the counter at +0x32; the relink moves it to
+   +0x1A and nothing else changes.  The decrement stays folded into the test
+   (`--*(s16 *)(p + 0x1A) <= 0`), which is what keeps the one `lhu`/`addiu`/
+   `sh` run and the `sll`/`bgtz` pair instead of a reload. */
+void func_b06_801748F0(u8 *p)
+{
+    if (--*(s16 *)(p + 0x1A) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_80174934);
 

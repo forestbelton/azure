@@ -79,8 +79,6 @@ s32 func_800AB538();
 
 s32 func_800AD058();
 
-s32 func_b03_80171DA0(u8 *p, UnkVec *b, u8 *c, u8 *d);
-
 extern u8 D_801760F4[];
 s32 func_800AA6B4(u8 *, UnkVec *, u8 *, u8 *);
 s32 func_800A2C34(u8 *);
@@ -133,6 +131,12 @@ typedef struct UnkDngB09A28Tbl
 } UnkDngB09A28Tbl;
 
 extern u8 D_801760DC[];
+
+void func_800A2B04(UnkVec *, s32, s32);
+u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
+s32 func_800A56E0(s32);
+extern s32 D_8008346C;
+extern u8 D_801760CC[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_801708D4);
 
@@ -908,7 +912,92 @@ void func_b42_80172EA0(u8 *p, void *b, void *c, void *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80172F04);
+/* A four-state tail switched on the actor's +0x9B: state 0 either flags the
+   actor done and hands off to func_8009C12C or zeroes the UnkVec's three
+   high fields, states 1 and 2 count the +0x96 timer UP to 4 (or bail early
+   on any of c + 0x14's 0xE000 bits) and then arm the D_801760CC facing
+   table / re-fire func_8009C12C, and state 3 parks func_b42_801714B8 in
+   +0x8C and clears +0x46's top bit. 120 words, 0 differing. Landed on the
+   first compile. 2 copies (dngfam.py). No rodata of its own -- its listing
+   has no `.section .rodata' block.
+
+   IT LANDED BECAUSE func_b42_801714B8 WAS ALREADY IN THIS UNIT: its address
+   is what state 3 stores into +0x8C, and the only declarations this body
+   needed beyond what the unit already carried were func_8009C12C,
+   func_800A56E0, D_8008346C and D_801760CC -- D_80083228, func_80047784,
+   func_800AD594 and func_800A4ACC were all brought in by earlier bodies.
+
+   Nearest relative is the landed func_b37_80172650 in csrc/ovl_dng_b37.c
+   (124 words), which shares the +0x9B switch, the
+   `*(u8 **)(c + 0x2C) = T; func_80047784(c, T[...], 0)' pair, the
+   func_800A56E0(0x808) sting and the terminal +0x8C handoff. It is NOT the
+   same body: this one has four numbered states instead of 0/1/0xFF, no
+   leading `--*(s16 *)(p + 0x96)', a counter that counts up rather than down,
+   state 0's three UnkVec stores, and a terminal arm with no func_800A2B04
+   and an unconditional 0x7FFF clear in place of b37's +0x6D two-arm gate.
+
+   The three `p[0x9B]++; *(s16 *)(p + 0x96) = 0;' copies are written out once
+   per arm as below; jump.c cross-jumps them into the single shared tail at
+   .Lb27_80173754 that the target has.
+
+   `--raw' is 20 differing and all 20 are relocations -- 6 `jal's, 6 `j's and
+   8 `%hi'/`%lo' halves (D_801760CC, D_80083228, func_b42_801714B8 and
+   D_8008346C) -- so no masked word is hiding a constant address.
+   THIS COPY'S OWN CONSTANT: 0xe000 -> 0x8000 at 2 of 3 sites, 0x808 -> 0x809, 0x100 -> 0x140 at 1 of 2 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b42_80172F04(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 3;
+            *(u16 *)(c + 0x14) |= 0x6000;
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        p[0x9B]++;
+        *(s16 *)(p + 0x96) = 0;
+        return;
+    case 1:
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) + 1;
+        if (*(s16 *)(p + 0x96) == 4 || (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u8 **)(c + 0x2C) = D_801760CC;
+            func_80047784(c, D_801760CC[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            func_800A56E0(0x809);
+            p[0x9B]++;
+            *(s16 *)(p + 0x96) = 0;
+        }
+        return;
+    case 2:
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) + 1;
+        if (*(s16 *)(p + 0x96) == 4 || (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            p[0x9B]++;
+            *(s16 *)(p + 0x96) = 0;
+        }
+        return;
+    case 3:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        func_800AD594(d, 0x140);
+        *(u32 *)(p + 0x8C) = (u32)func_b42_801714B8;
+        D_8008346C = 0;
+        func_800A4ACC(d);
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        return;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_801730E4);
 

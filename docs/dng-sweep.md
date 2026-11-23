@@ -735,3 +735,84 @@ with no `.align` at all. It will need the same carve when that function lands,
 and `dngrodata.py` reports both by name on every run.
 
 `func_b03_80170E54`'s whole six-member family is landed.
+
+# Batch 6: 15 of 15, and the jump tables pay off twice
+
+    agent  unit          reps  clones  words
+    h6     ovl_dng_b27     2      5    1,965
+    h7     ovl_dng_b02     4      9    1,795
+    h8     ovl_dng_b14     3      7    1,682
+    h9     ovl_dng_b06     5     28    2,102
+    h10    ovl_dng_b03     1      4    1,580
+                          --     --    -----
+                          15     53    9,124
+
+54.0% -> 55.0%. Fifteen representatives, fifteen landed, twelve of them on the
+first compile. No parks.
+
+## The jump-table work compounded immediately
+
+`func_b03_80170E54` was PARKED at the end of batch 5 because the container
+would not take its table. This batch it was the TWIN for two separate
+landings: h6's `func_b27_80171E20` (345 words -- that body plus exactly seven,
+one unshared arm) and, through `func_b03_80172A24`, h8's
+`func_b14_8017293C` (286 words). Both of those own tables of their own and
+would have been unlandable the day before.
+
+Ten compiled jump tables are now in the build across nine objects and all four
+containers are byte-identical.
+
+**h10 verified its own `.rdata` rather than trusting the ROM layout**, which
+is the check I had not thought to ask for: it compiled its unit to `.s` and
+confirmed exactly two `.rdata` blocks came out, 12 words then 7, in that
+order, with `%hi`/`%lo(jtbl_b03_80170838)` a real relocation and not a folded
+constant. Worth asking for every time.
+
+And it found something the ROM cannot tell you: **a function can have two
+switches on the same field and only one gets a table.**
+`func_b03_80172A24`'s six-case switch does; the three-case `else` arm
+compiles to a compare chain, and cross-jumping merges the table switch's 1/2/3
+arms INTO the compare chain's -- which is why the table's first three entries
+point past the `else` block, and why the inner switch's arms have to be
+written 3, 2, 1. Ascending is 318 words / 10 differing, because their emission
+order is what the table's `j`s point at. h8 re-measured the same thing in b14.
+
+## Two more dngclone defects, both general
+
+* **A NEGATIVE ASM IMMEDIATE CAN BE A POSITIVE C LITERAL UNDER A MINUS.**
+  `func_b06_80174214` writes `(s16)(dx - 0x10)`; the listing says
+  `addiu -0x10`. Three members want `+0x10`, so the search for -16 found
+  nothing and they were refused with "appears only 0 times in the code". The
+  matcher reads that spelling now, and because the sign lives in the OPERATOR
+  the substitution rewrites `dx - 0x10` as `dx + 0x10`. Third spelling of the
+  same lesson after the plain literal and the `~` mask.
+
+* **A CLONE NEEDS DECLARATIONS THE REPRESENTATIVE NEVER DID.**
+  `func_b06_80173E94` is defined EARLIER in ovl_dng_b06, so the rep needed no
+  forward declaration and `needed_decls` had nothing to carry. In the target
+  unit the renamed callee sits below the insertion point, and the compile
+  failed with `func_s01_80024024' undeclared -- naming a symbol that exists,
+  in a file nobody wrote by hand. `local_callee_sigs()` takes the prototype
+  from the rep unit's own definition and renames it with the body.
+
+`ovl_dng_s51` is the best advertisement yet for returning candidate spellings
+instead of refusing: it wanted `0x1f -> 0xf` AND `-0x10 -> -0x8`, each at 2 of
+3 sites, and the verifier picked which two.
+
+## And one defect an AGENT found that the tools did not
+
+h6 noticed `s32 func_b03_80171DA0(...)` declared in `csrc/ovl_dng_b27.c` --
+another bank's function, in a unit that neither calls nor defines it. There
+were **32 of them across 28 units**.
+
+`needed_decls` searched the cloned body INCLUDING ITS LEADING COMMENT, and a
+landed body's header names its twin: "TWIN: the landed carved sibling
+func_b03_80171DA0". That pulled the twin's declaration into every clone of the
+family. Harmless to the link, since an unused declaration emits nothing, and
+wrong in every other way -- and exactly the sort of thing a later agent reads
+and believes. The search runs on code only now, and all 32 are removed.
+
+Same lesson as `code_mask` in `vary_consts`: **a comment is prose, not a
+reference.** Twice now, in two different tools, the fix has been to stop
+reading the comment as code. Anything in this pipeline that greps a body
+should be asked which of the two it means.

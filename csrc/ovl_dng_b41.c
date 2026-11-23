@@ -90,6 +90,47 @@ s32 func_800AA6B4(u8 *, UnkVec *, u8 *, u8 *);
 void func_800AA888(u8 *, void *, u8 *, u8 *);
 void func_b41_80173834(u8 *p, u8 *b, u8 *c, u8 *d);
 
+typedef struct UnkDng73E94SP
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    u8 pad_06[0x12];
+    u8 *unk_18;
+    u8 pad_1C[0x4];
+    u8 *unk_20;
+    u8 pad_24[0x6C];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x28];
+    s32 unk_C0;
+} UnkDng73E94SP;
+typedef struct UnkDng74334SP
+{
+    u8 pad_00[0xC];
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    Unk3DBD0W unk_18;
+    u8 pad_1C[0x8];
+    u8 *unk_24;
+    u16 unk_28;
+    u8 pad_2A[0xA];
+    VECTOR unk_34;
+    u8 pad_44[0x10];
+    MATRIX unk_54;
+    MATRIX unk_74;
+    u8 pad_94[0x10];
+    SVECTOR unk_A4;
+    u8 pad_AC[0x4];
+    SVECTOR unk_B0[4];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng74334SP;
+extern u8 D_801748B8[];
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b41", func_b41_8017088C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b41", func_b41_80170A78);
@@ -628,7 +669,59 @@ s32 func_b41_80171FF4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b41", func_b41_801721B8);
+/* State 0x11's entry: clear the record's +0x71 top bit, and unless the
+   D_80083462 0x2000 gate is up or func_800A2B5C reports the record busy,
+   step it forward through func_800C7930, then -- if it is still not busy --
+   mark state 0x11/0, clear the +0x8C word, hang the bank-local D_801748B8
+   facing table off the renderable's +0x2C, re-key the sprite through
+   func_80047784, spend one of the record's +0x6D charges and re-aim with
+   func_8009C93C, raise the owner's +0x98 0x8 bit and set the +0x84 timer to
+   0x7C.  74 words, 0 differing.
+
+   The twin is csrc/ovl_dng_b33.c's func_b33_80171FCC (113 words), which is
+   this function with a func_800A04F0/func_800A2CB8 reach test, a second
+   D_80083460 gate and a `return -1` chain in front of it; the whole of this
+   function's gate chain, the func_80047784 byte-table index and the
+   `d[0x6D] -= 1;` BEFORE the func_8009C93C call are taken from it unchanged
+   and re-measured here.  This one is `void` -- the target leaves $v0 dead at
+   every exit -- so the three gates are plain `return;`s sharing the
+   epilogue and none of the twin's return-value plumbing appears.
+
+   ONE SPELLING FACT, and it is a store order: `*(s32 *)(p + 0x8C) = 0;`
+   comes BETWEEN `p[0x9A] = 0x11;` and `p[0x9B] = 0;`.  Written the twin's
+   way, with the +0x8C word last of the three, the word count and every
+   opcode are already right and the `sw $zero, 0x8C($s1)` sits one slot late
+   -- 74 words, 2 aligned differences. */
+void func_b41_801721B8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x11;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    e = D_801748B8;
+    *(u8 **)(c + 0x2C) = e;
+    func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    *(u16 *)(p + 0x98) |= 0x8;
+    d[0x84] = 0x7C;
+    d[0x85] = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b41", func_b41_801722E0);
 

@@ -20,7 +20,6 @@ void func_800A9A04(u8 *);
 void func_b43_80173900(u8 *p, u8 *b, u8 *c, u8 *d);
 extern void (*D_80173CEC[])(u8 *, UnkVec *, u8 *, u8 *);
 s32 func_8009A180(u8 *a, u8 *b);
-s32 func_b03_80171DA0(u8 *p, UnkVec *b, u8 *c, u8 *d);
 typedef struct UnkDngRoom2970
 {
     u8 pad_00[0xC];

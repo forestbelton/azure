@@ -82,7 +82,6 @@ void func_800AA888(u8 *, UnkVec *, u8 *, u8 *);
 void func_800A9A04(u8 *);
 void func_b38_80173D38(u8 *p, u8 *b, u8 *c, u8 *d);
 
-s32 func_b04_80172270(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern u8 D_80175140[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_8017087C);
