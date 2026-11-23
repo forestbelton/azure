@@ -108,6 +108,40 @@ void func_800478B8(u8 *);
 void func_800A020C(s32, u8 *);
 s32 func_800BCB04(s32, s32, s16);
 
+extern u8 D_801753EC[];
+void func_800A2B04(UnkVec *, s32, s32);
+void func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AD4D0(u8 *);
+
+s32 func_800AB1C0(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_80170874);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_80170FD8);
@@ -177,7 +211,8 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_8017142C);
    Only `a & 0xFFFC' in the gate is wrong, at 112 / 4.
 
    func_b27_80171A18 and func_b27_80171E20 are address-taken here and are
-   still INCLUDE_ASM stubs below, so both need a declaration above.    THIS COPY'S OWN CONSTANT: 0x9 -> 0x1b.
+   still INCLUDE_ASM stubs below, so both need a declaration above.
+   THIS COPY'S OWN CONSTANT: 0x9 -> 0x1b.
    The rest of this comment is the family representative's and its other
    numbers are its own.
 */
@@ -1057,7 +1092,25 @@ s32 func_b27_80173050(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_80173194);
+/* func_800D9884 (csrc/ovl_dungeon_800D50FC.c) minus its trailing D_80083462
+   test: the outer gate's failure falls through to the epilogue and the inner
+   gate's failure returns, so both branches land on the same word, and the
+   installed handler is the bank-local func_b27_80171E20. 31 words,
+   0 differing, first compile. */
+void func_b27_80173194(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b27_80171E20;
+        *(s32 *)(p + 0x90) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_80173210);
 
@@ -1088,7 +1141,115 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_801735E8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_801737C8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_80173E6C);
+/* The banked room script's three-state glide, switching on p + 0x9B:
+   state 0 seeds the velocity from the D_8006CCD8 / D_8006CCE8 facing pair,
+   state 1 decays it, state 2 steers onto the tile centre and installs
+   func_b27_80171E20. The resident overlay's func_800D9C7C
+   (csrc/ovl_dungeon_800D50FC.c) is the same machine -- the same three cases
+   FALLING THROUGH into one another, the same `stop:' label inside case 1
+   that case 0's `else' reaches by `goto', the same func_800AAA54 call -- and
+   func_800D991C in the same unit supplies the divide form of case 2. Both
+   of those comments carry the measured spelling facts this body relies on:
+   the three-statement numerator `u = c[0x24] << 6; w = b2 - 0x20; u -= w;'
+   (nine other spellings 1 to 4 differing on func_800D991C), the second
+   numerator left two-statement (1 word and 145 differing when split), and
+   `if (x > 0) x--;' in case 1 against `if (--x > 0)' in case 2, which
+   func_800D9C7C measures as not interchangeable.
+
+   Four deltas from func_800D9C7C, all read off the listing: the
+   D_8006CCD8 index is NOT a local here -- state 0 recomputes
+   `(*(u16 *)(d + 0x6A) >> 9) & 7' for each of the two tables and state 1
+   never uses it, so there is no $s4 to hold it; the seeds are negated and
+   scaled by 15 (`negu' then `sll 15') rather than shifted by 18; state 1
+   decays by a quarter (`b->unk_0C -= b->unk_0C / 4', the
+   `bgez'/`addiu 3'/`sra 2' triple) where func_800D9C7C subtracts
+   `D_8006CCD8[k] << 14'; and func_800AAA54's fourth argument is the
+   bank-local D_801753EC rather than 0. 181 words, 0 differing, on the first
+   compile. */
+void func_b27_80173E6C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 u;
+    s32 w;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        func_800AD4D0(d);
+        b->unk_0C = -D_8006CCD8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        b->unk_10 = -D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 15;
+        p[0x9B] += 1;
+        if (d[0x28] != 0)
+        {
+            if (*(u16 *)(c + 0x14) & 0x8000)
+            {
+                *(s16 *)(p + 0x96) = 0;
+                p[0x9B] = 2;
+                return;
+            }
+            *(s16 *)(p + 0x96) = (*(s32 *)(d + 0x1C) & 0x228) ? 8 : -1;
+        }
+        else
+        {
+            goto stop;
+        }
+        /* fallthrough */
+    case 1:
+        b->unk_0C -= b->unk_0C / 4;
+        b->unk_10 -= b->unk_10 / 4;
+        if (*(s16 *)(p + 0x96) > 0)
+        {
+            *(s16 *)(p + 0x96) -= 1;
+        }
+        else if (*(u16 *)(c + 0x14) & 0x6000)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            return;
+        }
+        if (d[0x28] == 0)
+        {
+        stop:
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(p, b, c, D_801753EC);
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 8;
+            p[0x9B] += 1;
+        }
+        return;
+    case 2:
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            u = c[0x24] << 6;
+            w = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            u -= w;
+            b->unk_0C = (u << 15) / *(s16 *)(p + 0x96);
+            w = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - w) << 15) / *(s16 *)(p + 0x96);
+        }
+        if (--*(s16 *)(p + 0x96) > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b27_80171E20;
+        return;
+    }
+}
 
 /* A bare forwarder: one call, nothing in the delay slot, no argument set up
    at all. The empty-paren declaration is what lets it pass its own incoming

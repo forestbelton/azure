@@ -70,6 +70,23 @@ s32 func_800AB464();
 
 s32 func_800AC7EC();
 
+void func_800A4ACC(u8 *p);
+s32 func_800AB1C0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+void func_800AD594(u8 *p, s32 a);
+
+extern s16 D_800DCF5E;
+extern s16 D_80175218;
+extern s32 D_80175220;
+extern u8 D_80175180[];
+s32 func_800AA6B4(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_800A2C34(u8 *);
+void func_800AA258(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AA888(u8 *, UnkVec *, u8 *, u8 *);
+void func_800A9A04(u8 *);
+void func_b04_80174218(u8 *p, u8 *b, u8 *c, u8 *d);
+void func_800478B8(u8 *);
+s32 func_800453E0(u8 *, UnkVec *, u8 *, s16);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_801708DC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80170BF8);
@@ -453,7 +470,60 @@ s32 func_b04_80172270(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80172434);
+/* The unconditional "close on the slot" entry: the gate-free sibling of the
+   landed func_b04_80172270 immediately above, with that function's whole
+   func_800A04F0 / func_800A2CB8 / func_800A0134 cursor interrogation removed.
+   What is left is its tail verbatim -- the two func_800A2B5C tests around the
+   func_800C7930 push, state 0x11, the re-dress and the func_8009C93C re-aim.
+   72 words, 0 differing, first compile.
+
+   THREE DELTAS FROM func_b04_80172270, all measured off this listing and not
+   assumed from it:
+
+   THE FACING TABLE IS READ FROM THE RENDERABLE, NOT WRITTEN TO IT. The
+   target has `lw $v1, 0x2C($s2)' and indexes that, where func_b04_80172270
+   stores D_80175140 into c + 0x2C first and indexes its own local -- so the
+   argument is spelled `(*(u8 **)(c + 0x2C))[...]' with no local and no store.
+
+   THE FIRST GATE IS THE SCALAR D_80083462, NOT D_80083460 + 0x2. The target
+   loads it with a bare `lui'/`lhu %lo(D_80083462)' and never builds a base
+   register, which is the spelling the landed func_b04_80172554 below already
+   uses in this unit; func_b04_80172270's `g = (u8 *)&D_80083460' idiom would
+   add the `addiu'.
+
+   d + 0x84 AND d + 0x85 COME AFTER THE func_8009C93C CALL, not before it as
+   in func_b04_80172270, and p + 0x98 picks up 0x8 between them and the call.
+   `d[0x6D] -= 1' stays BEFORE the call, as it is there.
+
+   There is NO unreferenced aggregate local here: the frame is 0x30, exactly
+   the 0x18 outgoing-argument area func_8009C93C's five arguments need plus
+   the five saved registers, where func_b04_80172270's is 0x40. */
+void func_b04_80172434(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x11;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    func_80047784(c, (*(u8 **)(c + 0x2C))[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    *(u16 *)(p + 0x98) |= 0x8;
+    d[0x84] = 0x7C;
+    d[0x85] = 0;
+}
 
 /* THE PARAMETER COPY HAS TO LEAVE THE PROLOGUE'S UNSCHEDULABLE PREFIX. The
    target saves and copies its four parameters in the order $s1, $s2, $s3,
@@ -516,7 +586,34 @@ s32 func_b04_80172554(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80172698);
+/* The banked room script's two-gate installer, the relinked twin of the
+   resident overlay's func_800D9884 (csrc/ovl_dungeon_800D50FC.c): the same
+   func_800AB1C0 gate, the same func_800AD594 / func_800A4ACC pair, the same
+   `blez'-to-the-epilogue inner gate, and the same D_80083462 & 0x80 tail.
+   Two deltas, both read off the listing: this copy does NOT clear p + 0x90
+   after installing the handler, and its flag arm writes -0x20 to p + 0x92
+   where the resident writes 0. The handler is the bank-local
+   func_b04_80171400. 37 words, 0 differing, on the first compile -- no
+   alternative spelling was measured, so nothing here is claimed to be
+   load-bearing beyond the `(s16)' cast on func_800AD9B4, which the twin's
+   own note measures at 38 differing when dropped. */
+void func_b04_80172698(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b04_80171400;
+    }
+    if ((D_80083462 & 0x80) != 0)
+    {
+        *(s16 *)(p + 0x92) = -0x20;
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming
@@ -580,7 +677,127 @@ void func_b04_801739F4(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80173A2C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80173ED8);
+/* The banked room script's three-state tail, state index at +0x9B, and the
+   near-twin of the landed func_b03_801736F4 (csrc/ovl_dng_b03.c), itself the
+   banked copy of the resident overlay's func_800DA398: state 0 re-dresses the
+   renderable from the bank-local D_80175188 facing table, state 1 is the long
+   refusal chain with the D_80175180 dress/flag/bump tail written out twice,
+   state 2 hands the actor back to func_b04_80171400. 208 words, 0 differing.
+
+   THE DELTA FROM func_b03_801736F4 IS ONE WORD: the +0x80000 arm clears the
+   slot's halfword at +0xA8 BETWEEN the func_800AA888 call and the
+   func_b04_80174218 hand-over. Written before the call instead it is 19
+   aligned differences.
+
+   `p[0x9B] += 1' IS WRITTEN OUT AT ALL THREE REACHING SITES, NOT REACHED BY
+   `goto'. jump2 cross-jumps the three copies back into the one block the
+   target has, so the length is the same either way -- but the three extra
+   references on `p' are what win it $s2. With the single `goto bump' label
+   func_b03_801736F4 uses, this body is 208 words with 17 ALIGNED DIFFERENCES,
+   every one a register: `p' takes $s3 and `b' takes $s2, the other way round
+   from the target, exactly the allocno_compare loss func_b03_80173358's
+   header measures from the other side. The extra +0xA8 store on `p' is not
+   enough on its own.
+
+   Measured and rejected: `b' declared `void *' with `(UnkVec *)' casts at the
+   three calls -- 208 words, 16 differing, so the parameter's type is not what
+   decides the swap.
+
+   The rest is func_b03_801736F4's shape verbatim, including its four
+   SEPARATE `&D_80083460' pointer locals (one per arm, with the gate's shared
+   with the state 1 tail) and the facing tables named directly at all three
+   dress sites rather than held in a local. */
+void func_b04_80173ED8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *h;
+    u8 *j;
+    u8 *k;
+    s32 v;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0xA) -= 1;
+        *(u8 **)(c + 0x2C) = D_80175188;
+        func_80047784(c, D_80175188[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        p[0x9B] += 1;
+        return;
+    case 1:
+        if (d[0x25] != 0)
+        {
+            *(u8 **)(c + 0x2C) = D_80175180;
+            func_80047784(c, D_80175180[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            *(s32 *)(d + 0x1C) |= 0x40000;
+            j = (u8 *)&D_80083460;
+            *(u16 *)(j + 0xA) += 1;
+            p[0x9B] += 1;
+            return;
+        }
+        g = (u8 *)&D_80083460;
+        if ((*(u16 *)(g + 0x2) & 0x1000) != 0)
+        {
+            return;
+        }
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, NULL) != 0)
+        {
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0)
+        {
+            return;
+        }
+        v = *(s32 *)(d + 0x1C);
+        if ((v & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if ((v & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            *(s16 *)(p + 0xA8) = 0;
+            func_b04_80174218(p, (u8 *)b, c, d);
+            return;
+        }
+        if (*(s8 *)(d + 0x6D) == 0)
+        {
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0 &&
+            (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+        {
+            return;
+        }
+        func_800A9A0C(d);
+        func_800A9A04(d);
+        if (d[0x25] == 0)
+        {
+            return;
+        }
+        *(u8 **)(c + 0x2C) = D_80175180;
+        func_80047784(c, D_80175180[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(s32 *)(d + 0x1C) |= 0x40000;
+        *(u16 *)(g + 0xA) += 1;
+        p[0x9B] += 1;
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        k = (u8 *)&D_80083460;
+        *(u16 *)(k + 0xA) -= 1;
+        *(s32 *)(d + 0x1C) &= ~0x208;
+        *(u32 *)(p + 0x8C) = (u32)func_b04_80171400;
+        return;
+    }
+}
 
 /* The four-argument installer's banked twin: func_800DA660 in the resident
    overlay is its first half verbatim, and this one adds the gate's `else`.
@@ -662,15 +879,135 @@ void func_b04_801743B4(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_801743EC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80174574);
+/* The node walk, the relinked twin of the resident overlay's func_800ADBCC
+   (csrc/ovl_dungeon_800A4B88.c): walk the second list off p - 8, park a
+   halfword in the scratchpad each turn and call func_800453E0 for every slot
+   whose +0x14 does not carry 0x80. 35 words, 0 differing, first compile.
+
+   THE RELINK IS THE SCRATCHPAD VALUE. func_800ADBCC parks the record's own
+   `*(s16 *)(p + 0x8)'; this copy parks the bank-local s16 D_80175218, whose
+   `lui' is hoisted out of the loop while the `lh' stays inside it -- that is
+   the whole of the three-word difference from the twin.
+
+   Both of the twin's load-bearing spellings were kept and still are: the
+   scratchpad goes through a POINTER LOCAL (as an absolute `*(s32 *)0x1F80013C'
+   it is the assembler's `lui $at'/`sw' macro, which cannot leave the loop),
+   and the slot stays a `u8 *' rather than a struct pointer so its +0x14 read
+   is not MEM_IN_STRUCT_P and sched1 leaves the load-delay `nop's alone. */
+s32 func_b04_80174574(u8 *p, UnkVec *v, u8 *s)
+{
+    UnkNode *n;
+    u8 *sp;
+
+    sp = (u8 *)0x1F800000;
+    for (;;)
+    {
+        *(s32 *)(sp + 0x13C) = D_80175218;
+        if (!(*(u16 *)(s + 0x14) & 0x80))
+        {
+            func_800453E0(p, v, s, *(s16 *)(s + 0x6));
+        }
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
+            return 0;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (u8 *)n->unk_0C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80174600);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80174800);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80174948);
+/* State 0x17's entry: clear the node's +0x71 top bit and +0x6D, install
+   ITSELF in the slot's +0x8C handler slot and mark state 0x17/0; then, unless
+   D_80083460's +0x2 0x2000 bit is up, if func_800A2BDC says the engine is
+   idle, drop the handler again, re-mark 0x17/0, reset D_800DCF5E and bump
+   D_80083460's +0xA counter. 43 words, 0 differing, first compile.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_801749F4);
+   THE +0x8C STORE IS THE FUNCTION'S OWN ADDRESS -- `lui'/`addiu' of
+   %hi/%lo(func_b04_80174948) -- so the self-reference is written as the
+   plain identifier, not as a table lookup.
+
+   D_80083460 goes through the unit's `g = (u8 *)&D_80083460' idiom: one
+   `addiu' base in $s1 serves both the +0x2 gate and the +0xA bump. */
+void func_b04_80174948(u8 *p, void *b, void *c, u8 *d)
+{
+    u8 *g;
+
+    d[0x71] &= 0x7F;
+    *(void **)(p + 0x8C) = func_b04_80174948;
+    p[0x9A] = 0x17;
+    p[0x9B] = 0;
+    d[0x6D] = 0;
+    g = (u8 *)&D_80083460;
+    if ((*(u16 *)(g + 0x2) & 0x2000) == 0)
+    {
+        if ((s16)func_800A2BDC(d) == 0)
+        {
+            *(s32 *)(p + 0x8C) = 0;
+            p[0x9A] = 0x17;
+            p[0x9B] = 0;
+            D_800DCF5E = 0;
+            *(u16 *)(g + 0xA) += 1;
+        }
+    }
+}
+
+/* The two-phase white-out. With the slot's +0x9A still zero, park the view's
+   +0x8 in the bank-local D_80175220, re-send the view through func_800478B8
+   and -- only if its +0x14 carries one of 0xE000 -- unlink the node, set the
+   0x10-frame countdown in +0x96 and step +0x9A. Afterwards, ease
+   D_80083160's three +0xA8..+0xAA colour bytes towards 0x80 by
+   (0x80 - v) / +0x96 and, when the countdown runs out, raise 0x8000 in the
+   node's -0x2 and in D_800814A0. 75 words, 0 differing, first compile.
+
+   THE EASE IS func_800ACE34's (csrc/ovl_dungeon_800A4B88.c), with the
+   divisor counting DOWN in the slot's +0x96 instead of up in the view's
+   +0xF: the `lh' of +0x96 is re-read for each of the three bytes for the
+   same reason its note gives -- each `sb' through the `u8 *' wipes cse's
+   memory table.
+
+   D_80083160 IS REACHED THROUGH A `u8 *' BASE TAKEN BEFORE THE GATE. Its
+   `addiu' sits in the `bnez's delay slot although the only use is in the
+   else arm, which is the materialise-up-front shape unk_108F0.c records for
+   this object; the bytes at +0xA8 also have their own splat label
+   (D_80083208) and are NOT spelled that way here.
+
+   THE COUNTDOWN TEST READS THE DECREMENTED VALUE, not a reload: `lhu',
+   `addiu -1', `sh', `sll 16', `bgtz' with no `sra' and no second load, which
+   is `(s16)(--*(u16 *)(p + 0x96)) <= 0'. */
+void func_b04_801749F4(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+
+    g = (u8 *)&D_80083160;
+    if (p[0x9A] == 0)
+    {
+        D_80175220 = *(s32 *)(c + 0x8);
+        func_800478B8(c);
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            func_80044A50((UnkNode *)(p - 0x20));
+            *(s16 *)(p + 0x96) = 0x10;
+            p[0x9A] += 1;
+        }
+    }
+    else
+    {
+        g[0xA8] += (0x80 - g[0xA8]) / *(s16 *)(p + 0x96);
+        g[0xA9] += (0x80 - g[0xA9]) / *(s16 *)(p + 0x96);
+        g[0xAA] += (0x80 - g[0xAA]) / *(s16 *)(p + 0x96);
+        if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80174B20);
 

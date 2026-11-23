@@ -89,6 +89,18 @@ s32 func_800AC7EC();
 
 extern u8 D_80175270[];
 
+s32 func_800AB1C0();
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+
+void func_b05_80173F28(u8 *p, u8 *b, u8 *c, u8 *d);
+void func_800A2B04(UnkVec *, s32, s32);
+u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
+s32 func_800A56E0(s32);
+extern u8 D_80175288[];
+extern s32 D_8008346C;
+extern u8 *D_800E3DE8;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_801708A4);
 
 /* The banked room script's per-frame actor driver, the relinked twin of the
@@ -767,7 +779,41 @@ s32 func_b39_80172658(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_8017279C);
+/* The two-gate handler installer of this unit's own landed func_b05_80172670,
+   with func_800AD594(d, 4) and func_800A4ACC(d) run between the gates, a
+   second store at +0x90, and a D_80083462 0x80 tail. 38 words, 0 differing
+   on the first compile.
+
+   The outer gate is called with no arguments at all -- no instruction sets up
+   $a0..$a3 before it -- so func_800AB1C0 needs the empty-paren declaration
+   this unit already uses for the same shape; its landed definition
+   (csrc/ovl_dungeon_800A4B88.c:4277) takes four, and spelled that way the
+   call site does not compile ("too few arguments"). The inner gate's result
+   is read as a halfword, `sll $v0, 16` with no `sra` and then `blez`, which
+   is `(s16)x > 0`.
+
+   THE `blez` BRANCHES PAST THE D_80083462 TAIL, not back to the gate's join:
+   its target is the epilogue, so the failing inner gate is an early `return`
+   and not a nested `if` that falls into the tail. The second parameter is
+   never mentioned. */
+void func_b39_8017279C(u8 *p, void *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0() != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b39_80170F6C;
+        *(s32 *)(p + 0x90) = 0;
+    }
+    if ((D_80083462 & 0x80) != 0)
+    {
+        *(s16 *)(p + 0x92) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80172834);
 
@@ -794,7 +840,76 @@ void func_b39_80172B98(u8 *p, void *b, void *c, void *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80172BFC);
+/* Three-state tail with an 0xFF terminal state, switched on the actor's
+   +0x9B after an unconditional `--*(s16 *)(p + 0x96)`. 124 words, 0
+   differing. It reuses the declarations func_b05_801721F0 and
+   func_b05_801730B8 had already brought into this unit -- func_800AD594,
+   func_800A4ACC and func_800A2B04 -- so the only new ones it needed were
+   func_8009C12C, func_800A56E0 and the three symbols D_80175288,
+   D_8008346C and D_800E3DE8.
+
+   State 0 arms this bank's D_80175288 facing table through the same
+   `*(u8 **)(c + 0x2C) = T; func_80047784(c, T[...], 0)` pair the landed
+   func_b05_80173F28 above uses, state 1 gates on
+   `((s8)c[4] == 4 && (c[0x14] & 0x1000)) || (c[0x14] & 0x8000)`, and state
+   0xFF parks func_b39_80170F6C in +0x8C.
+
+   THE +0x6D ARM ORDER IS LOAD-BEARING: written
+   `if (*(s8 *)(d + 0x6D) != 0) { D_800E3DE8 = d - 0x20; } else { ... }` it is
+   124 words / 7 aligned differences, because the target's `bnez` reaches the
+   D_800E3DE8 store as the SECOND arm. Spelled `== 0` with the +0x46 mask
+   first, as below, it is 0.
+   THIS COPY'S OWN CONSTANT: 0x4 -> 0x3 at 1 of 2 sites, 0x814 -> 0x804.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b39_80172BFC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 0xFF;
+            *(u16 *)(c + 0x14) |= 0x6000;
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            return;
+        }
+        *(u8 **)(c + 0x2C) = D_80175288;
+        func_80047784(c, D_80175288[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        p[0x9B]++;
+        return;
+    case 1:
+        if ((*(s8 *)(c + 0x4) == 3 && (*(u16 *)(c + 0x14) & 0x1000) != 0) ||
+            (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            func_800A56E0(0x804);
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            p[0x9B] = 0xFF;
+        }
+        return;
+    case 0xFF:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        func_800A2B04(b, c[0x24], c[0x25]);
+        func_800AD594(d, 0x100);
+        *(u32 *)(p + 0x8C) = (u32)func_b39_80170F6C;
+        D_8008346C = 0;
+        func_800A4ACC(d);
+        if (*(s8 *)(d + 0x6D) == 0)
+        {
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+        else
+        {
+            D_800E3DE8 = d - 0x20;
+        }
+        return;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80172DEC);
 

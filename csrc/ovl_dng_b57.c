@@ -63,6 +63,12 @@ s32 func_800AD058();
 
 s32 func_800AB464();
 
+void func_800A4ACC(u8 *p);
+s32 func_800AB1C0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+void func_800AD594(u8 *p, s32 a);
+
+s32 func_800AB538();
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b57", func_b57_801708AC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b57", func_b57_80170A4C);
@@ -417,7 +423,34 @@ s32 func_b57_801731CC(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b57", func_b57_80173310);
+/* The banked room script's two-gate installer, the relinked twin of the
+   resident overlay's func_800D9884 (csrc/ovl_dungeon_800D50FC.c): the same
+   func_800AB1C0 gate, the same func_800AD594 / func_800A4ACC pair, the same
+   `blez'-to-the-epilogue inner gate, and the same D_80083462 & 0x80 tail.
+   Two deltas, both read off the listing: this copy does NOT clear p + 0x90
+   after installing the handler, and its flag arm writes -0x20 to p + 0x92
+   where the resident writes 0. The handler is the bank-local
+   func_b57_80171FA4. 37 words, 0 differing, on the first compile -- no
+   alternative spelling was measured, so nothing here is claimed to be
+   load-bearing beyond the `(s16)' cast on func_800AD9B4, which the twin's
+   own note measures at 38 differing when dropped. */
+void func_b57_80173310(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b57_80171FA4;
+    }
+    if ((D_80083462 & 0x80) != 0)
+    {
+        *(s16 *)(p + 0x92) = -0x20;
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming
@@ -462,7 +495,18 @@ void func_b57_801748B0(void)
     func_800AD058();
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b57", func_b57_801748D0);
+/* A one-call forwarder with a tail store: func_800AB538 takes this
+   function's own incoming $a0..$a3 untouched and p + 0xA2 is cleared after
+   it returns. The empty-paren `s32 func_800AB538();' declaration already in
+   this unit is what allows the argument-free call -- func_800AB538's landed
+   definition is K&R with four parameters
+   (csrc/ovl_dungeon_800A4B88.c:5506) and every call site in the project
+   disagrees with it. 11 words, 0 differing, on the first compile. */
+void func_b57_801748D0(u8 *p)
+{
+    func_800AB538();
+    *(s16 *)(p + 0xA2) = 0;
+}
 
 /* A bare forwarder: one call, nothing in the delay slot, no argument set up
    at all. The empty-paren declaration is what lets it pass its own incoming

@@ -83,6 +83,37 @@ s32 func_800AB464();
 
 extern u8 D_80174528[];
 
+s32 func_800AB1C0(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+
+extern u8 D_80174558[];
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80170854);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80170A58);
@@ -617,9 +648,68 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80171FD4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_801720EC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_8017236C);
+/* State 0x17, built out of the banked room scripts' shared idioms rather
+   than from one twin: the D_80083462 gate, then func_800A2B5C either
+   side of func_800C7930(d - 0x20, b, 8, 0x300), then the pointer-local
+   D_80174558 facing table published at c+0x2C and one func_80047784.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_8017246C);
+   THE ONE SPELLING FACT IS STATEMENT ORDER: `*(s32 *)(p + 0x8C) = 0' sits
+   BETWEEN the p+0x9A and p+0x9B byte stores. Written after both of them --
+   the order csrc/ovl_dng_b08.c uses -- the 0x8C word store and the 0x9B byte
+   store come out transposed: 64 words, 2 differing.
+
+   64 words, 0 differing.
+   THIS COPY'S OWN CONSTANT: 0x17 -> 0x18.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b28_8017236C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *t;
+
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x18;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    t = D_80174558;
+    *(u8 **)(c + 0x2C) = t;
+    func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    func_800A4ACC(d);
+    d[0x6D] -= 1;
+}
+
+/* func_800D9884 (csrc/ovl_dungeon_800D50FC.c) minus its trailing D_80083462
+   test: the outer gate's failure falls through to the epilogue and the inner
+   gate's failure returns, so both branches land on the same word, and the
+   installed handler is the bank-local func_b28_80170E5C. 31 words,
+   0 differing, first compile. */
+void func_b28_8017246C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b28_80170E5C;
+        *(s32 *)(p + 0x90) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_801724E8);
 

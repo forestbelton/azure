@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""parkcheck.py [FILE...] -- structural check on docs/dungeon-parks/*.c.
+"""parkcheck.py [FILE...] -- structural check on the park directories.
+
+Both of them: `docs/dungeon-parks/` for the resident overlays and
+`docs/dng-parks/` for DUNGEON.BIN's 116 carved objects. The second was added
+with the carve and went unscanned until a park landed in it, which is the
+quiet way a checker stops checking.
 
 These files are a function BODY under a hand-written header comment. They are
 not compiled by anything, so nothing catches a malformed one -- and on
@@ -83,7 +88,8 @@ def check(path):
 
 def main():
     files = sys.argv[1:] or sorted(
-        glob.glob(os.path.join(PROJ, "docs/dungeon-parks/func_*.c")))
+        glob.glob(os.path.join(PROJ, "docs/dungeon-parks/func_*.c"))
+        + glob.glob(os.path.join(PROJ, "docs/dng-parks/func_*.c")))
     bad = 0
     for p in files:
         c = check(p)

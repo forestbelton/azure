@@ -80,6 +80,17 @@ s32 func_800AC7EC();
 
 extern u8 D_80173FD0[];
 
+s32 func_800AB1C0();
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+void func_800AD4D0(u8 *);
+void func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
+void func_800A2B04(UnkVec *, s32, s32);
+extern u8 D_80173FC8[];
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80170898);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80170AA4);
@@ -373,7 +384,41 @@ s32 func_b43_80172228(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_8017236C);
+/* The two-gate handler installer of this unit's own landed func_b05_80172670,
+   with func_800AD594(d, 4) and func_800A4ACC(d) run between the gates, a
+   second store at +0x90, and a D_80083462 0x80 tail. 38 words, 0 differing
+   on the first compile.
+
+   The outer gate is called with no arguments at all -- no instruction sets up
+   $a0..$a3 before it -- so func_800AB1C0 needs the empty-paren declaration
+   this unit already uses for the same shape; its landed definition
+   (csrc/ovl_dungeon_800A4B88.c:4277) takes four, and spelled that way the
+   call site does not compile ("too few arguments"). The inner gate's result
+   is read as a halfword, `sll $v0, 16` with no `sra` and then `blez`, which
+   is `(s16)x > 0`.
+
+   THE `blez` BRANCHES PAST THE D_80083462 TAIL, not back to the gate's join:
+   its target is the epilogue, so the failing inner gate is an early `return`
+   and not a nested `if` that falls into the tail. The second parameter is
+   never mentioned. */
+void func_b43_8017236C(u8 *p, void *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0() != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b43_80170F68;
+        *(s32 *)(p + 0x90) = 0;
+    }
+    if ((D_80083462 & 0x80) != 0)
+    {
+        *(s16 *)(p + 0x92) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80172404);
 
@@ -404,7 +449,128 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_801727CC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_801729D4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80172E8C);
+/* The banked twin of the resident overlay's func_800B2CA0
+   (csrc/ovl_dungeon_800A4B88.c:9260): the same three-state lunge switched on
+   the actor's +0x9B, with the same cross-jumped shared exit, the same
+   `t = -1; if (flags) t = 8;` shape for +0x96, and the same +0x8C handoff.
+   193 words, 0 differing. It differs from the twin in three measured ways:
+   the facing index is computed ONCE into a local before the switch (the
+   target keeps it in $s4 across both arms and reuses the `sll 1` byte offset,
+   where the twin re-reads d + 0x6A four times); case 0 seeds the velocity
+   from the tables POSITIVE and shifted 18 rather than negated and shifted 15;
+   and the shared exit is func_800AAA54 with this bank's D_80173FC8 table in
+   $a3 rather than the twin's D_80083460 teardown.
+
+   THE ONE SPELLING THAT HAD TO BE FOUGHT FOR IS CASE 2's TWO EASES. The
+   target computes `c[0x24] << 6` FIRST, then the cell centre, then
+   `sll 15`/`sra 1` -- two shifts, not one:
+
+   | spelling of the two case-2 eases                     | words | aligned |
+   | as written below: `(x = ...)` inside, then `>> 1`    |  193  |    0    |
+   | `((...) * 0x8000) >> 1`, x assigned beforehand       |  193  |    7    |
+   | `x = ...;` as its own statement, then `>> 1`         |  193  |    7    |
+   | shift into x, then `x >> 1` as a second statement    |  193  |   11    |
+   | `/ 2` in place of `>> 1`, assignment either way      |  193  |   31    |
+   | no local at all, `>> 1`                              |  191  |    8    |
+   | no local at all, `* 0x4000`                          |  191  |   12    |
+
+   Two separate facts are in that table. The EMBEDDED assignment is what
+   stops fold-const turning `- (*(s16 *)(b + 2) - 0x20)` into `+ 32`, worth
+   two words; written as a preceding statement the fold is also stopped but
+   the `lh` is then evaluated before the `lbu`, which is the 7. And `>> 1` is
+   NOT interchangeable with `/ 2` here even though both emit `sll 15`/`sra 1`
+   -- `/ 2` adds an eight-byte unreferenced stack local (`vars= 8`, frame 0x30
+   against the target's 0x28), so all 31 of its differences are the prologue,
+   the epilogue and the register renumbering they force. */
+void func_b43_80172E8C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 k;
+    s32 t;
+    s32 x;
+    s32 y;
+
+    k = (*(u16 *)(d + 0x6A) >> 9) & 7;
+    switch (p[0x9B])
+    {
+    case 0:
+        func_800AD4D0(d);
+        b->unk_0C = D_8006CCD8[k] << 18;
+        b->unk_10 = D_8006CCE8[k] << 18;
+        p[0x9B]++;
+        if (d[0x28] == 0)
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(p, b, c, D_80173FC8);
+            return;
+        }
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] = 2;
+            return;
+        }
+        t = -1;
+        if ((*(s32 *)(d + 0x1C) & 0x228) != 0)
+        {
+            t = 8;
+        }
+        *(s16 *)(p + 0x96) = t;
+        b->unk_0C -= b->unk_0C / 4;
+        b->unk_10 -= b->unk_10 / 4;
+        /* fallthrough */
+    case 1:
+        b->unk_0C -= D_8006CCD8[k] << 14;
+        b->unk_10 -= D_8006CCE8[k] << 14;
+        if (*(s16 *)(p + 0x96) > 0)
+        {
+            *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+        }
+        else if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            return;
+        }
+        if (d[0x28] == 0)
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(p, b, c, D_80173FC8);
+            return;
+        }
+        *(s16 *)(p + 0x96) = 8;
+        p[0x9B]++;
+        break;
+    case 2:
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            b->unk_0C = (((c[0x24] << 6) - (x = *(s16 *)((u8 *)b + 0x2) - 0x20)) << 15) >> 1;
+            b->unk_10 = (((c[0x25] << 6) - (y = *(s16 *)((u8 *)b + 0x6) - 0x20)) << 15) >> 1;
+        }
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+        if (*(s16 *)(p + 0x96) > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b43_80170F68;
+        break;
+    }
+}
 
 /* A bare forwarder: one call, nothing in the delay slot, no argument set up
    at all. The empty-paren declaration is what lets it pass its own incoming

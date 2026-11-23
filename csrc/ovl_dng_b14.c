@@ -83,6 +83,40 @@ s32 func_800AB464();
 
 extern u8 D_80174EF0[];
 
+extern s16 D_800DCF5E;
+
+extern s32 D_80174FD0;
+void func_800478B8(u8 *);
+
+s32 func_800AB1C0(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_80170894);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_80170A98);
@@ -615,7 +649,29 @@ s32 func_b14_80171E00(u8 *p, UnkVec *b, u8 *c, u8 *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_80171FC4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_801720DC);
+/* func_800D9884 (csrc/ovl_dungeon_800D50FC.c) minus its trailing D_80083462
+   test: the outer gate's failure falls through to the epilogue and the inner
+   gate's failure returns, so both branches land on the same word, and the
+   installed handler is the bank-local func_b14_80170E9C. 31 words,
+   0 differing, first compile.
+   THIS COPY'S OWN CONSTANT: 0x4 -> 0x3.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b14_801720DC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 3);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b14_80170E9C;
+        *(s32 *)(p + 0x90) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_80172158);
 
@@ -858,8 +914,91 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_8017414C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_801745E0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_801747D0);
+/* State 0x17's entry: clear the node's +0x71 top bit and +0x6D, install
+   ITSELF in the slot's +0x8C handler slot and mark state 0x17/0; then, unless
+   D_80083460's +0x2 0x2000 bit is up, if func_800A2BDC says the engine is
+   idle, drop the handler again, re-mark 0x17/0, reset D_800DCF5E and bump
+   D_80083460's +0xA counter. 43 words, 0 differing, first compile.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_8017487C);
+   THE +0x8C STORE IS THE FUNCTION'S OWN ADDRESS -- `lui'/`addiu' of
+   %hi/%lo(func_b14_801747D0) -- so the self-reference is written as the
+   plain identifier, not as a table lookup.
+
+   D_80083460 goes through the unit's `g = (u8 *)&D_80083460' idiom: one
+   `addiu' base in $s1 serves both the +0x2 gate and the +0xA bump. */
+void func_b14_801747D0(u8 *p, void *b, void *c, u8 *d)
+{
+    u8 *g;
+
+    d[0x71] &= 0x7F;
+    *(void **)(p + 0x8C) = func_b14_801747D0;
+    p[0x9A] = 0x17;
+    p[0x9B] = 0;
+    d[0x6D] = 0;
+    g = (u8 *)&D_80083460;
+    if ((*(u16 *)(g + 0x2) & 0x2000) == 0)
+    {
+        if ((s16)func_800A2BDC(d) == 0)
+        {
+            *(s32 *)(p + 0x8C) = 0;
+            p[0x9A] = 0x17;
+            p[0x9B] = 0;
+            D_800DCF5E = 0;
+            *(u16 *)(g + 0xA) += 1;
+        }
+    }
+}
+
+/* The two-phase white-out. With the slot's +0x9A still zero, park the view's
+   +0x8 in the bank-local D_80174FD0, re-send the view through func_800478B8
+   and -- only if its +0x14 carries one of 0xE000 -- unlink the node, set the
+   0x10-frame countdown in +0x96 and step +0x9A. Afterwards, ease
+   D_80083160's three +0xA8..+0xAA colour bytes towards 0x80 by
+   (0x80 - v) / +0x96 and, when the countdown runs out, raise 0x8000 in the
+   node's -0x2 and in D_800814A0. 75 words, 0 differing, first compile.
+
+   THE EASE IS func_800ACE34's (csrc/ovl_dungeon_800A4B88.c), with the
+   divisor counting DOWN in the slot's +0x96 instead of up in the view's
+   +0xF: the `lh' of +0x96 is re-read for each of the three bytes for the
+   same reason its note gives -- each `sb' through the `u8 *' wipes cse's
+   memory table.
+
+   D_80083160 IS REACHED THROUGH A `u8 *' BASE TAKEN BEFORE THE GATE. Its
+   `addiu' sits in the `bnez's delay slot although the only use is in the
+   else arm, which is the materialise-up-front shape unk_108F0.c records for
+   this object; the bytes at +0xA8 also have their own splat label
+   (D_80083208) and are NOT spelled that way here.
+
+   THE COUNTDOWN TEST READS THE DECREMENTED VALUE, not a reload: `lhu',
+   `addiu -1', `sh', `sll 16', `bgtz' with no `sra' and no second load, which
+   is `(s16)(--*(u16 *)(p + 0x96)) <= 0'. */
+void func_b14_8017487C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+
+    g = (u8 *)&D_80083160;
+    if (p[0x9A] == 0)
+    {
+        D_80174FD0 = *(s32 *)(c + 0x8);
+        func_800478B8(c);
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            func_80044A50((UnkNode *)(p - 0x20));
+            *(s16 *)(p + 0x96) = 0x10;
+            p[0x9A] += 1;
+        }
+    }
+    else
+    {
+        g[0xA8] += (0x80 - g[0xA8]) / *(s16 *)(p + 0x96);
+        g[0xA9] += (0x80 - g[0xA9]) / *(s16 *)(p + 0x96);
+        g[0xAA] += (0x80 - g[0xAA]) / *(s16 *)(p + 0x96);
+        if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b14", func_b14_801749A8);

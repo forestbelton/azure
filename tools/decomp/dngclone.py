@@ -38,6 +38,7 @@ Usage:
 """
 import argparse
 import concurrent.futures
+import itertools
 import os
 import re
 import shutil
@@ -220,6 +221,26 @@ def defined_funcs(text):
     return out
 
 
+def is_type_decl(decl):
+    """True for a typedef / struct / union / enum / preprocessor statement.
+
+    THESE MUST NEVER GO THROUGH `DECLARED`. It extracts the declared name by
+    taking the first identifier that is not a type keyword, and in a
+    `typedef struct X { u8 pad_00[0xC]; ... } X;` that is the FIRST FIELD. Two
+    unrelated structs whose first field is `pad_00` therefore look like two
+    declarations of one symbol, and `reconcile_decls` substituted
+    agent-h4's `UnkDng708A4SP` with the unit's existing `UnkDngRoom2970` --
+    after which the unit did not compile at all, with `UnkDng708A4SP'
+    undeclared pointing at a line nobody had written that way.
+
+    This is the third defect of exactly this shape (see the note on
+    function-pointer arrays), so the rule is now a named predicate rather
+    than a `startswith` repeated at each call site.
+    """
+    return decl_code(decl).startswith(("typedef", "struct", "union", "enum",
+                                       "#"))
+
+
 def reconcile_decls(decls, unit_text):
     """`decls` made compatible with what `unit_text` already says.
 
@@ -236,15 +257,24 @@ def reconcile_decls(decls, unit_text):
       argument converts without an instruction, so dropping ours changes no
       code, and the member is verified regardless.
     * otherwise keep ours.
+
+    A TYPE STATEMENT IS PASSED THROUGH UNTOUCHED -- see is_type_decl. It
+    declares no symbol the unit could define or redeclare, and matching one by
+    "declared name" matches its first field.
     """
     have = {}
     for d in decl_block(unit_text):
-        mm = DECLARED.search(d)
+        if is_type_decl(d):
+            continue
+        mm = DECLARED.search(decl_code(d))
         if mm:
             have[mm.group(1)] = d
     out = []
     for d in decls:
-        mm = DECLARED.search(d)
+        if is_type_decl(d):
+            out.append(d)
+            continue
+        mm = DECLARED.search(decl_code(d))
         if not mm:
             out.append(d)
             continue
@@ -386,6 +416,32 @@ class DECLARED:
         return None
 
 
+def decl_code(decl):
+    """`decl` with its LEADING COMMENTS stripped, for keyword tests.
+
+    A hand-written declaration usually comes with a comment above it, and an
+    invented typedef always does -- the comment IS the witness for the struct.
+    So the statement's text starts `/*', not `typedef', and a keyword test on
+    the raw text silently says it is not a typedef. That is how agent-h4's
+    three typedefs were dropped from a clone candidate and the whole unit
+    failed to compile with `UnkDng708A4SP' undeclared.
+    """
+    out = decl.lstrip()
+    while True:
+        if out.startswith("/*"):
+            j = out.find("*/")
+            if j == -1:
+                return ""
+            out = out[j + 2:].lstrip()
+        elif out.startswith("//"):
+            j = out.find("\n")
+            if j == -1:
+                return ""
+            out = out[j + 1:].lstrip()
+        else:
+            return out
+
+
 def needed_decls(decls, body):
     """The subset of `decls` the body actually refers to.
 
@@ -398,14 +454,15 @@ def needed_decls(decls, body):
     unused declaration emits nothing, and wrong in every other way.
 
     A typedef or struct definition is kept unconditionally: it is a type, so
-    the body refers to it by a name this cannot see.
+    the body refers to it by a name this cannot see. Both tests run on
+    `decl_code`, not the raw statement, because of the comment above it.
     """
     out = []
     for d in decls:
-        if d.startswith(("typedef", "struct", "union", "enum", "#")):
+        if is_type_decl(d):
             out.append(d)
             continue
-        m = DECLARED.search(d)
+        m = DECLARED.search(decl_code(d))
         if m and re.search(r"\b%s\b" % re.escape(m.group(1)), body):
             out.append(d)
     return out
@@ -512,13 +569,77 @@ def code_mask(text):
     return ok
 
 
-def vary_consts(body, pairs):
-    """`body` with each (old, new) numeric literal substituted, and a note.
+def _tok(sample, value):
+    """`value` spelled the way `sample` (the literal being replaced) is."""
+    return ("%#x" % value) if sample.lower().startswith("0x") else str(value)
+
+
+def _sites(body, ok, old):
+    """[(match, kind)] where `old` occurs in the CODE of `body`.
+
+    kind "plain" is the literal itself. kind "tilde" is the ONE-S COMPLEMENT
+    SPELLING, and it is not a nicety: the assembler writes a clear-these-bits
+    mask as a negative immediate (`addiu $v1, $zero, -0x9`) while the C that
+    produces it is `&= ~8`. The first family this mattered on refused three
+    of six members over exactly that, because -0x9 appears nowhere in the
+    source text. A tilde match requires the `~` to be the token's immediate
+    predecessor, so a bare `8` elsewhere in the body cannot be taken for one.
+    """
+    out = []
+    for m in NUM.finditer(body):
+        if not ok[m.start(1)]:
+            continue
+        v = int(m.group(1), 0)
+        if v == old:
+            out.append((m, "plain"))
+        elif old < 0 and v == ~old:
+            j = m.start(1) - 1
+            while j >= 0 and body[j] in " \t":
+                j -= 1
+            if j >= 0 and body[j] == "~":
+                out.append((m, "tilde"))
+    return out
+
+
+def _apply(body, picks):
+    """`body` with every (match, value, kind) in `picks` substituted.
+
+    Right to left, so an earlier replacement cannot move a later match's
+    offsets. Two different `old` values can never select the same match, so
+    the picks are disjoint by construction.
+    """
+    for m, val, kind in sorted(picks, key=lambda x: -x[0].start(1)):
+        v = val if kind == "plain" else ~val
+        body = body[:m.start(1)] + _tok(m.group(1), v) + body[m.end(1):]
+    return body
+
+
+def vary_consts(body, pairs, limit=12):
+    """([candidate body], [unsure]) -- bodies to try, best guess first.
 
     Matched BY VALUE, not by text: the listing says `0x9` where the C says
-    `9`. Comments are excluded (see code_mask), and a value that does not
-    appear exactly once in the CODE is left alone and named, because rewriting
-    the wrong `9` is worse than a failed verify.
+    `9`, and a clear-these-bits mask is a negative immediate in asm and a `~`
+    in C (see _sites). Comments are excluded (see code_mask).
+
+    `const_pairs` reports ONE ENTRY PER DIFFERING SITE, so a struct offset
+    used twice in the body arrives as the same pair twice. k identical pairs
+    against exactly k occurrences in the code is unambiguous: substitute all
+    k. That alone recovered three members of func_b01_80173AAC's family, which
+    an earlier one-occurrence-only rule had refused.
+
+    WHEN THE VALUE OCCURS MORE OFTEN THAN IT DIFFERS, THE CHOICE IS RETURNED
+    RATHER THAN REFUSED. func_b04_80174948 writes `p[0x9A] = 0x17' twice and
+    func_b10_801751C0 differs at ONE of them, so which `0x17' becomes `0x18'
+    is not knowable from a value -- but it is knowable from a compile. This
+    returns every placement, first-occurrence-first, and the caller verifies
+    them in turn. That is the sweep's rule everywhere else and it holds here:
+    a wrong guess costs a failed verify, never a wrong landing. Capped at
+    `limit` candidates so a pathological family cannot turn into a build farm.
+
+    Still refused by name, because no enumeration helps:
+      * one `old` wanting two different `new` values at different sites;
+      * a value that differs at MORE sites than it appears in the code, which
+        means the body does not spell it the way the listing does at all.
 
     Every substitution is recorded in the body's leading comment. Without that
     the clone's inherited write-up would describe the representative's
@@ -526,26 +647,96 @@ def vary_consts(body, pairs):
     is worse than no comment, and these are the most valuable thing the sweep
     produces after the code.
     """
-    unsure, done = [], []
+    want = {}
     for old, new in pairs:
-        ok = code_mask(body)
-        hits = [m for m in NUM.finditer(body)
-                if int(m.group(1), 0) == old and ok[m.start(1)]]
-        if len(hits) != 1:
-            unsure.append(f"{old:#x} appears {len(hits)}x in the code")
+        want.setdefault(old, []).append(new)
+
+    ok = code_mask(body)
+    unsure, choices, notes = [], [], []
+    for old, news in want.items():
+        if len(set(news)) != 1:
+            unsure.append(f"{old:#x} wants {len(set(news))} different values "
+                          f"({', '.join('%#x' % n for n in sorted(set(news)))})")
             continue
-        m = hits[0]
-        tok = ("%#x" % new) if m.group(1).lower().startswith("0x") else str(new)
-        body = body[:m.start(1)] + tok + body[m.end(1):]
-        done.append(f"{old:#x} -> {new:#x}")
-    if done:
-        note = ("   THIS COPY'S OWN CONSTANT: " + ", ".join(done) +
-                ".\n   The rest of this comment is the family "
-                "representative's and its other\n   numbers are its own.\n")
-        end = body.find("*/")
-        if end != -1:
-            body = body[:end] + note + body[end:]
-    return body, unsure
+        new, need = news[0], len(news)
+        hits = _sites(body, ok, old)
+        if len(hits) < need:
+            unsure.append(f"{old:#x} differs at {need} site(s) but appears "
+                          f"only {len(hits)} time(s) in the code")
+            continue
+        combos = list(itertools.combinations(hits, need))[:limit]
+        choices.append([[(m, new, kind) for m, kind in combo]
+                        for combo in combos])
+        tilde = any(k == "tilde" for _, k in hits)
+        notes.append(f"{old:#x} -> {new:#x}"
+                     + (f" (as ~{~old:#x} -> ~{~new:#x})" if tilde else "")
+                     + (f" at {need} of {len(hits)} sites"
+                        if len(hits) > need else
+                        f" at {need} sites" if need > 1 else ""))
+    if unsure:
+        return [], unsure
+
+    note = ("   THIS COPY'S OWN CONSTANT: " + ", ".join(notes) +
+            ".\n   The rest of this comment is the family "
+            "representative's and its other\n   numbers are its own.\n")
+    out = []
+    for sel in itertools.islice(itertools.product(*choices), limit):
+        cand = _apply(body, [pick for part in sel for pick in part])
+        if notes:
+            cut = cand.find("*/")
+            if cut != -1:
+                # The comment's last line usually has no trailing newline
+                # before `*/`, so the note would land on the end of a
+                # sentence.
+                lead = "" if cut == 0 or cand[cut - 1] == "\n" else "\n"
+                cand = cand[:cut] + lead + note + cand[cut:]
+        out.append(cand)
+    return out or [body], []
+
+
+def probe_member(text, unit, member, body, decls):
+    """(ok, candidate text, message) for one spelling of one member's body."""
+    try:
+        cand = add_body(text, member, body, decls)
+    except ValueError as e:
+        return False, None, str(e)
+    # A stale forward declaration of this very function, left by another
+    # family's body that only took its address, is `conflicting types'
+    # once the definition arrives. Same defect dngland fixes for the
+    # representative; it reaches the clones through exactly the same door.
+    cand = fix_forward_decl(cand, member)
+    # EVERY FUNCTION THE UNIT DEFINES, in the one compile ovlverify
+    # already does. Adding a definition can change what an earlier landed
+    # body compiles against -- the reconciled prototype above is that --
+    # and naming the others costs nothing but a comparison each.
+    others = [f for f in defined_funcs(cand) if f != member]
+    with tempfile.TemporaryDirectory(prefix="dngclone-") as td:
+        probe = os.path.join(td, unit + ".c")
+        open(probe, "w").write(cand)
+        env = dict(os.environ, AZURE_SCRATCH=os.path.join(td, "sp"))
+        r = subprocess.run(
+            [sys.executable,
+             os.path.join(PROJ, "tools", "decomp", "ovlverify.py"),
+             probe, member] + others,
+            capture_output=True, text=True, env=env, cwd=PROJ)
+        rows = [l.strip() for l in r.stdout.splitlines()
+                if re.match(r"^func_\S+: ", l)]
+    first = rows[0] if rows else ""
+    ok = (" 0 differing " in first
+          and re.search(r"target (\d+) words, candidate \1 words", first)
+          is not None)
+    if ok:
+        broke = [l for l in rows[1:] if " 0 differing " not in l]
+        if broke:
+            ok = False
+            first = ("REGRESSED another landed function in this unit: "
+                     + broke[0])
+    # The WHOLE stderr, not a 200-character prefix. A truncated traceback
+    # showed only `main()` and cost a diagnosis: the useful line of a
+    # Python traceback is its LAST one.
+    msg = first.strip() or (r.stderr.strip().replace("\n", " | ")
+                            or "no output")
+    return ok, (cand if ok else None), msg
 
 
 def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
@@ -574,57 +765,33 @@ def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
         body, _unmapped = rename(rep_body, smap)
         pairs = const_pairs(rep, member)
         if pairs:
-            body, unsure = vary_consts(body, pairs)
+            bodies, unsure = vary_consts(body, pairs)
             if unsure:
                 out.append((member, False,
                             "per-copy immediate not placeable in the body: "
                             + "; ".join(unsure)))
                 continue
+        else:
+            bodies = [body]
         decls = reconcile_decls([rename(d, smap)[0] for d in rep_decls], text)
-        try:
-            cand = add_body(text, member, body, decls)
-        except ValueError as e:
-            out.append((member, False, str(e)))
-            continue
-        # A stale forward declaration of this very function, left by another
-        # family's body that only took its address, is `conflicting types'
-        # once the definition arrives. Same defect dngland fixes for the
-        # representative; it reaches the clones through exactly the same door.
-        cand = fix_forward_decl(cand, member)
-        # EVERY FUNCTION THE UNIT DEFINES, in the one compile ovlverify
-        # already does. Adding a definition can change what an earlier landed
-        # body compiles against -- the reconciled prototype above is that --
-        # and naming the others costs nothing but a comparison each.
-        others = [f for f in defined_funcs(cand) if f != member]
-        with tempfile.TemporaryDirectory(prefix="dngclone-") as td:
-            probe = os.path.join(td, unit + ".c")
-            open(probe, "w").write(cand)
-            env = dict(os.environ, AZURE_SCRATCH=os.path.join(td, "sp"))
-            r = subprocess.run(
-                [sys.executable,
-                 os.path.join(PROJ, "tools", "decomp", "ovlverify.py"),
-                 probe, member] + others,
-                capture_output=True, text=True, env=env, cwd=PROJ)
-            rows = [l.strip() for l in r.stdout.splitlines()
-                    if re.match(r"^func_\S+: ", l)]
-        first = rows[0] if rows else ""
-        ok = (" 0 differing " in first
-              and re.search(r"target (\d+) words, candidate \1 words", first)
-              is not None)
-        if ok:
-            broke = [l for l in rows[1:] if " 0 differing " not in l]
-            if broke:
-                ok = False
-                first = ("REGRESSED another landed function in this unit: "
-                         + broke[0])
-        if ok:
-            text = cand
-        # The WHOLE stderr, not a 200-character prefix. A truncated traceback
-        # showed only `main()` and cost a diagnosis: the useful line of a
-        # Python traceback is its LAST one.
-        out.append((member, ok,
-                    first.strip() or (r.stderr.strip().replace("\n", " | ")
-                                      or "no output")))
+        # SEVERAL CANDIDATE SPELLINGS, and the verifier picks. vary_consts
+        # returns one body per placement of an immediate that occurs more
+        # often in the code than it differs in the listing; trying them in
+        # turn is strictly better than refusing, and costs one compile each
+        # only on the members that are actually ambiguous.
+        ok = False
+        for i, cand_body in enumerate(bodies):
+            ok, cand, msg = probe_member(text, unit, member, cand_body, decls)
+            if ok:
+                text = cand
+                if len(bodies) > 1:
+                    msg += (f"  [spelling {i + 1} of {len(bodies)} for the "
+                            f"per-copy immediate]")
+                break
+        if not ok and len(bodies) > 1:
+            msg += (f"  [all {len(bodies)} placements of the per-copy "
+                    f"immediate failed]")
+        out.append((member, ok, msg))
     if not dry_run and any(ok for _, ok, _ in out):
         open(path, "w").write(text)
     return out

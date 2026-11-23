@@ -45,7 +45,7 @@ typedef struct UnkDngRoom2970
 } UnkDngRoom2970;
 extern u8 D_80176300[];
 void func_80047784(u8 *, s32, s32);
-void func_b21_80170F20();
+void func_b21_80170F20(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 extern u8 D_80176320[];
 
@@ -88,6 +88,51 @@ extern UnkDngRoom2970 D_800E2970_s[] __asm__("D_800E2970");
 extern u8 D_801762D0[];
 
 extern u8 D_80176330[];
+
+s32 func_800AD9B4(u8 *, u8 *);
+s32 func_800AD9B4();
+s32 func_800AB1C0(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+
+extern u8 D_801762F8[];
+void func_b21_80171468(u8 *p, void *b, void *c, u8 *d);
+void func_b21_80171468(u8 *p, void *b, void *c, u8 *d);
+void func_b21_80171BB0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+void func_b21_8017201C(u8 *p, UnkVec *b, u8 *c, u8 *d);
+s32 func_b21_80173A54(u8 *a, void *b, void *c, s32 d);
+s32 func_800AA924(u8 *p, void *b, u8 *c, u8 *t);
+s16 func_8009FB34(u16 x, u16 y);
+s16 func_800A1C58(u8 *p);
+s32 func_800AAB10(u8 *p, void *b, u8 *c, u8 *d);
+void func_800AAF00(u8 *a, UnkVec *b, u8 *c, s32 t, void (*h)());
+extern u8 D_80176310[];
+extern u8 D_801762F0[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_801708A4);
 
@@ -621,7 +666,25 @@ s32 func_b21_80171E58(u8 *p, UnkVec *b, u8 *c, u8 *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_8017201C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80172134);
+/* func_800D9884 (csrc/ovl_dungeon_800D50FC.c) minus its trailing D_80083462
+   test: the outer gate's failure falls through to the epilogue and the inner
+   gate's failure returns, so both branches land on the same word, and the
+   installed handler is the bank-local func_b21_80170F20. 31 words,
+   0 differing, first compile. */
+void func_b21_80172134(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b21_80170F20;
+        *(s32 *)(p + 0x90) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_801721B0);
 
@@ -1150,7 +1213,25 @@ s32 func_b21_80174BCC(u8 *p, UnkVec *b, u8 *c, u8 *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80174D90);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80174EA8);
+/* func_800D9884 (csrc/ovl_dungeon_800D50FC.c) minus its trailing D_80083462
+   test: the outer gate's failure falls through to the epilogue and the inner
+   gate's failure returns, so both branches land on the same word, and the
+   installed handler is the bank-local func_b21_80173B98. 31 words,
+   0 differing, first compile. */
+void func_b21_80174EA8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b21_80173B98;
+        *(s32 *)(p + 0x90) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80174F24);
 

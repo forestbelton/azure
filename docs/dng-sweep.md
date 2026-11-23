@@ -334,3 +334,216 @@ being added. `ovlverify` compiles once for any number of names, so naming the
 others costs a comparison each -- and adding a definition can change what an
 earlier landed body compiles against, which is exactly what a reconciled
 prototype does.
+
+# Batch 5 onward: ONE AGENT, ONE UNIT, SEVERAL FAMILIES
+
+Batches 1-4 gave each agent one function. That shape was right while the
+families were huge -- batch 1's five representatives were worth 15,994 words
+-- but yield per batch fell to 6,134 by batch 4 as the 200-copy families ran
+out, and the bodies themselves got small: several of batch 4's landings took
+under two minutes. The limiting factor stopped being the work and became the
+handover.
+
+So from batch 5 the unit of dispatch is **one agent, one unit, every
+worthwhile family in it**. `tools/decomp/dng-brief.txt` is now written for
+that, and the grouping is not a convenience:
+
+* **One copy, one `AZURE_SCRATCH`, one declaration block.** The agent's second
+  function usually needs no new declarations because the first already brought
+  its symbols in. That was already observable across batches
+  (`func_b03_80171F64` landed with none at all); within one agent's run it is
+  the normal case.
+* **The best twin is often in the same unit.** `func_b01_80174070` -- 994
+  words of yield -- landed in 74 seconds as an already-landed neighbour two
+  listings away differing in one branch opcode. An agent holding four families
+  from one bank has those neighbours in front of it, and the first function it
+  lands becomes the twin for the next.
+* **Ordering is part of the brief.** Highest yield-per-word first, stated as
+  deliberate, so a run cut short has banked the valuable end. "Landing one is
+  a success" is stated too: a bounded fight then a park and move on, rather
+  than a whole run spent on the hardest of five.
+
+## Choosing the groups
+
+Rank families by copy count (which IS yield per word of body), group by unit,
+and pack each unit to a budget of ~480 words of representative body. Batch 5:
+
+    agent  unit          families  rep words   yield
+    h1     ovl_dng_b01      4         442      3,312
+    h2     ovl_dng_b03      2         455      3,198
+    h3     ovl_dng_b05      3         355      2,193
+    h4     ovl_dng_b09      5         460      2,181
+    h5     ovl_dng_b04      5         433      2,130
+                                               ------
+                                               13,014
+
+Double batch 4's yield for the same five agents. The renderer is
+`/home/case/scratch/azure-dng/render-brief.py`; the table above is its input.
+
+## `dngland` takes several functions now
+
+    python3 tools/decomp/dngland.py FUNC... --from AGENT_COPY.c
+
+All the names must be in one unit. The bodies are spliced together, the
+declarations unioned (`needed_decls` over the CONCATENATED bodies), and
+everything verified in ONE compile -- the requested functions plus every other
+function the unit defines.
+
+Two behaviours are deliberate and were tested before the batch landed, by
+rolling `csrc/ovl_dng_b42.c` back to 795c383 and re-landing batch 4's two
+functions into it from the committed file:
+
+* **A failing requested function is DROPPED and the rest retried.** Four good
+  bodies are worth banking and the fifth's residue is a separate problem. The
+  dropped names are printed as `NOT LANDED:`. Verified by corrupting one body's
+  offset: `0x8C` -> `0x90` gave `1 differing`, that function was dropped, and
+  the other still landed with 6 declarations instead of 7.
+* **A REGRESSION IN AN ALREADY-LANDED FUNCTION STOPS EVERYTHING.** It is not
+  attributable to any one requested function, so dropping them one at a time
+  cannot fix it; nothing is written and a human reads it. This is the one
+  failure mode the wider shape adds, and guessing at it is how a landed body
+  gets lost.
+
+## `vary_consts` refused three good members: the two rules it was missing
+
+Batch 5's first integration cloned 29 of `agent-h1`'s 32 members and refused
+three of `func_b01_80173AAC`'s family -- 639 words -- with `per-copy immediate
+not placeable`. `dngfam --diff` called all three identical after
+normalisation, so the refusal, not the family, was wrong. Both causes are
+general and both are fixed:
+
+* **A VALUE USED TWICE IN THE BODY IS NOT AMBIGUOUS WHEN BOTH USES MOVE.**
+  `const_pairs` reports one entry per differing SITE, so the offset `0xa2` --
+  read as a halfword and then cleared -- arrived as the same pair twice. The
+  old rule demanded exactly one occurrence in the code and refused. The rule
+  now is a COUNT MATCH: k identical pairs against exactly k occurrences means
+  substitute all k. One `old` mapping to two different `new` values is still
+  refused by name, and so is k pairs against j != k occurrences, because the
+  value then also appears at a site the listings agree on and no amount of
+  looking at a value says which is which.
+
+* **A CLEAR-THESE-BITS MASK IS A NEGATIVE IMMEDIATE IN ASM AND A `~` IN C.**
+  These three members want `&= ~0x208` where the representative has `&= ~8`.
+  The listings differ at `-0x9` vs `-0x209` and `-0x9` appears NOWHERE in the
+  source text, so the search found zero occurrences and refused. `_sites()`
+  now also matches the one's-complement spelling, requiring the `~` to be the
+  token's immediate predecessor so a bare `8` elsewhere cannot be taken for
+  one, and writes the replacement back in the same form. The note records it
+  as `-0x9 -> -0x209 (as ~0x8 -> ~0x208)`, which is what a reader of the
+  clone needs.
+
+All three then verified and were written. The note is also placed on its own
+line now; it had been landing on the end of the representative's last
+sentence, and these comments are the most valuable thing the sweep produces
+after the code.
+
+## THE FIRST AGENT TO INVENT A TYPEDEF BROKE THE INTEGRATION, THREE WAYS
+
+`agent-h4` is the first of batch 5 to need new types -- a scratchpad layout
+and a two-field table pair. All five of its functions verified in its own
+copy; spliced into `csrc/`, the unit did not compile at all. Three separate
+defects, and the worst of them had been reported as the opposite of what it
+was:
+
+* **`reconcile_decls` SUBSTITUTED ONE TYPEDEF FOR AN UNRELATED ONE.**
+  `DECLARED` extracts the declared name as the first identifier that is not a
+  type keyword; in `typedef struct X { u8 pad_00[0xC]; ... } X;` that is THE
+  FIRST FIELD. `UnkDng708A4SP` and the unit's existing `UnkDngRoom2970` both
+  begin `u8 pad_00[...]`, so they looked like two declarations of a symbol
+  called `pad_00` and the unit's won. **This is the third defect of exactly
+  this shape** -- after the function-pointer array named `void` and the stale
+  forward declaration -- so the rule is now a named predicate,
+  `is_type_decl()`, used at every call site: a type statement declares no
+  symbol the unit could define or redeclare and is passed through untouched.
+
+* **`needed_decls` missed a typedef that had a comment above it.** It kept
+  types unconditionally by testing `d.startswith("typedef")`, but a
+  hand-written declaration comes with a comment, and an invented typedef
+  ALWAYS does -- the comment is the witness for the struct. So the statement's
+  text starts `/*`. `decl_code()` strips leading comments and both tests run
+  on that.
+
+* **`dngland` reported a failed compile as every function failing**, then
+  crashed printing it (`KeyError` on a function with no verdict). Not one
+  verdict line means the unit did not compile, which is a different thing and
+  cannot be fixed by dropping names: it now prints the compiler's own output
+  whole and writes nothing. The useful diagnosis -- `UnkDng708A4SP'
+  undeclared` -- was in that stderr the whole time and the first run threw it
+  away.
+
+All five then landed with 29 clones, 2,181 words, no failures. Worth noting
+what did NOT go wrong: the agent checked its three new type names against
+every `csrc/ovl_dng_*.c` and `docs/dng-parks/` before choosing them, which is
+what the brief asks for, and there was no collision with the other four
+agents. The hazard was never the names.
+
+## A family member that is not a relink: say so, do not refuse
+
+`func_b04_80174948`'s 9-copy family has one member, `func_b10_801751C0`, that
+`const_pairs` reads as differing in a single immediate -- `0x17` -> `0x18` at
+ONE site, where the body writes `p[0x9A] = 0x17` TWICE. Which of the two is
+not knowable from a value.
+
+`vary_consts` now RETURNS BOTH PLACEMENTS instead of refusing, and
+`clone_unit` verifies them in turn. That is the sweep's rule everywhere else
+and it holds here: a wrong guess costs a failed verify, never a wrong landing.
+Capped at twelve candidates so a pathological family cannot become a build
+farm, and the winning spelling is named in the result line.
+
+Both placements came back at 22 differing, so that member is genuinely
+different code and stays a stub -- 43 words of real work for a later batch.
+The point is that the tool now distinguishes "I cannot place this constant"
+from "this is not the same function", and only the first is a tool limit.
+
+## THE BUILD GATE CAUGHT WHAT THE VERIFIER CANNOT: A JUMP TABLE
+
+Every one of batch 5's 17 representatives verified at `0 differing`, all 124
+clones verified, and `make containers` then said:
+
+    size differs by +0x120
+    FAIL  0xded004 of 0x1a86800 bytes differ (52.50%); first at 0x9e9974
+        built  addiu $v0, $v0, 0x3c80
+        ref    addiu $v0, $v0, 0x0808
+
+`func_b03_80170E54` switches on 12 cases and the ROM indexes
+`jtbl_b03_80170808`, which lives in the b03 segment's LEADING `data`
+subsegment. Our compile emits its OWN 12-entry table into `.rodata` and the
+linker appends it past the code: 0x30 bytes times the SIX members of the
+family is the +0x120, and everything after the first table shifted, which is
+the 52.5%.
+
+**`ovlverify` cannot see this.** It measures a function's own words against
+its listing and nothing else, so a body whose `.rodata` is wrong reports
+`0 differing` and nothing but the container build catches it. This is the
+clearest demonstration yet of why the build gate is the gate and not a
+formality, and it is the first defect in five batches that `ovlverify` was
+structurally unable to find.
+
+The body is RIGHT -- 338 words, 0 differing, `aligndiff` 0, every `--raw`
+difference a relocation -- so it is parked rather than abandoned, with its
+three load-bearing spellings and the twin's relink deltas, at
+`docs/dng-parks/func_b03_80170E54.c`. `tools/decomp/dngunsplice.py` is new and
+returns a landed body to its `INCLUDE_ASM` stub, keeping a copy; the five
+clones need no re-deriving, since landing the representative regenerates them.
+
+### This is worth more than a batch of landings
+
+**229 of the carved block's functions reference a `jtbl_` symbol, and 223 of
+them are still stubs.** Every segment with a leading `data` subsegment will
+hit this the moment a switch lands in it. The fix is structural: that
+subsegment has to become the C file's own `.rodata` so the emitted table lands
+at its ROM address instead of after the code, and the ROM's bytes must stop
+being included separately -- for b03 that means 0x54 bytes of which the table
+is 0x30 at +8, so whatever occupies 0x80170800..0x80170808 and
+0x80170838..0x80170854 has to come from the C file too, in that order.
+
+Until then a `switch` over five or more dense cases is the one shape an agent
+can land and still not be able to ship, and the brief should say so.
+
+### `parkcheck` was not scanning this directory
+
+`docs/dng-parks/` was created with the carve and `parkcheck.py` only globbed
+`docs/dungeon-parks/`, so every park written here for five batches would have
+gone unchecked. No park had been written yet, which is the only reason it cost
+nothing -- a checker that silently stops covering a directory is exactly the
+kind of thing that is discovered too late. It scans both now.

@@ -168,10 +168,24 @@ void func_b12_80170A44(u8 *p, UnkVec *b, u8 *c);
    Only `a & 0xFFFC' in the gate is wrong, at 112 / 4.
 
    func_b12_80170A44 and func_b12_80170E70 are address-taken here and are
-   still INCLUDE_ASM stubs below, so both need a declaration above.    THIS COPY'S OWN CONSTANT: 0x9 -> 0xc.
+   still INCLUDE_ASM stubs below, so both need a declaration above.
+   THIS COPY'S OWN CONSTANT: 0x9 -> 0xc.
    The rest of this comment is the family representative's and its other
    numbers are its own.
 */
+extern s16 D_800DCF5E;
+
+extern s16 D_80175B20;
+s32 func_800453E0(u8 *, UnkVec *, u8 *, s16);
+
+s32 func_800AB1C0();
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+
+void func_800AD4D0(u8 *);
+void func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
+void func_800A2B04(UnkVec *, s32, s32);
+
 u8 *func_b12_8017087C(s16 a, u16 b, u16 c, s16 d)
 {
     UnkNode *n;
@@ -1058,7 +1072,41 @@ s32 func_b12_801720B4(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_801721F8);
+/* The two-gate handler installer of this unit's own landed func_b05_80172670,
+   with func_800AD594(d, 4) and func_800A4ACC(d) run between the gates, a
+   second store at +0x90, and a D_80083462 0x80 tail. 38 words, 0 differing
+   on the first compile.
+
+   The outer gate is called with no arguments at all -- no instruction sets up
+   $a0..$a3 before it -- so func_800AB1C0 needs the empty-paren declaration
+   this unit already uses for the same shape; its landed definition
+   (csrc/ovl_dungeon_800A4B88.c:4277) takes four, and spelled that way the
+   call site does not compile ("too few arguments"). The inner gate's result
+   is read as a halfword, `sll $v0, 16` with no `sra` and then `blez`, which
+   is `(s16)x > 0`.
+
+   THE `blez` BRANCHES PAST THE D_80083462 TAIL, not back to the gate's join:
+   its target is the epilogue, so the failing inner gate is an early `return`
+   and not a nested `if` that falls into the tail. The second parameter is
+   never mentioned. */
+void func_b12_801721F8(u8 *p, void *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0() != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b12_80170E70;
+        *(s32 *)(p + 0x90) = 0;
+    }
+    if ((D_80083462 & 0x80) != 0)
+    {
+        *(s16 *)(p + 0x92) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80172290);
 
@@ -1089,7 +1137,128 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80172654);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80172AF8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80172FE8);
+/* The banked twin of the resident overlay's func_800B2CA0
+   (csrc/ovl_dungeon_800A4B88.c:9260): the same three-state lunge switched on
+   the actor's +0x9B, with the same cross-jumped shared exit, the same
+   `t = -1; if (flags) t = 8;` shape for +0x96, and the same +0x8C handoff.
+   193 words, 0 differing. It differs from the twin in three measured ways:
+   the facing index is computed ONCE into a local before the switch (the
+   target keeps it in $s4 across both arms and reuses the `sll 1` byte offset,
+   where the twin re-reads d + 0x6A four times); case 0 seeds the velocity
+   from the tables POSITIVE and shifted 18 rather than negated and shifted 15;
+   and the shared exit is func_800AAA54 with this bank's D_80175A94 table in
+   $a3 rather than the twin's D_80083460 teardown.
+
+   THE ONE SPELLING THAT HAD TO BE FOUGHT FOR IS CASE 2's TWO EASES. The
+   target computes `c[0x24] << 6` FIRST, then the cell centre, then
+   `sll 15`/`sra 1` -- two shifts, not one:
+
+   | spelling of the two case-2 eases                     | words | aligned |
+   | as written below: `(x = ...)` inside, then `>> 1`    |  193  |    0    |
+   | `((...) * 0x8000) >> 1`, x assigned beforehand       |  193  |    7    |
+   | `x = ...;` as its own statement, then `>> 1`         |  193  |    7    |
+   | shift into x, then `x >> 1` as a second statement    |  193  |   11    |
+   | `/ 2` in place of `>> 1`, assignment either way      |  193  |   31    |
+   | no local at all, `>> 1`                              |  191  |    8    |
+   | no local at all, `* 0x4000`                          |  191  |   12    |
+
+   Two separate facts are in that table. The EMBEDDED assignment is what
+   stops fold-const turning `- (*(s16 *)(b + 2) - 0x20)` into `+ 32`, worth
+   two words; written as a preceding statement the fold is also stopped but
+   the `lh` is then evaluated before the `lbu`, which is the 7. And `>> 1` is
+   NOT interchangeable with `/ 2` here even though both emit `sll 15`/`sra 1`
+   -- `/ 2` adds an eight-byte unreferenced stack local (`vars= 8`, frame 0x30
+   against the target's 0x28), so all 31 of its differences are the prologue,
+   the epilogue and the register renumbering they force. */
+void func_b12_80172FE8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 k;
+    s32 t;
+    s32 x;
+    s32 y;
+
+    k = (*(u16 *)(d + 0x6A) >> 9) & 7;
+    switch (p[0x9B])
+    {
+    case 0:
+        func_800AD4D0(d);
+        b->unk_0C = D_8006CCD8[k] << 18;
+        b->unk_10 = D_8006CCE8[k] << 18;
+        p[0x9B]++;
+        if (d[0x28] == 0)
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(p, b, c, D_80175A94);
+            return;
+        }
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] = 2;
+            return;
+        }
+        t = -1;
+        if ((*(s32 *)(d + 0x1C) & 0x228) != 0)
+        {
+            t = 8;
+        }
+        *(s16 *)(p + 0x96) = t;
+        b->unk_0C -= b->unk_0C / 4;
+        b->unk_10 -= b->unk_10 / 4;
+        /* fallthrough */
+    case 1:
+        b->unk_0C -= D_8006CCD8[k] << 14;
+        b->unk_10 -= D_8006CCE8[k] << 14;
+        if (*(s16 *)(p + 0x96) > 0)
+        {
+            *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+        }
+        else if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            return;
+        }
+        if (d[0x28] == 0)
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(p, b, c, D_80175A94);
+            return;
+        }
+        *(s16 *)(p + 0x96) = 8;
+        p[0x9B]++;
+        break;
+    case 2:
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            b->unk_0C = (((c[0x24] << 6) - (x = *(s16 *)((u8 *)b + 0x2) - 0x20)) << 15) >> 1;
+            b->unk_10 = (((c[0x25] << 6) - (y = *(s16 *)((u8 *)b + 0x6) - 0x20)) << 15) >> 1;
+        }
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) - 1;
+        if (*(s16 *)(p + 0x96) > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b12_80170E70;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_801732EC);
 
@@ -1500,7 +1669,44 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80173F38);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80173FDC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_8017458C);
+/* The node walk, the relinked twin of the resident overlay's func_800ADBCC
+   (csrc/ovl_dungeon_800A4B88.c): walk the second list off p - 8, park a
+   halfword in the scratchpad each turn and call func_800453E0 for every slot
+   whose +0x14 does not carry 0x80. 35 words, 0 differing, first compile.
+
+   THE RELINK IS THE SCRATCHPAD VALUE. func_800ADBCC parks the record's own
+   `*(s16 *)(p + 0x8)'; this copy parks the bank-local s16 D_80175B20, whose
+   `lui' is hoisted out of the loop while the `lh' stays inside it -- that is
+   the whole of the three-word difference from the twin.
+
+   Both of the twin's load-bearing spellings were kept and still are: the
+   scratchpad goes through a POINTER LOCAL (as an absolute `*(s32 *)0x1F80013C'
+   it is the assembler's `lui $at'/`sw' macro, which cannot leave the loop),
+   and the slot stays a `u8 *' rather than a struct pointer so its +0x14 read
+   is not MEM_IN_STRUCT_P and sched1 leaves the load-delay `nop's alone. */
+s32 func_b12_8017458C(u8 *p, UnkVec *v, u8 *s)
+{
+    UnkNode *n;
+    u8 *sp;
+
+    sp = (u8 *)0x1F800000;
+    for (;;)
+    {
+        *(s32 *)(sp + 0x13C) = D_80175B20;
+        if (!(*(u16 *)(s + 0x14) & 0x80))
+        {
+            func_800453E0(p, v, s, *(s16 *)(s + 0x6));
+        }
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
+            return 0;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (u8 *)n->unk_0C;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80174618);
 
@@ -1512,7 +1718,40 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_801749EC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80175180);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_8017526C);
+/* State 0x17's entry: clear the node's +0x71 top bit and +0x6D, install
+   ITSELF in the slot's +0x8C handler slot and mark state 0x17/0; then, unless
+   D_80083460's +0x2 0x2000 bit is up, if func_800A2BDC says the engine is
+   idle, drop the handler again, re-mark 0x17/0, reset D_800DCF5E and bump
+   D_80083460's +0xA counter. 43 words, 0 differing, first compile.
+
+   THE +0x8C STORE IS THE FUNCTION'S OWN ADDRESS -- `lui'/`addiu' of
+   %hi/%lo(func_b12_8017526C) -- so the self-reference is written as the
+   plain identifier, not as a table lookup.
+
+   D_80083460 goes through the unit's `g = (u8 *)&D_80083460' idiom: one
+   `addiu' base in $s1 serves both the +0x2 gate and the +0xA bump. */
+void func_b12_8017526C(u8 *p, void *b, void *c, u8 *d)
+{
+    u8 *g;
+
+    d[0x71] &= 0x7F;
+    *(void **)(p + 0x8C) = func_b12_8017526C;
+    p[0x9A] = 0x17;
+    p[0x9B] = 0;
+    d[0x6D] = 0;
+    g = (u8 *)&D_80083460;
+    if ((*(u16 *)(g + 0x2) & 0x2000) == 0)
+    {
+        if ((s16)func_800A2BDC(d) == 0)
+        {
+            *(s32 *)(p + 0x8C) = 0;
+            p[0x9A] = 0x17;
+            p[0x9B] = 0;
+            D_800DCF5E = 0;
+            *(u16 *)(g + 0xA) += 1;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80175318);
 

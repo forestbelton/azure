@@ -111,9 +111,87 @@ void func_800478B8(u8 *);
 void func_800A020C(s32, u8 *);
 s32 func_800BCB04(s32, s32, s16);
 
+s32 func_800AB1C0(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AD594(u8 *, s32);
+void func_800A4ACC(u8 *);
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_801708BC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_80170ED8);
+/* func_800D5AC0 (csrc/ovl_dungeon_800D50FC.c), byte for byte: one
+   semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
+   projected through the 0x1F800000 scratchpad, whose layout here is the
+   twin's exactly (+0x1C cursor, +0x24 OT base, +0xD0/+0xD4 out-parameters,
+   +0x100 index). The three dead lbu's at +0x4/+0x5/+0x6 are the
+   setRGB0(t, t->r0, t->g0, t->b0) echo of the colour word just copied in;
+   the twin's own comment carries the measurements for that and for its three
+   load-bearing orderings, which were not re-measured here because the first
+   compile of the twin's body landed. 120 words, 0 differing. */
+s32 func_b34_80170ED8(u8 *p, UnkVec *v)
+{
+    UnkDng708A4SP *sp = (UnkDng708A4SP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkNode *n;
+    TILE_1 *t;
+    DR_MODE *dm;
+
+    sp->unk_1C = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_24 = D_80083160.unk_00 + 0xB0;
+    while (1)
+    {
+        sp->unk_04 = *(u16 *)((u8 *)v + 0x2);
+        sp->unk_06 = *(u16 *)((u8 *)v + 0x6);
+        sp->unk_08 = *(u16 *)((u8 *)v + 0xA);
+        t = (TILE_1 *)sp->unk_1C;
+        sp->unk_1C = (u8 *)(t + 1);
+        sp->unk_100 = RotTransPers((SVECTOR *)&sp->unk_04, (s32 *)&t->x0, &sp->unk_D0, &sp->unk_D4);
+        if ((u32)sp->unk_100 < 0x1E0)
+        {
+            *(u32 *)&t->r0 = *(u32 *)(p + 0x8);
+            setTile1(t);
+            setSemiTrans(t, 1);
+            setRGB0(t, t->r0, t->g0, t->b0);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, t);
+            dm = (DR_MODE *)sp->unk_1C;
+            sp->unk_1C = (u8 *)(dm + 1);
+            func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, dm);
+        }
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)sp->unk_1C;
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_801710B8);
 
@@ -180,7 +258,8 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_80171498);
    Only `a & 0xFFFC' in the gate is wrong, at 112 / 4.
 
    func_b34_801718E0 and func_b34_80171CE8 are address-taken here and are
-   still INCLUDE_ASM stubs below, so both need a declaration above.    THIS COPY'S OWN CONSTANT: 0x9 -> 0x22.
+   still INCLUDE_ASM stubs below, so both need a declaration above.
+   THIS COPY'S OWN CONSTANT: 0x9 -> 0x22.
    The rest of this comment is the family representative's and its other
    numbers are its own.
 */
@@ -1020,7 +1099,25 @@ s32 func_b34_80172F20(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_80173064);
+/* func_800D9884 (csrc/ovl_dungeon_800D50FC.c) minus its trailing D_80083462
+   test: the outer gate's failure falls through to the epilogue and the inner
+   gate's failure returns, so both branches land on the same word, and the
+   installed handler is the bank-local func_b34_80171CE8. 31 words,
+   0 differing, first compile. */
+void func_b34_80173064(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b34_80171CE8;
+        *(s32 *)(p + 0x90) = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_801730E0);
 

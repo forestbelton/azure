@@ -71,6 +71,18 @@ s32 func_800AB464();
 
 s32 func_800AC7EC();
 
+void func_800A4ACC(u8 *p);
+s32 func_800AB1C0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+void func_800AD594(u8 *p, s32 a);
+
+extern u8 D_801741C4[];
+s32 func_800AA6B4(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_800A2C34(u8 *);
+void func_800AA258(u8 *, UnkVec *, u8 *, u8 *);
+void func_800AA888(u8 *, UnkVec *, u8 *, u8 *);
+void func_800A9A04(u8 *);
+void func_b33_80173D10(u8 *p, u8 *b, u8 *c, u8 *d);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_8017086C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_80170B64);
@@ -517,7 +529,34 @@ s32 func_b33_801722B8(u8 *a, void *b, void *c, s32 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_801723FC);
+/* The banked room script's two-gate installer, the relinked twin of the
+   resident overlay's func_800D9884 (csrc/ovl_dungeon_800D50FC.c): the same
+   func_800AB1C0 gate, the same func_800AD594 / func_800A4ACC pair, the same
+   `blez'-to-the-epilogue inner gate, and the same D_80083462 & 0x80 tail.
+   Two deltas, both read off the listing: this copy does NOT clear p + 0x90
+   after installing the handler, and its flag arm writes -0x20 to p + 0x92
+   where the resident writes 0. The handler is the bank-local
+   func_b33_801711A4. 37 words, 0 differing, on the first compile -- no
+   alternative spelling was measured, so nothing here is claimed to be
+   load-bearing beyond the `(s16)' cast on func_800AD9B4, which the twin's
+   own note measures at 38 differing when dropped. */
+void func_b33_801723FC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    if (func_800AB1C0(p, b, c, d) != 0)
+    {
+        func_800AD594(d, 4);
+        func_800A4ACC(d);
+        if ((s16)func_800AD9B4(c, d) <= 0)
+        {
+            return;
+        }
+        *(void **)(p + 0x8C) = func_b33_801711A4;
+    }
+    if ((D_80083462 & 0x80) != 0)
+    {
+        *(s16 *)(p + 0x92) = -0x20;
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming
@@ -581,7 +620,127 @@ void func_b33_801734F4(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_8017352C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_801739D0);
+/* The banked room script's three-state tail, state index at +0x9B, and the
+   near-twin of the landed func_b03_801736F4 (csrc/ovl_dng_b03.c), itself the
+   banked copy of the resident overlay's func_800DA398: state 0 re-dresses the
+   renderable from the bank-local D_801741CC facing table, state 1 is the long
+   refusal chain with the D_801741C4 dress/flag/bump tail written out twice,
+   state 2 hands the actor back to func_b33_801711A4. 208 words, 0 differing.
+
+   THE DELTA FROM func_b03_801736F4 IS ONE WORD: the +0x80000 arm clears the
+   slot's halfword at +0xA8 BETWEEN the func_800AA888 call and the
+   func_b33_80173D10 hand-over. Written before the call instead it is 19
+   aligned differences.
+
+   `p[0x9B] += 1' IS WRITTEN OUT AT ALL THREE REACHING SITES, NOT REACHED BY
+   `goto'. jump2 cross-jumps the three copies back into the one block the
+   target has, so the length is the same either way -- but the three extra
+   references on `p' are what win it $s2. With the single `goto bump' label
+   func_b03_801736F4 uses, this body is 208 words with 17 ALIGNED DIFFERENCES,
+   every one a register: `p' takes $s3 and `b' takes $s2, the other way round
+   from the target, exactly the allocno_compare loss func_b03_80173358's
+   header measures from the other side. The extra +0xA8 store on `p' is not
+   enough on its own.
+
+   Measured and rejected: `b' declared `void *' with `(UnkVec *)' casts at the
+   three calls -- 208 words, 16 differing, so the parameter's type is not what
+   decides the swap.
+
+   The rest is func_b03_801736F4's shape verbatim, including its four
+   SEPARATE `&D_80083460' pointer locals (one per arm, with the gate's shared
+   with the state 1 tail) and the facing tables named directly at all three
+   dress sites rather than held in a local. */
+void func_b33_801739D0(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *h;
+    u8 *j;
+    u8 *k;
+    s32 v;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0xA) -= 1;
+        *(u8 **)(c + 0x2C) = D_801741CC;
+        func_80047784(c, D_801741CC[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        p[0x9B] += 1;
+        return;
+    case 1:
+        if (d[0x25] != 0)
+        {
+            *(u8 **)(c + 0x2C) = D_801741C4;
+            func_80047784(c, D_801741C4[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            *(s32 *)(d + 0x1C) |= 0x40000;
+            j = (u8 *)&D_80083460;
+            *(u16 *)(j + 0xA) += 1;
+            p[0x9B] += 1;
+            return;
+        }
+        g = (u8 *)&D_80083460;
+        if ((*(u16 *)(g + 0x2) & 0x1000) != 0)
+        {
+            return;
+        }
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, NULL) != 0)
+        {
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0)
+        {
+            return;
+        }
+        v = *(s32 *)(d + 0x1C);
+        if ((v & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if ((v & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            *(s16 *)(p + 0xA8) = 0;
+            func_b33_80173D10(p, (u8 *)b, c, d);
+            return;
+        }
+        if (*(s8 *)(d + 0x6D) == 0)
+        {
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0 &&
+            (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+        {
+            return;
+        }
+        func_800A9A0C(d);
+        func_800A9A04(d);
+        if (d[0x25] == 0)
+        {
+            return;
+        }
+        *(u8 **)(c + 0x2C) = D_801741C4;
+        func_80047784(c, D_801741C4[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(s32 *)(d + 0x1C) |= 0x40000;
+        *(u16 *)(g + 0xA) += 1;
+        p[0x9B] += 1;
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        k = (u8 *)&D_80083460;
+        *(u16 *)(k + 0xA) -= 1;
+        *(s32 *)(d + 0x1C) &= ~0x208;
+        *(u32 *)(p + 0x8C) = (u32)func_b33_801711A4;
+        return;
+    }
+}
 
 /* The four-argument installer's banked twin: func_800DA660 in the resident
    overlay is its first half verbatim, and this one adds the gate's `else`.
