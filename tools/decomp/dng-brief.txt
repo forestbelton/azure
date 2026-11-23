@@ -1,0 +1,184 @@
+You are decompiling PSX game code in /home/case/projects/azure. Work ONLY in
+that repo. Your job: land ONE function, byte-exact, in your OWN PRIVATE COPY
+of its unit. You are one of five agents running right now.
+
+## Your function
+
+    FUNCTION   @FUNC@
+    UNIT       csrc/@UNIT@.c
+    LISTING    asm/nonmatchings/@UNIT@/@FUNC@.s
+    WORDS      @WORDS@
+    COPIES     @COPIES@   <-- see "Why this one" below
+
+## Why this one, and why it is worth more than its word count
+
+DUNGEON.BIN was carved into 116 code objects on 2026-11-22. They are not 116
+separate programs: the banked room scripts statically link a shared library,
+so the same function appears, relinked, in up to 216 objects. 1199 of the
+block's 2575 stubs are exact copies of a sibling.
+
+Your function is the REPRESENTATIVE of a family with @COPIES@ members. When it
+lands I replicate your body into the other @COPIESM1@ mechanically, so what you
+land is worth @YIELD@ words, not @WORDS@. Spend effort accordingly.
+
+    python3 tools/decomp/dngfam.py @FUNC@        # the member list
+
+**DO NOT TOUCH THE OTHER MEMBERS.** Do not open their units, do not try to
+land them, do not "helpfully" do two. The replication is mine and it is
+mechanical. One function, one agent.
+
+## Setup, exactly
+
+    cd /home/case/projects/azure
+    mkdir -p @WORKDIR@/sp
+    cp csrc/@UNIT@.c @WORKDIR@/@UNIT@.c
+    export AZURE_SCRATCH=@WORKDIR@/sp
+
+**KEEP THE BASENAME `@UNIT@.c`.** `ovlverify.py` picks which unit (and so
+which compiler flags, which container ELF and which listing directory) from
+the source file's BASENAME. A copy called `work.c` silently resolves against
+the wrong container and prints plausible nonsense instead of failing.
+
+**SET `AZURE_SCRATCH`.** `asmlib` derives its intermediate `.s`/`.o` path from
+the basename, and five agents sharing one path corrupt each other's compiles.
+The failures are loud and misleading -- `unrecognized opcode 'macro'`, `junk
+at end of line`, `symbol already defined` on unrelated functions -- and look
+like a defect in your source. They are not.
+
+**KEEP EVERY WORKING FILE INSIDE `@WORKDIR@/`.** That directory is yours.
+
+## NEVER RUN `make`, `make splat`, `make containers`, OR ANY BUILD
+
+`make` re-runs splat, which DELETES `asm/nonmatchings/` and rewrites it. That
+destroys the ground truth every other agent is measuring against, including
+yours. The verifier compiles your file itself; you do not need a build. The
+integration build is mine.
+
+Also do not run the permuter (`permrun.py`/`permimport.py`). Its jobs are a
+machine-wide budget and with five agents live it is mine to spend. If you
+cannot land the function, park it and report the residue; I run searches.
+
+## The verifier is the only thing that counts
+
+    python3 tools/decomp/ovlverify.py @WORKDIR@/@UNIT@.c @FUNC@
+
+It prints `target N words, candidate M words, K differing`. **Landed means
+`0 differing` AND candidate words == target words.** Anything else -- a build
+that links, an agreeing word count alone, a body that "looks right" -- is not
+a landing.
+
+On anything over ~200 words size the residue with
+
+    python3 tools/decomp/aligndiff.py @WORKDIR@/@UNIT@.c @FUNC@
+
+which aligns the two streams before counting; `ovlverify` compares word N
+against word N, so one transposed pair misses twice and inflates the number.
+`ovlverify --raw` shows unmasked bytes, which is how you prove a `%hi`/`%lo`
+the verifier masked is really a relocation and not a constant address.
+
+## Getting a first draft
+
+These units are fresh: every function is still `INCLUDE_ASM` and the unit has
+no declaration block yet. There is no park file and no prior attempt.
+
+    tools/m2c asm/nonmatchings/@UNIT@/@FUNC@.s
+
+That prints a first draft against `ctx.c`'s type context. Read
+`docs/m2c-pitfalls.md` before you trust it. Get it compiling, then measure,
+then work the residue.
+
+## Where the callees are already written
+
+The resident dungeon overlay is 100% decompiled. Anything your function calls
+at `0x800xxxxx` already has a real definition with a real signature:
+
+    grep -n "func_800ABDBC" csrc/ovl_dungeon*.c
+
+Read the definition and copy its signature rather than inventing one. Note
+that several are K&R-style with an arity the call sites disagree with; the
+project's fix for that is a unit-local alias declaration, which leaves the
+landed definition alone:
+
+    s32 func_80096100_4(u8 *, UnkVec *, u8 *, u8 *) __asm__("func_80096100");
+
+A `func_@TAG@_xxxxxxxx` callee is a sibling inside your own object and is
+still an `INCLUDE_ASM` stub -- just declare it.
+
+## Read these
+
+* `docs/landing-a-function.md` -- THE CONTRACT FOR ONE FUNCTION. Read it
+  properly. Two of its steps are overridden here and only two: you do not run
+  the permuter (above), and the landing gate is `ovlverify` + your report
+  rather than `make check` (the build is mine).
+* `docs/m2c-pitfalls.md` -- before you trust the first draft.
+* `docs/matching-levers.md` -- ~820 measured compiler behaviours. SEARCH IT
+  BEFORE SWEEPING SPELLINGS BY HAND:
+  `python3 tools/decomp/leverindex.py --grep <opcode or idiom>`.
+  Most of what you will hit is already in there. Do not read it end to end.
+* `docs/overlays.md` -- these units are `-G0`, and that is not cosmetic.
+
+## House rules
+
+* C style: Allman braces, 4 spaces, `(u8 *)p` with no space after the cast.
+  Before reporting, run
+  `clang-format -style=file:/home/case/projects/azure/.clang-format -i @WORKDIR@/@UNIT@.c`
+  and confirm a re-run reports no replacements.
+* New extern/function declarations go in a block at the TOP of your copy,
+  after `#include "common.h"` and before the first `INCLUDE_ASM`.
+* Keep types honest. If a struct field's offset and width are all you know, a
+  cast through `u8 *` is fine. Do not invent a struct you cannot witness.
+* A NEW TYPEDEF NAME MUST NOT COLLIDE WITH ONE ANOTHER AGENT IS INVENTING
+  RIGHT NOW. You cannot see the other four. Check both places before naming
+  one, and prefer a name that says which function it belongs to:
+
+      grep -ho 'UnkDng[A-Za-z0-9_]*' csrc/ovl_dng_*.c docs/dng-parks/*.c 2>/dev/null | sort -u
+
+* Put a short comment above the landed function giving its word count,
+  `0 differing`, and -- when you had to fight for it -- the ONE spelling fact
+  that made it land and what the wrong spellings cost. Measured numbers only;
+  never write a mechanism you did not verify.
+* A decomp device is allowed and `docs/landing-a-function.md` says how to
+  annotate one. Prefer a plain-C device (a `do { x; } while (0)` reference
+  bump, a duplicated arm) to an `__asm__` one, and record the plain scores you
+  rejected.
+
+## If it will not land
+
+A precise failure is worth more than a stalled agent, and on a @COPIES@-copy
+representative a measured residue is a real asset. Write your best body to
+
+    docs/dng-parks/@FUNC@.c
+
+**the moment it is your best, not at the end of your run.** `/tmp` is not
+durable -- a cleanup once took four finished functions and five unit copies
+with it. Rewrite that file each time your best improves. Do not `git add` it.
+
+Its header is hand-written and is the point. Give it the word counts, the
+aligned difference count, exactly which instructions differ, the copy count
+from `dngfam.py`, the mechanism if you know it, and **every spelling you
+measured and rejected with its score**. Put the declarations your body needs
+between literal `DECLARATIONS` / `END DECLARATIONS` lines inside that header
+comment -- a tool reads them, and a park whose declarations live only in your
+final report cannot be compiled from the repo at all. Do not write an inner
+`/*` anywhere in the header; it ends the comment early. Then:
+
+    python3 tools/decomp/parkcheck.py
+
+## Report back -- five things, no transcript
+
+1. The function, its unit, target words, and `0 differing` or the residue.
+2. If it landed: the complete body as ONE code block, with its comment, and
+   STRIPPED OF ANY SPLICE MARKERS you used while working.
+3. Every new declaration, extern or typedef it needs, as a code block. A body
+   whose two new typedefs went unreported has cost a round trip before.
+4. Any prototype of an ALREADY-LANDED function you had to change, with the
+   callers you re-measured. That can move code outside your unit, so say it
+   loudly.
+5. If it did not land: the residue and the path of your park file.
+
+Confirm in the report: your copy's path, that `csrc/` is unmodified, and that
+clang-format leaves your copy untouched.
+
+**If you land it, say so in a one-line interim message the moment it lands**,
+before you write anything else up. That line is what survives if your run is
+cut off.

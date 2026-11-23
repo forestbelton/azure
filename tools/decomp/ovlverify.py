@@ -98,6 +98,45 @@ CONTAINER = {
     "ovl_dungeon_800CABA8": "dungeon.bin",
     "ovl_dungeon_800D50FC": "dungeon.bin",
 }
+
+
+# ------------------------------------------------------------------ dng units
+#
+# DUNGEON.BIN's other 116 code objects, carved 2026-11-22. They are NOT reached
+# through OVERLAYS/`a = int(func.split("_")[1], 16)` above, because 47 of them
+# load at 0x80170800 and 66 at 0x80024000 -- an address names a RAM SLOT here,
+# not an object, so no range table could ever resolve one. Instead each object
+# gets splat `symbol_name_format: <tag>_$VRAM`, so its functions are named
+# `func_<tag>_<VRAM>` and THE NAME ITSELF says which unit owns it. `<tag>` is
+# the unit's own suffix: ovl_dng_b01 -> b01, ovl_dng_b31f -> b31f.
+TAGGED = re.compile(r"^func_([A-Za-z][A-Za-z0-9]*)_([0-9A-Fa-f]{8})$")
+_DNG_UNITS = None
+
+
+def dng_units():
+    """{tag: unit} for every carved DUNGEON.BIN object, from csrc/."""
+    global _DNG_UNITS
+    if _DNG_UNITS is None:
+        import glob as _glob
+        _DNG_UNITS = {}
+        for f in _glob.glob(os.path.join(PROJ, "csrc", "ovl_dng_*.c")):
+            unit = os.path.splitext(os.path.basename(f))[0]
+            _DNG_UNITS[unit[len("ovl_dng_"):]] = unit
+    return _DNG_UNITS
+
+
+def container_for(ovl):
+    """Which container ELF/binary holds `ovl`."""
+    if ovl in CONTAINER:
+        return CONTAINER[ovl]
+    if ovl.startswith("ovl_dng_"):
+        return "dungeon.bin"
+    raise SystemExit(f"no container known for {ovl}")
+
+
+def known_unit(stem):
+    """Is `stem` a unit name this tool can resolve a source file against."""
+    return stem in CONTAINER or stem in dng_units().values()
 ROW = re.compile(r"\s*/\* \w+ (\w+) ([0-9A-F]{8}) \*/\s+(.*)")
 
 
@@ -125,6 +164,10 @@ def overlay_for(func):
     3. **The first range that matches**, which is what this did when only one
        overlay loaded at 0x80088760.
     """
+    # A TAGGED NAME RESOLVES BY NAME, NOT BY ADDRESS -- see TAGGED above.
+    m = TAGGED.match(func)
+    if m and m.group(1) in dng_units():
+        return dng_units()[m.group(1)]
     a = int(func.split("_")[1], 16)
     cands = [name for name, lo, hi in OVERLAYS if lo <= a < hi]
     if not cands:
@@ -216,7 +259,7 @@ def rom_target(func):
     and stays visible -- but the printed table has no target text column.
     """
     ovl = overlay_for(func)
-    container = CONTAINER[ovl]
+    container = container_for(ovl)
     stem = container[:-4]
     elf = os.path.join(PROJ, "build", container + ".elf")
     ref = os.path.join(PROJ, "data", stem, container)
@@ -370,7 +413,7 @@ def main():
         return
 
     stem = os.path.splitext(os.path.basename(args.src or ""))[0]
-    if stem in CONTAINER:
+    if known_unit(stem):
         global SRC_UNIT
         SRC_UNIT = stem
     if not args.src or not args.funcs:
