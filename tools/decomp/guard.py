@@ -6,6 +6,12 @@ SP = os.environ.get('AZURE_SCRATCH', '/tmp/azure-decomp')
 os.makedirs(SP, exist_ok=True)
 PROJ = os.environ.get('AZURE_ROOT',
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# A NAME CAN CARRY A SEGMENT PREFIX. dungeon.bin's 116 carved objects share
+# two RAM windows, so splat gives each one its own symbol_name_format and the
+# names come out `func_b44_801735B4`, not `func_801735B4`. A bare
+# `func_[0-9A-Fa-f]+` captures `func_b44` and stops at the underscore, so the
+# eleven functions splat emitted as real C read as MISSING even though they
+# are compiled. See splat/dungeon.bin.yaml.
 known = set()
 for f in glob.glob(PROJ + '/asm/nonmatchings/**/*.s', recursive=True):
     m = re.search(r'nonmatching (\w+),', open(f).read())
@@ -22,7 +28,7 @@ for f in glob.glob(PROJ + '/csrc/**/*.c', recursive=True):
     # guard.py report present functions as MISSING, which is the opposite of
     # its job. Lazy matching stops at the nearest `) {` and still backtracks
     # correctly through a nested `(...)` in a parameter list.
-    have |= set(re.findall(r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', t, re.M))
+    have |= set(re.findall(r'^[A-Za-z_][\w \*]*?\b(func_(?:[0-9A-Za-z]+_)?[0-9A-Fa-f]+)\s*\([^;]*?\)\s*\{', t, re.M))
     # AN OLD-STYLE (K&R) DEFINITION puts its parameter DECLARATIONS between the
     # `)` and the `{`, so the pattern above -- which wants `) {` -- misses it
     # and the function reads as MISSING even though it is compiled. This
@@ -31,7 +37,7 @@ for f in glob.glob(PROJ + '/csrc/**/*.c', recursive=True):
     # (matching-levers section 7, and func_8005C2C0 is the case that exposed
     # this). Accept a run of `type name;` declarations before the brace.
     have |= set(re.findall(
-        r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\([\w\s,\*]*?\)\s*'
+        r'^[A-Za-z_][\w \*]*?\b(func_(?:[0-9A-Za-z]+_)?[0-9A-Fa-f]+)\s*\([\w\s,\*]*?\)\s*'
         r'(?:[A-Za-z_][\w \*]*[\w\*]\s*[\w\*\[\] ,]*;\s*)+\{', t, re.M))
     # A definition may carry an __asm__ label, so the C name is NOT the
     # assembler name: `void func_Xd(u16) __asm__("func_X"); void func_Xd(...)

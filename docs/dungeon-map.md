@@ -194,9 +194,17 @@ bytes first compared.
 
 ### 6. The 0x80020000 overlay -- same slot as main.bin's, different code
 
-File **0x182b000..0x1834800**, base **0x80020000** (delta 0x7E7F5000), pins at
-**94/108 (87%)**. 157 functions, 8,674 words; text 0x182b064..0x18337ec, which
-runs up to the first object of the 0x80024000 family at 0x1834800.
+File **0x1829800..0x1834800**, base **0x8001E800** (delta 0x7E7F5000), pins at
+**94/108 (87%)**. 229 functions, 10,230 words; a 5-word header at 0x1829800,
+text 0x1829814..0x18337ec, which runs up to the first object of the 0x80024000
+family at 0x1834800.
+
+**It starts at 0x1829800, not the 0x182b000 this file first gave it**, and so
+loads at 0x8001E800. The delta is the same either way; 0x182b000 was simply
+where a sweep window happened to begin. Walking back from it the code runs
+unbroken through 0x182aff0 to 0x1829814, under that header, under 0x600 bytes
+of zero padding to the sector boundary, and all five header pointers land
+inside the object at this base.
 
 0x80020000 is where main.bin's memory-card overlay loads
 (`csrc/ovl_main_80020000.c`), but this is **not** that object: 13% byte
@@ -242,6 +250,64 @@ distinct `jal` targets -- seven in the resident engine
 0x800750e0) and the nine above. The 0x8008axxx and 0x800bxxxx "targets" were
 words in the pointer tables between the groups, and the tables from 0xbdd4 on
 are town-overlay content that both containers carry at the same offsets.
+
+## All 116 are carved, 2026-11-22
+
+`splat/dungeon.bin.yaml` now has a `code` segment for every one of them, and
+all four containers are byte-identical. `tools/decomp/dungeon_carve.py`
+generates that block -- run it and diff if a boundary is ever in doubt -- and
+`--check` prints the objects whose cross-checks still complain.
+
+    python3 tools/decomp/dungeon_carve.py --check
+    python3 tools/decomp/dungeon_carve.py        # the YAML block
+
+**2,566 asm stubs, 543,607 words known, 39.7% landed.** Each object is carved
+`data` (its leading table of pointers into its own text) then `c` (text, to
+the last `jr $ra` and its delay slot). Everything after the text -- animation
+tables, further pointer tables, embedded assets, mastering filler -- stays
+`bin` and is promoted per object by whoever decompiles it. One rule for 116
+objects instead of 116 judgements, and it costs nothing, because a `bin`
+segment reproduces its bytes exactly.
+
+Five things the carve had to get right, each of which cost a build:
+
+1. **`symbol_name_format` per segment.** 47 objects load at 0x80170800 and 66
+   at 0x80024000, so without it they all generate `func_801708E8` and collide
+   in this container's single link. `b01_$VRAM` gives `func_b01_801708E8`.
+   Only the ROM case is overridden: out-of-segment references have no segment
+   at all and fall through to the global format, which is what keeps
+   `func_8003A7C4` shared instead of aliased 113 times.
+2. **`exclusive_ram_id` names the RAM SPACE, not the object.** splat keys its
+   overlay table by ROM *inside* the id and falls through to every other id
+   when an address misses in its own, so 116 ids did the opposite of
+   isolating them -- a branch label inside s62 came out `.Llo20_80026BE4` and
+   the link came apart on hundreds of undefined `.L` symbols. Two ids:
+   `dng_slot` and `dng_low`.
+3. **`--no-check-sections` on the link.** These objects share RAM by design;
+   overlapping VMAs are correct, and placement is by LMA throughout.
+4. **The text start is NOT "the first prologue".** Nine objects open with a
+   leaf function that has none, and that rule swallows them into the data
+   subsegment where nothing disassembles them. It is the word after BOTH the
+   last pointer into the object's own window and the last word that is not an
+   R3000 instruction. Neither test alone is enough: a pointer like
+   `0x80173a08` decodes as a fine `lb`, `0x01000340` is an `sll` with a
+   non-zero rs that only rabbitizer rejects, `0xfffefffe` is a MIPS III `sd`
+   that rabbitizer accepts and the R3000 does not have, and `0x0bb82000` is a
+   valid `j` to 0x8EE08000, which is not RAM.
+5. **`make` does not know about regenerated listings.** A `.c` file's
+   `INCLUDE_ASM` dependencies are invisible to it, so a re-split leaves every
+   `build/csrc/*.o` stale and the link fails on names from the PREVIOUS split.
+   `rm -f build/csrc/ovl_dng_*.o` after `splat split`. Deleting the `.c` files
+   too is what makes splat rewrite them when a boundary moves -- it skips a
+   file that already exists, so a stale `INCLUDE_ASM` list survives otherwise.
+
+**Two objects still have a complaint, and `--check` prints them rather than
+hiding them.** b31f and lo20, the two largest, carry rodata ISLANDS between
+functions -- Shift-JIS strings in lo20 at +0x5020, 1.6% of b31f's text across
+eleven runs. spimdisasm emits `.word` for what it cannot decode, so the bytes
+round-trip and the container is byte-identical; the cost is that the function
+after each island loses its own symbol. Each is worth a rodata subsegment when
+somebody reads it.
 
 ## The trap in this container
 
