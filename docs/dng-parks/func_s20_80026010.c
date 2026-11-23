@@ -103,6 +103,42 @@
        the plain array ref off the loop-invariant symbol is what matches. The
        difference is whether the +0x10 belongs in the base.)
 
+   THE SAME ARITHMETIC ON `e' INSTEAD, AND WHY IT ALSO FAILS. `e' only needs
+   8 references at a live length of 13 or less (3 * 8 / 13 = 1.85) to clear
+   the `c' chain, and it starts at 6 / 9 -- the smallest window in the
+   function. Every device that adds the reference also adds the barrier that
+   destroys the length:
+
+     `__asm__("" ::"r"(e));' after the def, after the +0x16 store and after
+         the +0x18 store                    169 words / 27 differing, each
+     `do { } while (0)' around the def, the +0x16 store, the +0x18 store
+                                            175 words / 42, 42, 44
+     the same around BOTH stores            175 words / 27
+     nested twice around the +0x18 store    175 words / 27
+
+   The `-da' probe says exactly why: with the asm in place pseudo 86 reads
+   `8 times across 29 insns' instead of `6 times across 9 insns', so its
+   priority FALLS from 2 * 6 / 9 = 1.333 to 3 * 8 / 29 = 0.828. The barrier
+   stops sched1 packing the slot's load and its two stores together, and the
+   range it spreads costs more than the reference buys. (The 169-word rows
+   are one word SHORT, not matching: the asm eats the `nop' in the +0x16
+   store's load-delay slot.)
+
+   AND THE DUPLICATED-TAIL ROUTE, measured because it is the recipe that
+   settled func_b03_80170E54, func_b04_80173ED8 and func_b14_80170894: this
+   function's only branch pair inside `c's live range is the
+   `i % 0x20 < 0x10' if/else, and the only `c' reference available to
+   duplicate into it is the `+0x4C' corner store:
+
+     the store moved to the HEAD of both arms      175 words / 80
+     the store moved to the TAIL of both arms      170 words / 72
+     the store kept in place AND added to both     178 words / 77
+
+   The tail form does confirm the coordinator's zero-word claim -- jump2
+   cross-jumps the two copies back into one and the body is still 170 words.
+   It is no use here because cross-jumping merges a tail AFTER the join, and
+   the target stores +0x4C in the `bgez $s5' DELAY SLOT, ahead of the branch.
+
    WHAT I WOULD TRY NEXT. Break the `combine_regs' tie chain on `c' rather
    than pay for a reference on `m': the chain is tied only because each link's
    source dies at the next, so one extra live use of `i & -0x10' or of the

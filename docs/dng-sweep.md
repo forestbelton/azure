@@ -974,3 +974,41 @@ still the right next move, but it is worth roughly half what I said.
 lines (the authority), `xsibs` reads the listing directory, `guard.py` reads
 both. Anything that joins two of them has to filter through `dngfam.stubs()`
 first. `dngpick.py` does; my ad-hoc analysis did not.
+
+## h13 closed out batch 7, and `decl_block` read a comment as code -- the FOURTH time
+
+Its two landings would not splice: `syntax error before `is''. Its
+declaration comment reads
+
+    /* ... func_s20_80025340 writes it, func_s20_80024EF4 reads it;
+       D_800264F8 is &D_80026478[0x10], its second bank. */
+
+and `decl_block` closes a statement on a line ending in `;` without asking
+whether the `;` is in CODE. The first line closed one mid-comment, the
+remainder became a statement beginning `D_800264F8 is &...', and the typedef
+after it was orphaned.
+
+That is the fourth tool in this pipeline to read a comment as code, after
+`vary_consts` (code_mask), `needed_decls` (decl_code) and `def_match`
+(code_view). Each one was found by a different agent's perfectly ordinary
+prose. **The rule is now mechanical: anything in this pipeline that scans a
+body or a block for syntax must mask comments first.** `decl_block` does.
+
+## h13's two parks are the best residue work of the sweep
+
+`func_s20_80026010` is 170 words with 23 aligned differences, every one two
+locals exchanging `$s0` and `$s1`, and the agent took the `-da` probe recipe
+and found something that AMENDS the lever file rather than using it: the sort
+is `local-alloc`'s, not `global_alloc`'s -- `;; N regs to allocate:` lists
+only local quantities -- and `combine_regs` has tied its opponent's whole
+address chain into one quantity of ~32 refs. It then measured all three
+free-reference devices and showed each one LOSES here, with the probe
+explaining why: the `__asm__` barrier makes its own pseudo read 8 times
+across 29 insns instead of 6 across 9, so the priority FALLS.
+
+It also confirmed the duplicated-tail entry's zero-word claim and showed it
+useless in this body, because cross-jumping merges a tail after the join
+while the target wants that store in a branch's delay slot.
+
+That is a better outcome than a landing: the lever file now says when its own
+devices do not apply, and how to tell.

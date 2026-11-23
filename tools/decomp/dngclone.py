@@ -370,16 +370,38 @@ def decl_block(src_text):
     # (whose name is not in the body), and the clone then fails to compile
     # against a file nobody could read. Track brace depth and close a
     # statement only at depth 0.
-    out, cur, depth = [], [], 0
+    #
+    # AND THE `;` MUST BE IN CODE. A declaration's comment is prose and prose
+    # contains semicolons: agent-h13 wrote
+    #
+    #   /* ... func_s20_80025340 writes it, func_s20_80024EF4 reads it;
+    #      D_800264F8 is &D_80026478[0x10], its second bank. */
+    #
+    # and the first line's `;` closed a statement MID-COMMENT. The remainder
+    # became a statement of its own beginning `D_800264F8 is &...', the
+    # typedef that followed was orphaned, and the unit would not compile:
+    # `syntax error before `is''. Fourth time a tool here has read a comment
+    # as code -- see code_mask in vary_consts, decl_code in needed_decls and
+    # code_view in def_match.
+    mask = code_mask(chunk)
+    out, cur, depth, off = [], [], 0, 0
     for ln in chunk.split("\n"):
         t = ln.strip()
         if not t and not cur:
+            off += len(ln) + 1
             continue
         cur.append(ln)
         depth += ln.count("{") - ln.count("}")
-        if depth <= 0 and (t.endswith(";") or t.endswith("*/")):
+        closes = False
+        if depth <= 0:
+            if t.endswith("*/"):
+                closes = True            # a comment block legitimately ends here
+            elif t.endswith(";"):
+                closes = mask[off + ln.rindex(";")]
+        if closes:
             out.append("\n".join(cur).strip())
             cur, depth = [], 0
+        off += len(ln) + 1
     if cur:
         out.append("\n".join(cur).strip())
     return out
