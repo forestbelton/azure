@@ -87,6 +87,49 @@ That prints a first draft against `ctx.c`'s type context. Read
 `docs/m2c-pitfalls.md` before you trust it. Get it compiling, then measure,
 then work the residue.
 
+## FIND THE RESIDENT TWIN FIRST. IT IS USUALLY THE WHOLE ANSWER.
+
+This is the single most useful fact about this block. The banked room scripts
+are relinked copies of code that ALSO EXISTS in the resident dungeon overlay
+at 0x800894A0 -- and that overlay is **100% decompiled**. So for most of these
+functions the body is already written, in C, with a comment explaining what
+made it land.
+
+Nine of the first ten functions landed on or near the first compile this way.
+Known pairs so far:
+
+    func_b01_80171C34 <- func_800D92C0      func_b03_80173358 <- func_800DA014
+    func_b03_80170A28 <- func_800D8728      func_b07_80171570 <- func_800D904C
+    func_b03_801736F4 <- func_800DA398      func_b03_80171DA0 <- func_800CA788
+    func_b01_80172800 <- func_800D9C18      func_b02_80174574 <- func_800DA660
+
+**A LANDED `ovl_dng_*` SIBLING CAN BE A BETTER TWIN THAN THE RESIDENT
+ORIGINAL**, and as the sweep goes on it usually is. It has already absorbed
+the relink -- the bank-local facing table, the `func_80047784` byte-table
+call, an inverted gate, whatever device the allocation needed -- so the only
+thing left to find is the delta. `func_b03_8017139C` landed on the first
+compile as `func_b07_80171570` plus five words; `func_b03_80171F64` landed
+with NO new declarations because its 113-word sibling had already brought
+every symbol into the unit. Check `csrc/ovl_dng_*.c` for a landed body of the
+same shape before you go to the resident overlay.
+
+How to find yours: read your listing's call sequence, then grep the resident
+units -- and the landed carved ones -- for a function that calls the same
+things in the same order.
+
+    grep -ln "func_800A9A0C" csrc/ovl_dungeon*.c
+
+`docs/dungeon-map.md` and the landed bodies in `csrc/ovl_dng_*.c` (each with a
+comment naming its own twin) are the other way in.
+
+The differences are small and local: an extra arm, a bank-local table in place
+of a resident one, an inverted gate, one constant. **But RE-MEASURE the twin's
+named spellings rather than assuming them.** On `func_b03_80170A28` all three
+of the twin's facts held -- 3, 15 and 132 aligned differences when spelled
+otherwise -- and on `func_b07_80171570` the gate turned out to be the twin's
+*inverted*, worth 2 words and 46 differences to get wrong. Put your own
+numbers in your comment, not the twin's.
+
 ## Where the callees are already written
 
 The resident dungeon overlay is 100% decompiled. Anything your function calls

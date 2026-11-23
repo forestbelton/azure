@@ -212,3 +212,57 @@ worth 2 words and 46 differences to get wrong.
 And `decl_block()` now splits on STATEMENTS rather than lines, because a
 declaration block can hold a multi-line struct typedef and splitting on
 newlines shredded it into a kept `typedef struct X` line and dropped fields.
+
+## Batch 3, 2026-11-23: five agents, 60 functions, 9,812 words
+
+All five landed; three on the first compile. 48.0% to 49.8%.
+
+| representative | words | copies | cloned | yield |
+|---|---|---|---|---|
+| `func_b14_80171410` | 466 | 5 | 4/4 | 2,330 |
+| `func_b09_80173D4C` | 228 | 9 | 8/8 | 2,052 |
+| `func_b09_801740DC` | 195 | 10 | 9/9 | 1,950 |
+| `func_b03_8017139C` | 150 | 12 | 11/11 | 1,800 |
+| `func_b03_80171F64` | 70 | 24 | 23/23 | 1,680 |
+
+**Pick on YIELD PER WORD from here on.** The 200-copy families are gone, so
+the ranking by raw yield now puts a 466-word function with 5 copies above a
+70-word function with 24. The second is better work: `func_b03_80171F64`
+landed on the first compile with NO new declarations at all, because its
+113-word sibling from batch 1 had already brought every symbol into the unit.
+
+**A LANDED CARVED SIBLING IS OFTEN A BETTER TWIN THAN THE RESIDENT ORIGINAL**,
+and increasingly so as the sweep goes on: it has already absorbed the relink.
+`func_b03_8017139C` landed as `func_b07_80171570` plus five words;
+`func_b09_801740DC` as the landed `func_b05_80173BEC` minus three flag
+updates. The brief now says so.
+
+**And re-measuring the twin's facts pays in BOTH directions.** On
+`func_b03_80171F64` two of its sibling's three named spellings did not hold
+(28 and 12 differing if assumed); on `func_b09_80173D4C` the twin's register
+map came from a duplicated bump that here was not enough on its own.
+
+## `dngfam --diff` NORMALISES LABEL NAMES, SO IT CAN HIDE A STRUCTURAL CHANGE
+
+Fixed 2026-11-23. `sig_insn` replaces a label with `S`, so two bodies whose
+branches go to DIFFERENT PLACES compare equal instruction for instruction. It
+reported `func_b14_80171410` as exactly one `nop` away from the landed
+`func_b01_80171C34`, that went into the agent's brief as "one word apart", and
+the real difference was a brace -- b01's `0x8000` gate wraps two arms where
+b14's wraps one. The agent found it from the branch offsets anyway, after
+spending its first compiles looking for a spelling.
+
+`--diff` now resolves every branch label to an instruction index and reports a
+target mismatch separately, and when the streams match but the flow does not
+it says in as many words to look for a structural difference rather than a
+spelling.
+
+## One more declaration-placement defect
+
+New declarations were inserted after `#include "common.h"`, which put a new
+`extern UnkDngRoom2970 D_800E2970_s[]` AHEAD of the `typedef struct
+UnkDngRoom2970` the unit already carried further down: `syntax error before
+D_800E2970_s' in three of one family's four members, while the fourth happened
+to lack the typedef and so received both in dependency order. They append to
+the END of the declaration block now, which leaves every existing declaration
+in scope and still orders a new typedef before a new user of it.

@@ -572,7 +572,70 @@ s32 func_b35_80171EC8(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b35", func_b35_8017208C);
+/* The banked room script's unconditional "same slot" entry, the 70-word
+   sibling of func_b03_80171DA0 above (the relinked twin of the resident
+   overlay's func_800CA788) with the cursor pick and the heading window cut
+   out: past the single D_80083462 0x2000 gate and the two func_800A2B5C
+   tests, put the actor into state 0x11, swap the D_80173D30 facing table
+   into the slot's +0x2C and re-aim through func_8009C93C.
+
+   THIS ONE IS `void` AND IT CARRIES NO LEFTOVER LOCAL. All three gates fall
+   straight into the epilogue with no $v0 set, and the calls here need exactly
+   the 0x30 frame the five register saves and func_8009C93C's 0x18 outgoing
+   area add up to -- so the 8-byte aggregate func_b03_80171DA0's comment had
+   to invent is absent. Adding `s32 unused[2];` back is 12 differing, every
+   $sp-relative offset and both ends of the frame.
+
+   AND THE +0x84/+0x85 PAIR MOVED TO THE TAIL. func_b03_80171DA0 stores them
+   before the table swap; here they are AFTER the func_8009C93C call, which is
+   the only place the scheduler cannot hoist them from. In the sibling's
+   position they are 28 differing. `d[0x6D] -= 1;` stays BEFORE that call as
+   in the sibling: after it is 10 differing.
+
+   | spelling                                   | words | differing |
+   | as written below                            |  70   |     0     |
+   | +0x84/+0x85 before the table swap           |  70   |    28     |
+   | `s32 unused[2];` restored                   |  70   |    12     |
+   | `d[0x6D] -= 1;` after func_8009C93C         |  70   |    10     |
+   | p stores in +0x9A, +0x9B, +0x8C order       |  70   |     2     |
+   | plain `if (func_800A2B5C(d) != 0)`          |  68   |    51     |
+
+   The `(s16)` on both func_800A2B5C tests is the target's `sll $v0, $v0, 16`
+   / `bnez` halfword test; dropping it costs the two `sll`s and 51 differing.
+   Three equal spellings, all 0: the gate read as
+   `g = (u8 *)&D_80083460; *(u16 *)(g + 0x2)` the way the sibling spells it,
+   D_80173D30 used directly at both sites with no `e` local, and one
+   shared `goto fail` label in place of the three plain `return;`s. The
+   simpler of each pair is kept. 70 words, 0 differing on the first compile. */
+void func_b35_8017208C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x11;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    e = D_80173D30;
+    *(u8 **)(c + 0x2C) = e;
+    func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    d[0x84] = 0x7C;
+    d[0x85] = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b35", func_b35_801721A4);
 

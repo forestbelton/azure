@@ -54,6 +54,25 @@ s32 func_800AB538();
 
 s32 func_800AD058();
 
+extern Unk80083462 D_80083460;
+u8 *func_800A04F0_r(u8 *p, s32 x, s32 y, s16 dir) __asm__("func_800A04F0");
+s16 func_800A0134(u8 *a, u8 *b);
+s32 func_800A19E4(s32 a, u8 *b, s16 c, s16 d, u8 *out);
+u8 *func_800A02AC(u8 *p, u16 x, u16 y);
+u16 func_800A6D30(void);
+s16 func_8009FD7C(s16 x1, s16 y1, s16 x2, s16 y2);
+s16 func_8009A540(s32 a, s32 x, s32 y, s16 z);
+s32 func_800A0E6C(u8 *b, s16 f, u8 *c, u8 *d);
+s32 func_8009A180(u8 *a, u8 *b);
+s16 func_800BCB04h(s32, s32, s16) __asm__("func_800BCB04");
+s32 func_b44_80172050(u8 *p, UnkVec *b, u8 *c, u8 *d);
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+extern s16 D_8006CD00[];
+extern u8 D_80082E80[];
+extern u16 D_80082EA4;
+extern UnkDngRoom2970 D_800E2970_s[] __asm__("D_800E2970");
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b44", func_b44_801708BC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b44", func_b44_80170A84);
@@ -155,7 +174,298 @@ void func_b44_801716B4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b44", func_b44_801718F8);
+/* The banked room script's walk step: the relinked twin of
+   func_b01_80171C34 in csrc/ovl_dng_b01.c, which is itself the resident
+   overlay's func_800D92C0 with three extra pre-loop arms.  Transcribed from
+   that landed body with this bank's symbols -- func_8009A66C for
+   func_8009A8C0, func_b44_80172050 for func_b01_8017237C -- and ONE
+   structural change.  466 words, 0 differing, 0 aligned differences.
+
+   THE 0x8000 GATE WRAPS ONLY THE ACTOR LOOKUP HERE, NOT THE 0x20000 ARM.
+   b01 writes `else if ((d[0x46] & 0x8000) == 0)' around both the
+   func_800A04F0 lookup and the 0x20000 arm, so a set 0x8000 skips the pair
+   and jump.c sends the branch straight to the loop prologue with the
+   `i = 0' hoisted into its delay slot.  This copy's gate closes after the
+   lookup and the 0x20000 arm runs either way: the branch goes to the
+   0x20000 test and its delay slot is a `nop'.  Written b01's way round it is
+   466 words and 2 aligned differences, the branch offset and that
+   `addu $s1, $zero, $zero'.  That one word is the only normalised
+   instruction between the two listings -- `dngfam.py --diff', word 202.
+
+   Everything below is b01's note re-measured on this bank; the numbers are
+   mine, not transcribed.
+
+   func_800BCB04 HAS TO COME THROUGH THE s16 ALIAS, AND IT DECIDES THE WHOLE
+   FUNCTION'S REGISTER ASSIGNMENT.  `i = func_800BCB04h(...)' is a halfword
+   assignment into `i' itself; with a plain `s32 func_800BCB04' and an
+   `(s16)' cast the result needs a temporary instead, which drops `i's
+   allocno priority -- global.c's allocno_compare ranks on
+   floor_log2(refs)*refs/live_length -- below `d's, so `i' no longer takes
+   $s1 first and `i', `d' and `c' come out rotated: 466 words, 125 aligned
+   differences.
+
+   AND THE LOOP'S HEADING VALUE SHARES `e' WITH THE TWO ACTOR LOOKUPS.  In
+   its own local it is 3 aligned differences: the `lh' of d + 0x2A lands in
+   $a0 where the target has $v1, because expand_preferences gives it `s's
+   hard-register preference and `s' prefers $a0.  Sharing `e', whose other
+   live range is in the pre-loop arms, gives the allocno the conflicts that
+   put $a0 out of reach and find_reg keeps $v1.
+
+   Both of b01's plain-C devices are still load-bearing here and both are
+   kept; each is 4 aligned differences if dropped, and the details are in
+   the two DEVICE comments below.  The D_8006CCD8 lookup through a local
+   that the index add writes back into is 8 aligned differences written
+   inline.  The tail's `t80' measures 0 either way -- D_80082E80 written
+   inline in that arm is also 466 words and 0 -- and is kept only to leave
+   this body a literal transcription of b01's.
+
+   b01's remaining facts are carried over untested, because this body landed
+   on the first compile: D_800E2970 indexed as an array of a 0x14-byte
+   record so the +0xC read keeps its own displacement, the second
+   D_8006CCE8 lookup left inline because cse folds its `%hi'/`%lo' away, the
+   tail's own `g2' for D_80083460, and the `(s16)' casts on the three
+   s32-returning callees.  THE SECOND PARAMETER IS NEVER READ AND MUST STILL
+   BE DECLARED AND PASSED ON: func_b44_80172050's call sets only $a0, $a2
+   and $a3, so its $a1 is this function's own incoming $a1 reaching it
+   untouched. */
+void func_b44_801718F8(u8 *p, void *b, void *c, u8 *d)
+{
+    u8 *g;
+    s32 cc2;
+    u8 *g2;
+    s32 e;
+    u8 *t;
+    u8 *t80;
+    u16 *w;
+    s16 *tbl;
+    s16 f;
+    s16 i;
+    s16 m;
+    s32 s;
+    s32 v;
+    s32 j;
+    s32 k;
+    s32 kk;
+    s32 t1;
+    s32 x;
+    s32 y;
+
+    g = (u8 *)&D_80083460;
+    f = 0;
+    if ((*(u16 *)(g + 0x2) & 0x4000) != 0 || *(s8 *)(d + 0x71) >= 0)
+    {
+        if (d[0x12] >= 2 || (s16)func_b44_80172050(p, b, c, d) == 0)
+        {
+            func_800A9A0C(d);
+            return;
+        }
+        if (*(u8 **)(g + 0xC) == d)
+        {
+            *(u16 *)(d + 0x46) = 0xC008;
+        }
+        return;
+    }
+    if ((*(u16 *)(g + 0x2) & 0x2000) == 0)
+    {
+        return;
+    }
+    func_800A19E4((s32)c, d, 3, 6, p + 0x9C);
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x410) != 0)
+    {
+        if ((v & 0x400) != 0)
+        {
+            e = (s32)func_800A02AC(d, *(u8 *)(c + 0x24), *(u8 *)(c + 0x25));
+            if (e != 0)
+            {
+                t = *(u8 **)(e - 0x14);
+                *(s16 *)(d + 0x2A) = func_800A0818(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), t[0x24], t[0x25], (u16 *)(p + 0x98));
+                d[0x71] &= 0x7F;
+                return;
+            }
+            /* DEVICE: the constant in a local, and the read-modify-write
+               wrapped in a do-while(0).  Measured here: a plain
+               `*(s32 *)(d + 0x14) |= 0x80000000;' is 466 words and 4
+               aligned differences, the loaded word and the `lui 0x8000'
+               swapping $v0 and $v1.  No uninitialised read, so nothing
+               warns under -Wall.  Same construct, same place, as
+               func_b01_80171C34 and the resident func_800D92C0; the other
+               spellings they rejected are in b01's note and are not
+               re-measured here. */
+            cc2 = 0x80000000;
+            if (*(s32 *)(d + 0x14) >= 0)
+            {
+                do
+                {
+                    *(s32 *)(d + 0x14) |= cc2;
+                } while (0);
+                *(s16 *)(d + 0x2A) = *(u16 *)(d + 0x2A) + ((func_800A6D30() & 7) << 9);
+            }
+        }
+        else
+        {
+            if (func_800A04F0_r(d, *(u8 *)(c + 0x24), *(u8 *)(c + 0x25), *(s16 *)(d + 0x2A)) != NULL)
+            {
+                d[0x71] &= 0x7F;
+                return;
+            }
+        }
+    }
+    else if ((v & 0x2000) != 0)
+    {
+        if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+        {
+            if ((v & 0x20000) != 0)
+            {
+                k = ((d[0x45] + ((s16)(*(u16 *)(D_800814A8 + 0x2A)) >> 9)) & 7) * 2;
+                x = D_80082E80[0x24] + *(u16 *)(k + (s32)D_8006CCD8);
+                y = D_80082E80[0x25] + *(u16 *)(k + (s32)D_8006CCE8);
+                if (*(u8 *)(c + 0x24) == (u16)x && *(u8 *)(c + 0x25) == (u16)y)
+                {
+                    d[0x71] &= 0x7F;
+                    return;
+                }
+                w = (u16 *)(p + 0x98);
+                m = func_800A0818(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), x, y, w);
+                *(s16 *)(d + 0x2A) = m;
+                if ((s16)func_8009A66C(m, c, d, 0x20) <= 0)
+                {
+                    *(s16 *)(d + 0x2A) = func_800A0818(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), D_80082E80[0x24], D_80082E80[0x25], w);
+                }
+                if (func_8009FD7C(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), D_80082E80[0x24], D_80082E80[0x25]) != 0)
+                {
+                    f = 1;
+                }
+            }
+            else
+            {
+                func_800A0E6C((u8 *)c, *(s8 *)(p + 0x9C), d, p + 0x98);
+            }
+        }
+    }
+    else
+    {
+        j = *(s8 *)(c + 0x26);
+        if (j >= 0 && (D_800E2970_s[j].unk_0C & 2) != 0)
+        {
+            func_800A0E6C((u8 *)c, *(s8 *)(p + 0x9C), d, p + 0x98);
+        }
+        else
+        {
+            if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+            {
+                e = (s32)func_800A04F0_r(d, *(u8 *)(c + 0x24), *(u8 *)(c + 0x25), *(s16 *)(d + 0x2A));
+                if (e != 0 && (*(s32 *)(e + 0x1C) & 0x2000) != 0 && func_800A0134((u8 *)e, d) < 0x81 &&
+                    func_8009A540(((s16)(*(u16 *)(d + 0x2A)) >> 9) & 0xFFFF, *(u8 *)(c + 0x24), *(u8 *)(c + 0x25),
+                                  (s16)(*(u16 *)(d + 0x88) - 0x20)) != 0)
+                {
+                    d[0x71] &= 0x7F;
+                    return;
+                }
+            }
+            if ((*(s32 *)(d + 0x1C) & 0x20000) != 0)
+            {
+                t80 = D_80082E80;
+                *(s16 *)(d + 0x2A) = func_800A0818(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), t80[0x24], t80[0x25],
+                                                   (u16 *)(p + 0x98));
+                if (func_8009FD7C(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), t80[0x24], t80[0x25]) != 0)
+                {
+                    if (func_800A0134((u8 *)D_800814A8, d) < 0x81 &&
+                        func_8009A540(((s16)(*(u16 *)(d + 0x2A)) >> 9) & 0xFFFF, *(u8 *)(c + 0x24), *(u8 *)(c + 0x25),
+                                      (s16)(*(u16 *)(d + 0x88) - 0x20)) != 0)
+                    {
+                        d[0x71] &= 0x7F;
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                func_800A0E6C((u8 *)c, *(s8 *)(p + 0x9C), d, p + 0x98);
+            }
+        }
+    }
+    i = 0;
+    tbl = D_8006CD00;
+    do
+    {
+        e = *(s16 *)(d + 0x2A);
+        if ((*(u16 *)(p + 0x98) & 2) != 0)
+        {
+            s = e - tbl[i];
+        }
+        else
+        {
+            s = e + tbl[i];
+        }
+        if ((s16)func_8009A66C((s16)s, (u8 *)c, d, 0x20) > 0)
+        {
+            if (i >= 3 && f != 0)
+            {
+                d[0x71] &= 0x7F;
+                return;
+            }
+            *(s16 *)(d + 0x2A) = s;
+            *(d + (d[0x71] & 0x7F) + 0x74) = *(u8 *)(c + 0x24);
+            *(d + (d[0x71] & 0x7F) + 0x7C) = *(u8 *)(c + 0x25);
+            d[0x71]++;
+            func_8009A3D0(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+            kk = (*(u16 *)(d + 0x2A) >> 8) & 0xE;
+            /* The table address is a local that the index add writes back
+               into, exactly as the landed func_800D92C0 needs it: the `%lo'
+               insn's destination then has reg_n_sets != 1.  Written inline
+               as `*(u8 *)(kk + (s32)D_8006CCD8)' it is 466 words and 8
+               aligned differences here.  The second lookup must stay
+               inline -- cse knows D_8006CCE8 is D_8006CCD8 + 0x10 and folds
+               its `%hi'/`%lo' away. */
+            t1 = (s32)D_8006CCD8;
+            t1 += kk;
+            *(u8 *)(c + 0x24) += *(u8 *)t1;
+            *(u8 *)(c + 0x25) += *(u8 *)(kk + (s32)D_8006CCE8);
+            func_8009A21C(*(u8 *)(c + 0x24), *(u8 *)(c + 0x25), (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+            break;
+        }
+        if (i == 0 && D_80082EA4 != *(u16 *)(c + 0x24))
+        {
+            if ((s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+            {
+                /* DEVICE: the return wrapped in a do-while(0).  Measured
+                   here: a plain `return;' is 466 words and 4 aligned
+                   differences.  No uninitialised read, so nothing warns
+                   under -Wall.  Same construct, same place, as
+                   func_b01_80171C34 and the resident func_800D92C0, whose
+                   note has the reorg mechanism. */
+                do
+                {
+                    return;
+                } while (0);
+            }
+        }
+        i++;
+    } while (i < 8);
+    if (i >= 8)
+    {
+        d[0x71] &= 0x7F;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        func_800A9A0C(d);
+        return;
+    }
+    *(u16 *)(d + 0x46) &= 0x7FFF;
+    p[0x9C] = *(u8 *)(c + 0x26);
+    d[0x6D]--;
+    g2 = (u8 *)&D_80083460;
+    *(u16 *)(g2 + 0x8) += 1;
+    if (*(s8 *)(d + 0x6D) == 0)
+    {
+        d[0x71] &= 0x7F;
+        return;
+    }
+    i = func_800BCB04h((*(u8 *)(c + 0x24) << 6) | 0x20, (*(u8 *)(c + 0x25) << 6) | 0x20, (s16)(*(u16 *)(d + 0x88) - 0x20));
+    if (i < 0x200)
+    {
+        *(s16 *)(d + 0x88) = i;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b44", func_b44_80172040);
 

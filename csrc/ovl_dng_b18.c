@@ -95,6 +95,8 @@ s32 func_800AB778();
 
 s32 func_800AB538();
 
+void func_b18_80171D80(u8 *, UnkVec *, u8 *, u8 *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_8017087C);
 
 /* The banked room script's per-frame actor driver, the relinked twin of the
@@ -270,7 +272,120 @@ void func_b18_80170A50(u8 *p, UnkVec *b, u8 *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_80170E7C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_801713E0);
+/* The banked room script's step-the-walk handler, the relinked twin of the
+   landed func_b07_80171570 in csrc/ovl_dng_b07.c (itself the resident
+   overlay's func_800D904C in csrc/ovl_dungeon_800D50FC.c): advance the actor
+   one cell of its queued path, swap in the D_b18_80174D44 facing table,
+   re-aim the sprite, and either stop at state 0xF or hand on to
+   func_b18_80171D80.  150 words, 0 differing.  12 copies (dngfam.py).
+
+   IT IS func_b07_80171570 PLUS FIVE WORDS: the `t != 3' arm also clears bit 3
+   of the halfword at p + 0x98, so the two 0xF stores cannot be one else arm
+   and the gate has to be NESTED.  b07's flat
+   `(s16)t == 3 && !(D_80083462 & 0x80) && !(c[0x14] & 0x8000)' with 0xF as
+   the single else is 145 words / 42 differing here.  Spelling the inner gate
+   the other way round -- `||' with the 0xF store as the taken arm -- is 10
+   differing: jump.c then cross-jumps one of the two `sw $zero, 0x8C($s4)'
+   stores the target keeps in both.  Hoisting the 0xFFF7 clear into its own
+   `if ((s16)t != 3)' ahead of the flat `&&' gate is 24, and leading with
+   `if ((s16)t != 3)' and trailing the call as the final else is 149 words /
+   60.
+
+   DEVICE: `x + ((x + x) - x - x)' on func_800A0818's first argument.  It is
+   the phantom zero of docs/matching-levers.md :11693 -- cse keeps the three
+   insns, flow counts them as references on `x', and combine deletes them
+   (simplify_binary_operation's `X * C - X' and `X - X' cases), so it emits
+   nothing and ties nothing.  Its job here is allocation only: without it `d'
+   outranks the `x'/`t' quantity in global-alloc and the two swap
+   callee-saved registers, `d' taking $s0 and `x' $s1 where the target has
+   $s1 and $s0 -- 150 words, 28 differing, every one of them that rename
+   (and `t', which shares `x's register, renames with it).  What the function
+   does without it: the same 150 instructions with two callee-saved registers
+   exchanged.  It does NOT warn under -Wall: nothing is read uninitialised.
+
+   Measured and rejected, all 150 words unless stated:
+     no device at all                                              28
+     no device, declaring `x' and `y' first                         28
+     no device, `s16 x, y'                                          28
+     no device, `d' copied into a local before the first test       28
+     the phantom on `y' as well as `x'                              28
+     the phantom on func_8009A3D0's first argument instead           7
+     the phantom as its own statement, `x = x + ((x + x) - x - x);'  2
+     `__asm__("" ::"r"(x));' after the two assignments               2
+     `__asm__("" ::"r"(x));' before the func_8009A3D0 call           2
+     the entry gate as `*(s16 *)(d + 0x8A) < d[0x71]'                2
+     the entry gate's first test as `d[0x71] > 0', no `(s8)' cast    3
+     merging `t' into `x'                                           37
+     no device, `u8 x, y'                                151 words, 123
+     merging `r' into `y'                                151 words, 107
+     a local for the 0x300/0x3000 select                 151 words,  75
+     `x' and `y' inline, no locals                       149 words, 125
+
+   `--raw' is 17 differing and every one is a relocation -- the six `jal's,
+   the three `j's, and the `%hi'/`%lo' pairs for D_b18_80174D44, D_80083228
+   and the two D_80083462 loads -- so no masked word is hiding a constant
+   address.  Hoisting D_b18_80174D44 into a local and writing the 0x8A bump
+   as `*(s16 *)(d + 0x8A) += 1' are each 0 differing too; the forms kept here
+   are b07's, for the replicator's sake. */
+void func_b18_801713E0(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 r;
+    s32 t;
+    s32 n;
+    s32 x;
+    s32 y;
+
+    if (*(s8 *)(d + 0x71) > 0 && d[0x71] > *(s16 *)(d + 0x8A))
+    {
+        if (*(u8 **)(c + 0x2C) != D_b18_80174D44)
+        {
+            *(u8 **)(c + 0x2C) = D_b18_80174D44;
+            func_80047784(c, D_b18_80174D44[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        x = c[0x24];
+        y = c[0x25];
+        func_8009A3D0(x, y, (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        r = func_800A0818(/* DEVICE: the phantom zero.  See the header. */
+                          x + ((x + x) - x - x), y, *(d + *(s16 *)(d + 0x8A) + 0x74), *(d + *(s16 *)(d + 0x8A) + 0x7C), (u16 *)(p + 0x98));
+        t = func_8009A66C((s16)r, c, d, 0x20);
+        c[0x24] = *(d + *(s16 *)(d + 0x8A) + 0x74);
+        c[0x25] = *(d + *(s16 *)(d + 0x8A) + 0x7C);
+        *(s16 *)(d + 0x8A) = *(u16 *)(d + 0x8A) + 1;
+        func_8009A21C(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        *(s16 *)(d + 0x2A) = r;
+        if ((s16)t == 3)
+        {
+            if ((D_80083462 & 0x80) == 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+            {
+                func_b18_80171D80(p, b, c, d);
+            }
+            else
+            {
+                p[0x9A] = 0xF;
+            }
+        }
+        else
+        {
+            p[0x9A] = 0xF;
+            *(u16 *)(p + 0x98) &= 0xFFF7;
+        }
+        *(s32 *)(p + 0x8C) = 0;
+        *(u32 *)(d + 0x1C) |= 0x40000000;
+        if ((D_80083462 & 0x80) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 8;
+            n = d[0x71];
+            if (n > 0)
+            {
+                *(s16 *)(p + 0x96) = 8 / n;
+            }
+        }
+    }
+}
 
 /* The banked room script's walk step, the relinked twin of the resident
    overlay's func_800D92C0 (csrc/ovl_dungeon_800D50FC.c) with three extra
@@ -649,7 +764,70 @@ s32 func_b18_80171DE4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_80171FA8);
+/* The banked room script's unconditional "same slot" entry, the 70-word
+   sibling of func_b03_80171DA0 above (the relinked twin of the resident
+   overlay's func_800CA788) with the cursor pick and the heading window cut
+   out: past the single D_80083462 0x2000 gate and the two func_800A2B5C
+   tests, put the actor into state 0x11, swap the D_b18_80174D4C facing table
+   into the slot's +0x2C and re-aim through func_8009C93C.
+
+   THIS ONE IS `void` AND IT CARRIES NO LEFTOVER LOCAL. All three gates fall
+   straight into the epilogue with no $v0 set, and the calls here need exactly
+   the 0x30 frame the five register saves and func_8009C93C's 0x18 outgoing
+   area add up to -- so the 8-byte aggregate func_b03_80171DA0's comment had
+   to invent is absent. Adding `s32 unused[2];` back is 12 differing, every
+   $sp-relative offset and both ends of the frame.
+
+   AND THE +0x84/+0x85 PAIR MOVED TO THE TAIL. func_b03_80171DA0 stores them
+   before the table swap; here they are AFTER the func_8009C93C call, which is
+   the only place the scheduler cannot hoist them from. In the sibling's
+   position they are 28 differing. `d[0x6D] -= 1;` stays BEFORE that call as
+   in the sibling: after it is 10 differing.
+
+   | spelling                                   | words | differing |
+   | as written below                            |  70   |     0     |
+   | +0x84/+0x85 before the table swap           |  70   |    28     |
+   | `s32 unused[2];` restored                   |  70   |    12     |
+   | `d[0x6D] -= 1;` after func_8009C93C         |  70   |    10     |
+   | p stores in +0x9A, +0x9B, +0x8C order       |  70   |     2     |
+   | plain `if (func_800A2B5C(d) != 0)`          |  68   |    51     |
+
+   The `(s16)` on both func_800A2B5C tests is the target's `sll $v0, $v0, 16`
+   / `bnez` halfword test; dropping it costs the two `sll`s and 51 differing.
+   Three equal spellings, all 0: the gate read as
+   `g = (u8 *)&D_80083460; *(u16 *)(g + 0x2)` the way the sibling spells it,
+   D_b18_80174D4C used directly at both sites with no `e` local, and one
+   shared `goto fail` label in place of the three plain `return;`s. The
+   simpler of each pair is kept. 70 words, 0 differing on the first compile. */
+void func_b18_80171FA8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x11;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    e = D_b18_80174D4C;
+    *(u8 **)(c + 0x2C) = e;
+    func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    d[0x84] = 0x7C;
+    d[0x85] = 0;
+}
 
 /* THE PARAMETER COPY HAS TO LEAVE THE PROLOGUE'S UNSCHEDULABLE PREFIX. The
    target saves and copies its four parameters in the order $s1, $s2, $s3,

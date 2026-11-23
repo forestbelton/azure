@@ -71,6 +71,22 @@ s32 func_800AB538();
 
 s32 func_800AD058();
 
+extern void (*D_80173CEC[])(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_b03_80171DA0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+
+extern u8 D_801759F0[];
+s32 func_800AA6B4(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_800A2C34(u8 *);
+void func_800AA258(u8 *, void *, u8 *, u8 *);
+void func_800AA888(u8 *, void *, u8 *, u8 *);
+void func_800A9A04(u8 *);
+void func_b10_80174258(u8 *p, u8 *b, u8 *c, u8 *d);
+
+s32 func_80042900(s8 *, s8);
+void func_80042B68(s8 *, s8);
+s16 func_8009FD40(u8 *, u8 *);
+s32 func_800AA79C(u8 *, void *, u8 *, u8 *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_8017092C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80170B0C);
@@ -462,7 +478,70 @@ s32 func_b10_801727B8(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_8017297C);
+/* The banked room script's unconditional "same slot" entry, the 70-word
+   sibling of func_b03_80171DA0 above (the relinked twin of the resident
+   overlay's func_800CA788) with the cursor pick and the heading window cut
+   out: past the single D_80083462 0x2000 gate and the two func_800A2B5C
+   tests, put the actor into state 0x11, swap the D_80175988 facing table
+   into the slot's +0x2C and re-aim through func_8009C93C.
+
+   THIS ONE IS `void` AND IT CARRIES NO LEFTOVER LOCAL. All three gates fall
+   straight into the epilogue with no $v0 set, and the calls here need exactly
+   the 0x30 frame the five register saves and func_8009C93C's 0x18 outgoing
+   area add up to -- so the 8-byte aggregate func_b03_80171DA0's comment had
+   to invent is absent. Adding `s32 unused[2];` back is 12 differing, every
+   $sp-relative offset and both ends of the frame.
+
+   AND THE +0x84/+0x85 PAIR MOVED TO THE TAIL. func_b03_80171DA0 stores them
+   before the table swap; here they are AFTER the func_8009C93C call, which is
+   the only place the scheduler cannot hoist them from. In the sibling's
+   position they are 28 differing. `d[0x6D] -= 1;` stays BEFORE that call as
+   in the sibling: after it is 10 differing.
+
+   | spelling                                   | words | differing |
+   | as written below                            |  70   |     0     |
+   | +0x84/+0x85 before the table swap           |  70   |    28     |
+   | `s32 unused[2];` restored                   |  70   |    12     |
+   | `d[0x6D] -= 1;` after func_8009C93C         |  70   |    10     |
+   | p stores in +0x9A, +0x9B, +0x8C order       |  70   |     2     |
+   | plain `if (func_800A2B5C(d) != 0)`          |  68   |    51     |
+
+   The `(s16)` on both func_800A2B5C tests is the target's `sll $v0, $v0, 16`
+   / `bnez` halfword test; dropping it costs the two `sll`s and 51 differing.
+   Three equal spellings, all 0: the gate read as
+   `g = (u8 *)&D_80083460; *(u16 *)(g + 0x2)` the way the sibling spells it,
+   D_80175988 used directly at both sites with no `e` local, and one
+   shared `goto fail` label in place of the three plain `return;`s. The
+   simpler of each pair is kept. 70 words, 0 differing on the first compile. */
+void func_b10_8017297C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    p[0x9A] = 0x11;
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9B] = 0;
+    e = D_80175988;
+    *(u8 **)(c + 0x2C) = e;
+    func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    d[0x84] = 0x7C;
+    d[0x85] = 0;
+}
 
 /* THE PARAMETER COPY HAS TO LEAVE THE PROLOGUE'S UNSCHEDULABLE PREFIX. The
    target saves and copies its four parameters in the order $s1, $s2, $s3,
@@ -597,9 +676,316 @@ void func_b10_80173B84(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80173BBC);
+/* The banked room script's three-state tail, switching on the state index at
+   p + 0x9B: the relinked twin of the resident overlay's func_800DA014
+   (csrc/ovl_dungeon_800D50FC.c), which is this body statement for statement
+   with four local changes -- two separate bank-local facing tables
+   (D_801759E8 in state 0, D_801759F0 in state 1's re-dress) where the
+   resident uses D_800E262C for both, func_80047784 for func_8003DB94,
+   func_b10_80174258/func_b10_801717F4 for func_800DA660/func_800D8C64, and
+   NEITHER of the twin's two `*(s32 *)(d + 0x1C) &= ~0x200' clears: state 1's
+   0x8000 arm and state 2 install the handler and nothing else.
+   228 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80173F4C);
+   STATE 1 OPENS WITH A func_80042900 GATE THE RESIDENT TWIN DOES NOT HAVE,
+   and its false arm is the re-dress block the long refusal chain also falls
+   into -- so the whole chain is the body of
+   `if ((s16)func_80042900((s8 *)d, 1) != 0)' and the re-dress follows it.
+
+   THE `p[0x9B] += 1;' TAIL IS WRITTEN OUT PER ARM, NOT `goto'-ed, and
+   jump2's cross-jumping puts the single copy back: as `goto bump' it is
+   226 words / 29 aligned differences, because with one bump block the two
+   `sh' stores either side of it come out in the same registers and
+   cross-jumping merges them too, costing state 0's `sh $v0, 0xA($v1)' and
+   the load-delay `nop' the target has. Written per arm the two `sh's differ
+   ($v1 address/$v0 value in state 0, $v0 address/$v1 value in state 1), the
+   merge stops at the bump, and the word count is the target's.
+
+   DEVICE: state 0's bump is wrapped in a `do { } while (0)'. Without it the
+   body is 228 words / 18 aligned differences and every one of them is `p'
+   and `b' holding each other's callee-saved register -- the target has
+   p = $s2, b = $s3 and the plain body gives b = $s2, p = $s3. flow.c counts
+   a reference once per enclosing loop depth, so the zero-trip loop makes
+   state 0's two `p' references count twice, and that is enough to lift `p'
+   past `b' in allocno_compare without lifting it past `c' and `d'. The
+   cancelled pointer pair `p++; p--;' after the declarations overshoots --
+   it also gives `p' a second set, which turns off update_equiv_regs'
+   live-length doubling, and `p' comes out in $s0 ahead of `d': 49 aligned
+   differences. Measured and equal at 0 differing, so the exact spelling of
+   the wrapped statement is not the lever: `++p[0x9B];' inside the
+   do-while, and widening it to wrap the `*(u16 *)(h + 0xA) -= 1;' as well.
+   Measured and rejected: the do-while around state 1's bump instead is
+   226 words / 11 differences and around both bumps 226 / 37;
+   `p[0x9B] = p[0x9B] + 1;' long-hand in state 0 and declaring `b' as
+   `void *' are both 18, i.e. no change at all.
+
+   `&D_80083460' is FOUR separate pointer locals, one per arm, as in both
+   resident twins; sharing state 0's with state 1's re-dress is 226 words /
+   30 differences. */
+void func_b10_80173BBC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *h;
+    u8 *k;
+    u8 *m;
+    u8 *e;
+    s32 v;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        *(u8 **)(c + 0x2C) = D_801759E8;
+        func_80047784(c, D_801759E8[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0xA) -= 1;
+        do
+        {
+            p[0x9B] += 1;
+        } while (0);
+        return;
+    case 1:
+        if ((s16)func_80042900((s8 *)d, 1) != 0)
+        {
+            g = (u8 *)&D_80083460;
+            if ((*(u16 *)(g + 0x2) & 0x1000) != 0)
+            {
+                return;
+            }
+            if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, NULL) != 0)
+            {
+                return;
+            }
+            if (d[0x25] == 0)
+            {
+                if ((*(u16 *)(g + 0x2) & 0x2008) != 0)
+                {
+                    return;
+                }
+                func_800AA79C(p, b, c, d);
+                return;
+            }
+            if ((s16)func_800A2C34(d) != 0)
+            {
+                return;
+            }
+            v = *(s32 *)(d + 0x1C);
+            if ((v & 0x100) != 0)
+            {
+                func_800AA258(p, b, c, d);
+                return;
+            }
+            if ((v & 0x80000) != 0)
+            {
+                func_800AA888(p, b, c, d);
+                func_b10_80174258(p, (u8 *)b, c, d);
+                return;
+            }
+            if (*(s8 *)(d + 0x6D) == 0)
+            {
+                return;
+            }
+            if ((s16)func_800A2C34(d) != 0 &&
+                (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+            {
+                return;
+            }
+            func_800A9A0C(d);
+            func_800A9A04(d);
+            if ((s16)func_80042900((s8 *)d, 1) != 0)
+            {
+                e = D_80082E80;
+                if (*(s8 *)(c + 0x26) != *(s8 *)(e + 0x26) || *(s8 *)(c + 0x26) < 0)
+                {
+                    if ((s16)func_8009FD40(e, c) >= 2)
+                    {
+                        goto again;
+                    }
+                }
+                if ((func_800A6D30() & 7) == 0)
+                {
+                    func_80042B68((s8 *)d, 1);
+                }
+            }
+        again:
+            if ((s16)func_80042900((s8 *)d, 1) != 0)
+            {
+                return;
+            }
+        }
+        *(u8 **)(c + 0x2C) = D_801759F0;
+        func_80047784(c, D_801759F0[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u32 *)(p + 0x8C) = (u32)func_b10_801717F4;
+            return;
+        }
+        k = (u8 *)&D_80083460;
+        *(u16 *)(k + 0xA) += 1;
+        p[0x9B] += 1;
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        m = (u8 *)&D_80083460;
+        *(u16 *)(m + 0xA) -= 1;
+        *(u32 *)(p + 0x8C) = (u32)func_b10_801717F4;
+        return;
+    }
+}
+
+/* The banked room script's three-state tail of the handler installed at
+   p + 0x8C, switching on the state index at p + 0x9B: state 0 re-dresses the
+   renderable from the D_801759E8 facing table, state 1 is the long refusal
+   chain, state 2 hands the actor back to func_b10_801717F4. The resident
+   overlay's func_800DA398 (csrc/ovl_dungeon_800D50FC.c) is the same machine
+   over the same record and its comment covers the shape; the landed
+   func_b05_80173BEC is the nearer twin, since like this copy it opens state 1
+   with the same d[0x25] test that closes it, so the dress/bump tail is
+   written out twice. Representative of a 10-member family.
+
+   THIS COPY CARRIES NO FLAG UPDATES. The resident twin's
+   `*(s32 *)(d + 0x1C) |= 0x40000` at both state-1 dress sites and its
+   `&= ~0x208` in state 2 are absent here: writing them in, which is exactly
+   func_b05_80173BEC's body, is 207 words with 142 differing.
+
+   THE `p[0x9B] += 1;` BUMP MUST BE WRITTEN OUT IN ALL THREE REACHING ARMS,
+   NOT REACHED BY A SHARED `goto` LABEL, and that is the only thing that makes
+   this function land. jump2 cross-jumps the three copies back into the one
+   the target has, so they cost no code -- but flow counts them first, and
+   they are worth four references on `p`. One shared label is 195 words with
+   15 differing, EVERY ONE OF THEM A REGISTER: `p` takes $s3 and `b` takes
+   $s2, the other way round from the target. Two copies -- the opening arm
+   reaching the tail's label -- is the same 195 words and the same 15.
+
+   The cause is read off the compiler, not guessed. global.c's
+   allocno_compare ranks on floor_log2 (n_refs) * n_refs / live_length, and
+   from `.flow` one bump copy gives `p` 9 references over 173 insns against
+   `b`'s 5 over 47:
+
+       p = 3 *  9 / 173 = 0.156     loses to
+       b = 2 *  5 /  47 = 0.213
+
+   so `p` is allocated second. Three copies put `p` at 13 references over 177
+   insns -- 3 * 13 / 177 = 0.220 -- and it wins. The threshold either side was
+   solved before compiling: 12 references scores 3 * 12 / 177 = 0.203 and
+   still loses, which is why two copies cannot work and three must.
+   (docs/matching-levers.md, "HOW MANY REFERENCES YOU NEED IS AN ARITHMETIC
+   PROBLEM, NOT A SWEEP".)
+
+   `&D_80083460` IS FOUR SEPARATE POINTER LOCALS, one per arm. Sharing one
+   across the arms is 191 words with 146 differing -- the gate load sinks and
+   the arms merge.
+
+   The facing tables are NAMED DIRECTLY at all three dress sites. One shared
+   `u8 *` local for the three is 195 words with 6 differing, the `%hi`/`%lo`
+   pair splitting across registers at each site; three separate locals, one
+   per site, also measure 0 and the bare symbols are kept because they need no
+   extra declaration.
+
+   Other spellings measured and rejected: `d[0x6D]` read as `u8` rather than
+   `*(s8 *)(d + 0x6D)` is 1 differing, an `lbu` for the target's `lb`;
+   `*(s32 *)(d + 0x64)` for the `lh` of d + 0x64 is 1 differing; dropping the
+   `(s16)` cast on the first func_800A2C34 result is 194 words with 103
+   differing. Measured and equal at 195 words / 0 differing, so none of these
+   is the reason it lands: re-reading d + 0x1C at both flag tests instead of
+   through the `v` local, writing state 2 as a positive `if` arm instead of an
+   early return, nesting the d + 0x64 test instead of `&&`, and the three
+   separate table locals above.
+
+   195 words, 0 differing. */
+void func_b10_80173F4C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *h;
+    u8 *j;
+    u8 *k;
+    s32 v;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        h = (u8 *)&D_80083460;
+        *(u16 *)(h + 0xA) -= 1;
+        *(u8 **)(c + 0x2C) = D_801759E8;
+        func_80047784(c, D_801759E8[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        p[0x9B] += 1;
+        return;
+    case 1:
+        if (d[0x25] != 0)
+        {
+            *(u8 **)(c + 0x2C) = D_801759F0;
+            func_80047784(c, D_801759F0[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            j = (u8 *)&D_80083460;
+            *(u16 *)(j + 0xA) += 1;
+            p[0x9B] += 1;
+            return;
+        }
+        g = (u8 *)&D_80083460;
+        if ((*(u16 *)(g + 0x2) & 0x1000) != 0)
+        {
+            return;
+        }
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, NULL) != 0)
+        {
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0)
+        {
+            return;
+        }
+        v = *(s32 *)(d + 0x1C);
+        if ((v & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if ((v & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            func_b10_80174258(p, (u8 *)b, c, d);
+            return;
+        }
+        if (*(s8 *)(d + 0x6D) == 0)
+        {
+            return;
+        }
+        if ((s16)func_800A2C34(d) != 0 &&
+            (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+        {
+            return;
+        }
+        func_800A9A0C(d);
+        func_800A9A04(d);
+        if (d[0x25] == 0)
+        {
+            return;
+        }
+        *(u8 **)(c + 0x2C) = D_801759F0;
+        func_80047784(c, D_801759F0[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(u16 *)(g + 0xA) += 1;
+        p[0x9B] += 1;
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        k = (u8 *)&D_80083460;
+        *(u16 *)(k + 0xA) -= 1;
+        *(u32 *)(p + 0x8C) = (u32)func_b10_801717F4;
+        return;
+    }
+}
 
 /* The four-argument installer's banked twin: func_800DA660 in the resident
    overlay is its first half verbatim, and this one adds the gate's `else`.

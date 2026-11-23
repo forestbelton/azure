@@ -70,22 +70,59 @@ def sig_insn(text):
     return re.sub(r"\s+", " ", HEX.sub("N", SYM.sub("S", text))).strip()
 
 
-def body(path, name):
-    """[instruction text] for `name` out of its listing.
+LABEL = re.compile(r"^\s*(\.L[A-Za-z0-9_]+):")
+
+
+def body_labels(path, name):
+    """([instruction text], {label: instruction index}) for `name`.
 
     A carved listing can hold several symbols -- b31f and lo20 carry rodata
     islands between functions -- so the glabel/endlabel scan is not optional.
     """
-    out, inside = [], False
+    out, labs, inside = [], {}, False
     for ln in open(path):
         if ln.startswith("glabel "):
             inside = ln.split()[1].strip() == name
             continue
         if ln.startswith("endlabel") and inside:
             break
+        if not inside:
+            continue
+        lm = LABEL.match(ln)
+        if lm:
+            labs[lm.group(1)] = len(out)
+            continue
         m = ROW.match(ln)
-        if inside and m:
+        if m:
             out.append(m.group(1).strip())
+    return out, labs
+
+
+def body(path, name):
+    """[instruction text] for `name` out of its listing."""
+    return body_labels(path, name)[0]
+
+
+def targets(insns, labs):
+    """[resolved branch target index, or None] per instruction.
+
+    WHY THIS IS NOT OPTIONAL. `sig_insn` replaces a label with `S`, so two
+    bodies whose branches go to DIFFERENT PLACES can compare equal
+    instruction for instruction. On func_b14_80171410 that made `--diff`
+    against func_b01_80171C34 report exactly one difference -- a `nop` where
+    b01 materialises a zero -- and hid that the branch above it goes to a
+    different label as well. The real difference was a brace: b01's `0x8000`
+    gate wraps two arms where b14's wraps one. An agent told "one word apart"
+    spent its first compiles looking for a spelling.
+    """
+    out = []
+    for t in insns:
+        hit = None
+        for lab in re.findall(r"\.L[A-Za-z0-9_]+", t):
+            if lab in labs:
+                hit = labs[lab]
+                break
+        out.append(hit)
     return out
 
 
@@ -153,19 +190,31 @@ def main():
 
     if args.diff:
         a, b = args.diff
-        A, B = body(listing_path(a), a), body(listing_path(b), b)
+        A, la = body_labels(listing_path(a), a)
+        B, lb = body_labels(listing_path(b), b)
+        ta, tb = targets(A, la), targets(B, lb)
         print(f"{a}: {len(A)} words    {b}: {len(B)} words")
-        n = 0
+        n = jumps = 0
         for i in range(max(len(A), len(B))):
             x = A[i] if i < len(A) else "--"
             y = B[i] if i < len(B) else "--"
             if sig_insn(x) != sig_insn(y):
                 n += 1
                 print(f"  {i:4d} {x:42s} | {y}")
-            elif x != y and n < 0:
-                pass
-        print(f"{n} instructions differ after normalisation "
-              f"({'SAME FAMILY' if n == 0 else 'different functions'})")
+            elif (i < len(ta) and i < len(tb) and ta[i] != tb[i]):
+                jumps += 1
+                print(f"  {i:4d} {x:42s} | {y}"
+                      f"   <<< same instruction, TARGET {ta[i]} vs {tb[i]}")
+        print(f"{n} instructions differ after normalisation, "
+              f"{jumps} more branch to a different place")
+        if n == 0 and jumps == 0:
+            print("SAME FAMILY")
+        elif n == 0:
+            print("NOT the same function: the streams match but the control "
+                  "flow does not -- look for a structural difference (a brace, "
+                  "a gate wrapping one arm instead of two), not a spelling")
+        else:
+            print("different functions")
         return
 
     H = families(args.landed)

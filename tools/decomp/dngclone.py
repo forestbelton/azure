@@ -250,9 +250,9 @@ def definition(src_text, func):
     return src_text[start:i + 1], (start, i + 1)
 
 
-def decl_block(src_text):
-    """The unit's declaration block: everything between the include and the
-    first definition or stub, as individual statements."""
+def decl_span(src_text):
+    """(start, end) of the unit's declaration block: between the include and
+    the first stub or definition."""
     m = re.search(r'#include "common\.h"\n', src_text)
     start = m.end() if m else 0
     end = len(src_text)
@@ -260,6 +260,12 @@ def decl_block(src_text):
         mm = re.search(pat, src_text[start:])
         if mm:
             end = min(end, start + mm.start())
+    return start, end
+
+
+def decl_block(src_text):
+    """The unit's declaration block, as individual statements."""
+    start, end = decl_span(src_text)
     chunk = src_text[start:end]
     # STATEMENTS, NOT LINES. A declaration block can hold a multi-line
     # struct typedef, and splitting on newlines shreds it: `needed_decls`
@@ -325,15 +331,29 @@ def splice(unit_text, func, body):
     return pat.sub(lambda _: body.replace("\\", "\\\\"), unit_text, count=1)
 
 
-def add_body(text, member, body, decls):
-    """`text` with `member`'s stub replaced by `body` and `decls` ensured."""
+def insert_decls(text, decls):
+    """`text` with any of `decls` it lacks appended to its declaration block.
+
+    AT THE END OF THE BLOCK, NOT AT THE TOP. Inserting after the `#include`
+    put a new `extern UnkDngRoom2970 D_800E2970_s[]' AHEAD of the
+    `typedef struct UnkDngRoom2970' the unit already carried further down, and
+    the compile said `syntax error before D_800E2970_s' -- in three of one
+    family's four members, since the fourth happened not to have the typedef
+    yet and so received both in dependency order. Appending leaves every
+    existing declaration in scope, and a newly added typedef still precedes a
+    newly added user of it because `decls' keeps the source order it came in.
+    """
     have = set(decl_block(text))
     add = [d for d in decls if d not in have]
-    if add:
-        m = re.search(r'#include "common\.h"\n', text)
-        at = m.end() if m else 0
-        text = text[:at] + "\n" + "\n".join(add) + "\n" + text[at:]
-    return splice(text, member, body)
+    if not add:
+        return text
+    _, end = decl_span(text)
+    return text[:end] + "\n".join(add) + "\n\n" + text[end:]
+
+
+def add_body(text, member, body, decls):
+    """`text` with `member`'s stub replaced by `body` and `decls` ensured."""
+    return splice(insert_decls(text, decls), member, body)
 
 
 def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):

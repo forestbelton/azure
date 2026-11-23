@@ -79,12 +79,8 @@ def main():
     want = dngclone.reconcile_decls(
         dngclone.needed_decls(dngclone.decl_block(agent_text), body), text)
     add = [d for d in want if d not in have]
-    new = text
-    if add:
-        m = re.search(r'#include "common\.h"\n', new)
-        at = m.end() if m else 0
-        new = new[:at] + "\n" + "\n".join(add) + "\n" + new[at:]
-    new = dngclone.splice(new, func, body)
+    # insert_decls appends to the END of the declaration block; see its note.
+    new = dngclone.splice(dngclone.insert_decls(text, want), func, body)
 
     with tempfile.TemporaryDirectory(prefix="dngland-") as td:
         probe = os.path.join(td, os.path.basename(dest))
