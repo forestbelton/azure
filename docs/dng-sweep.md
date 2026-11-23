@@ -266,3 +266,71 @@ D_800E2970_s' in three of one family's four members, while the fourth happened
 to lack the typedef and so received both in dependency order. They append to
 the END of the declaration block now, which leaves every existing declaration
 in scope and still orders a new typedef before a new user of it.
+
+## Batch 4, 2026-11-23: five agents, 123 functions, 6,134 words
+
+**All five landed on the first compile**, and 20 of 20 agents have now landed
+their function. 49.8% to 50.9%.
+
+| representative | words | copies | cloned | yield |
+|---|---|---|---|---|
+| `func_b01_80174070` | 14 | 71 | 70/70 | 994 |
+| `func_b09_80171320` | 258 | 7 | 6/6 | 1,806 |
+| `func_b06_80173E94` | 148 | 10 | 9/9 | 1,480 |
+| `func_b09_80171158` | 114 | 11 | 10/10 | 1,254 |
+| `func_b03_80171D3C` | 25 | 24 | 23/23 | 600 |
+
+`func_b01_80174070` is the sweep's best return: three lines of C in 74
+seconds for 994 words. Its twin was not in the resident overlay but two
+listings away in its own unit -- it sits between two already-landed 14-word
+installers and differs from them in ONE branch opcode, `blez` where they have
+`beqz`. Read your neighbours before you read anything else.
+
+**THE ALLOCATION ARITHMETIC CUTS BOTH WAYS.** Three functions so far needed
+duplication ADDED to buy references; `func_b09_80171320` needed it REMOVED.
+It is the same function as the landed `func_b03_80170A28` and its thirteen
+siblings, except that the ground-height arm's common tail is written once
+here where theirs is duplicated -- and the duplicate's extra `q + 0x1C`
+reference is exactly enough to move `q` above `p` in the allocno rank. Written
+the siblings' way it is 267 words and 74 aligned differences.
+
+## A FAMILY SPLITTING ON ONE IMMEDIATE IS COMMON -- `dngclone` DOES IT NOW
+
+Three of the first twenty families. `dngfam` normalises hex literals, so they
+sit in one family and `--diff` calls them identical, which is right: they ARE
+the same function with a per-bank constant (an actor state, an angle window).
+Until batch 4 each one cost a failed verify and a hand re-clone from a `sed`.
+
+`const_pairs()` now reads the pair off the two listings and `vary_consts()`
+substitutes it BY VALUE -- the listing says `0x9` where the C says `9` --
+having masked comments first, because a landed body's header explains its
+constants in prose and the value therefore occurs twice. A value that is not
+in the code exactly once is refused by name rather than guessed at, and every
+substitution is recorded in the clone's comment so an inherited write-up is
+never quietly wrong about its own numbers.
+
+## Three more dngclone defects from batch 4
+
+* **`DECLARED` named every function-pointer array `void`.** In
+  `extern void (*D_80174E5C[])(...)` the `void` is itself followed by `(`, so
+  the pattern matched it, and `reconcile_decls` -- which keys on the name --
+  substituted a unit's existing `D_80174E4C` table declaration for the one
+  being cloned. The symptom was `D_80174E5C' undeclared, from a declaration
+  that had been silently replaced by its neighbour. It skips type keywords now.
+* **TWO AGENTS CAN DISAGREE ABOUT THE ARITY OF ONE FUNCTION AND BOTH LAND.**
+  `func_b09_80171158` takes `func_b09_80171320`'s ADDRESS and declared it with
+  four parameters; that function's own body is three. Taking an address does
+  not depend on the signature, so both verified at 0 differing in their own
+  copies and the conflict appeared only when they met in one unit.
+  `fix_forward_decl()` rewrites the stale declaration from the definition,
+  which is the authority.
+* **A UNIT'S EXISTING DECLARATION NOW WINS over a cloned one** even when the
+  unit does not define the symbol, for the same reason the definition does:
+  it is what the unit's other landed bodies already compile against.
+
+And the safety net that should have been there from the start: **`dngland` and
+`dngclone` now re-verify EVERY function the unit defines**, not just the one
+being added. `ovlverify` compiles once for any number of names, so naming the
+others costs a comparison each -- and adding a definition can change what an
+earlier landed body compiles against, which is exactly what a reconciled
+prototype does.

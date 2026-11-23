@@ -28,6 +28,25 @@ s32 func_800AB538();
 
 s32 func_800AD058();
 
+typedef struct UnkDngRoom2970
+{
+    u8 pad_00[0xC];
+    u16 unk_0C;
+    u8 pad_0E[0x6];
+} UnkDngRoom2970;
+s32 func_800AB464();
+
+extern s16 D_80083228;
+s32 func_800AA36C(u8 *, void *, void *, u8 *);
+void func_b22_801720B4(u8 *p, UnkVec *b, u8 *c);
+extern u8 D_8006CCF8[];
+extern void (*D_80175EF4[])(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_800A9E70(u8 *, void *, u8 *, u8 *);
+void func_80047738(u8 *, s16, s16);
+void func_800478B8(u8 *);
+void func_800A020C(s32, u8 *);
+s32 func_800BCB04(s32, s32, s16);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b22", func_b22_8017086C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b22", func_b22_80170CEC);
@@ -56,7 +75,186 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b22", func_b22_80171BEC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b22", func_b22_80171D64);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b22", func_b22_801720B4);
+/* The banked room script's per-frame actor driver, the same relinked twin of
+   the resident overlay's func_800D8728 (csrc/ovl_dungeon_800D50FC.c) that
+   landed as func_b03_80170A28 and its thirteen siblings: past the engine's
+   0x2000 gate it runs func_800A9E70, then the record's own +0x8C
+   continuation, then the +0x9A entry of this bank's D_80175EF4 facing table,
+   re-aims the tile when the +0x6D facing moved under it, re-skins the slot
+   for the eight-way facing, steps the mover by its velocity, runs the +0x9D
+   bob counter and leashes +0x92/+0x88 to the ground height func_800BCB04
+   reports. Bank-local deltas from func_b03_80170A28: the +0x8C gate compares
+   against func_b22_801724BC and the facing table is D_80175EF4.
+
+   THE ONE SHAPE DELTA FROM THE FOURTEEN LANDED SIBLINGS, and the reason this
+   body is 258 words where theirs are 267: the three-way ground-height arm's
+   common tail -- b->unk_14 = 0, the +0x1C 0x8000000 set and p[0x9D] = 0 --
+   is written ONCE here, with the +0x90 / +0x92 stores as a nested if/else
+   inside the else arm, not duplicated into both arms the way every sibling
+   writes it. The siblings' duplicated spelling is not merely longer: the
+   extra arm carries a second `q + 0x1C` reference, and dropping it moves q
+   below p in global.c's allocno rank, so p takes $s1 and q takes $s2 here
+   where the siblings have them the other way round. That is not a choice --
+   writing the tail twice puts q back in $s1 and misses everywhere.
+
+   The three spellings func_800D8728's and func_b03_80170A28's comments name
+   are all load-bearing here too, re-measured in this unit:
+
+   | spelling                                      | words | aligned diffs |
+   | as written below                              |  258  |      0        |
+   | the siblings' duplicated tail                 |  267  |     74        |
+   | one handler local instead of `h` and `h2`     |  258  |      3        |
+   | `s32 k1`/`s32 k2` instead of `s16`            |  255  |     15        |
+   | no `q` alias, `p` at every use                |  255  |    120        |
+
+   The `& 7` facing index is read four times and the target holds it in three
+   registers -- $s0 for the +0x94 store, $v1 for the +0x94 compare and the
+   +0x2C subscript, $s5 for the D_8006CCF8 test, the last live across
+   func_80047738 and the reason a sixth callee-saved register is saved. A
+   same-width copy is copy-propagated away; the NARROWER copies survive
+   because cse's make_regs_eqv never equates a subreg set. The two +0x8C
+   handler reads need their own locals for the same reason: one local is a
+   single global-alloc quantity and takes $v1 at both sites, where the
+   target's second site is $v0. 258 words, 0 differing, first compile. */
+void func_b22_801720B4(u8 *p, UnkVec *b, u8 *c)
+{
+    void (*h)(u8 *, UnkVec *, u8 *, u8 *);
+    void (*h2)(u8 *, UnkVec *, u8 *, u8 *);
+    u8 *q;
+    u8 *e;
+    s16 dir;
+    s32 r;
+    s32 v;
+    s16 k1;
+    s16 k2;
+
+    q = p;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        h = *(void (**)(u8 *, UnkVec *, u8 *, u8 *))(p + 0x8C);
+        if (h == (void (*)(u8 *, UnkVec *, u8 *, u8 *))func_b22_801724BC)
+        {
+            h(p, b, c, p);
+        }
+        else
+        {
+            p[0x71] &= 0x7F;
+        }
+        return;
+    }
+    dir = (s8)p[0x6D];
+    if (func_800A9E70(p, b, c, p) != 0)
+    {
+        return;
+    }
+    h2 = *(void (**)(u8 *, UnkVec *, u8 *, u8 *))(p + 0x8C);
+    if (h2 != NULL)
+    {
+        h2(p, b, c, p);
+    }
+    D_80175EF4[p[0x9A]](p, b, c, p);
+    if (dir != *(s8 *)(p + 0x6D))
+    {
+        func_800AA36C(p, b, c, p);
+    }
+    if ((*(u16 *)(c + 0x14) & 0x8000) == 0)
+    {
+        v = ((D_80083228 + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7;
+        k1 = v;
+        k2 = v;
+        if (*(s16 *)(p + 0x94) != k1)
+        {
+            e = *(u8 **)(c + 0x2C);
+            if (e != NULL)
+            {
+                func_80047738(c, e[k1], *(s8 *)(c + 0x4));
+            }
+            *(s16 *)(p + 0x94) = v;
+        }
+        if (D_8006CCF8[k2] != 0)
+        {
+            *(u16 *)(c + 0x14) |= 1;
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) &= 0xFFFE;
+        }
+        if ((*(s32 *)(q + 0x1C) & 0x20) == 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0x40) == 0)
+            {
+                func_800478B8(c);
+            }
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) |= 0x7000;
+        }
+        func_800A020C(*(s32 *)(q + 0x1C), c + 0xC);
+    }
+    else if ((*(u16 *)(c + 0x14) & 0x800) != 0)
+    {
+        *(u16 *)(c + 0x14) &= 0x8FFF;
+    }
+    else
+    {
+        *(u16 *)(c + 0x14) |= 0x7000;
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    if ((*(u16 *)(p + 0x98) & 0x8) != 0)
+    {
+        p[0x9D] = 0;
+    }
+    else
+    {
+        b->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
+        p[0x9D]++;
+    }
+    *(s32 *)(p + 0x90) += b->unk_14;
+    if ((*(u16 *)(p + 0x98) & 0x4) == 0)
+    {
+        r = func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6), *(u16 *)(q + 0x88) - 0x20);
+        if ((s16)r < 0x200)
+        {
+            if (*(s16 *)(p + 0x92) + *(s16 *)(q + 0x88) < (s16)r)
+            {
+                *(u32 *)(q + 0x1C) &= 0xF7FFFFFF;
+            }
+            else
+            {
+                if ((s16)r >= *(s16 *)(q + 0x88))
+                {
+                    *(s32 *)(p + 0x90) = 0;
+                }
+                else
+                {
+                    *(s16 *)(p + 0x92) = r - *(u16 *)(q + 0x88);
+                }
+                b->unk_14 = 0;
+                *(u32 *)(q + 0x1C) |= 0x8000000;
+                p[0x9D] = 0;
+            }
+            if ((*(u32 *)(q + 0x1C) & 0x40000000) != 0)
+            {
+                *(u32 *)(q + 0x1C) &= 0xBFFFFFFF;
+                r = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, *(u16 *)(q + 0x88) - 0x20);
+                *(u16 *)(p + 0x92) += *(u16 *)(q + 0x88) - r;
+                *(u16 *)(q + 0x88) = r;
+            }
+        }
+        else
+        {
+            *(u32 *)(q + 0x1C) &= 0xF7FFFFFF;
+        }
+    }
+    else
+    {
+        *(u32 *)(q + 0x1C) &= 0xF7FFFFFF;
+    }
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(q + 0x88) + *(u16 *)(p + 0x92);
+    *(u16 *)(c + 0x14) |= 0x40;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b22", func_b22_801724BC);
 
@@ -259,7 +457,14 @@ void func_b22_80175D1C(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b22", func_b22_80175D54);
+/* 14 words, 0 differing. */
+void func_b22_80175D54(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b22_801724BC;
+    }
+}
 
 /* 14 words, 0 differing. */
 void func_b22_80175D8C(u8 *p)

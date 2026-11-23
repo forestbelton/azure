@@ -37,6 +37,18 @@ import dngclone  # noqa: E402
 PROJ = dngclone.PROJ
 
 
+def verify_many(path, funcs):
+    """(all ok, [result line]) for several functions in one compile."""
+    env = dict(os.environ, AZURE_SCRATCH=os.path.join(
+        tempfile.gettempdir(), "dngland-sp-%d" % os.getpid()))
+    r = subprocess.run(
+        [sys.executable, os.path.join(PROJ, "tools", "decomp", "ovlverify.py"),
+         path] + funcs, capture_output=True, text=True, env=env, cwd=PROJ)
+    lines = [l.strip() for l in r.stdout.splitlines()
+             if re.match(r"^func_\S+: ", l)]
+    return all(" 0 differing " in l for l in lines) and len(lines) == len(funcs), lines
+
+
 def verify(path, func):
     env = dict(os.environ, AZURE_SCRATCH=os.path.join(
         tempfile.gettempdir(), "dngland-sp-%d" % os.getpid()))
@@ -81,13 +93,31 @@ def main():
     add = [d for d in want if d not in have]
     # insert_decls appends to the END of the declaration block; see its note.
     new = dngclone.splice(dngclone.insert_decls(text, want), func, body)
+    # A stale forward declaration of this very function, left by another
+    # agent that only took its address, is a `conflicting types' error once
+    # the definition arrives. See fix_forward_decl.
+    new = dngclone.fix_forward_decl(new, func)
 
+    # VERIFY EVERY FUNCTION THE UNIT DEFINES, not just this one. Adding a
+    # definition can change what an earlier landed body in the same unit
+    # compiles against -- a prototype reconciled above is exactly that -- and
+    # one compile answers for all of them.
+    others = [f for f in dngclone.defined_funcs(new) if f != func]
     with tempfile.TemporaryDirectory(prefix="dngland-") as td:
         probe = os.path.join(td, os.path.basename(dest))
         open(probe, "w").write(new)
         ok, line = verify(probe, func)
+        bad = []
+        if ok and others:
+            okk, lines = verify_many(probe, others)
+            bad = [l for l in lines if " 0 differing " not in l]
     print(f"{'OK  ' if ok else 'FAIL'} {line}")
-    if not ok:
+    if ok and others:
+        print(f"     {len(others)} other function(s) in the unit re-verified, "
+              f"{len(bad)} now failing")
+        for l in bad:
+            print(f"     REGRESSED {l}")
+    if not ok or bad:
         raise SystemExit(f"{func} does not verify against {dest} -- not written")
     print(f"     {len(add)} new declaration(s): {'; '.join(add) or 'none'}")
     if args.dry_run:

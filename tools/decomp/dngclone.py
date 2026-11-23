@@ -181,14 +181,81 @@ def def_signature(src_text, func):
     return " ".join(sig.split()) + ";"
 
 
+def fix_forward_decl(text, func):
+    """Make any declaration of `func` in `text` agree with its definition.
+
+    TWO AGENTS CAN DISAGREE ABOUT THE ARITY OF ONE FUNCTION and both land.
+    func_b09_80171158 takes func_b09_80171320's ADDRESS and declared it with
+    four parameters; func_b09_80171320's own body is three. Taking an address
+    does not depend on the signature, so both verified at 0 differing in their
+    own copies -- and the conflict appeared only when they met in one unit.
+
+    The definition is the authority. This rewrites the stale declaration
+    rather than deleting it, because something in the unit may need the
+    forward reference, and the caller re-verifies every function the unit
+    defines afterwards.
+    """
+    sig = def_signature(text, func)
+    if not sig:
+        return text
+    start, end = decl_span(text)
+    block, out = text[start:end], []
+    changed = False
+    for d in decl_block(text):
+        mm = DECLARED.search(d)
+        if mm and mm.group(1) == func and " ".join(d.split()) != sig:
+            block = block.replace(d, sig, 1)
+            changed = True
+    return text[:start] + block + text[end:] if changed else text
+
+
+def defined_funcs(text):
+    """Every carved function `text` DEFINES, in source order."""
+    out = []
+    for m in re.finditer(r"(?m)^[A-Za-z_][\w \*\t]*?\b(func_[A-Za-z0-9]+_[0-9A-Fa-f]{8})\s*\(",
+                         text):
+        name = m.group(1)
+        if name not in out and def_match(text, name)[0] is not None:
+            out.append(name)
+    return out
+
+
 def reconcile_decls(decls, unit_text):
-    """Replace each declaration of a symbol `unit_text` DEFINES with a
-    prototype taken from that definition. See def_signature."""
+    """`decls` made compatible with what `unit_text` already says.
+
+    Three cases, in order:
+
+    * the unit DEFINES the symbol -- take the prototype from that definition
+      (see def_signature), because the definition is the authority;
+    * the unit already DECLARES it -- keep the unit's declaration and drop
+      ours. Two agents pick their own parameter types for a shared callee and
+      both are right for their own function, so `s32 f(u8 *, void *, u8 *,
+      u8 *)` from one family meets `s32 f(u8 *, void *, void *, u8 *)` from
+      another and the compiler says `conflicting types'. The one already in
+      the unit is the one its other landed bodies compile against; a pointer
+      argument converts without an instruction, so dropping ours changes no
+      code, and the member is verified regardless.
+    * otherwise keep ours.
+    """
+    have = {}
+    for d in decl_block(unit_text):
+        mm = DECLARED.search(d)
+        if mm:
+            have[mm.group(1)] = d
     out = []
     for d in decls:
         mm = DECLARED.search(d)
-        sig = def_signature(unit_text, mm.group(1)) if mm else None
-        out.append(sig if sig else d)
+        if not mm:
+            out.append(d)
+            continue
+        name = mm.group(1)
+        sig = def_signature(unit_text, name)
+        if sig:
+            out.append(sig)
+        elif name in have:
+            out.append(have[name])
+        else:
+            out.append(d)
     return out
 
 
@@ -289,9 +356,34 @@ def decl_block(src_text):
 
 
 # The identifier a declaration declares: the first one followed by `(`, `[`
-# or `;`. Covers `s16 func_X(void *, s16);`, `extern u8 D_Y[];`,
-# `extern u16 D_Z;` and the alias form `u8 *f_r(u8 *) __asm__("f");`.
-DECLARED = re.compile(r"\b([A-Za-z_]\w*)\s*(?=\(|\[|;)")
+# or `;` THAT IS NOT A TYPE KEYWORD. Covers `s16 func_X(void *, s16);`,
+# `extern u8 D_Y[];`, `extern u16 D_Z;`, the alias form
+# `u8 *f_r(u8 *) __asm__("f");` and the function-pointer array
+# `extern void (*D_W[])(u8 *);`.
+#
+# THE KEYWORD SKIP IS NOT COSMETIC. In `extern void (*D_80174E5C[])(...)` the
+# `void` is itself followed by `(`, so the un-skipped pattern named every such
+# declaration `void` -- and `reconcile_decls`, which keys on the name, then
+# treated a unit's existing `D_80174E4C` table declaration as the SAME symbol
+# and substituted it for the one being cloned. The result was
+# `D_80174E5C' undeclared, from a declaration that had been silently replaced
+# by its neighbour.
+_TYPEWORD = re.compile(
+    r"^(?:void|char|short|int|long|signed|unsigned|float|double|const|"
+    r"volatile|extern|static|register|struct|union|enum|typedef|"
+    r"[us](?:8|16|32|64)|f32)$")
+_DECL_CAND = re.compile(r"\b([A-Za-z_]\w*)\s*(?=\(|\[|;)")
+
+
+class DECLARED:
+    """`DECLARED.search(decl)` -> a match whose group(1) is the declared name."""
+
+    @staticmethod
+    def search(decl):
+        for m in _DECL_CAND.finditer(decl):
+            if not _TYPEWORD.match(m.group(1)):
+                return m
+        return None
 
 
 def needed_decls(decls, body):
@@ -356,6 +448,106 @@ def add_body(text, member, body, decls):
     return splice(insert_decls(text, decls), member, body)
 
 
+NUM = re.compile(r"\b(0[xX][0-9a-fA-F]+|\d+)\b")
+# An instruction's text with every numeric literal blanked, so two copies that
+# differ only in an immediate compare equal.
+_NUMBLANK = re.compile(r"-?\b(?:0[xX][0-9a-fA-F]+|\d+)\b")
+
+
+def const_pairs(rep, member):
+    """[(rep value, member value)] for immediates that differ between two
+    family members whose instruction streams are otherwise identical.
+
+    THREE OF THE FIRST TWENTY FAMILIES SPLIT ON ONE IMMEDIATE. `dngfam.py`
+    normalises hex literals, so these sit in one family and `--diff` calls
+    them the same -- which is right, because they ARE the same function: a
+    per-bank actor-state constant, a per-bank angle window. The copies then
+    failed to verify at exactly 1 differing and had to be re-cloned by hand
+    from a sed of the body.
+
+    This reads the pair off the two listings instead. Only an instruction
+    whose text matches once the numbers are blanked contributes, so a real
+    opcode or register difference is still a refusal rather than a guess --
+    and the substituted body is verified against the member's own listing
+    like any other clone.
+    """
+    A = dngfam.body(dngfam.listing_path(rep), rep)
+    B = dngfam.body(dngfam.listing_path(member), member)
+    out = []
+    for x, y in zip(A, B):
+        if x == y or _NUMBLANK.sub("#", x) != _NUMBLANK.sub("#", y):
+            continue
+        xs, ys = _NUMBLANK.findall(x), _NUMBLANK.findall(y)
+        for a, b in zip(xs, ys):
+            if a != b:
+                out.append((int(a, 0), int(b, 0)))
+    return out
+
+
+def code_mask(text):
+    """[bool] per character: True where `text` is CODE, not comment.
+
+    COMMENTS MUST BE EXCLUDED FROM THE LITERAL SEARCH. A landed body's header
+    explains its constants in prose -- "the state-9 actor", "9 members" -- so
+    the value being substituted reliably occurs twice and `vary_consts`
+    refused every member of the first family it was tried on.
+    """
+    ok = [True] * len(text)
+    i = 0
+    while i < len(text):
+        if text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            j = len(text) if j == -1 else j + 2
+            for k in range(i, j):
+                ok[k] = False
+            i = j
+        elif text.startswith("//", i):
+            j = text.find("\n", i)
+            j = len(text) if j == -1 else j
+            for k in range(i, j):
+                ok[k] = False
+            i = j
+        else:
+            i += 1
+    return ok
+
+
+def vary_consts(body, pairs):
+    """`body` with each (old, new) numeric literal substituted, and a note.
+
+    Matched BY VALUE, not by text: the listing says `0x9` where the C says
+    `9`. Comments are excluded (see code_mask), and a value that does not
+    appear exactly once in the CODE is left alone and named, because rewriting
+    the wrong `9` is worse than a failed verify.
+
+    Every substitution is recorded in the body's leading comment. Without that
+    the clone's inherited write-up would describe the representative's
+    constant while the code carried another -- a comment that is quietly wrong
+    is worse than no comment, and these are the most valuable thing the sweep
+    produces after the code.
+    """
+    unsure, done = [], []
+    for old, new in pairs:
+        ok = code_mask(body)
+        hits = [m for m in NUM.finditer(body)
+                if int(m.group(1), 0) == old and ok[m.start(1)]]
+        if len(hits) != 1:
+            unsure.append(f"{old:#x} appears {len(hits)}x in the code")
+            continue
+        m = hits[0]
+        tok = ("%#x" % new) if m.group(1).lower().startswith("0x") else str(new)
+        body = body[:m.start(1)] + tok + body[m.end(1):]
+        done.append(f"{old:#x} -> {new:#x}")
+    if done:
+        note = ("   THIS COPY'S OWN CONSTANT: " + ", ".join(done) +
+                ".\n   The rest of this comment is the family "
+                "representative's and its other\n   numbers are its own.\n")
+        end = body.find("*/")
+        if end != -1:
+            body = body[:end] + note + body[end:]
+    return body, unsure
+
+
 def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
     """Clone every member of one family that lives in ONE unit, in sequence.
 
@@ -380,12 +572,30 @@ def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
             out.append((member, False, str(e)))
             continue
         body, _unmapped = rename(rep_body, smap)
+        pairs = const_pairs(rep, member)
+        if pairs:
+            body, unsure = vary_consts(body, pairs)
+            if unsure:
+                out.append((member, False,
+                            "per-copy immediate not placeable in the body: "
+                            + "; ".join(unsure)))
+                continue
         decls = reconcile_decls([rename(d, smap)[0] for d in rep_decls], text)
         try:
             cand = add_body(text, member, body, decls)
         except ValueError as e:
             out.append((member, False, str(e)))
             continue
+        # A stale forward declaration of this very function, left by another
+        # family's body that only took its address, is `conflicting types'
+        # once the definition arrives. Same defect dngland fixes for the
+        # representative; it reaches the clones through exactly the same door.
+        cand = fix_forward_decl(cand, member)
+        # EVERY FUNCTION THE UNIT DEFINES, in the one compile ovlverify
+        # already does. Adding a definition can change what an earlier landed
+        # body compiles against -- the reconciled prototype above is that --
+        # and naming the others costs nothing but a comparison each.
+        others = [f for f in defined_funcs(cand) if f != member]
         with tempfile.TemporaryDirectory(prefix="dngclone-") as td:
             probe = os.path.join(td, unit + ".c")
             open(probe, "w").write(cand)
@@ -393,11 +603,20 @@ def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
             r = subprocess.run(
                 [sys.executable,
                  os.path.join(PROJ, "tools", "decomp", "ovlverify.py"),
-                 probe, member],
+                 probe, member] + others,
                 capture_output=True, text=True, env=env, cwd=PROJ)
-            first = (r.stdout.splitlines() or [""])[0]
-        ok = " 0 differing " in first and re.search(
-            r"target (\d+) words, candidate \1 words", first) is not None
+            rows = [l.strip() for l in r.stdout.splitlines()
+                    if re.match(r"^func_\S+: ", l)]
+        first = rows[0] if rows else ""
+        ok = (" 0 differing " in first
+              and re.search(r"target (\d+) words, candidate \1 words", first)
+              is not None)
+        if ok:
+            broke = [l for l in rows[1:] if " 0 differing " not in l]
+            if broke:
+                ok = False
+                first = ("REGRESSED another landed function in this unit: "
+                         + broke[0])
         if ok:
             text = cand
         # The WHOLE stderr, not a 200-character prefix. A truncated traceback

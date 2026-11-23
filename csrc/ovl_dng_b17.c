@@ -66,6 +66,10 @@ s32 func_800AB778();
 
 s32 func_800AB538();
 
+s32 func_800AB464();
+
+s32 func_800AC7EC();
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b17", func_b17_8017089C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b17", func_b17_80170BB8);
@@ -656,6 +660,20 @@ void func_b17_801743EC(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b17", func_b17_80174424);
+/* 14 words, 0 differing. */
+void func_b17_80174424(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b17_801713A8;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b17", func_b17_8017445C);
+/* 14 words, 0 differing. */
+void func_b17_8017445C(u8 *p)
+{
+    if (func_800AC7EC(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b17_801713A8;
+    }
+}

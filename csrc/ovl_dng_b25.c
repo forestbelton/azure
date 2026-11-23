@@ -31,6 +31,14 @@ void func_b25_80171F1C();
 
 s32 func_800AB778();
 
+typedef struct UnkDngRoom2970
+{
+    u8 pad_00[0xC];
+    u16 unk_0C;
+    u8 pad_0E[0x6];
+} UnkDngRoom2970;
+s32 func_800AB464();
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80170A44);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80170BB8);
@@ -270,7 +278,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80175BE0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80175CD8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_801765DC);
+/* 14 words, 0 differing. */
+void func_b25_801765DC(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b25_80171F1C;
+    }
+}
 
 /* 14 words, 0 differing. */
 void func_b25_80176614(u8 *p)

@@ -4,7 +4,7 @@ void func_8009A3D0(s32, s32, s32);
 s32 func_800A0818(s16, s16, s16, s16, u16 *);
 s32 func_8009A66C(u32, u8 *, u8 *, s16);
 void func_8009A21C(s32, s32, s32);
-void func_b40_80171DC4(u8 *, UnkVec *, u8 *, u8 *);
+void func_b40_80171DC4(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern void (*D_80174198[])(u8 *, UnkVec *, u8 *, u8 *);
 
 s32 func_80042900(s8 *, s8);
@@ -96,6 +96,12 @@ s32 func_800AB778();
 s32 func_800AB538();
 
 s32 func_800AD058();
+
+s32 func_800AB464();
+
+s32 func_800AC7EC();
+
+extern u8 D_80174048[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_801708A8);
 
@@ -648,7 +654,47 @@ void func_b40_8017167C(u8 *p, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_80171DC4);
+/* State 0x10, and hand c the facing cell that the heading at d+0x2A selects
+   out of the bank-local byte table D_80174048: the relinked twin of the
+   resident overlay's func_800D9820 in csrc/ovl_dungeon_800D50FC.c.  The
+   relink is the one the rest of this block shows -- a BYTE table pushed
+   through func_80047784 (`>> 9 & 7', one `lbu') where the resident has a
+   POINTER table pushed through func_8003DB94 (`>> 7 & 0x1C', a `lw').  The
+   base is a local because it is used twice, stored at c+0x2C and indexed,
+   exactly as in the twin.  25 words, 0 differing, first compile.
+   24 copies (dngfam.py).
+
+   THE ONE FACT THAT MATTERS IS STATEMENT ORDER, not the table spelling:
+   the two p stores have to come before the c+0x2C store, because 0x10 is
+   materialised into $v0 and spent on p+0x9A before the table address is ever
+   loaded.  Writing them after the table store is 24 words / 17 differing.
+   Hoisting the d+0x2A halfword into an `s16' local is 26 words / 19 -- the
+   reload is re-sign-extended instead of feeding the `addu' straight.
+
+   Measured and rejected, all 0 differing at 25 words, so the form kept here
+   is the twin's for the replicator's sake:
+     no local, the symbol written out twice                         0
+     `*(t + idx)' instead of `t[idx]'                               0
+     the local assigned inside the store, `= t = D_80174048'        0
+     the index hoisted into an `s32' local                          0
+     reading the base back out of c+0x2C after storing it           0
+   Measured and rejected, differing:
+     the two p stores moved after the table store    24 words,  17
+     the d+0x2A facing hoisted into an `s16' local   26 words,  19
+
+   `--raw' is 6 differing and every one is a relocation -- the `jal', the
+   `%hi'/`%lo' pair for D_80174048 and the pair for D_80083228 -- so no
+   masked word is hiding a constant address. */
+void func_b40_80171DC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *t;
+
+    p[0x9A] = 0x10;
+    p[0x9B] = 0;
+    t = D_80174048;
+    *(u8 **)(c + 0x2C) = t;
+    func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_80171E28);
 
@@ -1163,6 +1209,20 @@ void func_b40_80173F88(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_80173FC0);
+/* 14 words, 0 differing. */
+void func_b40_80173FC0(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b40_80170EA8;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b40", func_b40_80173FF8);
+/* 14 words, 0 differing. */
+void func_b40_80173FF8(u8 *p)
+{
+    if (func_800AC7EC(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b40_80170EA8;
+    }
+}

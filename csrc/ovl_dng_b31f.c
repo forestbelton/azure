@@ -24,6 +24,14 @@ s32 func_800AB778();
 
 s32 func_800AB538();
 
+typedef struct UnkDngRoom2970
+{
+    u8 pad_00[0xC];
+    u16 unk_0C;
+    u8 pad_0E[0x6];
+} UnkDngRoom2970;
+s32 func_800AB464();
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A908);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A928);
@@ -178,7 +186,14 @@ void func_b31f_8016DBDC(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016DC14);
+/* 14 words, 0 differing. */
+void func_b31f_8016DC14(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b31f_8016B778;
+    }
+}
 
 /* 14 words, 0 differing. */
 void func_b31f_8016DC4C(u8 *p)
@@ -313,7 +328,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_801709A4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_801709C4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_801709E4);
+/* 14 words, 0 differing. */
+void func_b31f_801709E4(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b31f_8016F78C;
+    }
+}
 
 /* 14 words, 0 differing. */
 void func_b31f_80170A1C(u8 *p)

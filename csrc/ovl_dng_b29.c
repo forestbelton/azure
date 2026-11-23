@@ -73,6 +73,8 @@ extern u8 D_80082E80[];
 extern u16 D_80082EA4;
 extern UnkDngRoom2970 D_800E2970_s[] __asm__("D_800E2970");
 
+s32 func_800AB464();
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b29", func_b29_8017088C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b29", func_b29_80170AE8);
@@ -677,7 +679,14 @@ void func_b29_801746BC(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b29", func_b29_801746F4);
+/* 14 words, 0 differing. */
+void func_b29_801746F4(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b29_80171094;
+    }
+}
 
 /* 14 words, 0 differing. */
 void func_b29_8017472C(u8 *p)

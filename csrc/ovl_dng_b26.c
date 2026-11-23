@@ -90,6 +90,10 @@ s32 func_800AB538();
 
 s32 func_800AD058();
 
+s32 func_800AB464();
+
+s32 func_800AC7EC();
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_80170874);
 
 /* The banked room script's per-frame actor driver, the relinked twin of the
@@ -985,6 +989,20 @@ void func_b26_801737BC(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_801737F4);
+/* 14 words, 0 differing. */
+void func_b26_801737F4(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b26_80170E68;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_8017382C);
+/* 14 words, 0 differing. */
+void func_b26_8017382C(u8 *p)
+{
+    if (func_800AC7EC(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b26_80170E68;
+    }
+}

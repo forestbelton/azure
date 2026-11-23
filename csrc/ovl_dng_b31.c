@@ -94,6 +94,15 @@ void func_80042B68(s8 *, s8);
 s16 func_8009FD40(u8 *, u8 *);
 s32 func_800AA79C(u8 *, void *, u8 *, u8 *);
 
+s32 func_800AB464();
+
+UnkNode *func_8003FD64(s32, void *);
+extern u8 D_80083498[];
+extern u8 D_80045340[];
+s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
+s32 func_800AA36C(u8 *, void *, void *, u8 *);
+void func_b31_801712A8(u8 *, void *, u8 *, u8 *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_801708A0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_80170AFC);
@@ -102,7 +111,123 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_80170D58);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_80171030);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_801710E0);
+/* The banked room script's SPAWNER for the state-9 actor: allocate a 0x112
+   node off D_80083498, install func_b31_801712A8 as the node's +0x10 driver,
+   dress the slot from the bank-local D_80175554 facing table, pick the
+   +0x14/+0x1C flag pair from the low two bits of the caller's `a', and -- only
+   for a==0 -- give one actor in two a random 0x20|rand palette out of
+   func_800A48F0 and the OTHER bank-local table D_801755A4. Then hand the
+   node to func_800A9C18 and arm the +0x8C continuation func_b31_801716F4.
+
+   Not a twin of anything landed in this block: no carved sibling calls
+   func_8003FD64 yet and the resident overlay has no func_800A9C18 caller in C.
+   The structural template is the resident dungeon overlay's func_800B23F8
+   (csrc/ovl_dungeon_800A4B88.c), which is the same allocate/dress/flag-arm/
+   +0x9A-tail skeleton with a different driver, a different +0x13 state and
+   without the a==0 arm; all three of ITS named facts hold here and are
+   re-measured below on this body.
+   114 words, 0 differing (0 aligned, and all 21 raw differences are the
+   7 `jal's, 2 `j's and 6 `lui'/`addiu' pairs the verifier masks).
+
+   THE FIRST PARAMETER MUST BE A SIGNED 16-BIT PARAMETER and that is the one
+   fact that is not free. As `s32 a' with `(s16)a' written at the
+   func_800A9C18 call the body is 111 words / 30 aligned differences -- the
+   second copy of `a' ($s7, the one the sll/sra at the call reads) disappears
+   entirely, because it only exists as the schedulable parameter copy a
+   sub-word parameter type creates (see func_800B23F8's comment and
+   docs/matching-levers.md, "A SUB-WORD parameter type is how a parameter copy
+   becomes schedulable"). As `u16 a' it is 112 / 4: the a==0 gate folds to one
+   `andi $v0, $s3, 0xFFFC'.
+
+   `b' AND `c' MUST BE 16-BIT TOO, though they are only ever stored as the
+   bytes at r+0x24 and r+0x25. Signedness is free (s16/s16 is also 0), the
+   width is not: `u8 b, u8 c' and `u32 b, u32 c' are both 11 differing /
+   13 aligned, `u8 b, u16 c' is 5 and `u16 b, u8 c' is 4 -- all of it the
+   interleaved prologue copy order, which the target emits a0, a1, a3, a2.
+   `d' is free at either width (s32 also 0).
+
+   `w' IS A SECOND PAYLOAD POINTER and is load-bearing, exactly as in
+   func_800B23F8: the three late stores go through the register the `c'
+   parameter dies in ($s5), while $s0 stays live as func_800AA36C's FOURTH
+   argument. Written through `p' with no `w' at all the body is 113 words /
+   8 aligned differences. `w = p;' and `w = (u8 *)n + 0x20;' are
+   byte-identical, and so is writing `w = p;' lower down -- the `move' lands
+   between the +0x25 and +0x2C stores by scheduling, not by source order.
+
+   `func_800AA36C(w, m, r, p)' and NOT `(w, m, r, w)': the same address twice
+   costs the last word ($a3 comes from $s5), 1 aligned difference.
+   `(p, m, r, p)' is 4.
+
+   `*(s8 *)(w + 0x9C) = -1;' and NOT `w[0x9C] = 0xFF;' -- through a u8 lvalue
+   gcc folds -1 to 0xFF, cse shares it with the neighbouring 0x9A store and
+   the `addiu $v0, $zero, -0x1' disappears: 113 words, 2 aligned differences.
+
+   NO DEVICES, and these are free (all measured at 114/0): the a==0 gate as
+   `(a & ~3) == 0', `(s16)(a & ~3) == 0', `(u16)(a & ~3) == 0' or
+   `((a & ~3) << 16) == 0' -- the truncation comes from `a' being s16, not
+   from the cast; `k' inlined as `(a & 3)' at both tests; `k > 1' for
+   `k >= 2'; and the two +0x2C stores spelled `*(u32 *)(...) = (u32)D_...'.
+   Only `a & 0xFFFC' in the gate is wrong, at 112 / 4.
+
+   func_b31_801712A8 and func_b31_801716F4 are address-taken here and are
+   still INCLUDE_ASM stubs below, so both need a declaration above.    THIS COPY'S OWN CONSTANT: 0x9 -> 0x1f.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+u8 *func_b31_801710E0(s16 a, u16 b, u16 c, s16 d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *p;
+    u8 *w;
+    s32 k;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        w = p;
+        n->unk_10 = (u32)func_b31_801712A8;
+        p[0x13] = 31;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = d;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x25) = c;
+        *(u8 **)((u8 *)r + 0x2C) = D_80175554;
+        k = a & 3;
+        *((u8 *)r + 0x24) = b;
+        if (k == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x6000;
+            *(u32 *)(p + 0x1C) |= 0x6000;
+        }
+        else if (k >= 2)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        else if ((a & ~3) == 0)
+        {
+            if ((*(u32 *)(p + 0x14) & 0x200) == 0)
+            {
+                if ((func_800A6D30() & 1) != 0)
+                {
+                    func_800A48F0((s8 *)p, 1, (func_800A6D30() & 0x3F) | 0x20);
+                    *(u8 **)((u8 *)r + 0x2C) = D_801755A4;
+                }
+            }
+        }
+        func_800A9C18(n, m, r, a);
+        w[0x9A] = 0xFF;
+        *(s8 *)(w + 0x9C) = -1;
+        *(u32 *)(w + 0x8C) = (u32)func_b31_801716F4;
+        func_800AA36C(w, m, r, p);
+    }
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_801712A8);
 
@@ -1179,7 +1304,14 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_80174FE4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_801750F8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_801754DC);
+/* 14 words, 0 differing. */
+void func_b31_801754DC(u8 *p)
+{
+    if (func_800AB464(p) > 0)
+    {
+        *(s32 *)(p + 0x8C) = (s32)func_b31_801716F4;
+    }
+}
 
 /* 14 words, 0 differing. */
 void func_b31_80175514(u8 *p)
