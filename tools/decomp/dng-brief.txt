@@ -34,8 +34,15 @@ block's 2575 stubs are exact copies of a sibling.
 
 Each function above is the REPRESENTATIVE of a family. When it lands I
 replicate your body into the other members mechanically, so the list is worth
-@TOTYIELD@ words, not @TOTWORDS@. Spend effort accordingly -- a 31-word body
-with 17 copies deserves the same fight as a 500-word one.
+@TOTYIELD@ words, not @TOTWORDS@.
+
+**THE BIG FAMILIES ARE GONE.** Early in this sweep a 31-word body could have
+17 copies and deserved the same fight as a 500-word one. 7.3% of what is left
+is recoverable by replication, down from 13.4%, and most families now have
+TWO members. So the honest guidance is now the plain one: a function is worth
+roughly its own word count, your list is longer than earlier batches' because
+of that, and the way to finish it is the twin search rather than a long fight
+on any one body.
 
     python3 tools/decomp/dngfam.py <func>        # that family's member list
 

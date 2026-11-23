@@ -816,3 +816,46 @@ Same lesson as `code_mask` in `vary_consts`: **a comment is prose, not a
 reference.** Twice now, in two different tools, the fix has been to stop
 reading the comment as code. Anything in this pipeline that greps a body
 should be asked which of the two it means.
+
+## The audit I said I would do: three places, not two
+
+After batch 6's stray declarations I went looking for every other place the
+pipeline greps a function body, on the rule that **a comment is prose, not
+code**. There was a third, and it is the most dangerous of the three.
+
+`def_match` and `defined_funcs` find a DEFINITION with a line-anchored
+`^[A-Za-z_]...name(` pattern. A comment line at column zero reading
+
+    func_b03_80170854(p, b, c, d) is the twin
+
+matches that exactly, and `definition()` would then take the COMMENT's span
+and scan on for a balanced brace -- splicing over whatever lies between. That
+is the same shape as two of this tool's worst defects (the forward
+declaration that swallowed seven stubs, and the comment walk-back that
+swallowed a whole previous function), both of which produced
+`redefinition of ...` errors naming lines nobody had written.
+
+Nothing in `csrc/` triggers it today -- I checked all 1,049 definitions and
+every column-0 comment line in every unit, and found zero -- but agents write
+comments full of code and clang-format does not reindent a comment's
+interior, so it was a matter of time. `code_view()` returns the text with
+every comment character replaced by a space, SAME LENGTH so match offsets
+still index the original, and both patterns run on that. Regression: all
+1,049 definitions still resolve and every one still ends in a closing brace;
+the hostile comment above now yields nothing.
+
+## Batch 7 and the inflection
+
+**The replication multiplier is spent.** Recoverable-by-replication is down
+to 7.3% from 13.4% at the carve, 1,321 distinct functions remain of 1,526
+stubs, and most surviving families have TWO members. A 31-word body with 17
+copies was worth a long fight; a 2-copy one is worth about its own words.
+
+So the lever moved again -- from agents per batch (batches 1-4), to functions
+per agent (batches 5-6), to WORDS per agent. Batch 7 packs each agent to ~800
+words of representative body instead of ~480, which raised the batch from
+5,868 words of yield to 7,441 for the same five agents. Ranking is by family
+yield still, but the budget is what binds now.
+
+The brief says this plainly rather than repeating the old "a 31-word body
+deserves the same fight" line, which is no longer true of anything left.

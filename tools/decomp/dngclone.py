@@ -133,7 +133,7 @@ def def_match(src_text, func):
     A definition has `{` after its parameter list; a prototype has `;`.
     """
     for cand in re.finditer(r"(?m)^[A-Za-z_][\w \*\t]*?\b%s\s*\("
-                            % re.escape(func), src_text):
+                            % re.escape(func), code_view(src_text)):
         i, depth = cand.end() - 1, 0
         while i < len(src_text):
             if src_text[i] == "(":
@@ -214,7 +214,7 @@ def defined_funcs(text):
     """Every carved function `text` DEFINES, in source order."""
     out = []
     for m in re.finditer(r"(?m)^[A-Za-z_][\w \*\t]*?\b(func_[A-Za-z0-9]+_[0-9A-Fa-f]{8})\s*\(",
-                         text):
+                         code_view(text)):
         name = m.group(1)
         if name not in out and def_match(text, name)[0] is not None:
             out.append(name)
@@ -550,6 +550,26 @@ def const_pairs(rep, member):
             if a != b:
                 out.append((int(a, 0), int(b, 0)))
     return out
+
+
+def code_view(text):
+    """`text` with every comment character replaced by a space.
+
+    SAME LENGTH, so a match's offsets still index the original. This is for
+    the patterns that look for a DEFINITION, which are line-anchored on
+    `^[A-Za-z_]...name(` -- a comment line at column zero reading
+    `func_b03_80170854(p, b, c, d) is the twin' matches that exactly, and
+    `definition()` would then take the comment's span and splice over it,
+    swallowing whatever lies between it and the next balanced brace. Nothing
+    in csrc/ does that today; two of this tool's worst defects were
+    mis-anchored spans from other causes, so the pattern is closed rather
+    than watched.
+
+    Third place the same rule has been needed, after code_mask in
+    vary_consts and decl_code in needed_decls: a comment is prose, not code.
+    """
+    return "".join(c if keep else (" " if c != "\n" else "\n")
+                   for c, keep in zip(text, code_mask(text)))
 
 
 def code_mask(text):
