@@ -1,5 +1,162 @@
-/* PARK -- func_800B6AC4, the 12-case +0x9B state machine over jtbl_80089310.
-   NOT LANDED.  CURRENT STATE, 2026-11-22 (the dated sections below are a
+/* ==================== LANDED 2026-11-22.  812/812 words, 0 aligned
+   ==================== differences, and 0 differing (masked) in the real unit.
+
+   THE BODY BELOW IS THE LANDED BODY.  Merge it with the comment block and the
+   DECLARATIONS reproduced further down.  Everything under the second ruler is
+   the pre-landing log, kept for the lever catalogue.
+
+   THE LAST TWO ROWS WERE A const ALIAS ON D_800814A0, AND IT IS A NEW LEVER.
+   Case 10 reads and writes the word through
+
+       extern const u32 D_800814A0_c __asm__("D_800814A0");
+       ...
+       z = D_800814A0_c;
+       *(u32 *)&D_800814A0_c = z | 0x8000;
+
+   and that one change takes the arm from 2 aligned rows to 0 at 812 words.
+
+   WHY, AND IT IS THE STEP THE REST OF THIS HEADER WAS MISSING.  The residue
+   was a transposition of the two sched2 fillers at aligned 763 and 769, and
+   this header had proved the basin closed WHILE 1841 IS BIRTHING.  That proof
+   is sound.  The conclusion drawn from it was not, because de-birthing 1841
+   was never the only way out.  The question that mattered is whether 1846,
+   the `lw %lo(D_800814A0)', is BLOCKED in the cycle after the c+0x2C store.
+   Off the sched1 trace for the park body:
+
+       ;; ready list at T-19: 1849 (8) 1881 (1) 1877 (1), now 1849 1881 1877
+       ;; ready list at T-20: 1881 (1) 1877 (1) 1846 (7f000001) 1841 (7f000001)
+       ;; blocking insn 1846 for 1 cycles, now 1841 1881 1877
+       ;; ready list at T-21: ... 1840 (7f000001) 1846 (7f000001), now 1846 1840 ...
+       ;; ready list at T-22: ... 1838 (8) 1843 (7f000001), now 1843 1840 1838 ...
+
+   1846 and 1841 are released TOGETHER by the store at T-19, both carry
+   LAUNCH_PRIORITY, 1846 has the higher LUID and sorts first, and ONLY the
+   memory-unit hazard hands T-20 to 1841.  Unblock 1846 and the order falls
+   out with no change to 1841 at all.  1846 takes T-20, 1843 is released and
+   takes T-21, 1841 takes T-22, 1840 takes T-23, and the post-sched1 chain is
+   `1838 < 1840 < 1841 < 1843 < 1846', which contains the target's filler
+   order `a2 < 1840 < 1841 < 1843'.
+
+   AND 1846 IS BLOCKED ONLY BECAUSE THE STORE RELEASES IT.  The store is
+   1846's ANTI successor, so 1846 can never be ready before the cycle after
+   the store, and that cycle is always the blocked one.  The link has to go.
+   `anti_dependence' (sched.c:866) has two escapes and the first is
+   `if (RTX_UNCHANGING_P (mem)) return 0' on the READ.  varasm.c:773 sets that
+   flag from `TREE_READONLY' on the DECL, so a const-qualified DECLARATION of
+   the symbol is the entire mechanism.  expr.c:5359 is why no CAST reaches it,
+   because an INDIRECT_REF takes the flag from `TREE_READONLY & TREE_STATIC'
+   and a cast to `const u32 *' never sets TREE_STATIC.  That is why the nine
+   const and volatile spellings recorded below all measure 2.
+
+   WHY THE STORE MUST CAST THE const AWAY.  `output_dependence' (sched.c:893)
+   has NO unchanging escape, so the link pinning the c+0x2C store ahead of the
+   D_800814A0 store survives either way.  The cast keeps the store an ordinary
+   changing, non-in-struct reference, which is what keeps `true_dependence''s
+   in-struct exception able to sink it past the `((s16 *)d)[0x15]' load.  An
+   INDIRECT_REF through `(u32 *)' is not in-struct here, since expr.c:5344
+   wants a PLUS_EXPR or an ADDR_EXPR of an aggregate at the top of the
+   address.
+
+   THE ALIAS IS THIS REPO'S OWN SPELLING FOR THIS VERY SYMBOL.  csrc/main.h
+   already carries `extern u32 D_800814A0_a[1] __asm__("D_800814A0")' with a
+   long comment about needing two spellings per site, so this is the same
+   device one qualifier over.  Putting `const' on include/structs.h's own
+   `extern u32 D_800814A0' is NOT an option.  csrc/unk_24FCC.c,
+   csrc/unk_154BC.c and six landed functions in THIS unit assign to the bare
+   name and all of them would stop compiling.
+
+   MEASURED AROUND THE LEVER, on the 2-row body, with a baseline canary
+   interleaved every six candidates:
+     * `extern const u32 D_800814A0_c', read and store both through it, 0 rows
+       at 812 words.  THE LANDING.
+     * the same lever spelled as `const' added to include/structs.h and
+       csrc/ovl_dungeon_decls.h with the store as
+       `*(u32 *)&D_800814A0 = z | 0x8000', also 0 at 812, measured against
+       shadow copies of both headers.  Same mechanism, not usable, see above.
+     * the alias WITHOUT `const', read and store both through it, 2 at 812 --
+       so the qualifier is the lever and the indirect-ref store is not.
+     * the const alias on the READ ONLY with the bare name on the store, 18
+       rows at 813 words.  Two DECLs for one symbol give two SYMBOL_REFs, cse
+       cannot share the `%hi' and the arm costs an extra word.
+     * the c+0x2C store as `((u8 **)c)[0xB]', which removes the SAME anti
+       dependence by MEM_IN_STRUCT_P, 9 rows at 812 words -- AND ITS FILLER
+       ORDER IS THE TARGET'S.  It is 9 and not 0 because the in-struct flag
+       also kills the OUTPUT dependence on the D_800814A0 store.  That
+       asymmetry is exactly what the const buys and the array form cannot.
+     * making the D_800814A0 STORE in-struct to keep that output dependence,
+       `((u32 *)((u8 *)&D_800814A0 - 4))[1]', 43 rows at 805 words with and
+       without the array form.  An in-struct store can no longer be sunk past
+       the d+0x2A load, so it collides head-on with the lever that landed that
+       load.
+     * the same bias on the LOAD with the array-form store, 8 rows at 812.
+
+   THE COMMENT BLOCK FOR csrc GOES IMMEDIATELY ABOVE THE BODY.  Its opening
+   and closing comment markers are dropped here so that this header stays a
+   single comment, and the ready-to-paste form is in the merge script:
+
+     The 12-case +0x9B state machine over jtbl_80089310.  812 words, 0 differing.
+     FIVE SPELLINGS CARRIED IT, each measured, and the last of them is the one
+     that had kept the park at 2 aligned rows for a day:
+
+     (1) EVERY D_80083460 BASE AND EVERY SCRATCH POINTER NEEDS ITS OWN LOCAL --
+         h/h2/h3/h4, r, e2/e7/e9/e10, n5, base9/base10.  One `h' shared by cases
+         2, 3 and 7 crosses a call in case 3, so global alloc gives the single
+         pseudo a callee-saved register everywhere and case 2's
+         `lui/addiu D_80083460' comes out in $s0 where the target has $v1.
+         Splitting them took the function from 280 aligned rows to 96 in one
+         step and, with it, fixed the whole parameter register map.
+     (2) CASE 2's FIRST D_80013714 READ IS THE CONSTANT ADDRESS
+         `*(u16 *)0x80013714' and the other four are structs.h's SYMBOL.  As the
+         symbol the `lui' is two insns and reorg steals one into the delay slot
+         of the preceding `bnez $v0, .L800B7750', where the target has a `nop'.
+         In case 7 the `%hi' is CSE'd into $s3 and serves three reads, which the
+         assembler macro cannot do, so that site must NOT be the constant.
+     (3) CASE 10's d+0x2A LOAD IS `((s16 *)d)[0x15]', NOT `*(s16 *)(d + 0x2A)'.
+         expr.c:5344 sets MEM_IN_STRUCT_P when the TOP NODE of the INDIRECT_REF's
+         address is a PLUS_EXPR, and that is what lets true_dependence's
+         in-struct exception sink the D_800814A0 store past the load.  The
+         flagless cast is 818 words and 46 rows on this body.
+     (4) CASE 10's TABLE STORE IS `*(u8 **)(c + 0x2C)', NOT `((u8 **)c)[0xB]'.
+         Here the SAME flag is wanted ABSENT.  The array form sets it, the
+         store's dependences on the D_800814A0 pair vanish and the store floats.
+         152 bodies with the array form measure 9 rows and the same bodies with
+         the pointer cast measure 2.
+     (5) CASE 10 READS D_800814A0 THROUGH THE const ALIAS `D_800814A0_c' AND
+         WRITES IT THROUGH `*(u32 *)&D_800814A0_c'.  The alias carries its own
+         comment at the top of this file.  With the bare name on the same two
+         statements the arm is 2 aligned rows, with the alias it is 0.
+
+     WHAT DOES NOT WORK, so that it is not tried again.  On the 2-row body all
+     five sweeps come back empty -- widthsweep, stmtsweep, refsweep over 28
+     names and 7680 insertion points, devsweep over 4959 wrappers a round, and
+     partsweep.  So do 420 legal statement orders of case 10 and a 150-minute
+     permuter run of 219965 candidates whose best find measured 19 rows.  The
+     residue was a transposition of the two sched2 fillers at aligned 763 and
+     769, and every way of de-birthing the table pseudo to fix it costs more
+     than it buys -- a cancelled `t10++; t10--;' 13 rows, a real second set
+     sharing another arm's table 19 to 22, a read-modify-write 27 rows at 814
+     words (case 8 cross-jumps into case 10's tail at .L800B770C, which pins the
+     call's index to `t10[idx]'), and a `register u8 *t10 __asm__("$5")' pin 6.
+     Lever (5) fixes the transposition without touching that pseudo at all.
+
+   DECLARATIONS
+     extern u32 D_800835E4[];
+     extern u8 D_800DD108[];
+     extern u8 D_800DD110[];
+     extern u8 D_800DD118[];
+     extern u8 D_800E0A2A[];
+     extern u8 D_800E0A33[];
+     extern u8 D_800E2968;
+     extern const u32 D_800814A0_c __asm__("D_800814A0");
+     typedef u8 *(*UnkDungeonSpawner)(s32, u8, u8, s16);
+   END DECLARATIONS
+   The alias wants the explanatory comment that sits above it in the landed
+   file, because parksplice carries the LINE and not the comment.
+
+   ==================== everything below is the pre-landing log.
+
+   PARK LOG -- func_800B6AC4, the 12-case +0x9B state machine over jtbl_80089310.
+   LANDED -- see the top of this file.  STATE BEFORE IT, 2026-11-22 (the dated sections below are a
    log, newest first; this block is the only one that describes the body as
    it stands):
 
@@ -1078,9 +1235,9 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
             *(u32 *)(e10 + 0x14) &= ~0x4000;
             *(u16 *)(*(u8 **)(d + 0x60) - 0x2) |= 0x8000;
             t10 = D_800DD140;
-            z = D_800814A0;
+            z = D_800814A0_c;
             *(u8 **)(c + 0x2C) = t10;
-            D_800814A0 = z | 0x8000;
+            *(u32 *)&D_800814A0_c = z | 0x8000;
             func_80048A44(c, t10[((D_80083228 + ((s16 *)d)[0x15] + 0x100) >> 9) & 7], 0, 1);
             p[0x9B]++;
         }
