@@ -1,4 +1,154 @@
-/* PARK: func_800CEA44, 242 of 242 words, 3 aligned differences.
+/* ***** LANDED 2026-11-22: 242 of 242 words, 0 differing. *****
+
+   This file is now a LANDED body awaiting merge, not a park.  Merge it with
+   /tmp/claude-1000/agent-cea44b/merge_func_800CEA44.py (anchor-based and
+   idempotent) or by hand into csrc/ovl_dungeon_800CABA8.c in place of
+   `INCLUDE_ASM("asm/nonmatchings/ovl_dungeon_800CABA8", func_800CEA44);',
+   then DELETE this file.  Declaration needed: `extern u8 D_800E1C3A[];' in
+   the unit's own top block.  `extern u32 D_800835E4[];' is ALREADY in
+   csrc/ovl_dungeon_decls.h:1073 and must NOT be added again.  No prototype
+   change: csrc/ovl_dungeon_decls.h:1421 already carries
+   `void func_800CEA44();', the only in-unit reference is the address-of in
+   func_800CEE0C (defined after it, so no forward declaration is needed), and
+   every other function in the unit compiles byte-identically modulo label
+   numbering.
+
+   PARK HISTORY BELOW.
+
+   THE COMMENT BLOCK TO PUT ABOVE THE BODY IN csrc IS REPRODUCED BELOW, one
+   `   | ' prefix per line, so that it survives even if the merge script in
+   /tmp does not.  Strip the prefix and wrap it in a C comment.
+
+   |  242 words, 0 differing.  A three-state machine on the halfword at `p + 0x6`.
+   | State 0 spends the D_800E3648 slot for room `*(s16 *)(p + 0xC)`: for each
+   | of its `*(s8 *)(e + 2)` charges it rolls a random pair out of D_80083460's
+   | +0x18 table, asks func_800A1618 for a template, then tries up to sixteen
+   | random tiles inside the D_800E2970 room record for one that func_8009A350
+   | reports with no 0xB700 flag, and spawns there through the function pointer
+   | func_800A0B94 RETURNS -- the `jalr $v0`, called with (0, (u8)a, (u8)c,
+   | -0x400).  It then drains the spawn's +0x18 budget through func_800A1D4C and
+   | stamps +0x9A/+0x8C/+0x1C/+0x92.  State 1 counts down +0x4 and plays the
+   | message; the default state counts down, clears the slot and sets the two
+   | 0x8000 request bits.
+   | 
+   | THE LAST TWO LEVERS, both register names with every instruction already in
+   | place, and both derived from the compiler rather than swept for -- all five
+   | repo sweeps (part/width/stmt/dev/ref) come back empty on the 3-row body AND
+   | on the 2-row body.
+   | 
+   | (A) `c0 = func_800A6DA4(...); ... c = t[2] + c0;` -- THE SUM'S DESTINATION
+   | MUST NOT BE ONE OF ITS OPERANDS.  optabs.c:412-434 swaps a commutative
+   | optab's operands when
+   |   ((target == 0 || REG_P (target))
+   |      ? ((REG_P (op1) && ! REG_P (op0)) || target == op1)
+   |      : rtx_equal_p (op1, target)) || GET_CODE (op0) == CONST_INT
+   | -- "try to make the first operand a register; even better, try to make it
+   | the same as the target".  With one accumulator `c`, `c = t[2] + c;` hits
+   | `target == op1` and expand emits `(plus c t[2])`, which is exactly what
+   | `c = c + t[2];` gives with no swap: so BOTH orders of one variable produce
+   | `addu $s0, $v0, $a0` and eight spellings all measured the same 3 rows.
+   | Giving the second func_800A6DA4 result its own local makes `target` a third
+   | pseudo, the swap does not fire, and the target's `addu $s0, $a0, $v0`
+   | appears.  3 rows -> 2.  (`c = c0 + t[2];` puts the operands back the wrong
+   | way round; the device must stay on `c`, not move to `c0` -- 22 rows.)
+   | 
+   | (B) `j = *(u32 *)(o + 0x18) < tb[o[0x11]]; if (j == 0)` -- THE GUARD'S
+   | `sltu` DESTINATION IS A GLOBAL-ALLOC DECISION, AND A BLOCK-LOCAL CANNOT
+   | REACH $a0.  Written as a plain `if (tb[o[0x11]] <= *(u32 *)(o + 0x18))`
+   | the comparison result is a fresh block-local pseudo; block_alloc
+   | (local-alloc.c:1404) walks the operands 1..n calling
+   | combine_regs(operand[i], operand[0]) and takes the first that wins, and
+   | combine_regs (:1791) refuses operand 1 at its very first test because
+   | `j` is a global allocno (`reg_qty < 0`; local-alloc.c:469 needs
+   | reg_basic_block >= 0 and `j` is also read at the loop top).  The tie
+   | therefore falls to operand 2, the limit -- a block-local -- and the result
+   | takes ITS register: `sltu $v0, $a0, $v0`.  Untying it does not help, and
+   | neither does moving the value into a block-local of its own: MIPS defines
+   | no REG_ALLOC_ORDER, so find_free_reg hands an unsuggested block-local
+   | quantity $v0, then $v1, then $a0, and the store temp just swaps registers
+   | with `tb` (10 rows, `sltu $v1, $v1, $v0`).  docs/matching-levers.md,
+   | "BREAKING combine_regs' TIE IS NOT THE SAME AS MOVING THE REGISTER": to
+   | reach an $aN a value needs BOTH halves -- multi-block, so it is a
+   | global-alloc allocno at all, and conflicting with $v0.  Storing the
+   | comparison into `j` gives it both for free, because `j` already has them
+   | (`.greg`: `98 conflicts: ... 95 ... 2 29`, and `98 in 4`), and the one
+   | `sltu` then writes $a0 because its destination IS `j`.  2 rows -> 0.
+   | `j = (u32)j < tb[o[0x11]];` with `if (j == 0)` or `if (!j)` is the same
+   | object; `j = tb[o[0x11]] <= *(u32 *)(o + 0x18); if (j)` costs a word and 11
+   | rows (the `<=` needs an extra `xori`), and `a`/`c`/`x`/`n` in place of `j`
+   | measure 15/26/8/13 because only `j`'s allocno has the $v0 conflict.
+   | 
+   | `j` IS DEAD AT BOTH REUSES: it is `func_800A6D30() & 0x1E` from the top of
+   | the same iteration and is reassigned every iteration, so using it first as
+   | the o+0x18 store temp and then as the guard's boolean is safe, and the
+   | stored value round-trips bit-exactly through s32.
+   | 
+   | THE FRAME IS 0x48 BECAUSE `k` IS A SPILLED HImode PSEUDO.  `w` sits at 0x10
+   | and `k` at 0x18 with six bytes between them: `(s16)k` is a PARADOXICAL
+   | subreg (mips.md's extendhisi2 is `gen_lowpart (SImode, ...)`), so
+   | scan_paradoxical_subregs (reload1.c:3772) sets reg_max_ref_width[k] = 4 and
+   | alter_reg passes align == -1 to assign_stack_local, which rounds the slot
+   | up to 8 at BIGGEST_ALIGNMENT -- vars 16, frame 0x48.  That is also why the
+   | reload is `lhu` + `sll 16` + `sra 16` and both ends use $t0.  `(void)&k`
+   | makes `k` an ordinary addressable 2-byte local and loses all of it (~23
+   | rows of prologue/epilogue offsets).  AND IT ONLY SURVIVES WHILE
+   | `g = (u8 *)&D_80083460;` IS WRITTEN BEFORE THE func_800A6D30 CALL: with `g`
+   | written after, the symbol+0x18 folds to two words instead of three, the
+   | `while (n >= 0)` body gets small enough for loop.c:1730's
+   | `threshold * savings * m->lifetime >= insn_count` to flip, and
+   | `(s16)k * 0x14` is hoisted out of the loop, undoing the spill.  6 words.
+   | 
+   | ONE LOCAL PER SITE for D_800E3648 (b/e, b2/e2, b3/e3) and D_80083460
+   | (g, g2): one variable is one pseudo spanning three basic blocks, which
+   | global_alloc gives a callee-saved register so the symbol's `addiu` writes
+   | $s0 at every site; the target materialises it into a dead temp each time.
+   | Shared: 81 rows.  Same finding as func_800CB170 above.
+   | 
+   | `rm = D_800E2970; t = rm + k * 0x14;` -- the symbol is its own local for the
+   | same reason, 8 rows.  `tb` + `tb1` are two pseudos because the target has
+   | two: the `tb1 = tb` copy survives cse only inside the `if`, where the `do`
+   | body's label has two predecessors and resets cse's table.
+   | 
+   | BOTH func_800A6DA4 CALLS BEFORE EITHER `t[...]` LOAD: a load cannot be
+   | scheduled across a call, so `a = call() + t[0];` reads t[0] between the two
+   | calls.  17 rows.  `(s16)x` at the three post-spawn calls folds to a plain
+   | move (num_sign_bit_copies on a `lbu` is 24, so combine's
+   | simplify_shift_const kills the sll/sra pair) and nothing after combine
+   | deletes copies; plain `x` is 1 row worse, `(u8)x` leaves an `andi`.
+   | 
+   | THE ONE DEVICE: `c++; c--;` after `c = t[2] + c0;`, worth 7 rows at the
+   | same word count -- four more references to `c`, no instructions.  Without
+   | it the two `lbu`s and `addiu $a3, $sp, 0x10` schedule in the wrong order
+   | (0x800CEB68..0x800CEB78).  No honest statement was found that supplies
+   | those references. 
+
+
+   PARK: func_800CEA44, 242 of 242 words, 2 aligned differences.
+
+   ====================================== 2026-11-22 (session 3): 3 rows -> 2
+
+   (13) THE `addu' OPERAND ORDER IS expand_binop's `target == op1' SWAP, and
+       no spelling of ONE variable can change it.  optabs.c:412-434 says, for
+       a commutative optab, "try to make the first operand a register; even
+       better, try to make it the same as the target", and swaps when
+         ((target == 0 || REG_P (target))
+            ? ((REG_P (op1) && ! REG_P (op0)) || target == op1)
+            : rtx_equal_p (op1, target))
+          || GET_CODE (op0) == CONST_INT
+       For `c = t[2] + c;' op0 is t[2] (a reg), op1 is `c' AND `c' is the
+       store target, so `target == op1' fires and expand emits
+       `(plus c t[2])' -- the same RTL `c = c + t[2];' gives with no swap at
+       all.  That is why all eight spellings in the list below measure 3:
+       both orders of ONE accumulator variable collapse to the same insn.
+       The fix is to make the add's DESTINATION a different pseudo from both
+       operands, so `target == op1' is false:
+         `c0 = func_800A6DA4(...); ... c = t[2] + c0;'       242 w, 2 rows
+       `c = c0 + t[2];' would swap back (op0 == ... no: no swap, but then the
+       order is c0,t[2] again), so the sum must be written t[2] FIRST.
+       Measured on the 3-row body: `s32 c0' and `u32 c0' are identical at 2;
+       putting the sum in a fresh `c2' and using `c2' at the two later casts
+       is also 2; `a' through a fresh local as well is 20; and the `c++; c--;'
+       device must stay ON `c' (moving it to `c0', or dropping it, is 22).
 
    ====================================== 2026-11-21 (session 2): 112 rows -> 3
 
@@ -132,21 +282,70 @@
        `r = *(u8 **)(g + 0x18) + (func_800A6D30() & 0x1E);` -- measures 11,
        because `j` is also the store temp from (10).
 
-   ------------------------------------------------------------------ residue
+   ====================================== 2026-11-22 (session 3): 2 rows -> 0
 
-   THREE ROWS, 242/242 words, and all three are REGISTER NAMES:
+   (14) `j = *(u32 *)(o + 0x18) < tb[o[0x11]]; if (j == 0)' -- THE GUARD'S
+       `sltu' DESTINATION IS A GLOBAL-ALLOC DECISION AND A BLOCK-LOCAL CANNOT
+       REACH $a0.  The diagnosis in the residue note below is right about the
+       tie and wrong about the cure.  Making the compared value block-local
+       DOES move the tie to operand 1 -- but MIPS defines no REG_ALLOC_ORDER,
+       so find_free_reg hands an unsuggested block-local quantity $v0, then
+       $v1, then $a0, and the store temp merely SWAPS REGISTERS WITH `tb':
+       `sltu $v1, $v1, $v0' with tb in $a0, 10 rows.  Measured that way for a
+       fresh `u32 u'/`s32 u', for `j' made block-local by renaming its
+       loop-top use, and with `tb' split into a base local + an incremented
+       one (243-244 words).  docs/matching-levers.md, "BREAKING combine_regs'
+       TIE IS NOT THE SAME AS MOVING THE REGISTER", states the rule: to reach
+       an $aN a value needs BOTH halves -- multi-block, so it is a
+       global-alloc allocno at all, AND conflicting with $v0.
+       `j' ALREADY HAS BOTH (`.greg': `98 conflicts: 80 91 93 94 95 97 98 101
+       2 29', and `98 in 4'), so the cure is to make the comparison's
+       DESTINATION be `j': one `sltu' whose dest and operand 1 are the same
+       global pseudo.  2 -> 0.
+         `j = (u32)j < tb[o[0x11]];' with `if (j == 0)' or with `if (!j)'
+           produce the same object                                         0
+         `j = tb[o[0x11]] <= *(u32 *)(o + 0x18); if (j)'          243 w, 11
+           (the `<=' needs an extra `xori')
+         `a'/`c'/`c0'/`i'/`x'/`n' as the boolean instead of `j'
+                                              15/26/2/2/8/13 (c0 and i are 2,
+           i.e. no effect at all -- their allocnos have no $v0 conflict)
+       `j' is dead at both reuses, so this is safe: it is
+       `func_800A6D30() & 0x1E' from the top of the same iteration and is
+       reassigned every iteration.
 
-     0x800CEB78  addu $s0, $v0, $a0   vs  addu $s0, $a0, $v0
+   ALSO RE-RUN AT 2 ROWS AND EMPTY, all five of them, on the body (13)
+   produced: partsweep (5 + 2 partitions), widthsweep, stmtsweep (8 movable
+   assignments), devsweep (1740 candidates/round) and refsweep (28 names,
+   2923 insertion points).  A 506-candidate private sweep of the guard block
+   -- store-temp name x value-split shape x call/`o[0x12]'/`tb++' position --
+   also bottomed out at 2.  Nothing in any of those spaces was ever going to
+   find it, because every one of them keeps the comparison result in a
+   compiler temp.
+
+   -------------------------------------------- residue AS IT WAS AT 2 ROWS
+
+   TWO ROWS, 242/242 words, and both are ONE DECISION -- the guard's `sltu`
+   DESTINATION:
+
      0x800CEC58  sltu $v0, $a0, $v0   vs  sltu $a0, $a0, $v0
      0x800CEC5C  bnez $v0, ...        vs  bnez $a0, ...
 
-   The second and third are one decision: the guard's `sltu` destination.
    Both source registers already match ($a0 = the value stored at o+0x18,
-   $v0 = the limit); gcc reuses a dying source for the result and picks the
-   lower-numbered one, $v0, while the target reuses $a0.  The first is the
-   operand order of `c = t[2] + c;`, which does not follow the source: eight
-   spellings (`c = c + t[2]`, `c += t[2]`, `a` and `c` swapped, `(s32)t[2]`,
-   `d2 = t[2]` into its own local, `d0`/`d2` for both) all measure 3.
+   $v0 = the limit).  The mechanism is local-alloc.c:1404/1791: block_alloc
+   walks the operands 1..n and calls combine_regs(operand[i], operand[0]),
+   taking the FIRST that wins, so the sltu's result is tied to operand 1 if
+   it can be and to operand 2 otherwise.  Operand 1 here is `j`, and
+   combine_regs refuses at its first test, `reg_qty[ureg] < 0`:
+   local-alloc.c:472 sets reg_qty to -1 for any pseudo with
+   reg_basic_block < 0, and `j` is referenced in TWO basic blocks (the
+   `func_800A6D30() & 0x1E` at the loop top and the store here), so it is a
+   global allocno.  The tie therefore falls through to operand 2, the limit
+   -- a block-12 local -- and the result takes ITS register, $v0.  The .lreg
+   dump shows this directly: insn 363 `(set (reg 196) (ltu (reg/v 98)
+   (reg 194)))` with `;; Register 194 in 2.` and `;; Register 196 in 2.`,
+   and `Register 98 used 10 times across 8 insns` with NO `in block N`.
+   `98 in 4` -- `j` IS in $a0, as the target wants; it is only the tie that
+   goes the wrong way.
 
    ALL FOUR SWEEPS ARE CLEAN ON THE 3-ROW BODY, re-run after every change
    above with a private fast harness on the onefunc standalone (~0.15 s a
@@ -247,8 +446,11 @@
    because the eight bytes are k's spill slot, not w.  The scalar is what is
    written below.
 
-   DECLARATIONS THIS NEEDS -- EXACTLY TWO (unchanged):
+   DECLARATIONS THIS NEEDS -- EXACTLY ONE AT MERGE TIME:
      extern u8 D_800E1C3A[];
+   `extern u32 D_800835E4[]' is ALREADY at csrc/ovl_dungeon_decls.h:1073 and
+   must not be added twice.  The line below is kept only so parksplice still
+   harvests a working splice from this file; it is a duplicate, not a change.
      extern u32 D_800835E4[];
    NO PROTOTYPE CHANGE.
 
@@ -287,6 +489,7 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
     s16 k;
     s32 a;
     s32 c;
+    s32 c0;
     s32 x;
     s32 y;
     u8 *s;
@@ -322,9 +525,9 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                     while (1)
                     {
                         a = func_800A6DA4(0, (u16)(*(u16 *)(t + 4) - 1));
-                        c = func_800A6DA4(0, (u16)(*(u16 *)(t + 6) - 1));
+                        c0 = func_800A6DA4(0, (u16)(*(u16 *)(t + 6) - 1));
                         a = a + t[0];
-                        c = t[2] + c;
+                        c = t[2] + c0;
                         c++;
                         c--;
                         if (func_8009A350((u8)a - 1, (u8)c, 0, &w) != 0 && (w & 0xB700) == 0)
@@ -352,7 +555,8 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
                             j = tb[y];
                             *(u32 *)(o + 0x18) = j;
                             tb++;
-                            if (tb[o[0x11]] <= *(u32 *)(o + 0x18))
+                            j = *(u32 *)(o + 0x18) < tb[o[0x11]];
+                            if (j == 0)
                             {
                                 tb1 = tb;
                                 do
@@ -402,3 +606,4 @@ void func_800CEA44(u8 *p, UnkVec *v, u32 q)
         }
     }
 }
+
