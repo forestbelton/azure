@@ -310,14 +310,21 @@ def main():
         raise SystemExit(f"{rep} is not defined in {src} -- land it first")
     rep_decls = needed_decls(decl_block(rep_text), rep_body)
 
+    # `landed=True` BECAUSE THE REPRESENTATIVE IS ALREADY LANDED by the time
+    # this runs -- dngland.py writes it into csrc/ and then calls this. The
+    # default view hides landed functions, which is right for ranking work and
+    # would hide the very function being cloned.
     fam = None
-    for g in dngfam.families().values():
+    for g in dngfam.families(landed=True).values():
         if any(n == rep for _, n, _ in g):
             fam = g
             break
     if fam is None:
         raise SystemExit(f"{rep}: no listing, so no family to clone into")
-    members = [n for _, n, _ in fam if n != rep]
+    # Members that are themselves already landed have no INCLUDE_ASM line to
+    # splice over, so they are not work -- skip them rather than fail on them.
+    still = dngfam.stubs()
+    members = [n for _, n, _ in fam if n != rep and n in still]
     if args.only:
         want = set(args.only.split(","))
         members = [m for m in members if m in want]

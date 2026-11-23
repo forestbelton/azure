@@ -98,14 +98,37 @@ def listing_path(func):
                         "ovl_dng_" + m.group(1), func + ".s")
 
 
-def families():
-    """{digest: [(unit, func, words)]} over every carved stub listing."""
+def stubs():
+    """Every carved function still carried by INCLUDE_ASM, from csrc/.
+
+    A LISTING IS NOT EVIDENCE THAT A FUNCTION IS STILL A STUB. splat is
+    documented to prune the listing of a landed function, and under this
+    block's spec it does not: after batch 1 there were 2577 listings against
+    2015 stubs, so a ranking taken from listings alone offered work that was
+    already done and `dngclone` would have gone looking for an INCLUDE_ASM
+    line that is not there. csrc is the authority.
+    """
+    out = set()
+    for f in glob.glob(os.path.join(PROJ, "csrc", "ovl_dng_*.c")):
+        out |= set(re.findall(r'INCLUDE_ASM\("[^"]*",\s*(func_\w+)\)',
+                              open(f).read()))
+    return out
+
+
+def families(landed=False):
+    """{digest: [(unit, func, words)]} over every carved stub listing.
+
+    Landed functions are left out unless `landed` -- see stubs().
+    """
+    keep = None if landed else stubs()
     H = collections.defaultdict(list)
     for d in sorted(glob.glob(os.path.join(PROJ, "asm", "nonmatchings",
                                            "ovl_dng_*"))):
         unit = os.path.basename(d)
         for f in sorted(glob.glob(os.path.join(d, "*.s"))):
             name = os.path.basename(f)[:-2]
+            if keep is not None and name not in keep:
+                continue
             b = body(f, name)
             if not b:
                 # b31f/lo20 rodata islands leave a symbol with no
@@ -124,6 +147,8 @@ def main():
     ap.add_argument("--diff", nargs=2, metavar=("A", "B"))
     ap.add_argument("--json", metavar="PATH")
     ap.add_argument("-n", type=int, default=30)
+    ap.add_argument("--landed", action="store_true",
+                    help="include functions that are no longer INCLUDE_ASM")
     args = ap.parse_args()
 
     if args.diff:
@@ -143,7 +168,7 @@ def main():
               f"({'SAME FAMILY' if n == 0 else 'different functions'})")
         return
 
-    H = families()
+    H = families(args.landed)
     if args.json:
         json.dump({k: v for k, v in H.items()}, open(args.json, "w"))
         print(f"wrote {args.json}: {len(H)} signatures")
