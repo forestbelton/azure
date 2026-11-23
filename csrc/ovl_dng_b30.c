@@ -1,5 +1,24 @@
 #include "common.h"
 
+void func_8009A3D0(s32, s32, s32);
+s32 func_800A0818(s16, s16, s16, s16, u16 *);
+s32 func_8009A66C(u32, u8 *, u8 *, s16);
+void func_8009A21C(s32, s32, s32);
+void func_b30_80171DCC(u8 *, UnkVec *, u8 *, u8 *);
+extern void (*D_80173CEC[])(u8 *, UnkVec *, u8 *, u8 *);
+extern void (*D_80174198[])(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_800A0818(s16 a, s16 b, s16 c, s16 d, u16 *f);
+s32 func_8009A66C(u32 f, u8 *c, u8 *d, s16 y);
+void func_8009A3D0(s32 x, s32 y, s32 f);
+void func_8009A21C(s32 a, s32 b, s32 c);
+typedef struct UnkDngRoom2970
+{
+    u8 pad_00[0xC];
+    u16 unk_0C;
+    u8 pad_0E[0x6];
+} UnkDngRoom2970;
+extern u16 D_80083462;
+
 extern Unk80083462 D_80083460;
 extern u8 D_80176660[];
 u8 *func_800A04F0_r(u8 *p, s32 x, s32 y, s16 dir) __asm__("func_800A04F0");
@@ -45,7 +64,100 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b30", func_b30_80170AD0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b30", func_b30_80170EE4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b30", func_b30_80171460);
+/* The banked room script's step-the-walk handler, the relinked twin of the
+   resident overlay's func_800D904C in csrc/ovl_dungeon_800D50FC.c: advance
+   the actor one cell of its queued path, swap in the D_801765D0 facing
+   table, re-aim the sprite, and either stop at state 0xF or hand on to
+   func_b30_80171DCC.  145 words, 0 differing.
+
+   THE GATE IS THE TWIN'S, INVERTED.  func_800D904C sets state 0xF on
+   `(s16)t == 3 && (D_80083462 & 0x80 || c[0x14] & 0x8000)`; here the `t`
+   test goes the other way -- func_b30_80171DCC is called only on
+   `(s16)t == 3 && !(D_80083462 & 0x80) && !(c[0x14] & 0x8000)`, and 0xF is
+   the else arm.  The listing shows it: `bne $v0, $v1, .Lb07_8017172C` lands
+   on an `addiu $v0, 0xF` of its own, the copy reorg left behind when it
+   stole the else arm's `addiu` into the two `bnez` delay slots.  Written the
+   twin's way round the function is 143 words and 46 differing: the two arms
+   swap, and jump.c then cross-jumps the `sw $zero, 0x8C($s4)` that the
+   target keeps in both.
+
+   DEVICE: `x + ((x + x) - x - x)` on func_800A0818's first argument.  It is
+   the phantom zero of docs/matching-levers.md :11693 -- cse keeps the three
+   insns, flow counts them as references on `x`, and combine deletes them, so
+   it emits nothing and ties nothing.  Its job here is allocation only:
+   without it `d` outranks the `x`/`t` quantity in global-alloc and the two
+   swap callee-saved registers, `d` taking $s0 and `x` $s1 where the target
+   has $s1 and $s0 -- 145 words, 28 differing, every one of them that rename
+   (and `t`, which shares `x`'s register, renames with it).  What the
+   function does without it: the same 145 instructions with two callee-saved
+   registers exchanged.  It does NOT warn under -Wall: nothing is read
+   uninitialised.
+
+   Measured and rejected, all 145 words unless stated:
+     the phantom on func_8009A3D0's first argument instead          7
+     the phantom as its own statement, `x = x + ((x + x) - x - x);` 2
+     the phantom on `y` as well as `x`                              28
+     `__asm__("" ::"r"(x));` before the func_8009A3D0 call          2
+     no device at all                                               28
+     no device, declaring `x` and `y` first                         28
+     no device, `s16 x, y`                                          28
+     no device, `d` copied into a local before the first test       28
+     merging `t` into `x`                                           53
+     merging `r` into `y`                                146 words, 112
+     a local for the 0x300/0x3000 select                 146 words, 118
+     `x` and `y` inline, no locals                       144 words, 120
+     `x` and `y` computed before the table swap          146 words, 134 */
+void func_b30_80171460(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 r;
+    s32 t;
+    s32 n;
+    s32 x;
+    s32 y;
+
+    if (*(s8 *)(d + 0x71) > 0 && d[0x71] > *(s16 *)(d + 0x8A))
+    {
+        if (*(u8 **)(c + 0x2C) != D_801765D0)
+        {
+            *(u8 **)(c + 0x2C) = D_801765D0;
+            func_80047784(c, D_801765D0[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        x = c[0x24];
+        y = c[0x25];
+        func_8009A3D0(x, y, (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        r = func_800A0818(/* DEVICE: the phantom zero.  See the header. */
+                          x + ((x + x) - x - x), y, *(d + *(s16 *)(d + 0x8A) + 0x74), *(d + *(s16 *)(d + 0x8A) + 0x7C), (u16 *)(p + 0x98));
+        t = func_8009A66C((s16)r, c, d, 0x20);
+        c[0x24] = *(d + *(s16 *)(d + 0x8A) + 0x74);
+        c[0x25] = *(d + *(s16 *)(d + 0x8A) + 0x7C);
+        *(s16 *)(d + 0x8A) = *(u16 *)(d + 0x8A) + 1;
+        func_8009A21C(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        *(s16 *)(d + 0x2A) = r;
+        if ((s16)t == 3 && (D_80083462 & 0x80) == 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+        {
+            func_b30_80171DCC(p, b, c, d);
+        }
+        else
+        {
+            p[0x9A] = 0xF;
+        }
+        *(s32 *)(p + 0x8C) = 0;
+        *(u32 *)(d + 0x1C) |= 0x40000000;
+        if ((D_80083462 & 0x80) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 8;
+            n = d[0x71];
+            if (n > 0)
+            {
+                *(s16 *)(p + 0x96) = 8 / n;
+            }
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b30", func_b30_801716A4);
 

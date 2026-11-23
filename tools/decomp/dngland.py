@@ -43,7 +43,10 @@ def verify(path, func):
     r = subprocess.run(
         [sys.executable, os.path.join(PROJ, "tools", "decomp", "ovlverify.py"),
          path, func], capture_output=True, text=True, env=env, cwd=PROJ)
-    line = (r.stdout.splitlines() or [r.stderr.strip()[:200]])[0]
+    # The WHOLE stderr on failure: a truncated traceback shows only `main()`,
+    # and the useful line of a Python traceback is its last one.
+    line = (r.stdout.splitlines()
+            or [r.stderr.strip().replace("\n", " | ")])[0]
     ok = " 0 differing " in line and re.search(
         r"target (\d+) words, candidate \1 words", line) is not None
     return ok, line.strip()
@@ -68,7 +71,14 @@ def main():
     dest = dngclone.unit_path(func)
     text = open(dest).read()
     have = set(dngclone.decl_block(text))
-    add = [d for d in dngclone.decl_block(agent_text) if d not in have]
+    # needed_decls: the agent's copy carries the whole unit's declaration
+    # block, most of it from earlier families. reconcile_decls: a declaration
+    # of something this unit already DEFINES takes its prototype from that
+    # definition, so two agents' different parameter types for one callee
+    # cannot collide. Both are dngclone's, for the same reasons.
+    want = dngclone.reconcile_decls(
+        dngclone.needed_decls(dngclone.decl_block(agent_text), body), text)
+    add = [d for d in want if d not in have]
     new = text
     if add:
         m = re.search(r'#include "common\.h"\n', new)

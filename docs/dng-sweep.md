@@ -145,3 +145,70 @@ family after the first copied the earlier families' declarations into every
 member and renamed only the ones its own symbol map knew. 171 stray
 declarations across 46 units, harmless to the link and wrong in every other
 way. `needed_decls()` is the fix.
+
+## Batch 2, 2026-11-23: five agents, 96 functions, 28,985 words
+
+All five landed again, and every clone verified:
+
+| representative | words | copies | cloned | yield |
+|---|---|---|---|---|
+| `func_b01_80171C34` | 466 | 35 | 34/34 | 16,310 |
+| `func_b03_80170A28` | 267 | 15 | 14/14 | 4,005 |
+| `func_b03_801736F4` | 207 | 17 | 16/16 | 3,519 |
+| `func_b07_80171570` | 145 | 18 | 17/17 | 2,610 |
+| `func_b03_80173358` | 231 | 11 | 10/10 | 2,541 |
+
+42.7% to 48.0%.
+
+## THE RESIDENT OVERLAY IS A BODY-LEVEL TEMPLATE, NOT JUST A SIGNATURE SOURCE
+
+This is the single most useful thing the first two batches established, and it
+is why nine of ten functions landed on or near the first compile.
+
+The banked room scripts are relinked copies of code that also exists in the
+resident dungeon overlay at 0x800894A0 -- **which is 100% landed**. So for
+most of this block the answer is already written, with a comment explaining
+what made it land:
+
+| carved function | resident twin |
+|---|---|
+| `func_b01_80171C34` | `func_800D92C0` |
+| `func_b03_80170A28` | `func_800D8728` |
+| `func_b03_801736F4` | `func_800DA398` |
+| `func_b03_80173358` | `func_800DA014` |
+| `func_b07_80171570` | `func_800D904C` |
+| `func_b03_80171DA0` | `func_800CA788` |
+| `func_b01_80172800` | `func_800D9C18` |
+| `func_b02_80174574` | `func_800DA660` |
+
+Find the twin FIRST. The differences are small and local -- an extra arm, a
+bank-local table in place of a resident one, an inverted gate -- and the
+twin's own comment usually names every load-bearing spelling. **Re-measure
+those spellings rather than assuming them**: on `func_b03_80170A28` all three
+of the twin's named facts held (3, 15 and 132 aligned differences when spelled
+otherwise), and on `func_b07_80171570` the gate was the twin's *inverted*,
+worth 2 words and 46 differences to get wrong.
+
+## Two more dngclone defects, both from batch 2
+
+* **`definition()` matched the FORWARD DECLARATION, not the definition.** A
+  landed body elsewhere in the unit may declare the function being cloned --
+  `func_b01_80172628` declares `func_b01_80171C34` -- and the prototype comes
+  first in the file. The old code took the first regex match, scanned on for
+  the next `{`, and swallowed every INCLUDE_ASM and definition until the
+  braces balanced; the compile then said `redefinition of
+  __maspsx_include_asm_hack_...' about lines nobody had written. It now tries
+  every candidate and accepts only one with `{` after its parameter list.
+* **TWO AGENTS CHOOSE DIFFERENT PARAMETER TYPES FOR THE SAME CALLEE, AND BOTH
+  ARE RIGHT.** `func_b01_80171C34`'s author declared its sibling
+  `s32 f(u8 *, void *, void *, u8 *)`; that sibling's own landed body, from
+  another family, is `s32 f(u8 *, UnkVec *, u8 *, u8 *)`. In the 26 units
+  holding both, the renamed declaration was a `conflicting types' error --
+  26 of 34 members refused. `reconcile_decls()` takes the prototype from the
+  DEFINITION wherever the target unit has one, which is sound because a
+  pointer argument converts without an instruction, and every member is
+  verified anyway.
+
+And `decl_block()` now splits on STATEMENTS rather than lines, because a
+declaration block can hold a multi-line struct typedef and splitting on
+newlines shredded it into a kept `typedef struct X` line and dropped fields.

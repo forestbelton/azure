@@ -118,11 +118,93 @@ def rename(text, smap):
     return CSYM.sub(sub, text), unmapped
 
 
+def def_match(src_text, func):
+    """(match, index of the parameter list's `)`) for `func`'s DEFINITION.
+
+    EVERY candidate is tried, and only a definition is accepted. A landed body
+    elsewhere in the unit may FORWARD-DECLARE this function -- the landed
+    func_b01_80172628 declares func_b01_80171C34 -- and the prototype comes
+    first in the file, so taking the first regex match picked the declaration,
+    then scanned on for the next `{` and swallowed every INCLUDE_ASM and
+    definition between it and a balanced brace. The clone came out with seven
+    duplicated stubs and the compiler said `redefinition of
+    __maspsx_include_asm_hack_...', naming lines nobody had written.
+    A definition has `{` after its parameter list; a prototype has `;`.
+    """
+    for cand in re.finditer(r"(?m)^[A-Za-z_][\w \*\t]*?\b%s\s*\("
+                            % re.escape(func), src_text):
+        i, depth = cand.end() - 1, 0
+        while i < len(src_text):
+            if src_text[i] == "(":
+                depth += 1
+            elif src_text[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        j = i + 1
+        while j < len(src_text) and src_text[j] in " \t\r\n":
+            j += 1
+        if j < len(src_text) and src_text[j] == "{":
+            return cand, i
+    return None, None
+
+
+def def_signature(src_text, func):
+    """`func`'s own definition in `src_text`, rewritten as a prototype.
+
+    WHY A CLONE CANNOT JUST CARRY THE REPRESENTATIVE'S DECLARATION OF A
+    SIBLING. Two agents working different families pick their own parameter
+    types for the same callee, and both are right for their own function:
+    func_b01_80171C34's author declared its sibling `s32 f(u8 *, void *,
+    void *, u8 *)` while that sibling's own landed body -- a member of another
+    family -- is `s32 f(u8 *, UnkVec *, u8 *, u8 *)`. In the 26 units where
+    both are present the renamed declaration is a `conflicting types' error.
+
+    The definition is the authority, so the prototype is taken from it. A
+    pointer argument converts without an instruction, so the call site's code
+    is unchanged -- and every member is verified anyway.
+
+    Returns None for a K&R definition, whose parameter list is names only and
+    would make an invalid prototype.
+    """
+    m, close = def_match(src_text, func)
+    if m is None:
+        return None
+    sig = src_text[m.start():close + 1]
+    params = sig[sig.index("(") + 1:-1].strip()
+    if params and params != "void" and not re.search(
+            r"\*|\b(?:void|char|short|int|long|signed|unsigned|float|double|"
+            r"struct|union|enum|[su]8|[su]16|[su]32|[su]64|f32|Unk\w*)\b",
+            params):
+        return None                      # K&R: `f(p, b, c, d)`
+    return " ".join(sig.split()) + ";"
+
+
+def reconcile_decls(decls, unit_text):
+    """Replace each declaration of a symbol `unit_text` DEFINES with a
+    prototype taken from that definition. See def_signature."""
+    out = []
+    for d in decls:
+        mm = DECLARED.search(d)
+        sig = def_signature(unit_text, mm.group(1)) if mm else None
+        out.append(sig if sig else d)
+    return out
+
+
 def definition(src_text, func):
     """(comment + definition, span) for `func` in a unit's source."""
-    m = re.search(r"(?m)^[A-Za-z_][\w \*\t]*?\b%s\s*\(" % re.escape(func),
-                  src_text)
-    if not m:
+    # EVERY candidate, and only the one that is a DEFINITION. A landed body
+    # elsewhere in the unit may FORWARD-DECLARE this function -- the landed
+    # func_b01_80172628 declares func_b01_80171C34 -- and the prototype comes
+    # first in the file, so taking the first match picked the declaration,
+    # then scanned for the next `{` and swallowed every INCLUDE_ASM and
+    # definition between it and a balanced brace. The clone came out with
+    # seven duplicated stubs and the compile said `redefinition of
+    # __maspsx_include_asm_hack_...', naming lines nobody had written.
+    # A definition has `{` after its parameter list; a prototype has `;`.
+    m, _close = def_match(src_text, func)
+    if m is None:
         return None, None
     start = m.start()
     # Pull in an immediately preceding comment block, which carries the
@@ -179,7 +261,25 @@ def decl_block(src_text):
         if mm:
             end = min(end, start + mm.start())
     chunk = src_text[start:end]
-    return [s.strip() for s in chunk.split("\n") if s.strip()]
+    # STATEMENTS, NOT LINES. A declaration block can hold a multi-line
+    # struct typedef, and splitting on newlines shreds it: `needed_decls`
+    # keeps the `typedef struct X` line, drops the `{`, drops each field
+    # (whose name is not in the body), and the clone then fails to compile
+    # against a file nobody could read. Track brace depth and close a
+    # statement only at depth 0.
+    out, cur, depth = [], [], 0
+    for ln in chunk.split("\n"):
+        t = ln.strip()
+        if not t and not cur:
+            continue
+        cur.append(ln)
+        depth += ln.count("{") - ln.count("}")
+        if depth <= 0 and (t.endswith(";") or t.endswith("*/")):
+            out.append("\n".join(cur).strip())
+            cur, depth = [], 0
+    if cur:
+        out.append("\n".join(cur).strip())
+    return out
 
 
 # The identifier a declaration declares: the first one followed by `(`, `[`
@@ -260,7 +360,7 @@ def clone_unit(rep, rep_body, rep_decls, unit, members, dry_run):
             out.append((member, False, str(e)))
             continue
         body, _unmapped = rename(rep_body, smap)
-        decls = [rename(d, smap)[0] for d in rep_decls]
+        decls = reconcile_decls([rename(d, smap)[0] for d in rep_decls], text)
         try:
             cand = add_body(text, member, body, decls)
         except ValueError as e:
