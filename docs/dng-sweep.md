@@ -1237,3 +1237,55 @@ words of yield, against 1,433 stubs remaining. The park is better than it was
 and says exactly what to measure next; that is the right outcome for the
 budget spent, and the honest summary is that the permuter halved a residue it
 could not close.
+
+## 14 units were calling a function with NO DECLARATION AT ALL
+
+h22 noticed, in passing, that `func_b18_8017087C` -- landed, 117 words, 0
+differing -- was calling `func_8004491C` with no declaration in scope, i.e.
+against gcc's implicit `int func_8004491C()`. It added the real prototype and
+re-measured.
+
+That is a class, not a one-off. `cdkgcc -Wall` over all 116 units:
+
+    func_8003FD64   12 units   b06 s01 s02 s16 s32 s37 s39 s40 s41 s42 s51 s58
+    func_80069EF8    2 units   b15 b19
+
+`func_8003FD64` returns `UnkNode *`. An implicit `int` return happens to work
+on this target because `sizeof(int) == sizeof(void *) == 4` and both come back
+in `$v0`, which is exactly why it has been silent through nine batches: every
+one of those bodies verified at 0 differing WITH the implicit declaration.
+
+All 14 now carry the real prototype, and I re-verified every function in each
+affected unit rather than just the callers -- 109 functions across the 14.
+**None regressed**, so the implicit declarations were not load-bearing. That
+is the result I wanted either way: if one of them HAD moved a word, the
+implicit `int` would have been doing real work and the landing would have been
+resting on it.
+
+Worth noting what made this findable at all: `-Wall`. The project does not
+build with it, gcc 2.7.2 says nothing without it, and `ovlverify` compiles the
+same way the build does -- so nothing in the normal loop could ever have
+reported this. A periodic `-Wall` sweep over the carved units is cheap and
+belongs in the routine.
+
+## Batch 9's methodological result: the callee-set grep is the primary tool now
+
+It found a twin `xsibs` had scored below threshold SIX times across batches 8
+and 9 -- h12 twice, h18, h21, h22 twice -- and h22's case is the strongest
+argument the sweep has produced for the mandatory comments:
+`func_b18_80172AB4` is 422 words, its twin `func_b03_80172A24` is 316, and the
+size ratio puts it under any shape floor. It landed on the FIRST COMPILE
+because h10 had written four measured spelling facts into that twin two
+batches earlier. One grep was worth 499 of h22's 844 words.
+
+So the brief now carries the operational recipe -- grep four or five
+distinctive symbols ONE AT A TIME over the landed side and intersect the file
+lists -- plus h25's refinement: **pick the symbols the TAIL uses, not just
+the callees.** For `func_b35_801728C4` the `func_800xxxxx` callees found
+nothing and two distinctive globals found it at once, because those are what
+the shared teardown touches.
+
+New lever (1112), also found twice independently in this batch: **a block
+emitted in the wrong place at the right word count is usually an inverted
+two-arm gate.** 17 and 7 aligned differences in the two measured cases, and it
+is one character to test.

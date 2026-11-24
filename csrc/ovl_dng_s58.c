@@ -93,6 +93,8 @@ void func_s58_8002525C(u8 *p);
    emit the UNSIGNED load (`lbu`/`lhu`) because a read-modify-write of a
    narrow lvalue does not need the sign bits, while the separate `>= -0x6`
    test is a signed `lh`. */
+UnkNode *func_8003FD64(s32, void *);
+
 void func_s58_8002407C(u8 *p, UnkVec *v, UnkSlot *s)
 {
     s16 c;

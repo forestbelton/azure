@@ -49,6 +49,8 @@ typedef struct UnkDng74334SP
 s32 func_80069EF8();
 void func_s42_800243A4();
 
+UnkNode *func_8003FD64(s32, void *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s42", func_s42_800240AC);
 
 /* One semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,

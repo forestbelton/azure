@@ -69,6 +69,8 @@ typedef struct UnkDngS58Name12
 } UnkDngS58Name12;
 extern s16 D_800267B8;
 
+UnkNode *func_8003FD64(s32, void *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_8002405C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_80024190);

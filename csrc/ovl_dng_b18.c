@@ -88,7 +88,7 @@ s32 func_800AC5C8();
 s32 func_800AC480();
 
 s32 func_800ABDBC();
-void func_b18_80170E7C();
+void func_b18_80170E7C(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 s32 func_800AB778();
 
@@ -122,6 +122,33 @@ void func_b18_80170A50(u8 *p, UnkVec *b, u8 *c);
 void func_800A2B04(UnkVec *, s32, s32);
 extern u8 D_80174D6C[];
 extern u8 D_80174D74[];
+
+void func_b18_80171638(u8 *p, void *b, void *c, u8 *d);
+extern u8 D_80174D54[];
+extern u8 D_80174D94[];
+s32 func_800AA924(u8 *p, void *b, u8 *c, u8 *t);
+s16 func_8009FB34(u16 x, u16 y);
+s16 func_800A1C58(u8 *p);
+s32 func_800AAB10(u8 *p, void *b, u8 *c, u8 *d);
+void func_800AAF00(u8 *a, UnkVec *b, u8 *c, s32 t, void (*h)());
+void func_b18_801713E0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+void func_b18_80171FA8(u8 *p, UnkVec *b, u8 *c, u8 *d);
+s32 func_b18_801720C0(u8 *a, void *b, void *c, s32 d);
+void func_b18_8017452C(u8 *p, void *b, void *c, u8 *d);
+extern s32 D_8008346C;
+extern u8 D_80174D9C[];
+extern u8 D_80174DA4[];
+s32 func_8003F270(void);
+s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n);
+s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e);
+void func_800DA840(SVECTOR *src, s16 a);
+s32 func_800A56E0(s32);
+extern u8 D_800DEC70[];
+UnkNode *func_8003FC64(s32);
+s32 func_8004491C(UnkNode *, u32);
+void func_8003DB94(void *, void *, s32);
+s32 func_80069EF8(void);
+void func_b18_80173FF4(u8 *, UnkVec *, u8 *);
 
 u8 *func_b18_8017087C(s16 a, u16 b, u16 c, s16 d)
 {
@@ -350,7 +377,219 @@ void func_b18_80170A50(u8 *p, UnkVec *b, u8 *c)
     *(u16 *)(c + 0x14) |= 0x40;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_80170E7C);
+/* The +0x8C handler at the head of this bank's actor machine -- the relinked
+   twin of the resident overlay's func_800D8C64
+   (csrc/ovl_dungeon_800D50FC.c). Four early exits on the D_80083462 flag word
+   and d+0x1C's bits, the +0x9A state byte set to 0xE, the facing re-dress from
+   the bank-local byte tables, and then the walk. 345 words, 0 differing, first
+   compile. 3 copies (dngfam.py).
+
+   IT IS THE LANDED func_b05_80170E84 (csrc/ovl_dng_b05.c, 338 words) PLUS ONE
+   ARM, and b05's three load-bearing spellings were all that was needed:
+     * the walk tail func_b18_80171638 is WRITTEN OUT AT ALL THREE SITES, not
+       goto-ed -- jump2 folds the three copies back to one block but flow has
+       already counted their references, which is what gives `c' $s0;
+     * ONE table local per dress site (`e'/`e2'/`e3'), not one shared;
+     * the case 5/6/7 arm's D_800814A8 is a POINTER local `w' assigned BEFORE
+       the d+0x2A store, so the `lw's load delay gets filled by that `sh'.
+   Those three facts are measured on b05's body, not re-measured here: this
+   body was 0 differing on its first compile with them in place.
+
+   THE RELINK DELTA FROM b05, read off the listing:
+     * b05's five tables become D_80174DB4 (the d[0x25]==0 and 0x200 arms'
+       comparand), D_80174DAC (what those two arms store and pass),
+       D_b18_80174D4C (the state-0xE dress and the final dress),
+       D_80174D54 (func_800AA6B4) and D_80174D94 (func_800AAF00);
+     * func_b05_801713CC / func_b05_80171624 / func_b05_80171DD0 /
+       func_b05_80171F94 / func_b05_801720AC / func_b05_80173F28 become
+       func_b18_801713E0 / func_b18_80171638 / func_b18_80171DE4 /
+       func_b18_80171FA8 / func_b18_801720C0 / func_b18_80173D94;
+     * THE WHOLE 345-vs-338 WORD DELTA IS ONE EXTRA NESTED ARM: b05 calls
+       func_800AAB10 and discards the result, this one tests it and calls
+       func_b18_8017452C on a nonzero -- 7 words.
+
+   THIS FUNCTION OWNS jtbl_b18_80170808, the 12-entry table at 0x80170808 for
+   the switch over (d + 0x46) & 0x3FFF. Entries: cases 1,2,3 -> the
+   func_800AAF00 arm; 4, 10 and 11 -> `default' (the walk), so they need no
+   label of their own; 5,6,7 -> the func_800A0818 / D_800814A8 arm; 8,9 -> the
+   func_b18_80171DE4 arm; 12 -> func_800A9A0C, written as a `case' label inside
+   the `w[0x9A] != 0x11' arm, which is also where cross-jumping merges it with
+   the d+0x1C & 0x20 early exit.
+
+   `--raw' is 80 differing and all 80 are relocations -- 23 `jal's, 9 `j's and
+   48 `%hi'/`%lo' halves (b05's 79 plus this body's one extra `jal') -- so no
+   masked word hides a constant address. */
+void func_b18_80170E7C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+    s32 v;
+    u16 x;
+    u8 *e;
+    u8 *e2;
+    u8 *e3;
+    s32 m;
+    u8 *w;
+
+    if ((D_80083462 & 0x1000) != 0)
+    {
+        p[0x9A] = 0xE;
+        func_b18_801713E0(p, b, c, d);
+        return;
+    }
+    if (d[0x25] == 0)
+    {
+        func_800AA79C(p, b, c, d);
+        if (*(u8 **)(c + 0x2C) != D_80174DB4)
+        {
+            e = D_80174DAC;
+            *(u8 **)(c + 0x2C) = e;
+            func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        return;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x200) != 0)
+    {
+        if (*(u8 **)(c + 0x2C) == D_80174DB4)
+        {
+            p[0x9A] = 0xD;
+            p[0x9B] = 1;
+            *(u32 *)(p + 0x8C) = 0;
+            *(s32 *)(d + 0x1C) &= ~0x40000;
+            return;
+        }
+        if (func_800AA924(p, b, c, D_80174DAC) != 0)
+        {
+            return;
+        }
+    }
+    if ((D_80083462 & 0x2000) == 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if (p[0x9A] != 0xE)
+        {
+            e2 = D_b18_80174D4C;
+            if (*(u8 **)(c + 0x2C) != e2)
+            {
+                *(u8 **)(c + 0x2C) = e2;
+                func_80047784(c, e2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            }
+            p[0x9A] = 0xE;
+        }
+        *(u16 *)(p + 0x98) &= ~0xC;
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, D_80174D54) != 0)
+        {
+            return;
+        }
+        if ((*(s32 *)(d + 0x1C) & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            func_b18_80173D94(p, (u8 *)b, c, d);
+            return;
+        }
+        if ((s16)func_800A1C58(d) != 0 && (s16)func_800AAB10(p, b, c, d) != 0)
+        {
+            func_b18_8017452C(p, b, c, d);
+        }
+    }
+    n = func_8009FB34(c[0x24], c[0x25]);
+    c[0x26] = n;
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x20) != 0)
+        {
+            func_800A9A0C(d);
+            return;
+        }
+        if (*(u16 *)(c + 0x24) == D_80082EA4)
+        {
+            func_b18_80171638(p, b, c, d);
+            return;
+        }
+        if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+        {
+            if ((D_80083462 & 0x2000) != 0 &&
+                (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+            {
+                return;
+            }
+            if ((s16)func_b18_801720C0(p, b, c, 0) == 0)
+            {
+                return;
+            }
+            *(u16 *)(d + 0x46) |= 0x4000;
+            if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+            {
+                func_b18_80171638(p, b, c, d);
+                return;
+            }
+        }
+        switch (*(u16 *)(d + 0x46) & 0x3FFF)
+        {
+        case 8:
+        case 9:
+            if ((s16)func_b18_80171DE4(p, b, c, d) != 0)
+            {
+                return;
+            }
+            func_b18_80171FA8(p, b, c, d);
+            return;
+        case 5:
+        case 6:
+        case 7:
+            m = func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+            w = (u8 *)D_800814A8;
+            *(s16 *)(d + 0x2A) = m;
+            if (w[0x9A] != 0x11)
+            {
+            case 12:
+                func_800A9A0C(d);
+                return;
+            }
+        case 1:
+        case 2:
+        case 3:
+            func_800AAF00(p, b, c, (s32)D_80174D94, func_b18_80170E7C);
+            return;
+        default:
+            func_b18_80171638(p, b, c, d);
+            return;
+        }
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) == 0)
+    {
+        if ((s8)n < 0 || (D_800E2970_s[(s8)n].unk_0C & 2) == 0)
+        {
+            if ((v & 0x430) == 0)
+            {
+                if ((s16)func_8009FD7C(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25]) != 0)
+                {
+                    *(s16 *)(d + 0x2A) =
+                        func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+                }
+            }
+        }
+    }
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((*(u16 *)(c + 0x14) & 0x40) != 0)
+    {
+        return;
+    }
+    e3 = D_b18_80174D4C;
+    if (*(u8 **)(c + 0x2C) == e3)
+    {
+        return;
+    }
+    *(u8 **)(c + 0x2C) = e3;
+    func_80047784(c, e3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+}
 
 /* The banked room script's step-the-walk handler, the relinked twin of the
    landed func_b07_80171570 in csrc/ovl_dng_b07.c (itself the resident
@@ -1208,7 +1447,292 @@ void func_b18_80172600(u8 *p, void *b, void *c, void *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_80172664);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_80172AB4);
+/* The actor's +0x9B state machine for the three-slot carry, grown to SEVEN
+   states: state 0 picks the slot triple out of (d + 0x46) & 0x3FFF and hands
+   it to func_800A94A0, state 1 arms the D_80174D9C dress and the +0x96
+   countdown, state 2 runs that countdown against b->unk_14 and swaps in
+   D_80174DA4, state 3 waits on func_8003F270 and falls into state 4's
+   c+0x14 gate, state 5 dresses from D_80174D94 and jumps the state byte
+   straight to 0xFF, and state 0xFF is the teardown that re-installs
+   func_b18_80170E7C. 422 words, 0 differing, first compile.
+   1 member (dngfam.py), so the yield is its own 422 words.
+
+   `xsibs.py' finds NO sibling for this one at any ratio -- its 422 words
+   against the twin's 316 put it under the floor. THE CALLEE-SET GREP FOUND IT:
+   func_800A94A0, func_800DA840, func_800A05A4, func_8003F270 and D_8006DE24
+   all land on csrc/ovl_dng_b03.c, and inside it on func_b03_80172A24, whose
+   states 0, 1 and 2 are this function's states 0, 3 and 0xFF verbatim.
+
+   ALL FOUR OF func_b03_80172A24's NAMED FACTS CARRIED OVER UNCHANGED, which
+   is why this landed on the first compile; their scores are b03's and are not
+   re-measured on this body:
+     * `k' MUST BE `s16' -- as `s32' b03 loses the target's
+       `addu $v0, $s5, $zero' ahead of the `beqz';
+     * THE INNER (three-case) SWITCH'S ARMS MUST BE WRITTEN 3, 2, 1, because
+       cross-jumping merges the table switch's 1/2/3 arms into them and their
+       emission order is what the table's `j's point at;
+     * `D_8008346C = 0' GOES BEFORE THE D_800814A8 DECREMENT, so the `lw' of
+       D_800814A8 has that `sw' to fill its load delay;
+     * THE D_8006DE24 RECORD NEEDS BOTH THE POINTER LOCAL AND THE INDEX LOCAL.
+
+   THE FOUR NEW STATES, read off the listing. They are all dress-and-advance
+   arms sharing the `p[0x9B]++' tail that cross-jumping gives them, so each
+   needs its OWN table local (`e2'/`e3'/`e4'/`e5') for the same reason state
+   0xFF's dress does. State 1 splits on c+0x14's 0x8000 then 0x6000 off ONE
+   `lhu' (cse shares it) and ends by laying 0xFFF00000 into b->unk_14; state 2
+   adds 0x10000 to b->unk_14 each frame and tests the decremented +0x96 with
+   `n > 0' where b03's state 2 tests `n <= 0'; state 4's gate is
+   `!(c[4] == 1 && (c+0x14 & 0x1000)) && (c+0x14 & 0xE000) == 0' -- b03's
+   state 2 head is the same shape with 4 for 1 and an `||', and it also sets
+   c+0x14's 0x800, which this one does not.
+
+   THIS FUNCTION OWNS jtbl_b18_80170838, the 7-entry table at 0x80170838 for
+   state 0's FIRST switch -- the (d + 0x1C) & 0x2000 arm. Entries: 1 -> d+8,
+   2 -> d+0xB, 3 -> d+0xE, 4 -> `default' (NULL, no label of its own),
+   5 -> d+8 with k=1, 6 -> d+0xB with k=1, 7 -> d+0xE with k=1. The second
+   switch (the `else') has only three cases and compiles to a compare chain,
+   so the unit gets one new table here and not two. The seven-way dispatch on
+   p[0x9B] itself is a compare tree, not a table.
+
+   `--raw' is 70 differing and every one is a relocation -- 15 `jal's,
+   19 `j's and 36 `%hi'/`%lo' halves (5 D_80083228 `lh's, 2 D_800814A8 `lw's,
+   1 D_8008346C `sw' and their `lui's, plus the table and symbol pairs) -- so
+   no masked word hides a constant address. */
+void func_b18_80172AB4(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    SVECTOR t;
+    Unk8006DE24 *tbl;
+    u8 *g;
+    u8 *e;
+    u8 *m;
+    u8 *q;
+    u8 *g2;
+    u8 *e2;
+    u8 *e3;
+    u8 *e4;
+    u8 *e5;
+    s16 k;
+    s32 i;
+    s32 x;
+    s32 y;
+    s16 n;
+
+    k = 0;
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u32 *)(d + 0x1C) & 0x2000) != 0)
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 7:
+                k = 1;
+            case 3:
+                g = d + 0xE;
+                break;
+            case 6:
+                k = 1;
+            case 2:
+                g = d + 0xB;
+                break;
+            case 5:
+                k = 1;
+            case 1:
+                g = d + 0x8;
+                break;
+            default:
+                g = NULL;
+                break;
+            }
+        }
+        else
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 3:
+                g = d + 0xE;
+                break;
+            case 2:
+                g = d + 0xB;
+                break;
+            case 1:
+                g = d + 0x8;
+                break;
+            default:
+                g = NULL;
+                break;
+            }
+        }
+        if (g[0] != 0)
+        {
+            *(u16 *)(p + 0x98) &= 0xFF7F;
+            if (k != 0)
+            {
+                m = (u8 *)D_800814A8;
+                *(s32 *)(d + 0x60) = (s32)m;
+                q = *(u8 **)(m - 0x14);
+                d[0x72] = q[0x24];
+                d[0x73] = q[0x25];
+            }
+            else
+            {
+                tbl = D_8006DE24;
+                i = g[0];
+                e = (u8 *)&tbl[i];
+                if (e[0x12] == 2)
+                {
+                    m = *(u8 **)(d + 0x60);
+                    if (m != NULL)
+                    {
+                        q = *(u8 **)(m - 0x14);
+                        d[0x72] = q[0x24];
+                        d[0x73] = q[0x25];
+                    }
+                }
+                else
+                {
+                    *(s32 *)(d + 0x60) =
+                        func_800A05A4(d, c[0x24], c[0x25], *(s16 *)(d + 0x2A), 0x10);
+                    x = *(s8 *)(d + 0x72);
+                    y = *(s8 *)(d + 0x73);
+                    d[0x72] = __builtin_abs(x);
+                    d[0x73] = __builtin_abs(y);
+                }
+            }
+            t.vx = *(u16 *)((u8 *)b + 0x2);
+            t.vy = *(u16 *)((u8 *)b + 0x6);
+            t.vz = *(u16 *)((u8 *)b + 0xA);
+            if (func_800A94A0(d, g, k, p + 0x98) == 0)
+            {
+                break;
+            }
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+            func_800A56E0(0x703);
+            func_800DA840(&t, (g[0] - 1) % 3);
+            p[0x9B]++;
+        }
+        else
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            D_8008346C = 0;
+            *(u16 *)(D_800814A8 + 0xA6) -= 1;
+            func_800A4ACC(d);
+            d[0x6D] -= 1;
+            *(s32 *)(p + 0x8C) = (s32)func_b18_80170E7C;
+            d[0x73] = 0;
+            d[0x72] = 0;
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+        break;
+    case 1:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 3;
+            break;
+        }
+        if ((*(u16 *)(c + 0x14) & 0x6000) == 0)
+        {
+            break;
+        }
+        e2 = D_80174D9C;
+        *(u8 **)(c + 0x2C) = e2;
+        func_80047784(c, e2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(u16 *)(p + 0x98) |= 8;
+        *(s32 *)(d + 0x1C) &= ~0x8000000;
+        *(s16 *)(p + 0x96) = 8;
+        b->unk_14 = 0xFFF00000;
+        p[0x9B]++;
+        break;
+    case 2:
+        b->unk_14 += 0x10000;
+        n = *(u16 *)(p + 0x96) - 1;
+        *(s16 *)(p + 0x96) = n;
+        if (n > 0)
+        {
+            break;
+        }
+        e3 = D_80174DA4;
+        *(u8 **)(c + 0x2C) = e3;
+        func_80047784(c, e3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        b->unk_14 = 0;
+        p[0x9B]++;
+        break;
+    case 3:
+        if (func_8003F270() != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x800;
+            break;
+        }
+        *(u16 *)(c + 0x14) &= 0xF7FF;
+        p[0x9B]++;
+    case 4:
+        if (!(*(s8 *)(c + 0x4) == 1 && (*(u16 *)(c + 0x14) & 0x1000) != 0) &&
+            (*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        *(s16 *)(p + 0x96) = 3;
+        *(u16 *)(p + 0x98) |= 0x80;
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        e4 = D_80174D9C;
+        *(u8 **)(c + 0x2C) = e4;
+        func_80047784(c, e4[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(u16 *)(p + 0x98) &= 0xFFF7;
+        *(s32 *)(d + 0x1C) |= 0x8000000;
+        p[0x9B]++;
+        break;
+    case 5:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        e5 = D_80174D94;
+        *(u8 **)(c + 0x2C) = e5;
+        func_80047784(c, e5[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        p[0x9B] = 0xFF;
+        break;
+    case 0xFF:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        if (*(u8 **)(c + 0x2C) != D_b18_80174D4C)
+        {
+            *(u8 **)(c + 0x2C) = D_b18_80174D4C;
+            func_80047784(c,
+                          (*(u8 **)(c + 0x2C))[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7],
+                          0);
+        }
+        g2 = (u8 *)&D_80083460;
+        if (*(s32 *)(g2 + 0xC) != 0)
+        {
+            break;
+        }
+        *(u16 *)(g2 + 0xA) -= 1;
+        *(u16 *)(c + 0x14) &= 0xF7FF;
+        *(s32 *)(p + 0x8C) = (s32)func_b18_80170E7C;
+        func_800A4ACC(d);
+        if (*(s8 *)(d + 0x6D) > 0)
+        {
+            d[0x6D] = d[0x6D] - 1;
+        }
+        d[0x73] = 0;
+        d[0x72] = 0;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        func_800A56E0(0xB4);
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_8017314C);
 
@@ -1658,7 +2182,76 @@ s32 func_b18_80173F68(u8 *p, UnkVec *v, u8 *s)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_80173FF4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_8017406C);
+/* The bank's 0x212 particle spawner: allocate a node, install
+   func_b18_80173FF4 as its +0x10 step, dress the slot from D_80045340 and
+   D_800DEC70 with a 0x800/0x800 scale and a 0x60/0xFF/0xFF colour, copy the
+   caller's mover into the node's own and its first two words into the
+   payload's +0x40/+0x44, and light the renderable up with +0x12 = 0x7DCF.
+   77 words, 0 differing, first compile. 1 member (dngfam.py).
+
+   NOT A RELINKED TWIN -- `xsibs.py' finds no sibling at any ratio. The
+   structural template is the resident overlay's func_800B2230
+   (csrc/ovl_dungeon_800A4B88.c, 48 words), found by grepping the callee set
+   (func_8003FC64 + D_800DEC70): the same func_8003FC64(0x212) / +0x10
+   install / func_8004491C(n, D_80045340) / func_8003DB94(r, D_800DEC70, ...)
+   skeleton, with the whole-UnkVec block move replaced by three halfword
+   copies and the payload stores.
+
+   TWO SPELLINGS ARE READ OFF THE LISTING RATHER THAN GUESSED:
+     * `r' IS ASSIGNED TWICE, not once. The target reloads n->unk_0C after the
+       stores through `m' and through `v + 0x40', because those stores
+       invalidate it; a single `r' would hold the first load across them.
+     * THE PAYLOAD'S +0x00 STORE IS SPELLED OFF `n', NOT OFF `v'. The target's
+       `sb $v0, 0x20($s2)' uses the node base where every other payload access
+       uses $s0 = n + 0x20, so it is written `*((u8 *)n + 0x20) = 0xFF' while
+       +0x01, +0x02, +0x1A, +0x40 and +0x44 go through `v'.
+   Both were right on the first compile, so neither has a rejected score to
+   quote. The third parameter is never read -- the only caller,
+   func_b18_801741A0, passes $a0/$a1/$a2 and only $a1 is used.
+
+   `s32 func_8004491C(UnkNode *, u32);' IS NEW TO THE UNIT. func_b18_8017087C
+   above was already calling it with no declaration at all (implicit `int');
+   adding the prototype leaves it at 117 words / 0 differing, re-measured.
+
+   `--raw' is 10 differing and every one is a relocation -- the 4 `jal's and
+   the 3 `%hi'/`%lo' pairs for D_80045340, func_b18_80173FF4 and D_800DEC70. */
+void func_b18_8017406C(u8 *p, UnkVec *b, u8 *c)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *v;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        v = (u8 *)n + 0x20;
+        *(s16 *)(v + 0x1A) = 0xF;
+        n->unk_10 = (u32)func_b18_80173FF4;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x20;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        *(s32 *)(v + 0x40) = b->unk_00;
+        *(s32 *)(v + 0x44) = b->unk_04;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)b + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)b + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)b + 0xA);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x800;
+        r->unk_1C = 0x800;
+        r->unk_0C[2] = 0x60;
+        r->unk_0C[1] = 0xFF;
+        r->unk_0C[0] = 0xFF;
+        *((u8 *)n + 0x20) = 0xFF;
+        v[1] = r->unk_0C[1];
+        v[2] = r->unk_0C[2];
+        func_8003DB94(r, D_800DEC70, func_80069EF8() & 1);
+        r->unk_12 = 0x7DCF;
+        r->unk_14 |= 0x100;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b18", func_b18_801741A0);
 

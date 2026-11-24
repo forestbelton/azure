@@ -145,6 +145,10 @@ void func_b36_80171FC0(u8 *p, UnkVec *b, u8 *c, u8 *d);
 s32 func_b36_801721F8(u8 *a, void *b, void *c, s32 d);
 void func_b36_801720D8(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
+void func_800A2B04(UnkVec *, s32, s32);
+extern u8 D_80174A94[];
+extern u8 D_80174A9C[];
+
 u8 *func_b36_80170894(s16 a, u16 b, u16 c, s16 d)
 {
     UnkNode *n;
@@ -980,7 +984,125 @@ void func_b36_8017233C(u8 *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b36", func_b36_801723D4);
+/* The resident overlay's func_800D991C (csrc/ovl_dungeon_800D50FC.c) with this
+   bank's allocation: the same three-case +0x9B switch that falls through arm
+   to arm, the same two-numerator divide in case 1, the same `-= 1' countdown
+   tail, the same D_80083460+0x8 decrement and the same func_800AD9B4 handler
+   install. 223 words, 0 differing. 3 copies (dngfam.py).
+
+   Four things differ from the resident twin and all four are this copy's own:
+   case 0 is GATED on `(*(u16 *)(c + 0x14) & 0x6000)' and the failing gate
+   leaves the switch entirely; the facing publish is this unit's
+   func_80047784 byte-table call against the bank-local D_80174A94 (case 0)
+   and D_80174A9C (case 2) where the resident calls func_8003DB94 against
+   D_800E262C; the sub-counter is +0x9E and its accumulator +0xA0 (the
+   resident uses +0x96/+0xA4 and a 0xFFF00000 gravity ramp), and case 1's
+   step is `-func_800644B8(h * 409) << 9' instead.
+
+   THE TAIL GATE'S 0x2000 ARM MUST BE THE `then', NOT THE `else'. Written
+   `if ((v & 0x2000) == 0) { 0x410/0x20000 } else { 0x46 & 0x8000 }' the
+   function is still 223 words but the (d + 0x46) arm is emitted AFTER the
+   func_800A0818 arm: 17 aligned differences, 7 of them the whole arm moved.
+   The 0x410 and 0x20000 tests stay NESTED inside the `else if' -- the
+   resident twin's note applies here too, fold_truthop would merge them.
+
+   The two numerators keep the resident's asymmetry: the first is the
+   three-statement `u = c[0x24] << 6; w = b2 - 0x20; u -= w;' form and the
+   second the two-statement one. */
+void func_b36_801723D4(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 u;
+    s32 w;
+    s32 v;
+    u16 x;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x6000) == 0)
+        {
+            break;
+        }
+        *(u8 **)(c + 0x2C) = D_80174A94;
+        func_80047784(c, D_80174A94[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(u16 *)(p + 0x98) |= 8;
+        *(s32 *)(d + 0x1C) &= ~0x8000000;
+        *(s16 *)(p + 0x9E) = 5;
+        *(s32 *)(p + 0xA0) = 0;
+        p[0x9B] += 1;
+    case 1:
+        *(s32 *)(p + 0x90) -= *(s32 *)(p + 0xA0);
+        if (*(s16 *)(p + 0x9E) != 0)
+        {
+            u = c[0x24] << 6;
+            w = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            u -= w;
+            b->unk_0C = (u << 16) / *(s16 *)(p + 0x9E);
+            w = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - w) << 16) / *(s16 *)(p + 0x9E);
+            *(s32 *)(p + 0xA0) = -func_800644B8(*(s16 *)(p + 0x9E) * 409) << 9;
+        }
+        *(s32 *)(p + 0x90) += *(s32 *)(p + 0xA0);
+        if ((*(s16 *)(p + 0x9E) -= 1) < 0)
+        {
+            *(s32 *)(p + 0x90) = 0;
+            *(u16 *)(p + 0x98) &= ~8;
+            *(s32 *)(d + 0x1C) |= 0x8000000;
+            p[0x9B] += 1;
+        }
+    case 2:
+        if ((*(s32 *)(d + 0x1C) & 0x8000000) != 0)
+        {
+            *(u16 *)(p + 0x98) &= ~8;
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            *(u8 **)(c + 0x2C) = D_80174A9C;
+            func_80047784(c, D_80174A9C[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            p[0x9B] += 1;
+        }
+        break;
+    }
+
+    if ((*(s16 *)(p + 0x96) -= 1) > 0)
+    {
+        return;
+    }
+    b->unk_14 = 0;
+    b->unk_10 = 0;
+    b->unk_0C = 0;
+    func_800A2B04(b, c[0x24], c[0x25]);
+    func_800AD594(d, 4);
+    func_800A4ACC(d);
+    g = (u8 *)&D_80083460;
+    if (*(s16 *)(g + 0x8) != 0)
+    {
+        *(u16 *)(g + 0x8) -= 1;
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) != 0)
+    {
+        if ((*(u16 *)(d + 0x46) & 0x8000) != 0)
+        {
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+    }
+    else if ((v & 0x410) == 0)
+    {
+        if ((v & 0x20000) != 0)
+        {
+            *(s16 *)(d + 0x2A) =
+                func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+        }
+    }
+    if ((s16)func_800AD9B4(c, d) > 0)
+    {
+        *(u32 *)(p + 0x8C) = (u32)func_b36_80170E94;
+        func_800A9A04(d);
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming

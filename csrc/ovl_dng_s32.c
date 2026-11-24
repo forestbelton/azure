@@ -113,6 +113,8 @@ typedef struct UnkDngS58Name12
 } UnkDngS58Name12;
 extern s16 D_80025924;
 
+UnkNode *func_8003FD64(s32, void *);
+
 s32 func_s32_8002403C(u8 *p, UnkVec *v)
 {
     UnkDng73E94SP *sp = (UnkDng73E94SP *)0x1F800000;

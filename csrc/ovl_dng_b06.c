@@ -132,6 +132,8 @@ s32 func_80069EF8();
 void func_b06_801740E4();
 extern u8 D_8017587C[];
 
+UnkNode *func_8003FD64(s32, void *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_8017087C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b06", func_b06_80170BB8);

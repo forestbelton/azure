@@ -74,6 +74,8 @@ extern u8 D_800256E0[];
 UnkNode *func_8003FC64(s32);
 void func_s51_80024104(u8 *p);
 
+UnkNode *func_8003FD64(s32, void *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_8002405C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_80024104);

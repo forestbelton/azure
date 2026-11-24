@@ -158,6 +158,36 @@ ones in the same order:
 
 Shape similarity cannot see a partial match. The callee set can.
 
+**THE RECIPE, which has now found a twin six times that `xsibs` scored below
+threshold.** Take four or five of the most distinctive symbols out of your
+listing, `grep -ln` each ONE AT A TIME over the landed side, and INTERSECT the
+file lists:
+
+    for s in func_800A94A0 func_800DA840 func_800A05A4 D_8006DE24; do
+        grep -ln $s csrc/ovl_dungeon*.c csrc/ovl_dng_*.c
+    done | sort | uniq -c | sort -rn | head
+
+The file in every list has the function; then grep those same symbols inside
+it to find which one. `func_b18_80172AB4` is 422 words and its twin is 316 --
+a size ratio shape matching cannot see past -- and it landed on the FIRST
+COMPILE because the twin's comment already carried four measured spelling
+facts. That one grep was worth 499 of that agent's 844 words.
+
+**PICK THE SYMBOLS THE *TAIL* USES, not just the callees.** For
+`func_b35_801728C4` the `func_800xxxxx` callees found nothing and the two
+distinctive globals `D_800E3DE8` and `D_8008346C` found it at once, because
+those are what the shared teardown touches.
+
+## IF THE RESIDUE IS A WHOLE BLOCK IN THE WRONG PLACE, CHECK WHICH ARM IS THE `then`
+
+Two agents reached this independently in one batch. When a body is the right
+word count (or one off) and the residue is a block emitted in the wrong
+position, the likeliest cause is that a two-arm gate is written with the arms
+the wrong way round -- `if (x == 0) { A } else { B }` where the target has
+`if (x != 0) { B } else { A }`. It costs 7 and 17 aligned differences in the
+two measured cases, with every row being the moved block and the inverted
+branch. Check that before anything else; it is one character.
+
 ## FIND THE RESIDENT TWIN FIRST. IT IS USUALLY THE WHOLE ANSWER.
 
 This is the single most useful fact about this block. The banked room scripts

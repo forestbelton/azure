@@ -49,6 +49,8 @@ typedef struct UnkDng74334SP
 s32 func_80069EF8();
 void func_s37_80024ED4();
 
+UnkNode *func_8003FD64(s32, void *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_80024094);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_80024A5C);

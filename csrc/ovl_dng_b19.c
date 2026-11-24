@@ -173,6 +173,8 @@ s32 func_b19_80170884(u8 *p, UnkVec *v);
 
 void func_b19_80170BFC(u8 *p, UnkVec *v);
 
+s32 func_80069EF8();
+
 s32 func_b19_80170884(u8 *p, UnkVec *v)
 {
     UnkDng708A4SP *sp = (UnkDng708A4SP *)0x1F800000;

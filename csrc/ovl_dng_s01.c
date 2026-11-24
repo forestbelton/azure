@@ -49,6 +49,8 @@ s32 func_80069EF8();
 void func_s01_80024448();
 s32 func_s01_80024024(u8 *p, UnkVec *v);
 
+UnkNode *func_8003FD64(s32, void *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s01", func_s01_80024024);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s01", func_s01_80024280);

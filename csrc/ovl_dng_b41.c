@@ -131,6 +131,37 @@ typedef struct UnkDng74334SP
 } UnkDng74334SP;
 extern u8 D_801748B8[];
 
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+extern s32 D_8008346C;
+void func_800A2B04(UnkVec *, s32, s32);
+s32 func_800A56E0(s32);
+extern u8 *D_800E3DE8;
+u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b41", func_b41_8017088C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b41", func_b41_80170A78);
@@ -838,7 +869,85 @@ void func_b41_801725EC(u8 *p, void *b, void *c, void *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b41", func_b41_80172650);
+/* The same four-call tail the landed func_b45_801726C4
+   (csrc/ovl_dng_b45.c) and func_b37_80172A7C run -- func_800A2B04,
+   func_800AD594, the +0x8C handler park, D_8008346C = 0, func_800A4ACC and
+   the +0x6D two-arm -- in front of a FOUR-state +0x9B machine instead of
+   their three. 121 words, 0 differing on the first compile. 2 copies
+   (dngfam.py).
+
+   What this copy has that func_b45_801726C4 does not: no leading
+   `--*(s16 *)(p + 0x96)'; a state 0 that is only `p[0x9B] = 1' and falls
+   through; this bank's D_801748B8 facing table published through
+   func_80047784; three b zero-stores and a `*(s16 *)(p + 0x96) = 0' on the
+   state-1 else path; a state 2 whose gate is the countdown itself; and
+   `p[0x9B] += 1' in place of the `0xFF' terminal state -- which is why
+   states 1 and 2 share one `addiu'/`sb' pair by cross-jumping.
+
+   STATE 2's COMPARE IS AGAINST A LITERAL 2 EVEN THOUGH THE TARGET SPELLS IT
+   `bne $v0, $v1'. $v1 still holds the dispatch's `lbu 0x9B($s1)' and cse
+   knows it equals 2 inside the arm, so the literal is folded onto the live
+   register. The increment is the value of the test --
+   `if ((*(s16 *)(p + 0x96) += 1) == 2)' -- which is what produces the
+   `sll 16'/`sra 16' sign-extension of the stored halfword.
+
+   The +0x6D arm order is func_b45_801726C4's documented fact and it holds
+   here: `== 0' with the +0x46 mask as the FIRST arm.
+   THIS COPY'S OWN CONSTANT: 0x804 -> 0x808.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b41_80172650(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    switch (p[0x9B])
+    {
+    case 0:
+        p[0x9B] = 1;
+    case 1:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 3;
+            *(u16 *)(c + 0x14) |= 0x6000;
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        *(u8 **)(c + 0x2C) = D_801748B8;
+        func_80047784(c, D_801748B8[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(s16 *)(p + 0x96) = 0;
+        p[0x9B] += 1;
+        return;
+    case 2:
+        if ((*(s16 *)(p + 0x96) += 1) == 2)
+        {
+            func_800A56E0(0x808);
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            p[0x9B] += 1;
+        }
+        return;
+    case 3:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        func_800A2B04(b, c[0x24], c[0x25]);
+        func_800AD594(d, 0x100);
+        *(u32 *)(p + 0x8C) = (u32)func_b41_80171058;
+        D_8008346C = 0;
+        func_800A4ACC(d);
+        if (*(s8 *)(d + 0x6D) == 0)
+        {
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+        else
+        {
+            D_800E3DE8 = d - 0x20;
+        }
+        return;
+    }
+}
 
 /* 0x10 bytes of this bank's own rodata, between its jump tables,
    read by func_b41_801722E0. Spelled as BYTES because that is all the
