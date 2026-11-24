@@ -49,3 +49,19 @@ parks appear to contradict each other on whether the array-ref or the integer
 address form matches, and the resolution (symbol base vs pointer-local base)
 is a spelling neither agent tested. You only see that with both tables in
 front of you.
+
+
+## WHEN A PARK LANDS, DELETE ITS FILE
+
+After batch 12 two of the seven files here named functions that were already
+landed, so an agent told to `ls docs/dng-parks/` would have taken one for an
+available residue. This directory means "still a stub and still measured",
+and a file that is neither makes it lie.
+
+Delete the file in the same change that lands the function. Nothing is lost:
+the mechanism and the load-bearing spellings belong in the landed function's
+comment in `csrc/`, anything that transfers to another function belongs in
+`docs/matching-levers.md` -- which is indexed and which the brief tells every
+agent to read -- and git has the file itself at its full content if anyone
+ever wants the whole rejected table back. A third copy in a directory nobody
+opens is not an archive.

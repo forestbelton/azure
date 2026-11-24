@@ -155,6 +155,65 @@
    from before the loop until the two stores after it, so neither can carry a
    constant.
 
+
+   DISPATCHER PASS 2, 2026-11-23 (batch 12): THE THREE "abs() BLOCKS" SHOULD
+   BE ACTUAL `abs()' FOR x AND y, AND THAT IS 12 OF THE 65 ROWS.
+
+       this park's body, all three written manually     438 words,  65
+       abs() on the x delta only                        438 words,  59
+       abs() on the y delta only                        438 words,  59
+       abs() on x AND y, z left manual                  438 words,  53  <-- BEST
+       abs() on all three                               436 words,  43  (2 SHORT)
+
+   So take the body to `out[0] = abs(*(s16 *)(n + 0x2) - *(s16 *)((u8 *)b +
+   0x2));' and the same for `out[1]', and LEAVE THE z BLOCK AS IT IS. `abs'
+   expands to mips.md's in-place `abssi2' arm -- `bgez' / a real `nop' /
+   `negu' on one register -- which is two words where the manual
+   `if (d < 0) { d = -d; }' is three, so each substitution that the target did
+   NOT make shows up immediately as a word short. x and y keep the length and
+   drop six rows each; z loses a word, which is the measurement that says the
+   target's z delta really is the manual shape.
+
+   The lead for this came from func_b09_80170A84, a park cleared outright the
+   same day by exactly this substitution (docs/matching-levers.md, "A
+   PROXIMITY TEST IS ONE `&&' CHAIN OF INLINE abs()"). There the temporaries
+   were the whole residue; here they are 12 rows of 65, because this body
+   stores the results into `out[]' rather than testing them, so removing `d'
+   does not remove a scheduling window -- it only removes the one subtraction
+   whose operand order window 1 is about.
+
+   AND THE OPERAND-ORDER IDEA IS DISPROVED, which is worth more than the 12
+   rows because it was the obvious next move. `|A - B| == |B - A|', so with an
+   abs the source may write the subtraction either way round, and
+   `expand_expr's `binop:' always expands operand 0 first -- so swapping the
+   operands looked like the way to make the SUBTRAHEND get the earlier
+   register and resolve window 1's $v0/$v1 exchange. It does not. All eight
+   swap combinations, on top of the best abs pattern and on the all-manual
+   body:
+
+       abs,abs,manual   swap none                       438 words,  53
+                        swap y / swap x                 438 words,  55 / 55
+                        swap x and y                    438 words,  57
+                        any combination including z     437 words (SHORT)
+       all manual       swap none / swap x / swap y     438 words,  65 / 63 / 65
+
+   Swapping is inert or slightly worse, never better, and swapping z always
+   costs the word. So window 1 is NOT reachable by operand order, and the
+   park's standing advice -- read the `-da' dump and name the two pseudos --
+   is still the only open route.
+
+   A WARNING ABOUT MEASURING THIS PARK, because I got it wrong for an hour:
+   `aligndiff.py' prints `R', `+', `-' and `X' rows and then a summary line,
+
+       built 438 words, target 438 words, 53 aligned differences
+
+   and the figure in every park header is THAT LINE. Counting only the `R'
+   rows gives 30 for this body against the 53 above, which looks like a park
+   header gone stale by 50% -- I believed that and said so -- and worse, on
+   the func_s27_80024E64 park the two metrics RANK THE VARIANTS DIFFERENTLY:
+   R-rows alone pick a candidate that the real figure scores at 151 against a
+   145 it ranks lower. Read the summary line.
+
    DECLARATIONS
    u8 *func_8003DE58(u8 *, UnkSlot *, s16 *, s16);
    s32 func_800A44E0(s32, s32, s16, u32);

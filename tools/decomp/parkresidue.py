@@ -7,7 +7,8 @@ and a header can simply be wrong. On 2026-11-16 I ranked a batch by scraping
 headers with a regex and told an agent a park was at 6 differing when it was
 at 33 -- the regex had matched a number from the prose.
 
-This splices each park's body into the CURRENT csrc/ovl_dungeon.c and runs
+This splices each park's body into the CURRENT unit that carries its stub
+(either block: `csrc/ovl_dungeon*.c' or `csrc/ovl_dng_*.c') and runs
 aligndiff, so the ranking is a measurement. It also catches a park that no
 longer compiles, which is the more valuable failure to find early.
 
@@ -34,10 +35,40 @@ UNIT = os.path.join(PROJ, "csrc/ovl_dungeon.c")
 # which looks like a malformed park rather than a stale tool.
 UNIT_GLOB = os.path.join(PROJ, "csrc/ovl_dungeon*.c")
 
+# AND DUNGEON.BIN's 116 CARVED OBJECTS ARE A SECOND SET, with their own park
+# directory. Both of these were hardcoded to the pre-carve layout, and the
+# cost of that was not a crash but SILENCE: every `ovl_dng_*' park was
+# unreachable, so the one tool whose whole job is "do not trust a park
+# header" never looked at them. Measured on 2026-11-23, batch 12, both were
+# stale by a wide margin and in the SAME direction:
+#
+#     func_s14_80024AE4   header 65 aligned,  actually 42
+#     func_s27_80024E64   header 152 aligned, actually 94
+#
+# Both got better on their own, because siblings landed in their units and
+# brought declarations and callee prototypes with them. A park header is a
+# measurement of a unit that no longer exists, and in both cases a dispatcher
+# reading the header would have mispriced the park by 50%.
+PARK_DIRS = ("docs/dng-parks", "docs/dungeon-parks")
+UNIT_GLOBS = (os.path.join(PROJ, "csrc/ovl_dungeon*.c"),
+              os.path.join(PROJ, "csrc/ovl_dng_*.c"))
+
 
 def unit_paths():
     import glob
-    return sorted(glob.glob(UNIT_GLOB))
+    out = []
+    for g in UNIT_GLOBS:
+        out += glob.glob(g)
+    return sorted(out)
+
+
+def park_path(func):
+    """The park file for FUNC in whichever directory holds it."""
+    for d in PARK_DIRS:
+        p = os.path.join(PROJ, d, "%s.c" % func)
+        if os.path.exists(p):
+            return p
+    return os.path.join(PROJ, PARK_DIRS[0], "%s.c" % func)
 
 
 def unit_of(func):
@@ -410,7 +441,7 @@ def splices(unit, stub, body, decls):
 
 
 def measure(func):
-    park = os.path.join(PROJ, "docs/dungeon-parks/%s.c" % func)
+    park = park_path(func)
     body = body_of(park, func)
     if body is None:
         return func, None, "no definition line in park"
@@ -457,7 +488,8 @@ def main():
             args.append(a)
     funcs = args or sorted(
         os.path.basename(p)[:-2]
-        for p in glob.glob(os.path.join(PROJ, "docs/dungeon-parks/func_*.c")))
+        for d in PARK_DIRS
+        for p in glob.glob(os.path.join(PROJ, d, "func_*.c")))
     rows, bad = [], []
     with cf.ThreadPoolExecutor(max_workers=jobs) as ex:
         for func, res, err in ex.map(measure, funcs):
