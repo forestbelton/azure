@@ -246,6 +246,9 @@ void func_b12_80171F9C(u8 *p, UnkVec *b, u8 *c, u8 *d);
 s32 func_b12_801720B4(u8 *a, void *b, void *c, s32 d);
 void func_b12_8017526C(u8 *p, void *b, void *c, u8 *d);
 
+void func_80044A50(UnkNode *);
+extern s32 D_80175B28;
+
 u8 *func_b12_8017087C(s16 a, u16 b, u16 c, s16 d)
 {
     UnkNode *n;
@@ -2160,7 +2163,50 @@ void func_b12_80173F00(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80173F38);
+/* The 0x212 node's two-state fade: while its +0xC phase is 0, spend the
+   +0xE countdown and step the phase when it runs out; in phase 1, walk the
+   packed colour word at +0x8 down by 0x101010 a frame and kill the node --
+   0x8000 into its -0x2 flags and into D_800814A0 -- once the byte at +0x8
+   has dropped below 0x11. 41 words, 0 differing, first compile.
+
+   NO TWIN: xsibs.py's best offer is town.bin:func_800C907C at ratio 0.635,
+   which is a different function, and the callee set is empty (this body
+   calls nothing). It is plain decompilation, and the one thing that made it
+   immediate is that THE KILL PAIR IS ALREADY IN THIS UNIT: the
+   `*(u16 *)(p - 0x2) |= 0x8000; D_800814A0 |= 0x8000;' couple and its
+   `lhu'/`addiu -1'/`sh'/`sll 16'/`bgtz' countdown are both verbatim out of
+   the landed func_b12_801749A8 below, so no new declaration was needed at
+   all.
+
+   WRITTEN AS A `switch', NOT AN if/else CHAIN, and there is no jump table:
+   two cases compile to the `beqz'/`addiu $v0, 1'/`beq' compare chain the
+   target has, and the listing opens straight at `.section .text'. The
+   subtraction is spelled as the ADDITION of 0xFFEFEFF0 -- one `lui'/`ori'
+   pair and an `addu', which is what `+= 0xFFEFEFF0' gives and what
+   `-= 0x101010' would not. */
+void func_b12_80173F38(u8 *p)
+{
+    switch (*(s16 *)(p + 0xC))
+    {
+    case 0:
+        if ((s16)(--*(u16 *)(p + 0xE)) <= 0)
+        {
+            *(u16 *)(p + 0xC) += 1;
+        }
+        break;
+    case 1:
+        if (p[0x8] < 0x11)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        else
+        {
+            *(s32 *)(p + 0x8) += 0xFFEFEFF0;
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80173FDC);
 
@@ -2289,7 +2335,76 @@ void func_b12_8017526C(u8 *p, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80175318);
+/* The two-phase white-out: with the slot's +0x9A still zero, park the view's
+   +0x8 in the bank-local D_80175B28, re-send the view through func_800478B8
+   and -- only if its +0x14 carries one of 0xE000 -- unlink the node, set the
+   0x10-frame countdown in +0x96 and step +0x9A; every eighth frame of that
+   phase also bumps D_80175B20. Afterwards, ease D_80083160's three
+   +0xA8..+0xAA colour bytes towards 0x80 by (0x80 - v) / +0x96 and, when the
+   countdown runs out, raise 0x8000 in the node's -0x2 and in D_800814A0.
+   86 words, 0 differing, first compile. 2 copies (dngfam.py:
+   func_b12_80175318, func_b16_80173B94).
+
+   xsibs.py FOUND NOTHING for this stub (best 0.633 to
+   dungeon.bin:func_800C4C00) -- the twin came out of the CALLEE-SET GREP the
+   brief describes: `grep -ln func_80044A50' intersected with
+   `grep -ln func_800478B8' leaves six carved units, and all six call
+   func_80044A50 as `func_80044A50((UnkNode *)(p - 0x20))' inside exactly
+   this function. The template is the landed func_b04_801749F4 in
+   csrc/ovl_dng_b04.c, 75 words, and both of its named facts hold here: the
+   `lh' of +0x96 is re-read for each of the three colour bytes (each `sb'
+   through the `u8 *' wipes cse's memory table), and D_80083160 is reached
+   through a `u8 *' base taken BEFORE the gate, which is why its `addiu'
+   sits in the `bnez's delay slot although the only use is in the else arm.
+   The countdown test still reads the decremented value rather than a
+   reload, `(s16)(--*(u16 *)(p + 0x96)) <= 0'.
+
+   THE RELINK IS D_80175220 -> D_80175B28 AND ELEVEN EXTRA WORDS: the
+   state-0 arm ends with `if (((*(u16 *)(p + 0x96))++ & 7) == 0)
+   D_80175B20 += 1;'. The post-increment is load-bearing -- the target stores
+   the BUMPED halfword (`lhu', `addiu 1', `andi 7' on the OLD value, `sh' the
+   new) -- and the arm's exit `j' is reused by the new `bnez', so 75 + 12 - 1
+   = 86. D_80175B20 is the same bank-local halfword func_b12_8017458C below
+   parks in the scratchpad, and its existing `extern s16' declaration serves
+   both uses unchanged.
+
+   `--raw' is 13 differing and all 13 are relocations -- the two `jal's, the
+   one `j' and the ten `%hi'/`%lo' halves for D_80083160, D_80175B28,
+   D_80175B20 and D_800814A0. func_80044A50 and the bank-local D_80175B28
+   are the only new declarations this body needed; D_80083160 and D_800814A0
+   come from include/structs.h. */
+void func_b12_80175318(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+
+    g = (u8 *)&D_80083160;
+    if (p[0x9A] == 0)
+    {
+        D_80175B28 = *(s32 *)(c + 0x8);
+        func_800478B8(c);
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            func_80044A50((UnkNode *)(p - 0x20));
+            *(s16 *)(p + 0x96) = 0x10;
+            p[0x9A] += 1;
+        }
+        if (((*(u16 *)(p + 0x96))++ & 7) == 0)
+        {
+            D_80175B20 += 1;
+        }
+    }
+    else
+    {
+        g[0xA8] += (0x80 - g[0xA8]) / *(s16 *)(p + 0x96);
+        g[0xA9] += (0x80 - g[0xA9]) / *(s16 *)(p + 0x96);
+        g[0xAA] += (0x80 - g[0xAA]) / *(s16 *)(p + 0x96);
+        if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b12", func_b12_80175470);
 

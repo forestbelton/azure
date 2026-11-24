@@ -173,8 +173,6 @@ s32 func_b19_80170884(u8 *p, UnkVec *v);
 
 void func_b19_80170BFC(u8 *p, UnkVec *v);
 
-s32 func_80069EF8();
-
 s32 func_b19_80170884(u8 *p, UnkVec *v)
 {
     UnkDng708A4SP *sp = (UnkDng708A4SP *)0x1F800000;
@@ -353,7 +351,7 @@ void func_b19_80170D28(UnkNode *a, s16 b, u32 c, s16 f, s16 dx, s16 dy, s16 dz)
    `n->unk_0C' and the same `*(u32 *)p = c; *(u32 *)(p + 0x8) = c;' tail.
    Three deltas from that twin, all read off the listing: the position offset
    is the caller's own `dx'/`dy'/`dz' (z again less 0x64) rather than a
-   D_800E2468 row, the random velocity is func_80069EF8 rather than rand()
+   D_800E2468 row, the random velocity is rand rather than rand()
    and is `<< 7' on all three axes rather than 6/6/5, and there is no
    constant drift along the row -- so the step is func_b19_80170BFC and the
    +0x32/+0x34 life is 5. 85 words, 0 differing.
@@ -379,9 +377,9 @@ void func_b19_80170F2C(UnkNode *a, s16 b, u32 c, s16 f, s16 dx, s16 dy, s16 dz)
         *(s16 *)((u8 *)n->unk_08 + 0x6) = *(u16 *)((u8 *)a->unk_08 + 0x6) + dy;
         *(s16 *)((u8 *)n->unk_08 + 0xA) = *(u16 *)((u8 *)a->unk_08 + 0xA) + dz - 0x64;
         *(s16 *)((u8 *)n->unk_0C + 0x6) = 6;
-        *(s32 *)((u8 *)n->unk_08 + 0xC) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 7;
-        *(s32 *)((u8 *)n->unk_08 + 0x10) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 7;
-        *(s32 *)((u8 *)n->unk_08 + 0x14) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 7;
+        *(s32 *)((u8 *)n->unk_08 + 0xC) = ((rand() & 0x7FFF) - 0x4000) << 7;
+        *(s32 *)((u8 *)n->unk_08 + 0x10) = ((rand() & 0x7FFF) - 0x4000) << 7;
+        *(s32 *)((u8 *)n->unk_08 + 0x14) = ((rand() & 0x7FFF) - 0x4000) << 7;
         p = (u8 *)n + 0x20;
         *(s16 *)(p + 0x14) = b;
         *(s16 *)(p + 0x32) = 5;

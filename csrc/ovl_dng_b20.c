@@ -206,7 +206,6 @@ extern u8 D_8003E140[];
 extern u8 D_800DCF5C;
 extern u8 D_8014A000[];
 UnkNode *func_8003FC64(s32);
-s32 func_80069EF8(void);
 void func_8003DB94(void *, void *, s32);
 void func_80041588(Unk41284 *, s8 *, s32);
 u32 func_800445E0(void);
@@ -1881,7 +1880,7 @@ void func_b20_80173CFC(u8 *a, UnkVec *b, u8 *c, s16 d)
         *((u8 *)r + 0xE) = 0x30;
         *((u8 *)r + 0xD) = 0x30;
         *((u8 *)r + 0xC) = 0x30;
-        r->unk_1A = func_80069EF8() & 0xFFF;
+        r->unk_1A = rand() & 0xFFF;
         *(UnkDngB20Name12 *)((u8 *)n + 0x9A) = *(UnkDngB20Name12 *)D_80175324;
         r->unk_08 = (u32)((u8 *)n + 0x9A);
     }
@@ -2144,7 +2143,7 @@ void func_b20_80174D14(u8 *p, UnkVec *b, u8 *c, u8 *d)
         k = func_800498A0(d) - 1;
         if (k < 0)
         {
-            k = func_80069EF8() % 3;
+            k = rand() % 3;
         }
         func_8003DB94(r, D_8014A000 + D_80175318[k], 0);
         *(u16 *)(c + 0x14) |= 0x80;

@@ -46,7 +46,6 @@ typedef struct UnkDng74334SP
     u8 pad_D8[0x28];
     s32 unk_100;
 } UnkDng74334SP;
-s32 func_80069EF8();
 void func_s42_800243A4();
 
 UnkNode *func_8003FD64(s32, void *);
@@ -144,7 +143,7 @@ s32 func_s42_80024154(u8 *p, UnkVec *v)
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s42", func_s42_800243A4);
 
 /* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
-   each axis by a fresh func_80069EF8() & 0x1F and the caller's own offset
+   each axis by a fresh rand() & 0x1F and the caller's own offset
    less 0x10, then park func_s42_800243A4 as the step and
    func_s42_80024154 as the draw, with `b` at the payload's +0x14, `d` at
    +0x32 and `c` at +0x8.  72 words, 0 differing.  The twin is
@@ -177,11 +176,11 @@ void func_s42_80024470(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     {
         n->unk_10 = (u32)func_s42_800243A4;
         *(s16 *)((u8 *)n->unk_08 + 0x2) =
-            *(u16 *)((u8 *)a->unk_08 + 0x2) + (func_80069EF8() & 0x1F) + (s16)(dx - 0x10);
+            *(u16 *)((u8 *)a->unk_08 + 0x2) + (rand() & 0x1F) + (s16)(dx - 0x10);
         *(s16 *)((u8 *)n->unk_08 + 0x6) =
-            *(u16 *)((u8 *)a->unk_08 + 0x6) + (func_80069EF8() & 0x1F) + (s16)(dy - 0x10);
+            *(u16 *)((u8 *)a->unk_08 + 0x6) + (rand() & 0x1F) + (s16)(dy - 0x10);
         *(s16 *)((u8 *)n->unk_08 + 0xA) =
-            *(u16 *)((u8 *)a->unk_08 + 0xA) + (func_80069EF8() & 0x1F) + (s16)(dz - 0x10);
+            *(u16 *)((u8 *)a->unk_08 + 0xA) + (rand() & 0x1F) + (s16)(dz - 0x10);
         p = (u8 *)n + 0x20;
         *(s16 *)(p + 0x14) = b;
         *(s16 *)(p + 0x32) = d;
@@ -190,13 +189,13 @@ void func_s42_80024470(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-/* The bank's "random value below n": six masked draws from func_80069EF8,
+/* The bank's "random value below n": six masked draws from rand,
    picked by the size of n, each retried until it falls under n. The mask and
    shift pairs are read straight off the listing -- 0xC >> 2, 0xF0 >> 4,
    0xFC >> 2, 0xFF0 >> 4, then 0xFFF and 0xFFFF unshifted -- and the six
    bounds are the `slti' constants 5, 0x11, 0x41, 0x101, 0x1001 and the
    fall-through. xsibs found no twin at ratio 0.70 and nothing in the project
-   reads func_80069EF8 this way, so this is plain decompilation.
+   reads rand this way, so this is plain decompilation.
 
    Two shape facts read off the listing rather than guessed. The n == 0 test
    shares its `addu $v0, $v1, $zero' with the LAST arm's fall-through at
@@ -220,7 +219,7 @@ s32 func_s42_80024590(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xC) >> 2;
+                r = (rand() & 0xC) >> 2;
             } while (r >= n);
             return r;
         }
@@ -228,7 +227,7 @@ s32 func_s42_80024590(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xF0) >> 4;
+                r = (rand() & 0xF0) >> 4;
             } while (r >= n);
             return r;
         }
@@ -236,7 +235,7 @@ s32 func_s42_80024590(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xFC) >> 2;
+                r = (rand() & 0xFC) >> 2;
             } while (r >= n);
             return r;
         }
@@ -244,7 +243,7 @@ s32 func_s42_80024590(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xFF0) >> 4;
+                r = (rand() & 0xFF0) >> 4;
             } while (r >= n);
             return r;
         }
@@ -252,13 +251,13 @@ s32 func_s42_80024590(s32 n)
         {
             do
             {
-                r = func_80069EF8() & 0xFFF;
+                r = rand() & 0xFFF;
             } while (r >= n);
             return r;
         }
         do
         {
-            r = func_80069EF8() & 0xFFFF;
+            r = rand() & 0xFFFF;
         } while (r >= n);
     }
     return r;

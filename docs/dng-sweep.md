@@ -1396,3 +1396,44 @@ h23 also noted the other half of the same mistake: the snapshot in `csrc/`
 had my own reconciled prototype for `func_b20_8017102C` where its copy keeps
 the unit's pre-existing unprototyped form. Both verify; the hazard is ending
 up with both, which the re-sync resolved.
+
+## 227 call sites were spelling a named function by its raw address
+
+h21's park identifies `func_80065770` as libgte's `RotTransPersN`. It is
+right -- and `splat/common_syms.txt` has carried
+`RotTransPersN = 0x80065770;` all along. The identification was correct and
+redundant, which is the useful part: it means the carved units have been
+writing raw addresses for functions the project already names.
+
+    rand            129 sites in 21 units
+    RotTransPers     30 sites in  4
+    RotTransSV       14 sites in  2
+    AddPrim          12 sites in  2
+    RotTransPers4     6, SetPolyG4 6, PushMatrix 6, PopMatrix 6,
+    SetRotMatrix      6, SetTransMatrix 6, RotMatrix 6
+
+`rand` is the one that matters. Agents have been writing
+`func_80069EF8() & 0x3F` where `rand() & 0x3F` was available, and `rand()` was
+ALREADY the established spelling -- the resident `ovl_dungeon_800D50FC.c` uses
+it, and three carved units did too. So this was an inconsistency between
+agents rather than a convention anyone had chosen, and half the block was
+writing an address where the other half wrote what the code means.
+
+All 227 are renamed, each unit re-verified function by function (248
+functions across 22 units, all still 0 differing), and the units' now-dead
+local declarations removed. Four containers byte-identical, 0 raw references
+left.
+
+**One thing the rename taught me about my own tooling.** Two units failed the
+first pass with `conflicting types for RotTransPers4'. My removal regex
+required the declaration's `;` on the same line, and clang-format had wrapped
+that 10-argument prototype across two -- so the local declaration survived,
+got renamed, and then collided with `libgte.h`'s. Removing declarations
+STATEMENT-WISE through `decl_block` fixed both. That is the fifth time in this
+sweep a line-oriented assumption about C source has been wrong; `decl_block`
+exists precisely because of the first four, and I still reached for a regex.
+
+**Why the brief should ask for the real name.** A raw `func_80069EF8()` tells
+a later agent nothing; `rand()` tells it the function picks a random number,
+which is the single most useful fact about the surrounding code. The check is
+one grep against `splat/common_syms.txt`.

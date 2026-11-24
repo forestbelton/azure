@@ -124,6 +124,49 @@ typedef struct UnkDngB09A28Tbl
     UnkDngB09A28 unk_00[8];
 } UnkDngB09A28Tbl;
 
+void func_800478B8(u8 *);
+typedef struct UnkDng73E94SP
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    u8 pad_06[0x12];
+    u8 *unk_18;
+    u8 pad_1C[0x4];
+    u8 *unk_20;
+    u8 pad_24[0x6C];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x28];
+    s32 unk_C0;
+} UnkDng73E94SP;
+typedef struct UnkDng74334SP
+{
+    u8 pad_00[0xC];
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    Unk3DBD0W unk_18;
+    u8 pad_1C[0x8];
+    u8 *unk_24;
+    u16 unk_28;
+    u8 pad_2A[0xA];
+    VECTOR unk_34;
+    u8 pad_44[0x10];
+    MATRIX unk_54;
+    MATRIX unk_74;
+    u8 pad_94[0x10];
+    SVECTOR unk_A4;
+    u8 pad_AC[0x4];
+    SVECTOR unk_B0[4];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng74334SP;
+void func_80044A50(UnkNode *);
+extern s32 D_801742E8;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170878);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170A58);
@@ -1253,6 +1296,79 @@ void func_b16_80173AE8(u8 *p, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80173B94);
+/* The two-phase white-out: with the slot's +0x9A still zero, park the view's
+   +0x8 in the bank-local D_801742E8, re-send the view through func_800478B8
+   and -- only if its +0x14 carries one of 0xE000 -- unlink the node, set the
+   0x10-frame countdown in +0x96 and step +0x9A; every eighth frame of that
+   phase also bumps D_801742E0. Afterwards, ease D_80083160's three
+   +0xA8..+0xAA colour bytes towards 0x80 by (0x80 - v) / +0x96 and, when the
+   countdown runs out, raise 0x8000 in the node's -0x2 and in D_800814A0.
+   86 words, 0 differing, first compile. 2 copies (dngfam.py:
+   func_b16_80173B94, func_b16_80173B94).
+
+   xsibs.py FOUND NOTHING for this stub (best 0.633 to
+   dungeon.bin:func_800C4C00) -- the twin came out of the CALLEE-SET GREP the
+   brief describes: `grep -ln func_80044A50' intersected with
+   `grep -ln func_800478B8' leaves six carved units, and all six call
+   func_80044A50 as `func_80044A50((UnkNode *)(p - 0x20))' inside exactly
+   this function. The template is the landed func_b04_801749F4 in
+   csrc/ovl_dng_b04.c, 75 words, and both of its named facts hold here: the
+   `lh' of +0x96 is re-read for each of the three colour bytes (each `sb'
+   through the `u8 *' wipes cse's memory table), and D_80083160 is reached
+   through a `u8 *' base taken BEFORE the gate, which is why its `addiu'
+   sits in the `bnez's delay slot although the only use is in the else arm.
+   The countdown test still reads the decremented value rather than a
+   reload, `(s16)(--*(u16 *)(p + 0x96)) <= 0'.
+
+   THE RELINK IS D_80175220 -> D_801742E8 AND ELEVEN EXTRA WORDS: the
+   state-0 arm ends with `if (((*(u16 *)(p + 0x96))++ & 7) == 0)
+   D_801742E0 += 1;'. The post-increment is load-bearing -- the target stores
+   the BUMPED halfword (`lhu', `addiu 1', `andi 7' on the OLD value, `sh' the
+   new) -- and the arm's exit `j' is reused by the new `bnez', so 75 + 12 - 1
+   = 86. D_801742E0 is the same bank-local halfword func_b12_8017458C below
+   parks in the scratchpad, and its existing `extern s16' declaration serves
+   both uses unchanged.
+
+   `--raw' is 13 differing and all 13 are relocations -- the two `jal's, the
+   one `j' and the ten `%hi'/`%lo' halves for D_80083160, D_801742E8,
+   D_801742E0 and D_800814A0. func_80044A50 and the bank-local D_801742E8
+   are the only new declarations this body needed; D_80083160 and D_800814A0
+   come from include/structs.h.
+   THIS COPY'S OWN CONSTANT: 0x7 -> 0x3, 0x1 -> -0x1 at 1 of 2 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b16_80173B94(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+
+    g = (u8 *)&D_80083160;
+    if (p[0x9A] == 0)
+    {
+        D_801742E8 = *(s32 *)(c + 0x8);
+        func_800478B8(c);
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            func_80044A50((UnkNode *)(p - 0x20));
+            *(s16 *)(p + 0x96) = 0x10;
+            p[0x9A] += 1;
+        }
+        if (((*(u16 *)(p + 0x96))++ & 3) == 0)
+        {
+            D_801742E0 += -1;
+        }
+    }
+    else
+    {
+        g[0xA8] += (0x80 - g[0xA8]) / *(s16 *)(p + 0x96);
+        g[0xA9] += (0x80 - g[0xA9]) / *(s16 *)(p + 0x96);
+        g[0xAA] += (0x80 - g[0xAA]) / *(s16 *)(p + 0x96);
+        if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80173CEC);

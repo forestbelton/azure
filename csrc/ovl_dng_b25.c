@@ -68,7 +68,6 @@ void func_80042B68(s8 *, s8);
 s16 func_8009FD40(u8 *, u8 *);
 void func_800AA79C(u8 *, void *, u8 *, u8 *);
 
-s32 func_80069EF8(void);
 s32 func_800A19E4(s32 a, u8 *b, s16 c, s16 d, u8 *out);
 u8 *func_800A02AC(u8 *p, u16 x, u16 y);
 s32 func_800A0818(s16 a, s16 b, s16 c, s16 d, u16 *f);
@@ -112,7 +111,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80171010);
    Seven deltas from func_800D5DCC, every one read off the listing: the z
    seed is `- 0x58' not `- 0x14'; the row entries are `* 18', which is the
    `sll 3'/`addu'/`sll 1' triple; there is NO `*(s16 *)((u8 *)n->unk_0C +
-   0x6) = 6' write at all; the three velocities come from func_80069EF8
+   0x6) = 6' write at all; the three velocities come from rand
    rather than rand() and are `<< 4' on ALL THREE axes where the twin is
    6/6/5; the constant drift is `t[k] * 0x1C0000' (`sll 3'/`subu'/`sll 18')
    not 0x160000; the +0x32/+0x34 life is 0xC; and BOTH hung functions are
@@ -142,9 +141,9 @@ void func_b25_801711DC(UnkNode *a, s16 b, u8 *c)
         t = D_800E2468[(b >> 9) & 7];
         *(s16 *)((u8 *)n->unk_08 + 0x2) = *(u16 *)((u8 *)n->unk_08 + 0x2) + (t[0] * 18);
         *(s16 *)((u8 *)n->unk_08 + 0x6) = *(u16 *)((u8 *)n->unk_08 + 0x6) + (t[1] * 18);
-        *(s32 *)((u8 *)n->unk_08 + 0xC) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 4;
-        *(s32 *)((u8 *)n->unk_08 + 0x10) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 4;
-        *(s32 *)((u8 *)n->unk_08 + 0x14) = ((func_80069EF8() & 0x7FFF) - 0x4000) << 4;
+        *(s32 *)((u8 *)n->unk_08 + 0xC) = ((rand() & 0x7FFF) - 0x4000) << 4;
+        *(s32 *)((u8 *)n->unk_08 + 0x10) = ((rand() & 0x7FFF) - 0x4000) << 4;
+        *(s32 *)((u8 *)n->unk_08 + 0x14) = ((rand() & 0x7FFF) - 0x4000) << 4;
         *(s32 *)((u8 *)n->unk_08 + 0xC) += t[0] * 0x1C0000;
         *(s32 *)((u8 *)n->unk_08 + 0x10) += t[1] * 0x1C0000;
         p = (u8 *)n + 0x20;
@@ -205,13 +204,13 @@ void func_b25_80171384(u8 *p, UnkVec *v, u8 *c)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_8017145C);
 
-/* The bank's "random value below n": six masked draws from func_80069EF8,
+/* The bank's "random value below n": six masked draws from rand,
    picked by the size of n, each retried until it falls under n. The mask and
    shift pairs are read straight off the listing -- 0xC >> 2, 0xF0 >> 4,
    0xFC >> 2, 0xFF0 >> 4, then 0xFFF and 0xFFFF unshifted -- and the six
    bounds are the `slti' constants 5, 0x11, 0x41, 0x101, 0x1001 and the
    fall-through. xsibs found no twin at ratio 0.70 and nothing in the project
-   reads func_80069EF8 this way, so this is plain decompilation.
+   reads rand this way, so this is plain decompilation.
 
    Two shape facts read off the listing rather than guessed. The n == 0 test
    shares its `addu $v0, $v1, $zero' with the LAST arm's fall-through at
@@ -235,7 +234,7 @@ s32 func_b25_8017165C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xC) >> 2;
+                r = (rand() & 0xC) >> 2;
             } while (r >= n);
             return r;
         }
@@ -243,7 +242,7 @@ s32 func_b25_8017165C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xF0) >> 4;
+                r = (rand() & 0xF0) >> 4;
             } while (r >= n);
             return r;
         }
@@ -251,7 +250,7 @@ s32 func_b25_8017165C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xFC) >> 2;
+                r = (rand() & 0xFC) >> 2;
             } while (r >= n);
             return r;
         }
@@ -259,7 +258,7 @@ s32 func_b25_8017165C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xFF0) >> 4;
+                r = (rand() & 0xFF0) >> 4;
             } while (r >= n);
             return r;
         }
@@ -267,13 +266,13 @@ s32 func_b25_8017165C(s32 n)
         {
             do
             {
-                r = func_80069EF8() & 0xFFF;
+                r = rand() & 0xFFF;
             } while (r >= n);
             return r;
         }
         do
         {
-            r = func_80069EF8() & 0xFFFF;
+            r = rand() & 0xFFFF;
         } while (r >= n);
     }
     return r;

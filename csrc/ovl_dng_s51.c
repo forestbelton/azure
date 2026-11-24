@@ -45,7 +45,6 @@ typedef struct UnkDng74334SP
     u8 pad_D8[0x28];
     s32 unk_100;
 } UnkDng74334SP;
-s32 func_80069EF8();
 void func_s51_80024734();
 s32 func_s51_800244E4(u8 *p, UnkVec *v);
 
@@ -197,7 +196,7 @@ s32 func_s51_800244E4(u8 *p, UnkVec *v)
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_80024734);
 
 /* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
-   each axis by a fresh func_80069EF8() & 0x1F and the caller's own offset
+   each axis by a fresh rand() & 0x1F and the caller's own offset
    less 0x10, then park func_s51_80024734 as the step and
    func_s51_800244E4 as the draw, with `b` at the payload's +0x14, `d` at
    +0x32 and `c` at +0x8.  72 words, 0 differing.  The twin is
@@ -234,11 +233,11 @@ void func_s51_80024798(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     {
         n->unk_10 = (u32)func_s51_80024734;
         *(s16 *)((u8 *)n->unk_08 + 0x2) =
-            *(u16 *)((u8 *)a->unk_08 + 0x2) + (func_80069EF8() & 0xf) + (s16)(dx - 0x8);
+            *(u16 *)((u8 *)a->unk_08 + 0x2) + (rand() & 0xf) + (s16)(dx - 0x8);
         *(s16 *)((u8 *)n->unk_08 + 0x6) =
-            *(u16 *)((u8 *)a->unk_08 + 0x6) + (func_80069EF8() & 0xf) + (s16)(dy - 0x8);
+            *(u16 *)((u8 *)a->unk_08 + 0x6) + (rand() & 0xf) + (s16)(dy - 0x8);
         *(s16 *)((u8 *)n->unk_08 + 0xA) =
-            *(u16 *)((u8 *)a->unk_08 + 0xA) + (func_80069EF8() & 0x1F) + (s16)(dz - 0x10);
+            *(u16 *)((u8 *)a->unk_08 + 0xA) + (rand() & 0x1F) + (s16)(dz - 0x10);
         p = (u8 *)n + 0x20;
         *(s16 *)(p + 0x14) = b;
         *(s16 *)(p + 0x32) = d;

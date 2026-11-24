@@ -47,21 +47,19 @@ typedef struct UnkDng74334SP
 } UnkDng74334SP;
 void func_s72_80024BF4(u8 *p, UnkVec *v, UnkSlot *s, s16 d);
 
-s32 func_80069EF8(void);
-
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80024064);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80024398);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_800244BC);
 
-/* The bank's "random value below n": six masked draws from func_80069EF8,
+/* The bank's "random value below n": six masked draws from rand,
    picked by the size of n, each retried until it falls under n. The mask and
    shift pairs are read straight off the listing -- 0xC >> 2, 0xF0 >> 4,
    0xFC >> 2, 0xFF0 >> 4, then 0xFFF and 0xFFFF unshifted -- and the six
    bounds are the `slti' constants 5, 0x11, 0x41, 0x101, 0x1001 and the
    fall-through. xsibs found no twin at ratio 0.70 and nothing in the project
-   reads func_80069EF8 this way, so this is plain decompilation.
+   reads rand this way, so this is plain decompilation.
 
    Two shape facts read off the listing rather than guessed. The n == 0 test
    shares its `addu $v0, $v1, $zero' with the LAST arm's fall-through at
@@ -85,7 +83,7 @@ s32 func_s72_8002458C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xC) >> 2;
+                r = (rand() & 0xC) >> 2;
             } while (r >= n);
             return r;
         }
@@ -93,7 +91,7 @@ s32 func_s72_8002458C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xF0) >> 4;
+                r = (rand() & 0xF0) >> 4;
             } while (r >= n);
             return r;
         }
@@ -101,7 +99,7 @@ s32 func_s72_8002458C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xFC) >> 2;
+                r = (rand() & 0xFC) >> 2;
             } while (r >= n);
             return r;
         }
@@ -109,7 +107,7 @@ s32 func_s72_8002458C(s32 n)
         {
             do
             {
-                r = (func_80069EF8() & 0xFF0) >> 4;
+                r = (rand() & 0xFF0) >> 4;
             } while (r >= n);
             return r;
         }
@@ -117,13 +115,13 @@ s32 func_s72_8002458C(s32 n)
         {
             do
             {
-                r = func_80069EF8() & 0xFFF;
+                r = rand() & 0xFFF;
             } while (r >= n);
             return r;
         }
         do
         {
-            r = func_80069EF8() & 0xFFFF;
+            r = rand() & 0xFFFF;
         } while (r >= n);
     }
     return r;

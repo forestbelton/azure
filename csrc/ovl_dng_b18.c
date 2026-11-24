@@ -147,7 +147,6 @@ extern u8 D_800DEC70[];
 UnkNode *func_8003FC64(s32);
 s32 func_8004491C(UnkNode *, u32);
 void func_8003DB94(void *, void *, s32);
-s32 func_80069EF8(void);
 void func_b18_80173FF4(u8 *, UnkVec *, u8 *);
 
 u8 *func_b18_8017087C(s16 a, u16 b, u16 c, s16 d)
@@ -2247,7 +2246,7 @@ void func_b18_8017406C(u8 *p, UnkVec *b, u8 *c)
         *((u8 *)n + 0x20) = 0xFF;
         v[1] = r->unk_0C[1];
         v[2] = r->unk_0C[2];
-        func_8003DB94(r, D_800DEC70, func_80069EF8() & 1);
+        func_8003DB94(r, D_800DEC70, rand() & 1);
         r->unk_12 = 0x7DCF;
         r->unk_14 |= 0x100;
     }

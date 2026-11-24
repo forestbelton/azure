@@ -45,7 +45,6 @@ typedef struct UnkDng74334SP
     u8 pad_D8[0x28];
     s32 unk_100;
 } UnkDng74334SP;
-s32 func_80069EF8();
 void func_s58_80024374(u8 *p);
 s32 func_s58_80024124(u8 *p, UnkVec *v);
 
@@ -209,7 +208,7 @@ void func_s58_80024374(u8 *p)
 }
 
 /* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
-   each axis by a fresh func_80069EF8() & 0x1F and the caller's own offset
+   each axis by a fresh rand() & 0x1F and the caller's own offset
    less 0x10, then park func_s58_80024374 as the step and
    func_s58_80024124 as the draw, with `b` at the payload's +0x14, `d` at
    +0x32 and `c` at +0x8.  72 words, 0 differing.  The twin is
@@ -246,11 +245,11 @@ void func_s58_800243C4(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     {
         n->unk_10 = (u32)func_s58_80024374;
         *(s16 *)((u8 *)n->unk_08 + 0x2) =
-            *(u16 *)((u8 *)a->unk_08 + 0x2) + (func_80069EF8() & 0xf) + (s16)(dx - 0x8);
+            *(u16 *)((u8 *)a->unk_08 + 0x2) + (rand() & 0xf) + (s16)(dx - 0x8);
         *(s16 *)((u8 *)n->unk_08 + 0x6) =
-            *(u16 *)((u8 *)a->unk_08 + 0x6) + (func_80069EF8() & 0xf) + (s16)(dy - 0x8);
+            *(u16 *)((u8 *)a->unk_08 + 0x6) + (rand() & 0xf) + (s16)(dy - 0x8);
         *(s16 *)((u8 *)n->unk_08 + 0xA) =
-            *(u16 *)((u8 *)a->unk_08 + 0xA) + (func_80069EF8() & 0x1F) + (s16)(dz - 0x10);
+            *(u16 *)((u8 *)a->unk_08 + 0xA) + (rand() & 0x1F) + (s16)(dz - 0x10);
         p = (u8 *)n + 0x20;
         *(s16 *)(p + 0x14) = b;
         *(s16 *)(p + 0x32) = d;
@@ -293,7 +292,7 @@ void func_s58_80024CA4(u8 *p, s32 c1, s32 c2, s16 x, s16 y, s16 z)
         r = (UnkSlot *)n->unk_0C;
         r->unk_10 = 0x20;
         r->unk_14 |= 0xC;
-        r->unk_1A = (func_80069EF8() & 7) << 9;
+        r->unk_1A = (rand() & 7) << 9;
         r->unk_06 = 0;
         m = n->unk_08;
         b = D_80083780;
@@ -303,16 +302,16 @@ void func_s58_80024CA4(u8 *p, s32 c1, s32 c2, s16 x, s16 y, s16 z)
         *(s16 *)((u8 *)m + 0x2) += *(u16 *)(b + 0x2);
         *(s16 *)((u8 *)m + 0x6) += *(u16 *)(b + 0x6);
         *(s16 *)((u8 *)m + 0xA) += *(u16 *)(b + 0xA);
-        *(s16 *)((u8 *)m + 0x2) += (func_80069EF8() & 0x3F) + -0x20;
-        *(s16 *)((u8 *)m + 0x6) += (func_80069EF8() & 0x3F) + -0x20;
-        *(s16 *)((u8 *)m + 0xA) += (func_80069EF8() & 0x3F) + -0x40;
+        *(s16 *)((u8 *)m + 0x2) += (rand() & 0x3F) + -0x20;
+        *(s16 *)((u8 *)m + 0x6) += (rand() & 0x3F) + -0x20;
+        *(s16 *)((u8 *)m + 0xA) += (rand() & 0x3F) + -0x40;
         *(s32 *)(q + 0x94) = 0xFFFA0000;
         *(s32 *)(q + 0xA0) = 0x20000;
         *(s32 *)(q + 0x8C) = rec[*(s16 *)(p + 0x26)].a << 18;
         *(s32 *)(q + 0x90) = rec[*(s16 *)(p + 0x26)].b << 18;
-        *(s32 *)(q + 0x8C) += 0xFFF80000 + ((func_80069EF8() & 0x3FFF) << 6);
-        *(s32 *)(q + 0x90) += 0xFFF80000 + ((func_80069EF8() & 0x3FFF) << 6);
-        *(s32 *)(q + 0x94) += 0xFFF80000 + ((func_80069EF8() & 0x3FFF) << 6);
+        *(s32 *)(q + 0x8C) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
+        *(s32 *)(q + 0x90) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
+        *(s32 *)(q + 0x94) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
         r = (UnkSlot *)n->unk_0C;
         r->unk_1E = 0x800;
         r->unk_1C = 0x800;
@@ -383,7 +382,7 @@ void func_s58_80024F80(u8 *p, s32 c1, s32 c2, s16 x, s16 y, s16 z)
         r = (UnkSlot *)n->unk_0C;
         r->unk_10 = 0x20;
         r->unk_14 |= 0xC;
-        r->unk_1A = (func_80069EF8() & 7) << 9;
+        r->unk_1A = (rand() & 7) << 9;
         r->unk_06 = 0;
         m = n->unk_08;
         b = D_80083780;
@@ -393,16 +392,16 @@ void func_s58_80024F80(u8 *p, s32 c1, s32 c2, s16 x, s16 y, s16 z)
         *(s16 *)((u8 *)m + 0x2) += *(u16 *)(b + 0x2);
         *(s16 *)((u8 *)m + 0x6) += *(u16 *)(b + 0x6);
         *(s16 *)((u8 *)m + 0xA) += *(u16 *)(b + 0xA);
-        *(s16 *)((u8 *)m + 0x2) += (func_80069EF8() & 0x3F) + -0x20;
-        *(s16 *)((u8 *)m + 0x6) += (func_80069EF8() & 0x3F) + -0x20;
-        *(s16 *)((u8 *)m + 0xA) += (func_80069EF8() & 0x3F) + -0x40;
+        *(s16 *)((u8 *)m + 0x2) += (rand() & 0x3F) + -0x20;
+        *(s16 *)((u8 *)m + 0x6) += (rand() & 0x3F) + -0x20;
+        *(s16 *)((u8 *)m + 0xA) += (rand() & 0x3F) + -0x40;
         *(s32 *)(q + 0x94) = 0xFFFA0000;
         *(s32 *)(q + 0xA0) = 0x20000;
         *(s32 *)(q + 0x8C) = rec[*(s16 *)(p + 0x26)].a << 18;
         *(s32 *)(q + 0x90) = rec[*(s16 *)(p + 0x26)].b << 18;
-        *(s32 *)(q + 0x8C) += 0xFFF80000 + ((func_80069EF8() & 0x3FFF) << 6);
-        *(s32 *)(q + 0x90) += 0xFFF80000 + ((func_80069EF8() & 0x3FFF) << 6);
-        *(s32 *)(q + 0x94) += 0xFFF80000 + ((func_80069EF8() & 0x3FFF) << 6);
+        *(s32 *)(q + 0x8C) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
+        *(s32 *)(q + 0x90) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
+        *(s32 *)(q + 0x94) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
         r = (UnkSlot *)n->unk_0C;
         r->unk_1E = 0x1000;
         r->unk_1C = 0x1000;

@@ -144,7 +144,6 @@ void func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
 void func_800A2B04(UnkVec *, s32, s32);
 extern u8 D_80174ED8[];
 extern u8 D_80174E98[];
-s32 func_80065420(SVECTOR *, s32 *, s32 *, s32 *);
 extern s8 D_800DCECC[];
 extern u32 D_800814A0;
 extern u32 D_800814A8;
@@ -153,13 +152,12 @@ s32 func_8003F270(void);
 s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n);
 s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e);
 s32 func_800A56E0(s32);
-s32 func_80069EF8();
 void func_b23_80171020(u8 *, s32, s32, s32, s32, s32, s32);
 
 /* The tumble-and-settle step of the thrown-slot machine: decay b's three
    velocity components by 9/10 (the third by 8/10), wind c+0x1C/+0x1E on by
    0x32, project both b and the slot's own vector at p+0xA8 through
-   func_80065420 (RotTransPers) and set c+0x6 from the DIFFERENCE of the two
+   RotTransPers (RotTransPers) and set c+0x6 from the DIFFERENCE of the two
    depths less twice the D_800DCECC facing byte, then, once p+0x96 is under
    10, square the sprite up and ease its three colour bytes, re-send the view
    through func_800478B8 and raise 0x8000 in the node's -0x2 and in
@@ -177,7 +175,7 @@ void func_b23_80171020(u8 *, s32, s32, s32, s32, s32, s32);
    `ori $v1, $zero, 0xFF80' -- 151 words, 1 differing
    (docs/matching-levers.md :24832).
 
-   THE FRAME SHAPE IS LOAD-BEARING: func_80065420's second out-parameter is
+   THE FRAME SHAPE IS LOAD-BEARING: RotTransPers's second out-parameter is
    EIGHT bytes (`s32 sxy[2]'), which is what puts the third and fourth at
    sp+0x20 and sp+0x24 rather than sp+0x1C and sp+0x20. A plain `s32 sxy'
    leaves a hole where the target has none and moves two `addiu's.
@@ -211,12 +209,12 @@ void func_b23_80170874(u8 *p, UnkVec *b, u8 *c, u8 *d)
     sv.vx = *(u16 *)((u8 *)b + 0x2);
     sv.vy = *(u16 *)((u8 *)b + 0x6);
     sv.vz = *(u16 *)((u8 *)b + 0xA);
-    r = func_80065420(&sv, sxy, &pz, &flag);
+    r = RotTransPers(&sv, sxy, &pz, &flag);
     q = *(UnkVec **)(p + 0xA8);
     sv.vx = *(u16 *)((u8 *)q + 0x2);
     sv.vy = *(u16 *)((u8 *)q + 0x6);
     sv.vz = *(u16 *)((u8 *)q + 0xA);
-    *(s16 *)(c + 0x6) = r - func_80065420(&sv, sxy, &pz, &flag) -
+    *(s16 *)(c + 0x6) = r - RotTransPers(&sv, sxy, &pz, &flag) -
                         D_800DCECC[((D_80083228 + *(s16 *)(p + 0x94) + 0x100) >> 9) & 7] * 2;
     m = *(s16 *)(p + 0x96);
     if (m < 0xA)
@@ -239,7 +237,7 @@ void func_b23_80170874(u8 *p, UnkVec *b, u8 *c, u8 *d)
 
 /* The slot's OTHER tumble step, and NOT the same function as
    func_b23_80170874 above despite both being 151 words: they share only the
-   ~45-word tail (the two func_80065420 projections, the D_80083228 /
+   ~45-word tail (the two RotTransPers projections, the D_80083228 /
    D_800DCECC facing fix-up into c+0x6, func_800478B8 and the countdown into
    the node's -0x2 and D_800814A0). The heads are different work -- this one
    has no velocity decay at all, squares the sprite up under a count of 0x15
@@ -257,12 +255,12 @@ void func_b23_80170874(u8 *p, UnkVec *b, u8 *c, u8 *d)
    (3) c+0x22 is `-(x / 0x1000) / 2' in that order: `bgez'/`addiu 0xFFF'/
    `sra 12', then `negu', then the `srl 31'/`addu'/`sra 1' halve.
 
-   The frame is func_b23_80170874's, for the same reason: func_80065420's
+   The frame is func_b23_80170874's, for the same reason: RotTransPers's
    second out-parameter is eight bytes (`s32 sxy[2]'), so the third and
    fourth sit at sp+0x20 and sp+0x24.
 
    151 words, 0 differing, first compile -- the tail cost nothing because
-   func_b23_80170874 had already brought func_80065420, D_800DCECC and
+   func_b23_80170874 had already brought RotTransPers, D_800DCECC and
    D_800814A0 into the unit. */
 void func_b23_80170AD0(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
@@ -322,12 +320,12 @@ wound:
         sv.vx = *(u16 *)((u8 *)b + 0x2);
         sv.vy = *(u16 *)((u8 *)b + 0x6);
         sv.vz = *(u16 *)((u8 *)b + 0xA);
-        r = func_80065420(&sv, sxy, &pz, &flag);
+        r = RotTransPers(&sv, sxy, &pz, &flag);
         q = *(UnkVec **)(p + 0xA8);
         sv.vx = *(u16 *)((u8 *)q + 0x2);
         sv.vy = *(u16 *)((u8 *)q + 0x6);
         sv.vz = *(u16 *)((u8 *)q + 0xA);
-        *(s16 *)(c + 0x6) = r - func_80065420(&sv, sxy, &pz, &flag) -
+        *(s16 *)(c + 0x6) = r - RotTransPers(&sv, sxy, &pz, &flag) -
                             D_800DCECC[((D_80083228 + *(s16 *)(p + 0x94) + 0x100) >> 9) & 7] * 2;
     }
     else
@@ -1595,7 +1593,7 @@ void func_b23_8017364C(u8 *p, UnkVec *b, u8 *c, u8 *d)
             i = 0;
             do
             {
-                func_b23_80171020(p - 0x20, 0, 0xC0C0, (func_80069EF8() & 0xFF) | 0x80, 0, 0, 0);
+                func_b23_80171020(p - 0x20, 0, 0xC0C0, (rand() & 0xFF) | 0x80, 0, 0, 0);
                 i++;
             } while (i < 0xA);
         }

@@ -346,6 +346,17 @@ your report under item 4.
   one block as you go; do not start a second.
 * Keep types honest. If a struct field's offset and width are all you know, a
   cast through `u8 *` is fine. Do not invent a struct you cannot witness.
+* **IF A CALLEE HAS A REAL NAME, USE IT.** Before declaring
+  `s32 func_80069EF8();`, check:
+
+      grep -iE "= 0x80069ef8;" splat/common_syms.txt
+
+  That one is `rand`, and 129 sites across 21 units had been writing the
+  address instead. `RotTransPers`, `RotTransSV`, `RotTransPers4`, `AddPrim`,
+  `SetPolyG4`, `PushMatrix`, `PopMatrix`, `SetRotMatrix`, `SetTransMatrix`
+  and `RotMatrix` were all being spelled as addresses too. The real name
+  needs NO declaration -- it comes from `common.h` -- and it tells the next
+  reader what the code does, which an address never will.
 * A NEW TYPEDEF NAME MUST NOT COLLIDE WITH ONE ANOTHER AGENT IS INVENTING
   RIGHT NOW. You cannot see the other four. Check both places before naming
   one, and prefer a name that says which function it belongs to:

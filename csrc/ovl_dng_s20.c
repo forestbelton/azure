@@ -39,11 +39,6 @@ extern UnkDng26478 D_80026478[];
 extern u32 D_80026470;
 extern u32 D_80026474;
 extern s16 D_s20_8002632A;
-s32 func_80065420(SVECTOR *, s32 *, s32 *, s32 *);
-s32 func_800654B0(SVECTOR *, SVECTOR *, SVECTOR *, SVECTOR *, s32 *, s32 *, s32 *, s32 *, s32 *,
-                  s32 *);
-void func_8006658C(void *, void *);
-void func_80066708(POLY_G4 *);
 void func_80067F20(u32 *, s32, s32, s32, s32);
 
 typedef struct UnkDng255E8Vec
@@ -96,17 +91,9 @@ s16 func_800A48F0_i(u8 *, s32, s32) __asm__("func_800A48F0");
 extern u8 D_800263F8[];
 extern u8 D_80045340[];
 void func_8003DB94(void *, void *, s32);
-s32 func_80069EF8();
 void func_s20_80025868(u8 *p, UnkVec *v, u8 *c);
 
 void func_800478B8(u8 *);
-
-void func_800649A0(void);
-void func_80064A40(void);
-void func_80064CF0(MATRIX *);
-void func_80064D80(MATRIX *);
-s32 func_80065320(SVECTOR *, s32 *, s32 *);
-void func_80065820(SVECTOR *, MATRIX *);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_80024064);
 
@@ -199,7 +186,7 @@ UnkNode *func_s20_80024DE8(u8 *v, u8 *q)
 
    Written against func_s20_80025340's landed body in this same unit (the
    D_80083160/+0x8D0 cursor prologue, the `sp->unk_18' before `sp->unk_20'
-   order, the GetTPage/func_80067F20/func_8006658C tail) plus
+   order, the GetTPage/func_80067F20/AddPrim tail) plus
    func_s20_80026010's index arithmetic, so nothing here was fought for.
 
    Note the contrast with func_s20_80025340's trail-ring store, which needs an
@@ -211,8 +198,8 @@ UnkNode *func_s20_80024DE8(u8 *v, u8 *q)
 
    The two colour pairs are CHAINED assignments: `*(u32 *)&q->r0 =
    *(u32 *)&q->r1 = D_80026470' emits +0x0C before +0x04, which is the order
-   the target has in both arms.  func_800654B0 is RotTransPers4 and
-   func_80066708 is SetPolyG4 -- a real call, not the setPolyG4 macro, which
+   the target has in both arms.  RotTransPers4 is RotTransPers4 and
+   SetPolyG4 is SetPolyG4 -- a real call, not the setPolyG4 macro, which
    is why the tag and code bytes are written after the four colour words. */
 s32 func_s20_80024EF4(void)
 {
@@ -234,7 +221,7 @@ s32 func_s20_80024EF4(void)
         *(u32 *)&sp->unk_70[3] = *(u32 *)&D_80026478[(i & -0x10) + ((i + 1) & 0xF) + 0x10];
         sp->unk_70[1].vz = sp->unk_70[0].vz = D_80026478[i].unk_04;
         sp->unk_70[3].vz = sp->unk_70[2].vz = D_80026478[i + 0x10].unk_04;
-        sp->unk_C0 = func_800654B0(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+        sp->unk_C0 = RotTransPers4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
                                    (s32 *)&q->x0, (s32 *)&q->x1, (s32 *)&q->x2, (s32 *)&q->x3,
                                    &sp->unk_90, &sp->unk_94) -
                      0x8;
@@ -250,13 +237,13 @@ s32 func_s20_80024EF4(void)
                 *(u32 *)&q->r2 = *(u32 *)&q->r3 = D_80026470;
                 *(u32 *)&q->r0 = *(u32 *)&q->r1 = D_80026474;
             }
-            func_80066708(q);
+            SetPolyG4(q);
             setSemiTrans(q, 1);
-            func_8006658C(sp->unk_20 + sp->unk_C0 * 4, q);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
             dm = (DR_MODE *)sp->unk_18;
             sp->unk_18 = (u8 *)(dm + 1);
             func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
-            func_8006658C(sp->unk_20 + sp->unk_C0 * 4, dm);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, dm);
         }
     }
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)sp->unk_18;
@@ -296,7 +283,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_80025160);
 
    The arm order is load-bearing: `if (s->unk_06 < 0)' first is 212 words and
    185 differing -- the target falls through on `>= 0' and `bltz's to the
-   negative arm.  func_80065420 is RotTransPers; the `func_' spellings are
+   negative arm.  RotTransPers is RotTransPers; the `func_' spellings are
    what splat/dungeon.bin_undefined_funcs_auto.txt links. */
 s32 func_s20_80025340(u8 *p, UnkVec *v, UnkSlot *s)
 {
@@ -318,7 +305,7 @@ s32 func_s20_80025340(u8 *p, UnkVec *v, UnkSlot *s)
             sp->unk_00 = *(u16 *)((u8 *)v + 0xE);
             sp->unk_02 = *(u16 *)((u8 *)v + 0x12);
             sp->unk_04 = *(u16 *)((u8 *)v + 0x16);
-            sp->unk_C0 = func_80065420((SVECTOR *)sp, (s32 *)&l->x0, &sp->unk_90, &sp->unk_94);
+            sp->unk_C0 = RotTransPers((SVECTOR *)sp, (s32 *)&l->x0, &sp->unk_90, &sp->unk_94);
             sp->unk_00 = *(u16 *)((u8 *)v + 0xE) +
                          ((*(s16 *)((u8 *)v + 0x2) - *(s16 *)((u8 *)v + 0xE)) * s->unk_06 >> 8);
             sp->unk_02 = *(u16 *)((u8 *)v + 0x12) +
@@ -340,13 +327,13 @@ s32 func_s20_80025340(u8 *p, UnkVec *v, UnkSlot *s)
                          ((*(s16 *)((u8 *)v + 0x12) - *(s16 *)((u8 *)v + 0x6)) * s->unk_06 >> 8);
             sp->unk_04 = *(u16 *)((u8 *)v + 0xA) -
                          ((*(s16 *)((u8 *)v + 0x16) - *(s16 *)((u8 *)v + 0xA)) * s->unk_06 >> 8);
-            sp->unk_C0 = func_80065420((SVECTOR *)sp, (s32 *)&l->x0, &sp->unk_90, &sp->unk_94);
+            sp->unk_C0 = RotTransPers((SVECTOR *)sp, (s32 *)&l->x0, &sp->unk_90, &sp->unk_94);
             sp->unk_00 = *(u16 *)((u8 *)v + 0x2);
             sp->unk_02 = *(u16 *)((u8 *)v + 0x6);
             sp->unk_04 = *(u16 *)((u8 *)v + 0xA);
         }
         sp->unk_C0 =
-            (sp->unk_C0 + func_80065420((SVECTOR *)sp, (s32 *)&l->x1, &sp->unk_90, &sp->unk_94)) >>
+            (sp->unk_C0 + RotTransPers((SVECTOR *)sp, (s32 *)&l->x1, &sp->unk_90, &sp->unk_94)) >>
             1;
         if ((u32)sp->unk_C0 < 0x1E0)
         {
@@ -356,11 +343,11 @@ s32 func_s20_80025340(u8 *p, UnkVec *v, UnkSlot *s)
             l->r1 = l->r0 >> 1;
             l->g1 = l->g0 >> 1;
             l->b1 = l->b0 >> 1;
-            func_8006658C(sp->unk_20 + sp->unk_C0 * 4, l);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, l);
             dm = (DR_MODE *)sp->unk_18;
             sp->unk_18 = (u8 *)(dm + 1);
             func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
-            func_8006658C(sp->unk_20 + sp->unk_C0 * 4, dm);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, dm);
         }
         n = *(UnkNode **)(p - 0x8);
         if (n == NULL)
@@ -432,10 +419,10 @@ void func_s20_80025868(u8 *p, UnkVec *v, u8 *c)
    delay slot. The two 0x1000 scales are a literal written twice, from one
    `addiu', and NOT the read-back func_800CC5F0 and func_800CC88C use -- the
    target has no `lhu 0x1E' between them. The spin is
-   `func_80069EF8() & 0x7'.
+   `rand() & 0x7'.
 
    59 words, 0 differing on the first compile. raw 10 == the 10 relocations:
-   R_MIPS_26 on func_8003FC64, func_8004491C, func_80069EF8 and
+   R_MIPS_26 on func_8003FC64, func_8004491C, rand and
    func_8003DB94, and HI16/LO16 pairs on D_80045340, func_s20_80025868 and
    D_800263F8. */
 void func_s20_8002596C(s16 x, s16 y, s16 z)
@@ -455,7 +442,7 @@ void func_s20_8002596C(s16 x, s16 y, s16 z)
         *(s16 *)(m + 0xA) = z;
         *(s16 *)(m + 0xE) = 0;
         *(s16 *)(m + 0x12) = 0;
-        *(s16 *)(m + 0x16) = func_80069EF8() & 0x7;
+        *(s16 *)(m + 0x16) = rand() & 0x7;
         r = (u8 *)n->unk_0C;
         *(u32 *)(r + 0xC) = 0x808080;
         func_8003DB94(r, D_800263F8, 0);
@@ -471,7 +458,7 @@ void func_s20_8002596C(s16 x, s16 y, s16 z)
    corner records at the payload's +0x34..+0x53 on the mover's own origin into
    the scratchpad quad at 0x1F800070, build a rotation-only matrix from the
    slot's +0x16/+0x18 on the stack, push it, run the four corners through
-   func_80065320, pop, integrate the mover's velocity, write the rotated
+   RotTransSV, pop, integrate the mover's velocity, write the rotated
    corners back onto the payload biased by the mover again, fade the six
    colour bytes at +0x54..+0x5A by one 1/(+0x1A) step each, and kill the node
    when the +0x1A counter runs out.
@@ -521,9 +508,9 @@ void func_s20_8002596C(s16 x, s16 y, s16 z)
    LAND func_s20_80025A58, whose residue is these same seven words.
 
    253 words, 0 differing. raw 15 == the 15 relocations: 1 HI16 + 2 LO16 on
-   D_s20_80026326, the same three on D_800814A0, and R_MIPS_26 on func_800649A0,
-   func_80065820, func_80064D80, func_80064CF0, func_80065320 four times and
-   func_80064A40.
+   D_s20_80026326, the same three on D_800814A0, and R_MIPS_26 on PushMatrix,
+   RotMatrix, SetTransMatrix, SetRotMatrix, RotTransSV four times and
+   PopMatrix.
    THIS COPY'S OWN CONSTANT: 0x34 -> 0x30 at all 2 sites, 0x3c -> 0x38 at all 2 sites, 0x44 -> 0x40 at all 2 sites, 0x4c -> 0x48 at all 2 sites, 0x36 -> 0x32 at all 2 sites, 0x3e -> 0x3a at all 2 sites, 0x46 -> 0x42 at all 2 sites, 0x4e -> 0x4a at all 2 sites, 0x38 -> 0x34 at all 2 sites, 0x40 -> 0x3c at all 2 sites, 0x48 -> 0x44 at all 2 sites, 0x50 -> 0x4c at all 2 sites, 0x54 -> 0x50 at all 2 sites, 0x55 -> 0x51 at all 2 sites, 0x56 -> 0x52 at all 2 sites, 0x58 -> 0x54 at all 2 sites, 0x59 -> 0x55 at all 2 sites, 0x5a -> 0x56 at all 2 sites.
    The rest of this comment is the family representative's and its other
    numbers are its own.
@@ -552,21 +539,21 @@ void func_s20_80025A58(u8 *p, UnkVec *v, UnkSlot *s)
     D_s20_80026326 = c + 1;
     sp->unk_70[2].vz = t;
     sp->unk_70[3].vz = *(u16 *)(p + 0x4c) - *(u16 *)((u8 *)v + 0xA);
-    func_800649A0();
+    PushMatrix();
     rot.vx = s->unk_16;
     rot.vy = s->unk_18;
     rot.vz = 0;
     m.t[2] = 0;
     m.t[1] = 0;
     m.t[0] = 0;
-    func_80065820(&rot, &m);
-    func_80064D80(&m);
-    func_80064CF0(&m);
-    func_80065320((SVECTOR *)0x1F800070, (s32 *)0x1F800098, (s32 *)0x1F800094);
-    func_80065320((SVECTOR *)0x1F800078, (s32 *)0x1F8000A0, (s32 *)0x1F800094);
-    func_80065320((SVECTOR *)0x1F800080, (s32 *)0x1F8000A8, (s32 *)0x1F800094);
-    func_80065320((SVECTOR *)0x1F800088, (s32 *)0x1F8000B0, (s32 *)0x1F800094);
-    func_80064A40();
+    RotMatrix(&rot, &m);
+    SetTransMatrix(&m);
+    SetRotMatrix(&m);
+    RotTransSV((SVECTOR *)0x1F800070, (s32 *)0x1F800098, (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800078, (s32 *)0x1F8000A0, (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800080, (s32 *)0x1F8000A8, (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800088, (s32 *)0x1F8000B0, (s32 *)0x1F800094);
+    PopMatrix();
     v->unk_00 += v->unk_0C;
     v->unk_04 += v->unk_10;
     v->unk_08 += v->unk_14;
