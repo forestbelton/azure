@@ -1653,3 +1653,40 @@ quietly cost more than it saved: **a default that narrows the work must name
 what it removed, and must remove only what it can justify.** `--busy`
 confirmed a unit it had selected; `--skip lo16` suppressed 74 functions to
 protect 2. Both read as working configuration.
+
+## HOW LONG THE CHEAP POOL LASTS, FROM TWO SWEEP SNAPSHOTS
+
+`dngpick` has ranked on "does a landed body already look like this" since
+batch 13, and it is the single change that took landings from 19/23 with three
+parks to 23/24 with one. So the planning question is when that pool runs out.
+Two `dngtwin --sweep` runs, batch 13 and batch 17, with 109 stubs landed
+between them:
+
+                   batch 13              batch 17        delta
+    0.98+          55 /  10,343        49 /   7,983
+    0.90-0.97     118 /  25,595        75 /  13,664
+    >= 0.90 TOTAL 173 /  35,938       124 /  21,647      -49 stubs
+    0.80-0.89      95 /  15,847        92 /  16,478       -3
+    0.70-0.79      72 /   9,227        74 /  10,298       +2
+    none          865 / 153,550       806 / 147,246      -59
+
+**The pool refills, but not fast enough to hold.** The `>= 0.90` band fell by
+49 across 109 landings, and the two bands below it did NOT fall by the amount
+landed out of them -- 0.70-0.79 went UP by two. That can only be migration:
+`none` lost 59 stubs, and a stub leaves `none` when something that resembles
+it lands. So each landing both consumes the cheap pool and promotes a stub
+from below, netting about **0.45 cheap stubs consumed per landing**. At the
+current ~23 landings a batch, the 124 remaining cheap stubs are roughly
+**twelve more batches** of first-compile work.
+
+**AND THE REMAINDER DOES NOT REPLICATE.** Of the 806 stubs with no landed
+sibling at 0.70, only 61 (4,152 words) share a `dngfam` family key with
+another of them; **745 stubs and 143,094 words are true singletons**, the
+largest shared family being two copies. So the endgame is not more cloning:
+after the cheap pool drains, what is left is one-off bodies at full price,
+and the picker's `--size-first` ordering becomes the right one again rather
+than the one batch 12 lost three functions to.
+
+Worth re-measuring each batch -- it is one `--sweep` run, already in the
+pipeline -- because the net rate is the only number that says whether the
+briefs should still lead with twin facts.
