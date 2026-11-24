@@ -28,12 +28,25 @@ produced (what we actually compile). A multiset, not a sequence, because
 sched and reorg move loads around freely and an order difference is not a
 defect -- but a symbol that appears in one side and not the other is.
 
-Deliberately NOT checked here: `func_*' call targets, which `ovlverify'
-already pins through the `jal' opcode and whose names can legitimately differ
-between the listing's address form and a real name from `common_syms.txt'
-(`func_80065420' against `RotTransPers'), and `%lo' displacement forms, which
-the two sides spell differently. Those need the name map; data symbols do
-not, so this stays sound without one.
+## CALL TARGETS ARE NOW CHECKED TOO, AND THE OLD REASON FOR SKIPPING THEM WAS WRONG
+
+This file used to say call targets needed no checking because `ovlverify'
+"already pins them through the `jal' opcode". **That is false, and agent-h66
+measured it in batch 18:** `func_b38_80173F0C' calls `rand' (0x80069EF8), and
+spelled as the COMPLETELY UNRELATED `func_800A6D30()' it still measures 122
+words / 0 differing. The `jal' word is a relocation on both sides and compares
+equal, so the callee's identity is exactly as invisible as a data symbol's.
+
+The OTHER half of the old reason was real: the listing spells a call by
+address (`func_80065420') where the source may use a real name from
+`common_syms.txt' (`RotTransPers'), so a naive compare reports every renamed
+callee. That is the same shape as the 71 false reports `jtbl_*' once produced.
+The fix is the name map, which `splat/common_syms.txt' already is: both sides
+are canonicalised through it before comparing, so `func_80065420' and
+`RotTransPers' are one symbol.
+
+Still deliberately NOT checked: `%lo' displacement forms, which the two sides
+spell differently.
 
 A unit must have been BUILT for its assembly to exist, so run this after
 `make check', never instead of it.
@@ -43,6 +56,7 @@ Usage:
     python3 tools/decomp/relocheck.py ovl_dng_b31      # one unit
 """
 import collections
+import io
 import glob
 import os
 import re
@@ -78,6 +92,43 @@ PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 #                dispatcher checks its PLACEMENT at the build gate, so this
 #                tool is not the thing that should chase them.
 SYM = re.compile(r"\b(D_(?:[a-z0-9]+_)?8[0-9A-Fa-f]{7})\b")
+# Call targets: `jal <name>' on either side. Bank-local (func_b38_8017...) and
+# plain address forms (func_80069ef8) both match; so do real names.
+CALL = re.compile(r"\bjal\s+([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def name_map():
+    """{lowercase addr-form name: canonical name} from splat/common_syms.txt."""
+    out = {}
+    path = os.path.join(PROJ, "splat", "common_syms.txt")
+    if not os.path.exists(path):
+        return out
+    for line in io.open(path, encoding="utf-8", errors="replace"):
+        m = re.match(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(0x[0-9a-fA-F]+)\s*;", line)
+        if m:
+            out["func_%s" % m.group(2)[2:].lower()] = m.group(1)
+    return out
+
+
+NAMES = None
+
+
+def canon(sym):
+    """Canonicalise a call target through common_syms.txt, case-insensitively."""
+    global NAMES
+    if NAMES is None:
+        NAMES = name_map()
+    low = sym.lower()
+    if low in NAMES:
+        return NAMES[low]
+    # an address-form name is spelled with either case in the two streams
+    if re.match(r"^func_8[0-9a-f]{7}$", low):
+        return low
+    return sym
+
+
+def calls(text):
+    return collections.Counter(canon(m.group(1)) for m in CALL.finditer(text))
 # Resident code starts at 0x8003c9f8; nothing below that can be a bank table.
 LOW = 0x8003C9F8
 
@@ -98,8 +149,9 @@ def listing_syms(unit, func):
     # A jump table BELONGS to the function, it is not a reference to one, and
     # the listing defines it in a `.section .rodata' block at the head.
     t = re.sub(r"\.section \.rodata.*?\.section \.text", "", t, flags=re.S)
-    return collections.Counter(m.group(1) for m in SYM.finditer(t)
-                               if interesting(m.group(1)))
+    return (collections.Counter(m.group(1) for m in SYM.finditer(t)
+                                if interesting(m.group(1))),
+            calls(t))
 
 
 def built_syms(unit):
@@ -116,9 +168,10 @@ def built_syms(unit):
             cur, buf = m.group(1), []
             continue
         if re.match(r"^\s*\.end\b", ln) and cur:
-            out[cur] = collections.Counter(
-                x.group(1) for x in SYM.finditer("\n".join(buf))
-                if interesting(x.group(1)))
+            body = "\n".join(buf)
+            out[cur] = (collections.Counter(
+                x.group(1) for x in SYM.finditer(body)
+                if interesting(x.group(1))), calls(body))
             cur = None
             continue
         if cur is not None:
@@ -131,14 +184,17 @@ def check(unit):
     if built is None:
         return None
     rows = []
-    for func, got in sorted(built.items()):
-        want = listing_syms(unit, func)
-        if want is None:
+    for func, (got, gotc) in sorted(built.items()):
+        w = listing_syms(unit, func)
+        if w is None:
             continue
+        want, wantc = w
         missing = want - got
         extra = got - want
-        if missing or extra:
-            rows.append((func, missing, extra))
+        cmissing = wantc - gotc
+        cextra = gotc - wantc
+        if missing or extra or cmissing or cextra:
+            rows.append((func, missing, extra, cmissing, cextra))
     return len(built), rows
 
 
@@ -154,16 +210,23 @@ def main():
             continue
         n, rows = r
         nf += n
-        for func, missing, extra in rows:
+        for func, missing, extra, cmissing, cextra in rows:
             nb += 1
             print("%s: %s" % (unit, func))
             if missing:
-                print("    the LISTING references, the build does not: %s"
+                print("    DATA the LISTING references, the build does not: %s"
                       % ", ".join(sorted(missing.elements())))
             if extra:
-                print("    the BUILD references, the listing does not: %s"
+                print("    DATA the BUILD references, the listing does not: %s"
                       % ", ".join(sorted(extra.elements())))
-    print("\n%d landed bodies checked, %d with a data-symbol mismatch" % (nf, nb))
+            if cmissing:
+                print("    CALLS the LISTING makes, the build does not: %s"
+                      % ", ".join(sorted(cmissing.elements())))
+            if cextra:
+                print("    CALLS the BUILD makes, the listing does not: %s"
+                      % ", ".join(sorted(cextra.elements())))
+    print("\n%d landed bodies checked, %d with a data-symbol or call mismatch"
+          % (nf, nb))
 
 
 if __name__ == "__main__":

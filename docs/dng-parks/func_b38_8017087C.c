@@ -41,6 +41,81 @@
 
    csrc/ovl_dng_b38.c, agent-h51, 2026-11-23.
 
+   SECOND INDEPENDENT CONFIRMATION, 2026-11-24, agent-h66, batch 18. THE BODY
+   BELOW IS CORRECT AND THE BLOCKER IS THE BOUNDARY, NOT THE C. I spliced it
+   into my own copy of the unit unchanged and `aligndiff.py' gives
+
+       built 124 words, target 125 words, 1 aligned differences
+       -         0 8017087C      sll $at, $zero, 16
+
+   -- the single difference is the target's word 0, which is the rodata word
+   and which no C can emit. `ovlverify' gives `target 125 words, candidate
+   124 words, 125 differing', the whole-stream shift, exactly as the park
+   says. I also RE-PRICED the park's first measured spelling on my copy: `w =
+   p' collapsed into plain `p' at the six tail sites is `built 123 words,
+   target 125 words, 17 aligned differences', i.e. 16 with the phantom word
+   discounted -- the park's recorded figure to the digit. The table is sound.
+
+   TWO NEW PIECES OF EVIDENCE, BOTH FROM THE REPO AND NEITHER NEEDING A BUILD.
+
+   (1) THE ROM'S OWN HANDLER PAIR NAMES 0x80170880 AS THE ENTRY, AND SPLAT
+   CANNOT NAME IT. Every carved object opens with an 8-byte `data'
+   subsegment holding two code pointers. For ovl_dng_b38 splat has already
+   written them out, in asm/data/FA7000.data.s:
+
+       dlabel D_b38_80170800
+           .word 0x80170880
+           .word func_b38_80170A70
+       enddlabel D_b38_80170800
+
+   The SECOND word resolved to a symbol. The FIRST did not, because under the
+   current boundary no symbol exists at 0x80170880 -- splat put the first
+   `glabel' at 0x8017087C. Across all 116 carved objects' data listings
+   exactly TWO have a bare literal in that slot instead of a symbol:
+   asm/data/FA7000.data.s (this one, 0x80170880) and asm/data/E2D000.data.s
+   (ovl_dng_b29, 0x80170890, where splat's `c' start is 0xe2d08c and the
+   swallowed word is 0x2E004981). Every other carved object's first handler
+   resolves. So the defect is a one-word-early `c' start, it is detectable
+   WITHOUT any ROM reading, and ovl_dng_b29 has it too.
+
+   (2) THE LINKER SCRIPT DOES NOT PIN .text, SO EDIT (2) IS WHAT MOVES IT AND
+   EDIT (1) DOES NOT. build/dungeon.bin.ld:1718-1734 places the segment at
+   0x80170800 and then emits, in order and with no address of its own,
+   `.rodata', `.bss', `.text', `.data'. `nm build/dungeon.bin.elf' on the
+   committed build gives
+
+       ovl_dng_b38_RODATA_START = 0x80170808
+       ovl_dng_b38_RODATA_SIZE  = 0x74
+       ovl_dng_b38_RODATA_END   = 0x8017087c
+       ovl_dng_b38_TEXT_START   = 0x8017087c
+
+   so TEXT_START is a CONSEQUENCE of the emitted rodata size, not of the yaml.
+   Today the container matches because the stray word is carried as the first
+   `instruction' of func_b38_8017087C's INCLUDE_ASM listing. Growing
+   D_b38_80170874 from 0x8 to 0xC makes RODATA_SIZE 0x78 and TEXT_START
+   0x80170880, and the 124-word body then occupies 0x80170880..0x80170A70 --
+   the ROM's own extent -- with the container the same size as now. THE TWO
+   EDITS MUST THEREFORE BE MADE TOGETHER WITH THE BODY SPLICED IN, AND IN THAT
+   combination nothing moves:
+
+       rodata 0x74 + stub 125 words  = today, matches
+       rodata 0x78 + body  124 words = also matches
+       rodata 0x78 + stub  125 words = every label +4   <- the failed attempt
+       rodata 0x74 + body  124 words = container 4 bytes short
+
+   The recorded failure (`every label +4, image grew') is the THIRD row. That
+   is what you get from edit (2) while the text still has the 125-word
+   listing -- i.e. if the body was not spliced, or if splat had not
+   regenerated the listing at its new 124-word length. It is NOT evidence
+   against the park. Edit (1) is needed for the regenerated listing's length
+   and start and so that 0xfa7000's first word resolves to a symbol; it has no
+   effect on the link by itself.
+
+   A SPLICED COPY READY FOR THAT TEST is at
+   /home/case/scratch/azure-dng/agent-h66/ovl_dng_b38.with_8017087C_park.c
+   (this body plus the three functions agent-h66 landed this batch). It still
+   has D_b38_80170874 at 0x8 bytes; edit (2) is one four-byte addition there.
+
    THE BODY BELOW IS BYTE-EXACT. aligndiff.py reports `built 124 words,
    target 125 words, 1 aligned differences' and that ONE difference is the
    target's word 0, which no C can emit. ovlverify prints
