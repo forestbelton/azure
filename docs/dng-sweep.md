@@ -1499,3 +1499,27 @@ producing nothing, reported in a format that reads like a result. The log
 line `base=?` is the only tell, and `permrun.py`'s docstring already says to
 read only the verdict -- which is exactly how a silent failure hides. I only
 looked because the number was implausible for a 97-difference body.
+
+## TWO MEASUREMENT HABITS OF MINE THAT WERE WRONG, BOTH FOUND THE SAME DAY
+
+**I counted `OK  byte-identical` lines to claim four containers.** Those lines
+do not name the container -- the name is on the PRECEDING `reference data/...`
+line -- and the count was split across two logs as "3" and "2", which sums to
+five for four containers. The claim happened to be true (town.bin b946a57a,
+main.bin 69f63236, dungeon.bin 27f9fcc3, slus_006.14 e6bfbb95, the last
+verified twice), but I had been asserting it from a line count that cannot
+distinguish four containers from one container checked four times. **Grep the
+`reference data/` line and read the hashes.**
+
+**I backgrounded the permuter two ways at once.** `nohup ... &` inside a call
+that also passes `run_in_background` makes the outer shell exit immediately,
+the harness reports the command complete with exit 0, and the child is reaped
+-- leaving a zero-byte log. The first symptom was identical to the park's
+missing typedef: a permuter that appears to have run and produced nothing.
+Two different causes, one indistinguishable output, and in both cases the
+reassuring part was an exit code of 0.
+
+So the rule for this tool: **run it with `run_in_background` and no `&`**, and
+read `base=` on the first line before believing anything else. In the
+foreground it reaches `base=3230` and drops to 2875 in sixty seconds at two
+jobs, which is what a working run looks like.

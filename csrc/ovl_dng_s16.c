@@ -50,7 +50,69 @@ void func_s16_800243BC();
 
 UnkNode *func_8003FD64(s32, void *);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s16", func_s16_8002407C);
+extern u8 D_800E1C64[];
+extern u8 D_s16_80024004[];
+extern u8 D_s16_80024034[];
+s32 func_8009D218_2(u8 *, s32) __asm__("func_8009D218");
+s32 func_800A6870(s16);
+s16 func_800A48F0_i(u8 *, s32, s32) __asm__("func_800A48F0");
+void func_80099844(u8 *, u8 *);
+void *func_800990FC(void);
+void *func_80099194(u8 *, u8 *);
+void *func_80099734(u8 *, u8 *);
+u8 *func_80099290(u8 *);
+s32 func_800A5720(void *);
+
+/* Apply status kind 0x13 at a strength func_800A6870 derives from the second
+   parameter, then -- gated on the node's +0x14 & 0x4000 on both paths --
+   print the resident D_800E1C64 message if the status took, or assemble the
+   three-part bank-local message D_s16_80024004 / name / D_s16_80024034 if it
+   did not.
+
+   The gate is csrc/ovl_dng_s20.c's func_s20_800262B8 (func_8009D218 through
+   a TWO-argument alias, func_800A48F0 through an s16-returning one) and the
+   dialog chain is csrc/ovl_dng_b21.c's func_b21_80175E14 with one extra
+   func_80099194 in front of the func_80099734 name insert.
+
+   The second parameter is `u8', which is what makes the
+   `andi $a0, $s0, 0xFF' ahead of the func_800A6870 call its own truncation
+   rather than a mask -- s20's entry measures the s32 spelling at 9 differing
+   in its own body; nothing had to be fought for here.
+   60 words, 0 differing, first compile.
+
+   D_s16_80024004 and D_s16_80024034 ARE EXTERNS, NOT DEFINITIONS: they sit in
+   this object's `data' subsegment, 0x1894800..0x1894838, below the `.rodata'
+   one that owns D_s17_80024058.
+   THIS COPY'S OWN CONSTANT: 0x2 -> 0x1, 0x13 -> 0x12, 0x4 -> 0x2.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s16_8002407C(u8 *p, u8 d)
+{
+    void *m;
+    void *h;
+
+    if (func_8009D218_2(p, 1) == 0)
+    {
+        if ((s16)func_800A48F0_i(p, 0x12, (s8)(func_800A6870(d) + 2)) != 0)
+        {
+            if ((*(s32 *)(p + 0x14) & 0x4000) != 0)
+            {
+                func_80099844(p, D_800E1C64);
+            }
+        }
+        else if ((*(s32 *)(p + 0x14) & 0x4000) != 0)
+        {
+            h = func_800990FC();
+            m = h;
+            h = func_80099194(D_s16_80024004, h);
+            h = func_80099734(p, h);
+            h = func_80099194(D_s16_80024034, h);
+            func_80099290(h);
+            func_800A5720(m);
+        }
+    }
+}
 
 /* One semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
    projected through the 0x1F800000 scratchpad, with the tile's colour word
