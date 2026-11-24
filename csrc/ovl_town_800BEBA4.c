@@ -501,8 +501,8 @@ typedef struct UnkTown260C
    csrc/unk_72A8.c:40's Unk345B8SP rather than guessed from pads: the SVECTORs
    at +0x74/+0x7C/+0x84/+0x8C, unk_94/unk_98 as RotTransPers' p/flag, and
    unk_C4 as the otz accumulator are that unit's layout for the same object.
-   func_80065420 IS RotTransPers (splat/slus_006.14_symbol_addrs.txt:112), but
-   it is spelled func_80065420 here because that is the name
+   RotTransPers IS RotTransPers (splat/slus_006.14_symbol_addrs.txt:112), but
+   it is spelled RotTransPers here because that is the name
    splat/town.bin_undefined_funcs_auto.txt provides and so the one the town
    container definitely defines. */
 typedef struct UnkTownSP
@@ -726,8 +726,8 @@ typedef struct UnkTownA17CCSP
 
    +0x08 and +0x10 were pad until func_800A9E68 and func_800AA068 landed.
    They are an SVECTOR rotation and a VECTOR scale, and the witness is the
-   pair of libgte calls in func_800AA068 -- `func_80065820(&a->unk_08, m)`
-   (RotMatrix, SVECTOR *) and `func_80064BC0(m, &a->unk_10)` (ScaleMatrix,
+   pair of libgte calls in func_800AA068 -- `RotMatrix(&a->unk_08, m)`
+   (RotMatrix, SVECTOR *) and `ScaleMatrix(m, &a->unk_10)` (ScaleMatrix,
    VECTOR *) -- against func_800A1080, which builds the same matrix from the
    same three calls in the same order over its own SVECTOR/VECTOR pair.
    func_800A9E68 writes only unk_08.vy on &D_800D1178 and only unk_08.vx on
@@ -1500,7 +1500,6 @@ extern u8 D_800F8D1C[];
 extern u16 D_80082E76;
 extern void (*D_800D1638[])();
 extern void (*D_800D1640[])();
-void func_8006733C(void *r, void *src);
 extern s32 D_80113220;
 extern u8 D_800D43B0[];
 extern u8 D_800D43B8[];
@@ -2087,7 +2086,6 @@ s32 func_80049E1C(s32 a, s32 d, s32 m);
 void func_800B1778(s32 a, s32 b, s32 c);
 void func_800B17C0(s32 a, s32 b);
 void func_800ADB30(UnkTownADD80 *s);
-s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag);
 void func_800A8C84(SVECTOR *dst, UnkTown2AE8 *b);
 s32 func_8009D424();
 void func_800AD8CC(UnkTownADD80 *s);
@@ -2105,11 +2103,6 @@ s32 func_800352FC(void);
 void func_800AAF5C(void);
 void func_800AAFE0(UnkTown2AE8 *v, s32 b);
 void func_800C2C80(UnkTownActor *a, UnkTownRend *b, s32 c, s32 d);
-void func_800649A0(void);
-void func_80064A40(void);
-MATRIX *func_80064B90(MATRIX *m, VECTOR *v);
-MATRIX *func_80064BC0(MATRIX *m, VECTOR *v);
-MATRIX *func_80065820(SVECTOR *r, MATRIX *m);
 void func_800A1354(UnkTownA1080 *s);
 s32 func_8008C3B8(UnkTownVec16 *q, s32 i, UnkTownPlane *pl);
 s32 func_8008CF48(UnkVec *v, UnkTownPlane **out);
@@ -2151,7 +2144,6 @@ void func_800B0D0C();
 void func_800B0FD4();
 void func_8004E5A0(s32 v, s32 n, u8 *out);
 void func_8004E69C(u8 *q);
-void func_80069E38(u8 *dst, u8 *src);
 u32 func_8004AC18(s32 i);
 u8 *func_800B544C(u8 *s, u8 *p);
 u8 *func_800B557C(u8 *s, u8 *p);
@@ -2237,8 +2229,6 @@ extern u8 D_801112C8[];
 extern u8 D_801114C8[];
 s16 func_80042900(s8 *p, s8 n);
 u32 *func_80040574(s32 n);
-void func_80067014(s32 n);
-void func_800672D8(void *p, void *q);
 void func_8003F2A4(Unk80083968 *p);
 extern u32 D_8002E5D8[];
 extern u32 D_8002E5E8[];
@@ -2254,7 +2244,6 @@ u32 func_80049918(s32 i);
 s32 func_80049944(u32 a);
 s32 func_80049984(u8 *p);
 s32 func_8004AC3C(u8 *p, s32 *out);
-void func_80069EC8(void *p, s32 n);
 extern u8 D_80077FBC[];
 extern u8 D_800892CC[];
 extern u8 D_800D1794[];
@@ -2299,7 +2288,6 @@ typedef struct UnkTownB1DCCObj
 extern u8 D_800D162C[][2];
 extern u8 D_800D1630[][4];
 void func_80044AAC(UnkNode *, UnkNode *);
-s32 func_80069EF8();
 /* The particle template func_80097AD0/func_800A895C build on the stack and
    hand to func_8009792C/func_800A878C: a THIRD view over the same six 16.16
    words as UnkTown2AE8, and the only one that needs to exist, because this
@@ -2376,13 +2364,7 @@ extern s16 D_800D45AA[];
 extern UnkSlot D_80082E80_b __asm__("D_80082E80");
 void func_80044D24(u8 *, UnkSlot *, s16);
 void func_800453E0(u8 *, UnkVec *, UnkSlot *, s16);
-u16 func_80066460(s32 tp, s32 abr, s32 x, s32 y); /* GetTPage */
-void func_8006658C(void *ot, void *p);            /* AddPrim */
-void func_80066640(void *p, s32 abe);             /* SetSemiTrans */
-void func_800666E0(POLY_F4 *p);                   /* SetPolyF4 */
-void func_800666F4(POLY_FT4 *p);                  /* SetPolyFT4 */
-void func_80067E2C(DR_AREA *p, RECT *r);          /* SetDrawArea */
-void func_80067EF4(void *p, s32 a, s32 b);        /* the 0xE6 mask primitive */
+void func_80067EF4(void *p, s32 a, s32 b); /* the 0xE6 mask primitive */
 u16 func_8008C180(s16 x, s16 y);
 s32 func_800C1D44(s32 id);
 extern u8 D_80045C34[];
@@ -2716,7 +2698,7 @@ extern u8 D_800E9ECC[];
    it at the UnkNode's +0x10 -- it has since landed in
    csrc/ovl_town_800BEBA4.c -- and an address-taken symbol needs a declaration
    where an implicitly-declared call does not; it is declared unprototyped the
-   way func_800BF1C8 and func_800BF4CC are.  func_800673A0 has no declaration
+   way func_800BF1C8 and func_800BF4CC are.  MoveImage has no declaration
    anywhere in csrc/ or include/ -- the signature is the one the func_800BF1C8
    landed definition (csrc/ovl_town_800BEBA4.c, parked when this block was
    written) reads off its own listing.
@@ -2726,7 +2708,6 @@ extern u8 D_800E9ECC[];
    and all four resident symbols from splat/town.bin_undefined_syms_auto.txt. */
 void func_800BEBA4();
 void func_800BF15C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r);
-void func_800673A0(s16 *r, s32 x, s32 y);
 extern u8 D_800D231C[];
 extern s16 D_800D2324[];
 extern u8 D_80113138[];
@@ -2839,7 +2820,6 @@ void func_800A970C();
 void func_800C2CB0(u8 *a, s32 c, void *s, s32 z);
 void func_80033CD8(u8 *p, u32 tag);
 extern u8 D_80045340[];
-void func_80069EE8(u8 *p, s32 v, s32 n);
 void func_800422DC(u8 *arg0, u8 *arg1);
 void func_800423C0(u8 *arg0, s32 arg1, u8 *arg2);
 u32 func_8003C06C(s32 i);
@@ -3106,8 +3086,8 @@ void func_800BEBA4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
                 o->unk_10 = (u32)func_800BF15C;
                 func_8004491C(o, (u32)D_80045340);
                 rr = (UnkTownRend *)o->unk_0C;
-                o->unk_08->unk_00 = q->unk_00 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
-                o->unk_08->unk_04 = q->unk_04 + (((func_80069EF8() & 0x1FF) - 0x100) << 13);
+                o->unk_08->unk_00 = q->unk_00 + (((rand() & 0x1FF) - 0x100) << 13);
+                o->unk_08->unk_04 = q->unk_04 + (((rand() & 0x1FF) - 0x100) << 13);
                 o->unk_08->unk_08 = q->unk_08;
                 rr->unk_10 = 0x60;
                 rr->unk_1E = 0x1000;
@@ -3130,8 +3110,8 @@ void func_800BEBA4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
         (*(s16 *)p)++;
         break;
     case 2:
-        func_8006733C(D_800D2324, buf);
-        func_80067014(0);
+        StoreImage(D_800D2324, buf);
+        DrawSync(0);
         for (i = 0xF; i >= 0; i--)
         {
             v = buf[i];
@@ -3144,14 +3124,14 @@ void func_800BEBA4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
         {
             for (i = 0; i < 0x10 - (*(s16 *)((u8 *)p + 0x2) >> 2); i++)
             {
-                red = (func_80069EF8() % 3) * 8 + 0xF;
-                green = (func_80069EF8() % 3) * 8 + 0xF;
-                blue = (func_80069EF8() % 3) * 8 + 0xF;
-                buf[func_80069EF8() & 0xF] = (blue << 10) + ((green << 5) - 0x8000) + red;
+                red = (rand() % 3) * 8 + 0xF;
+                green = (rand() % 3) * 8 + 0xF;
+                blue = (rand() % 3) * 8 + 0xF;
+                buf[rand() & 0xF] = (blue << 10) + ((green << 5) - 0x8000) + red;
             }
         }
-        func_800672D8(D_800D231C, buf);
-        func_80067014(0);
+        LoadImage(D_800D231C, buf);
+        DrawSync(0);
         if (*(s16 *)((u8 *)p + 0x2) > 0)
         {
             break;
@@ -3162,13 +3142,13 @@ void func_800BEBA4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
     case 3:
         for (i = 0xF; i >= 0; i--)
         {
-            red = (func_80069EF8() % 3) * 8 + 0xF;
-            green = (func_80069EF8() % 3) * 8 + 0xF;
-            blue = (func_80069EF8() % 3) * 8 + 0xF;
+            red = (rand() % 3) * 8 + 0xF;
+            green = (rand() % 3) * 8 + 0xF;
+            blue = (rand() % 3) * 8 + 0xF;
             buf[i] = (blue << 10) + ((green << 5) - 0x8000) + red;
         }
-        func_800672D8(D_800D231C, buf);
-        func_80067014(0);
+        LoadImage(D_800D231C, buf);
+        DrawSync(0);
         if (*(s16 *)((u8 *)p + 0x2) > 0)
         {
             break;
@@ -3188,8 +3168,8 @@ void func_800BEBA4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
             blue = blue + (((0x1F - blue) * *(s16 *)((u8 *)p + 0x2)) >> 5);
             buf[i] = (blue << 10) + ((green << 5) - 0x8000) + red;
         }
-        func_800672D8(D_800D231C, buf);
-        func_80067014(0);
+        LoadImage(D_800D231C, buf);
+        DrawSync(0);
         if (*(s16 *)((u8 *)p + 0x2) > 0)
         {
             break;
@@ -3197,8 +3177,8 @@ void func_800BEBA4(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
         (*(s16 *)p)++;
         break;
     case 5:
-        func_800672D8(D_800D231C, D_80113138);
-        func_80067014(0);
+        LoadImage(D_800D231C, D_80113138);
+        DrawSync(0);
         *(u16 *)((u8 *)p - 0x2) |= 0x8000;
         D_800814A0 |= 0x8000;
         break;
@@ -3278,7 +3258,7 @@ void func_800BF1C8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *r)
         {
             i = 1;
         }
-        func_800673A0(box[i], 0x188, 0x180);
+        MoveImage(box[i], 0x188, 0x180);
         /* fallthrough */
     case 3:
         d = ((UnkTown2AE8 *)D_80083780)->unk_00 - b->unk_00;

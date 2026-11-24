@@ -72,11 +72,9 @@ extern u8 D_80089080[];
 extern u8 D_800DD880[];
 extern u8 D_800DD8B4[];
 extern u8 D_800E1C58[];
-s32 func_80069EF8(void);
 
 extern u8 *D_80073618[];
 extern u8 *D_800DF03C[];
-s32 func_80069E98(u8 *);
 s8 *func_8004E298(u8 *, u8 *, s32);
 void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f);
 
@@ -10107,8 +10105,8 @@ u8 *func_800992A8(s32 n, u8 *d)
 
 /* Append a string to `dst` and hand back the new cursor.
 
-   THEY ARE SPELLED `strlen` / `memcpy`, NOT `func_80069E98` /
-   `func_80069ED8`. Both names link, now that build/dungeon.bin passes
+   THEY ARE SPELLED `strlen` / `memcpy`, NOT `strlen` /
+   `memcpy`. Both names link, now that build/dungeon.bin passes
    --script=splat/common_syms.txt like town's and main's rules, and both
    measure the same bytes; the library spellings are the readable ones.
    seqcheck canonicalises a PSY-Q name to its `func_` spelling before
@@ -14012,7 +14010,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     sp->unk_38 = 0x1000;
     flag = base != D_801C9E40;
     sp->unk_48 = 0;
-    func_80067E2C((DR_AREA *)q, (RECT *)base);
+    SetDrawArea((DR_AREA *)q, (RECT *)base);
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, q);
     sp->unk_30 = s->unk_1C;
     sp->unk_34 = s->unk_1E;
@@ -14029,12 +14027,12 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     sp->unk_E4 = sp->unk_00;
     sp->unk_E8 = (s16)sp->unk_02;
     sp->unk_EC = 0;
-    func_80064CF0((MATRIX *)0x1F8000D0);
-    func_80064D80((MATRIX *)0x1F8000D0);
+    SetRotMatrix((MATRIX *)0x1F8000D0);
+    SetTransMatrix((MATRIX *)0x1F8000D0);
     sp->unk_28 = 0x20 - s->unk_20;
     sp->unk_2A = 0x20 - s->unk_22;
     sp->unk_2C = 0;
-    func_80065320((SVECTOR *)0x1F800028, (s32 *)0x1F800100, (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800028, (s32 *)0x1F800100, (s32 *)0x1F800094);
     q += 0xC;
     sp->unk_100 = sp->unk_100 - sp->unk_00;
     sp->unk_102 = sp->unk_102 - sp->unk_02;
@@ -14058,10 +14056,10 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     sp->unk_84 = 0;
     sp->unk_7C = 0;
     sp->unk_74 = 0;
-    func_80065320((SVECTOR *)0x1F800070, (s32 *)(q + 0x8), (s32 *)0x1F800094);
-    func_80065320((SVECTOR *)0x1F800078, (s32 *)(q + 0x10), (s32 *)0x1F800094);
-    func_80065320((SVECTOR *)0x1F800080, (s32 *)(q + 0x18), (s32 *)0x1F800094);
-    func_80065320((SVECTOR *)0x1F800088, (s32 *)(q + 0x20), (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800070, (s32 *)(q + 0x8), (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800078, (s32 *)(q + 0x10), (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800080, (s32 *)(q + 0x18), (s32 *)0x1F800094);
+    RotTransSV((SVECTOR *)0x1F800088, (s32 *)(q + 0x20), (s32 *)0x1F800094);
     *(s16 *)(q + 0x8) = *(u16 *)(q + 0x8) + sp->unk_100;
     *(s16 *)(q + 0x10) = *(u16 *)(q + 0x10) + sp->unk_100;
     *(s16 *)(q + 0x18) = *(u16 *)(q + 0x18) + sp->unk_100;
@@ -14080,7 +14078,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     *(s16 *)(q + 0x1C) = sp->unk_14.h + sp->unk_08.h;
     *(s16 *)(q + 0x24) = sp->unk_14.h + sp->unk_10.h;
     *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
-    func_800666F4((POLY_FT4 *)q);
+    SetPolyFT4((POLY_FT4 *)q);
     __asm__("" : "=r"(q) : "0"(q));
     r = q + 0x28;
     __asm__("" : "=r"(r) : "0"(r));
@@ -14102,7 +14100,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     c[0x4] >>= 1;
     c[0x5] >>= 1;
     c[0x6] >>= 1;
-    func_800666E0((POLY_F4 *)c);
+    SetPolyF4((POLY_F4 *)c);
     c[0x7] |= 2;
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, c);
     c = r + 0x40;
@@ -14118,7 +14116,7 @@ s32 func_8009E798(u8 *p, UnkVec *b, UnkSlot *s)
     {
         rc.y = ry + 0xE0;
     }
-    func_80067E2C((DR_AREA *)c, &rc);
+    SetDrawArea((DR_AREA *)c, &rc);
     AddPrim(sp->unk_20 + *(s16 *)((u8 *)b + 0xA) * 4, c);
     PopMatrix();
     c = r + 0x58;

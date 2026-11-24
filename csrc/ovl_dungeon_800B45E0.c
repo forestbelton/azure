@@ -771,7 +771,7 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
     cv[0] = D_80083160.unk_C4;
     cv[1] = D_80083160.unk_C6;
     cv[2] = D_80083160.unk_C8;
-    func_80064AE0(&m);
+    ReadRotMatrix(&m);
     i = 0;
     md = (void *)0x1F8000D0;
     ms = (void *)0x1F800050;
@@ -816,11 +816,11 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
             p->unk_E4 = p->unk_00;
             p->unk_E8 = (s16) * (u16 *)&p->unk_02;
             p->unk_EC = (s16) * (u16 *)&p->unk_04;
-            func_80065820(&p->unk_100, md);
-            func_80064840(&m, md, ms);
-            func_80064BC0(ms, &p->unk_30);
-            func_80064D80(ms);
-            func_80064CF0(ms);
+            RotMatrix(&p->unk_100, md);
+            CompMatrix(&m, md, ms);
+            ScaleMatrix(ms, &p->unk_30);
+            SetTransMatrix(ms);
+            SetRotMatrix(ms);
             for (;;)
             {
                 if ((e[0] & 0x20) == 0)
@@ -855,10 +855,10 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                     b = b + p->unk_14.h;
                     p->unk_8A = b;
                     p->unk_82 = b;
-                    p->unk_C0 = func_80065590(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
-                                              (void *)(q + 0x08), (void *)(q + 0x10),
-                                              (void *)(q + 0x18), (void *)(q + 0x20),
-                                              f0, f1);
+                    p->unk_C0 = RotAverage4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
+                                            (void *)(q + 0x08), (void *)(q + 0x10),
+                                            (void *)(q + 0x18), (void *)(q + 0x20),
+                                            f0, f1);
                     if ((u32)p->unk_C0 < 0x1E0 &&
                         (((u16)(*(u16 *)(q + 0x08) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x0A) + 0x20) < 0x121) |
                          ((u16)(*(u16 *)(q + 0x10) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x12) + 0x20) < 0x121) |
@@ -876,9 +876,9 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                         *(u16 *)(q + 0x1C) = p->unk_14.h + p->unk_08.h;
                         *(u16 *)(q + 0x24) = p->unk_14.h + p->unk_10.h;
                         *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
-                        func_800666F4(q);
+                        SetPolyFT4(q);
                         q[0x7] |= 2;
-                        func_8006658C(p->unk_20 + p->unk_C0 * 4, q);
+                        AddPrim(p->unk_20 + p->unk_C0 * 4, q);
                     }
                 }
                 if (*(s8 *)e < 0)
@@ -887,15 +887,15 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                 }
                 e += 0xC;
             }
-            func_80064D80(&m);
-            func_80064CF0(&m);
+            SetTransMatrix(&m);
+            SetRotMatrix(&m);
         }
         else
         {
             p->unk_E4 = 0;
             p->unk_E8 = 0;
             p->unk_EC = 0;
-            p->unk_C0 = func_80065420(p, &p->unk_B8, &p->unk_90, &p->unk_94);
+            p->unk_C0 = RotTransPers(p, &p->unk_B8, &p->unk_90, &p->unk_94);
             D_8006CD30.unk_1C = p->unk_C0 * 4;
             p->unk_C0 = p->unk_C0 - 4;
             if ((u32)p->unk_C0 >= 0x1E0)
@@ -907,10 +907,10 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
             p->unk_100 = s->unk_16 + ((s16)cv[0] >> 1);
             p->unk_104 = *(u16 *)((u8 *)gg + 0xB8) + (s->unk_1A - cv[1]);
             p->unk_102 = s->unk_18;
-            func_80065820(&p->unk_100, md);
-            func_80064840(&D_8006CD30, md, ms);
-            func_80064D80(ms);
-            func_80064CF0(ms);
+            RotMatrix(&p->unk_100, md);
+            CompMatrix(&D_8006CD30, md, ms);
+            SetTransMatrix(ms);
+            SetRotMatrix(ms);
             for (;;)
             {
                 if ((e[0] & 0x20) == 0)
@@ -935,7 +935,7 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                     b = b + p->unk_14.h;
                     p->unk_8A = b;
                     p->unk_82 = b;
-                    func_800654B0(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88, &p->unk_F0,
+                    RotTransPers4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88, &p->unk_F0,
                                   &p->unk_F4, &p->unk_F8, &p->unk_FC, f0,
                                   f1);
                     q = *(u8 **)((u8 *)p + 0x18);
@@ -988,15 +988,15 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                         {
                             q[0x7] = 0x2E;
                         }
-                        func_8006658C(p->unk_20 + p->unk_C0 * 4, q);
+                        AddPrim(p->unk_20 + p->unk_C0 * 4, q);
                         if ((q[0x7] & 2) == 0)
                         {
-                            func_80064D80(&m);
-                            func_80064CF0(&m);
+                            SetTransMatrix(&m);
+                            SetRotMatrix(&m);
                             sv.vz = (s16) * (u16 *)&p->unk_04 - 4;
                             p->unk_04 = func_800BCB04(*(u16 *)&p->unk_00, *(u16 *)&p->unk_02,
                                                       sv.vz << 16 >> 16);
-                            p->unk_C0 = func_80065420(p, &p->unk_B8, f0, f1);
+                            p->unk_C0 = RotTransPers(p, &p->unk_B8, f0, f1);
                             D_8006CD30.unk_1C = p->unk_C0 * 4;
                             p->unk_C0 = p->unk_C0 - 3;
                             p->unk_B8 = p->unk_B8 - 0xA0;
@@ -1011,16 +1011,16 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                             sv.vy = sv.vz / 2;
                             p->unk_100 = -(s16)cv[0];
                             p->unk_104 = *(u16 *)((u8 *)gg + 0xB8) - cv[1];
-                            func_80065820(&p->unk_100, md);
-                            func_80064840(&D_8006CD30, md, ms);
-                            func_80064BC0(ms, &sv);
-                            func_80064D80(ms);
-                            func_80064CF0(ms);
+                            RotMatrix(&p->unk_100, md);
+                            CompMatrix(&D_8006CD30, md, ms);
+                            ScaleMatrix(ms, &sv);
+                            SetTransMatrix(ms);
+                            SetRotMatrix(ms);
                             q = *(u8 **)((u8 *)p + 0x18);
                             *(u8 **)((u8 *)p + 0x18) = q + 0x28;
                             p->unk_70 = p->unk_70 + 6;
                             p->unk_78 = p->unk_78 + 6;
-                            func_800654B0(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
+                            RotTransPers4(&p->unk_70, &p->unk_78, &p->unk_80, &p->unk_88,
                                           &p->unk_F0, &p->unk_F4, &p->unk_F8, &p->unk_FC,
                                           f0, f1);
                             *(u16 *)(q + 0x08) = p->unk_F0 + p->unk_B8;
@@ -1048,7 +1048,7 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                             }
                             *(u32 *)(q + 0x4) = *(u32 *)s->unk_0C;
                             q[0x7] = 0x2C;
-                            func_8006658C(p->unk_20 + p->unk_C0 * 4, q);
+                            AddPrim(p->unk_20 + p->unk_C0 * 4, q);
                         }
                     }
                 }
@@ -1058,8 +1058,8 @@ s32 func_800B51C8(u8 *arg0, UnkVec *v, UnkSlot *s)
                 }
                 e += 0xC;
             }
-            func_80064D80(&m);
-            func_80064CF0(&m);
+            SetTransMatrix(&m);
+            SetRotMatrix(&m);
         }
     }
     *(u8 **)(gg->unk_00 + 0x8D0) = *(u8 **)((u8 *)p + 0x18);

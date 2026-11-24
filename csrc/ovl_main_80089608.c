@@ -168,7 +168,6 @@ void func_80089608(s32 *);
 extern void func_80044BB0(void) __asm__("D_80044BB0");
 extern void func_80053A88(void) __asm__("D_80053A88");
 
-
 void func_80089608(s32 *p)
 {
     /* r MUST be initialised here, ahead of the three tables, not assigned
@@ -179,15 +178,29 @@ void func_80089608(s32 *p)
        260 words / 245 DIFF. */
     s16 *r = (s16 *)p[0];
     u8 *tbl1[10] = {
-        &D_8008B074[0x00], &D_8008B074[0x78], &D_8008B074[0x54],
-        &D_8008B074[0x60], &D_8008B074[0x6C], &D_8008B074[0xA8],
-        &D_8008B074[0x9C], &D_8008B074[0x90], &D_8008B074[0xCC],
+        &D_8008B074[0x00],
+        &D_8008B074[0x78],
+        &D_8008B074[0x54],
+        &D_8008B074[0x60],
+        &D_8008B074[0x6C],
+        &D_8008B074[0xA8],
+        &D_8008B074[0x9C],
+        &D_8008B074[0x90],
+        &D_8008B074[0xCC],
         &D_8008B074[0xC0],
     };
     s16 tbl2[10] = {100, 100, 60, 50, 20, -15, -40, -50, -80, -100};
     u32 tbl3[10] = {
-        0xFFFFFF, 0xFF, 0xFF0000, 0xFF0000, 0xFF0000,
-        0xFF, 0xFF, 0xFF, 0xFF00, 0xFF00,
+        0xFFFFFF,
+        0xFF,
+        0xFF0000,
+        0xFF0000,
+        0xFF0000,
+        0xFF,
+        0xFF,
+        0xFF,
+        0xFF00,
+        0xFF00,
     };
     s32 i;
     s32 *w;
@@ -213,51 +226,51 @@ void func_80089608(s32 *p)
         }
         break;
     case 1:
-        {
-            s32 v;
+    {
+        s32 v;
 
-            v = ++((s16 *)p)[5];
-            if (v < 0x80)
+        v = ++((s16 *)p)[5];
+        if (v < 0x80)
+        {
+            /* RE-READ, not `v & 3`. v is the sign-extended value, so
+               `v & 3` masks the sll/sra result; re-reading the field
+               lets cse hand back the raw sum the `sh` stored, which is
+               the target's `andi $v0, $a0, 0x3`. It also keeps that raw
+               sum in its own register, which is what lets dbr sink the
+               `sh $a0, 0xA($s3)` into the branch's delay slot.
+               `v & 3`: 259 words / 7 DIFF. */
+            if ((((u16 *)p)[5] & 3) == 0)
             {
-                /* RE-READ, not `v & 3`. v is the sign-extended value, so
-                   `v & 3` masks the sll/sra result; re-reading the field
-                   lets cse hand back the raw sum the `sh` stored, which is
-                   the target's `andi $v0, $a0, 0x3`. It also keeps that raw
-                   sum in its own register, which is what lets dbr sink the
-                   `sh $a0, 0xA($s3)` into the branch's delay slot.
-                   `v & 3`: 259 words / 7 DIFF. */
-                if ((((u16 *)p)[5] & 3) == 0)
-                {
-                    p[1] += 0x10101;
-                }
+                p[1] += 0x10101;
             }
-            else if (v < 0x91)
-            {
-                /* The scratch IS the loop counter: the target holds this
-                   value in $s2, which is i's register, and i is not live
-                   here. A separate local lands in a temp instead.
-                   And `i * 0x10101` is the wrong expansion -- synth_mult
-                   picks ((i<<8)+i)<<8 + i, the target wants i + (i<<8) +
-                   (i<<16) accumulated back into i. `p[1] += i * 0x10101`:
-                   259 words / 14 DIFF. */
-                i = (~p[1] & 0xFF) >> 1;
-                i += (i << 8) + (i << 16);
-                p[1] += i;
-            }
-            else if (v < 0xA0)
-            {
-                i = (p[1] & 0xFF) >> 3;
-                i += (i << 8) + (i << 16);
-                p[1] -= i;
-            }
-            else
-            {
-                ((s16 *)p)[4] = 0xFF;
-                p[1] = 0;
-            }
-            ((u16 *)p)[7] -= 0xC;
         }
-        break;
+        else if (v < 0x91)
+        {
+            /* The scratch IS the loop counter: the target holds this
+               value in $s2, which is i's register, and i is not live
+               here. A separate local lands in a temp instead.
+               And `i * 0x10101` is the wrong expansion -- synth_mult
+               picks ((i<<8)+i)<<8 + i, the target wants i + (i<<8) +
+               (i<<16) accumulated back into i. `p[1] += i * 0x10101`:
+               259 words / 14 DIFF. */
+            i = (~p[1] & 0xFF) >> 1;
+            i += (i << 8) + (i << 16);
+            p[1] += i;
+        }
+        else if (v < 0xA0)
+        {
+            i = (p[1] & 0xFF) >> 3;
+            i += (i << 8) + (i << 16);
+            p[1] -= i;
+        }
+        else
+        {
+            ((s16 *)p)[4] = 0xFF;
+            p[1] = 0;
+        }
+        ((u16 *)p)[7] -= 0xC;
+    }
+    break;
     case 0xFF:
         ((u16 *)p)[-1] |= 0x8000;
         D_800814A0_a[0] |= 0x8000;
@@ -368,69 +381,69 @@ void func_80089A38(s32 *p, s32 *q, s32 arg2)
     case 0:
         break;
     case 1:
-        {
-            s32 d;
+    {
+        s32 d;
 
-            q[0] += q[3];
-            q[1] += q[4];
-            d = q[3];
-            if (((s16 *)p)[6] != 0)
-            {
-                q[3] = d - 0x10000;
-            }
-            else
-            {
-                q[3] = d + 0x10000;
-            }
-            q[4] += 0x8000;
-            if (q[3] == 0)
-            {
-                ((s16 *)p)[4]++;
-            }
+        q[0] += q[3];
+        q[1] += q[4];
+        d = q[3];
+        if (((s16 *)p)[6] != 0)
+        {
+            q[3] = d - 0x10000;
         }
-        break;
+        else
+        {
+            q[3] = d + 0x10000;
+        }
+        q[4] += 0x8000;
+        if (q[3] == 0)
+        {
+            ((s16 *)p)[4]++;
+        }
+    }
+    break;
     case 2:
-        {
-            s32 v;
+    {
+        s32 v;
 
-            v = 0xE8;
+        v = 0xE8;
+        if (((s16 *)p)[6] != 0)
+        {
+            v = 0x58;
+        }
+        ((s16 *)q)[1] = v;
+        ((s16 *)q)[3] = r[18] * 16 + 0xA8;
+        if (r[16] == 0x20)
+        {
+            s32 t;
+
+            t = -0x20000;
             if (((s16 *)p)[6] != 0)
             {
-                v = 0x58;
+                t = 0x20000;
             }
-            ((s16 *)q)[1] = v;
-            ((s16 *)q)[3] = r[18] * 16 + 0xA8;
-            if (r[16] == 0x20)
-            {
-                s32 t;
-
-                t = -0x20000;
-                if (((s16 *)p)[6] != 0)
-                {
-                    t = 0x20000;
-                }
-                q[3] = t;
-                q[4] = -0x40000;
-                ((s16 *)p)[4]++;
-            }
+            q[3] = t;
+            q[4] = -0x40000;
+            ((s16 *)p)[4]++;
         }
-        break;
+    }
+    break;
     case 3:
-        {
-            s32 d;
-            s32 v;
+    {
+        s32 d;
+        s32 v;
 
-            q[0] += q[3];
-            q[1] += q[4];
-            d = q[3];
-            q[3] = d + (d >> 3);
-            v = ((s16 *)q)[1];
-            if ((v < 0 ? -v : v) >= 0x169)
-            {
-                ((s16 *)p)[4] = 0xFF;
-            }
+        q[0] += q[3];
+        q[1] += q[4];
+        d = q[3];
+        q[3] = d + (d >> 3);
+        v = ((s16 *)q)[1];
+        if ((v < 0 ? -v : v) >= 0x169)
+        {
+            ((s16 *)p)[4] = 0xFF;
         }
-        break;
+    }
+    break;
     case 0xFF:
         ((u16 *)p)[-1] |= 0x8000;
         D_800814A0_a[0] |= 0x8000;
@@ -503,13 +516,13 @@ void func_80089C24(void)
     vol[2] = t2;
 
     func_80053DA8(0x200);
-    func_8006733C(&r, buf);
-    func_80067014(0);
+    StoreImage(&r, buf);
+    DrawSync(0);
     i = 0xFF;
     do
     {
-        /* The STP bit over a 0x200-byte CLUT read back by func_8006733C
-           (StoreImage) and written by func_800672D8 (LoadImage). THE s32
+        /* The STP bit over a 0x200-byte CLUT read back by StoreImage
+           (StoreImage) and written by LoadImage (LoadImage). THE s32
            TEMP IS LOAD-BEARING: `buf[i] |= ~0x7FFF` lets combine carry the
            `sh`'s 0xFFFF mask back onto the constant, which makes it fit
            `ori`'s immediate and costs the hoisted `addiu $a0, $zero,
@@ -520,7 +533,7 @@ void func_80089C24(void)
         v = buf[i] | ~0x7FFF;
         buf[i] = v;
     } while (--i >= 0);
-    func_800672D8(&r, buf);
+    LoadImage(&r, buf);
 
     w = func_8003FC64(0x11);
     if (w != NULL)

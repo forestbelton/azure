@@ -699,7 +699,6 @@ typedef struct UnkDungeonA31D0
 } UnkDungeonA31D0;
 void func_800A31D0(u8 *);
 void func_800B8FC8(u8 *, s32 *, s32 *, s32, s32);
-void func_80067E2C(void *, void *);
 extern u8 D_800E0C58[];
 extern u8 D_800E0C67[];
 /* The +0x9A state table func_800C9AAC dispatches through, same element type
@@ -1407,8 +1406,7 @@ void func_800AA53C(u8 *);
 extern u8 *D_800DD72C[];
 extern u8 *D_800DD784[];
 s32 func_80064584(s32);
-/* func_800B84E4's per-primitive hand-off, beside func_8006658C's. */
-void func_8006671C(void *);
+/* func_800B84E4's per-primitive hand-off, beside AddPrim's. */
 void func_800A5828();
 extern u8 D_800DD854[];
 extern u8 D_800DD860[];
@@ -1739,7 +1737,6 @@ typedef struct UnkDungeonG4
 /* RotTransPers-family: one scratchpad SVECTOR in, a packed screen pair and
    the flag out. Only the `func_' spelling is in
    splat/dungeon.bin_undefined_funcs_auto.txt, so that is what links. */
-s32 func_80065320(SVECTOR *, s32 *, s32 *);
 /* The 0xE6 mask primitive func_800B9144 brackets its run with, the spelling
    csrc/ovl_town.c:2511 uses. */
 void func_80067EF4(void *p, s32 a, s32 b);

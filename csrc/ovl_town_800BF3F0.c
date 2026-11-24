@@ -501,8 +501,8 @@ typedef struct UnkTown260C
    csrc/unk_72A8.c:40's Unk345B8SP rather than guessed from pads: the SVECTORs
    at +0x74/+0x7C/+0x84/+0x8C, unk_94/unk_98 as RotTransPers' p/flag, and
    unk_C4 as the otz accumulator are that unit's layout for the same object.
-   func_80065420 IS RotTransPers (splat/slus_006.14_symbol_addrs.txt:112), but
-   it is spelled func_80065420 here because that is the name
+   RotTransPers IS RotTransPers (splat/slus_006.14_symbol_addrs.txt:112), but
+   it is spelled RotTransPers here because that is the name
    splat/town.bin_undefined_funcs_auto.txt provides and so the one the town
    container definitely defines. */
 typedef struct UnkTownSP
@@ -726,8 +726,8 @@ typedef struct UnkTownA17CCSP
 
    +0x08 and +0x10 were pad until func_800A9E68 and func_800AA068 landed.
    They are an SVECTOR rotation and a VECTOR scale, and the witness is the
-   pair of libgte calls in func_800AA068 -- `func_80065820(&a->unk_08, m)`
-   (RotMatrix, SVECTOR *) and `func_80064BC0(m, &a->unk_10)` (ScaleMatrix,
+   pair of libgte calls in func_800AA068 -- `RotMatrix(&a->unk_08, m)`
+   (RotMatrix, SVECTOR *) and `ScaleMatrix(m, &a->unk_10)` (ScaleMatrix,
    VECTOR *) -- against func_800A1080, which builds the same matrix from the
    same three calls in the same order over its own SVECTOR/VECTOR pair.
    func_800A9E68 writes only unk_08.vy on &D_800D1178 and only unk_08.vx on
@@ -1506,7 +1506,6 @@ extern u8 D_800F8D1C[];
 extern u16 D_80082E76;
 extern void (*D_800D1638[])();
 extern void (*D_800D1640[])();
-void func_8006733C(void *r, void *src);
 extern s32 D_80113220;
 extern u8 D_800D43B0[];
 extern u8 D_800D43B8[];
@@ -2174,7 +2173,6 @@ s32 func_80049E1C(s32 a, s32 d, s32 m);
 void func_800B1778(s32 a, s32 b, s32 c);
 void func_800B17C0(s32 a, s32 b);
 void func_800ADB30(UnkTownADD80 *s);
-s32 func_80065420(SVECTOR *v0, s32 *sxy, s32 *p, s32 *flag);
 void func_800A8C84(SVECTOR *dst, UnkTown2AE8 *b);
 s32 func_8009D424();
 void func_800AD8CC(UnkTownADD80 *s);
@@ -2192,11 +2190,6 @@ s32 func_800352FC(void);
 void func_800AAF5C(void);
 void func_800AAFE0(UnkTown2AE8 *v, s32 b);
 void func_800C2C80(UnkTownActor *a, UnkTownRend *b, s32 c, s32 d);
-void func_800649A0(void);
-void func_80064A40(void);
-MATRIX *func_80064B90(MATRIX *m, VECTOR *v);
-MATRIX *func_80064BC0(MATRIX *m, VECTOR *v);
-MATRIX *func_80065820(SVECTOR *r, MATRIX *m);
 void func_800A1354(UnkTownA1080 *s);
 s32 func_8008C3B8(UnkTownVec16 *q, s32 i, UnkTownPlane *pl);
 s32 func_8008CF48(UnkVec *v, UnkTownPlane **out);
@@ -2238,7 +2231,6 @@ void func_800B0D0C();
 void func_800B0FD4();
 void func_8004E5A0(s32 v, s32 n, u8 *out);
 void func_8004E69C(u8 *q);
-void func_80069E38(u8 *dst, u8 *src);
 u32 func_8004AC18(s32 i);
 u8 *func_800B544C(u8 *s, u8 *p);
 u8 *func_800B557C(u8 *s, u8 *p);
@@ -2333,8 +2325,6 @@ extern u8 D_801112C8[];
 extern u8 D_801114C8[];
 s16 func_80042900(s8 *p, s8 n);
 u32 *func_80040574(s32 n);
-void func_80067014(s32 n);
-void func_800672D8(void *p, void *q);
 void func_8003F2A4(Unk80083968 *p);
 extern u32 D_8002E5D8[];
 extern u32 D_8002E5E8[];
@@ -2350,7 +2340,6 @@ u32 func_80049918(s32 i);
 s32 func_80049944(u32 a);
 s32 func_80049984(u8 *p);
 s32 func_8004AC3C(u8 *p, s32 *out);
-void func_80069EC8(void *p, s32 n);
 extern u8 D_80077FBC[];
 extern u8 D_800892CC[];
 extern u8 D_800D1794[];
@@ -2395,7 +2384,6 @@ typedef struct UnkTownB1DCCObj
 extern u8 D_800D162C[][2];
 extern u8 D_800D1630[][4];
 void func_80044AAC(UnkNode *, UnkNode *);
-s32 func_80069EF8();
 /* The particle template func_80097AD0/func_800A895C build on the stack and
    hand to func_8009792C/func_800A878C: a THIRD view over the same six 16.16
    words as UnkTown2AE8, and the only one that needs to exist, because this
@@ -2485,13 +2473,7 @@ extern s16 *D_800D4660[];
 extern UnkSlot D_80082E80_b __asm__("D_80082E80");
 void func_80044D24(u8 *, UnkSlot *, s16);
 void func_800453E0(u8 *, UnkVec *, UnkSlot *, s16);
-u16 func_80066460(s32 tp, s32 abr, s32 x, s32 y); /* GetTPage */
-void func_8006658C(void *ot, void *p);            /* AddPrim */
-void func_80066640(void *p, s32 abe);             /* SetSemiTrans */
-void func_800666E0(POLY_F4 *p);                   /* SetPolyF4 */
-void func_800666F4(POLY_FT4 *p);                  /* SetPolyFT4 */
-void func_80067E2C(DR_AREA *p, RECT *r);          /* SetDrawArea */
-void func_80067EF4(void *p, s32 a, s32 b);        /* the 0xE6 mask primitive */
+void func_80067EF4(void *p, s32 a, s32 b); /* the 0xE6 mask primitive */
 u16 func_8008C180(s16 x, s16 y);
 s32 func_800C1D44(s32 id);
 extern u8 D_80045C34[];
@@ -2889,7 +2871,7 @@ extern u8 D_800E9ECC[];
    it at the UnkNode's +0x10 -- it has since landed in
    csrc/ovl_town_800BEBA4.c -- and an address-taken symbol needs a declaration
    where an implicitly-declared call does not; it is declared unprototyped the
-   way func_800BF1C8 and func_800BF4CC are.  func_800673A0 has no declaration
+   way func_800BF1C8 and func_800BF4CC are.  MoveImage has no declaration
    anywhere in csrc/ or include/ -- the signature is the one the func_800BF1C8
    landed definition (csrc/ovl_town_800BEBA4.c, parked when this block was
    written) reads off its own listing.
@@ -2898,7 +2880,6 @@ extern u8 D_800E9ECC[];
    stores at the renderable's +0x08 -- all four address-taken (`lui`/`addiu`)
    and all four resident symbols from splat/town.bin_undefined_syms_auto.txt. */
 void func_800BEBA4();
-void func_800673A0(s16 *r, s32 x, s32 y);
 extern u8 D_800D231C[];
 extern s16 D_800D2324[];
 extern u8 D_80113138[];
@@ -3008,7 +2989,6 @@ void func_8003AFE0(s32 i, u32 v);
 s32 func_80053EF0(s32);
 UnkNode *func_800A9CAC(u32 a);
 UnkNode *func_8004B8BC(s32, void *);
-void func_80066F78(s32);
 
 s32 func_8003BD84(s32 x, s32 y);
 extern s16 D_80083228;
@@ -3066,7 +3046,6 @@ void func_800A970C();
 void func_800C2CB0(u8 *a, s32 c, void *s, s32 z);
 void func_80033CD8(u8 *p, u32 tag);
 extern u8 D_80045340[];
-void func_80069EE8(u8 *p, s32 v, s32 n);
 void func_800422DC(u8 *arg0, u8 *arg1);
 void func_800423C0(u8 *arg0, s32 arg1, u8 *arg2);
 u32 func_8003C06C(s32 i);
@@ -3912,7 +3891,7 @@ s32 func_800BFFF4(u8 *p, UnkVec *q, UnkSlot *s);
      pair, which then absorbs the `>> 1`.
    * ONE `t` FOR BOTH RANDOM VALUES.  Both are stored twice and the target
      keeps each in one register across its pair of `sh`s, so the expression
-     cannot be written out twice (that would call func_80069EF8 four times).
+     cannot be written out twice (that would call rand four times).
 
    Ties, measured: `*(s16 *)((u8 *)v + 0x1E) = *(s16 *)((u8 *)v + 0xC) = t;`
    as a chained assignment (right-to-left stores, so the same +0xC-then-+0x1E
@@ -3947,10 +3926,10 @@ void func_800BFB8C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
             v = (UnkTownSpawn *)((u8 *)o + 0x20);
             o->unk_10 = (u32)func_800BFD14;
             func_8004491C(o, (u32)func_800BFFF4);
-            t = (s16)g->unk_BC + func_80069EF8() % 0x400 - 0x200;
+            t = (s16)g->unk_BC + rand() % 0x400 - 0x200;
             *(s16 *)((u8 *)v + 0xC) = t;
             *(s16 *)((u8 *)v + 0x1E) = t;
-            t = *(s16 *)((u8 *)p + 0x8) + func_80069EF8() % *(s16 *)((u8 *)p + 0xA);
+            t = *(s16 *)((u8 *)p + 0x8) + rand() % *(s16 *)((u8 *)p + 0xA);
             *(s16 *)((u8 *)v + 0x10) = -0x180;
             *(s16 *)((u8 *)v + 0x26) = -0x180;
             *(s16 *)((u8 *)v + 0xE) = t;
@@ -4171,11 +4150,11 @@ void func_800BFF7C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    endpoint the integer halves of the 16.16 triple at the actor view's +0x1C
    (read at +0x1E/+0x22/+0x26, the func_800A130C offsets) copied into a stack
    SVECTOR, the second the already-packed s16 triple at +0x0C taken by address,
-   each projected with func_80065420 (RotTransPers) STRAIGHT INTO the
+   each projected with RotTransPers (RotTransPers) STRAIGHT INTO the
    primitive's own xy pair.  LINE_G2 is witnessed three ways, as in
    func_800A2AF8: the allocator steps 0x14 (five words), the two colour words
    land at +0x04 and +0x0C (r0 and r1), and the two `sxy` out-parameters are
-   +0x08 and +0x10, its two xy pairs.  func_800667D0 is therefore SetLineG2,
+   +0x08 and +0x10, its two xy pairs.  SetLineG2 is therefore SetLineG2,
    which is what splat names it; it has no declaration anywhere in the tree and
    rides an implicit one.
 
@@ -4186,7 +4165,7 @@ void func_800BFF7C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    split into its own statement is 119 / 119.  The lever's fingerprint -- does
    the sign extension read `$v0` or a callee-saved register -- cannot
    discriminate HERE, and the reason is the intervening CALL: the copy out of
-   `$v0` sits in the SECOND func_80065420's DELAY SLOT, so a CALL_INSN
+   `$v0` sits in the SECOND RotTransPers's DELAY SLOT, so a CALL_INSN
    separates it from the extension and cse reaches the arm its own comment
    calls "Some registers are invalidated by subroutine calls"
    (scratch/gcc-src/cdk-gcc-b18/cse.c:7285-7291),
@@ -4213,7 +4192,7 @@ void func_800BFF7C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    `>> 1` AND NOT `/ 2`: the signed division is 124 words / 72 differing, where
    the target has a bare `sra $s0, $s0, 1`.
 
-   THE SVECTOR COPY GOES AFTER func_800667D0 AND func_80066640.  Written in
+   THE SVECTOR COPY GOES AFTER SetLineG2 AND SetSemiTrans.  Written in
    front of them it is 124 / 103, because the three `lhu`/`sh` pairs then stop
    being the filler sched1 puts in the `lhu`s' own load-delay slots and the
    `$a0`/`$a1` setup for the first projection has to be rebuilt.
@@ -4232,14 +4211,14 @@ void func_800BFF7C(UnkTownSpawn *p, UnkVec *q, UnkTownRend *r)
    as a statement rather than an initialiser, `SVECTOR v` declared last of the
    four locals, the loop exit as `if (n != NULL) { p = ...; continue; } break;`,
    and `(u32)ln + 0x14` for `(u32)(ln + 1)` -- all 0.  Both call constants ARE
-   witnessed: func_80066640's abe is 1 (0 is 1 differing) and func_80066460's
+   witnessed: SetSemiTrans's abe is 1 (0 is 1 differing) and GetTPage's
    x is 0 (func_800A2AF8's 0x140 is 1 differing).
 
    122 words -- its header reads `nonmatching func_800BFFF4, 0x1E8`, and
    0x1E8/4 = 122.  No jump table, no rodata of its own, no function address
    taken.  0 differing; raw 8 == relocdump's 8, none on a function symbol, and
    seqcheck matches the ordered sequence: %hi/%lo(D_80083160) then `jal`
-   func_800667D0, func_80066640, func_80065420, func_80065420, func_80066460,
+   SetLineG2, SetSemiTrans, RotTransPers, RotTransPers, GetTPage,
    func_80067F20.  No intra-function `j` -- the one backward branch is a
    `bnez`. */
 s32 func_800BFFF4(u8 *p, UnkVec *q, UnkSlot *s)
@@ -4259,19 +4238,19 @@ s32 func_800BFFF4(u8 *p, UnkVec *q, UnkSlot *s)
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(ln + 1);
         *(u32 *)&ln->r0 = 0x202020;
         *(u32 *)&ln->r1 = 0;
-        func_800667D0(ln);
-        func_80066640(ln, 1);
+        SetLineG2(ln);
+        SetSemiTrans(ln, 1);
         v.vx = *(u16 *)(p + 0x1E);
         v.vy = *(u16 *)(p + 0x22);
         v.vz = *(u16 *)(p + 0x26);
-        z = func_80065420(&v, (s32 *)&ln->x0, &pp, &flag);
-        z = (z + func_80065420((SVECTOR *)(p + 0xC), (s32 *)&ln->x1, &pp, &flag)) >> 1;
+        z = RotTransPers(&v, (s32 *)&ln->x0, &pp, &flag);
+        z = (z + RotTransPers((SVECTOR *)(p + 0xC), (s32 *)&ln->x1, &pp, &flag)) >> 1;
         if ((u16)z < 0x1E0)
         {
             addPrim((u32 *)(g->unk_00 + 0xB0) + z, ln);
             dm = (DR_MODE *)*(u32 *)(g->unk_00 + 0x8D0);
             *(u32 *)(g->unk_00 + 0x8D0) = (u32)(dm + 1);
-            func_80067F20((u32 *)dm, 0, 0, func_80066460(0, 1, 0, 0), 0);
+            func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
             addPrim((u32 *)(g->unk_00 + 0xB0) + z, dm);
         }
         n = *(UnkNode **)(p - 0x8);
@@ -5042,7 +5021,8 @@ void func_800C0DE8(void)
     }
 }
 
-void func_800C0E5C(void) {
+void func_800C0E5C(void)
+{
 }
 
 /* One byte out of the 0x80010000 table at +0x33A4, at a stride of 2.  Its own
@@ -5077,7 +5057,7 @@ u8 func_800C0E64(s32 a)
     return p[a * 2 + 0x33A4];
 }
 
-/* A random value reduced modulo the caller's bound: func_80069EF8's result
+/* A random value reduced modulo the caller's bound: rand's result
    through `%`, with the divisor saved into $s0 in the `jal`'s delay slot
    because it is the incoming $a0 and the call would destroy it.  `div` with no
    divide-by-zero guard is what cc1psx emits at -O2, and `mfhi` is the
@@ -5085,15 +5065,15 @@ u8 func_800C0E64(s32 a)
    above and func_800C0EAC below; the single `s32` parameter is witnessed by
    $a0 being read before it is written, and nothing calls it by name anywhere.
 
-   Binding func_80069EF8's result to a local first ties at 0 differing.
+   Binding rand's result to a local first ties at 0 differing.
 
    12 words -- its header reads `nonmatching func_800C0E7C, 0x30`, and
    0x30/4 = 12.  No jump table, no rodata of its own, no function address
    taken.  0 differing; raw 1 == relocdump's own 1, none on a FUNCTION symbol,
-   seqcheck arith=OK seq=OK, and the one `jal` decodes to func_80069EF8. */
+   seqcheck arith=OK seq=OK, and the one `jal` decodes to rand. */
 s32 func_800C0E7C(s32 a)
 {
-    return func_80069EF8() % a;
+    return rand() % a;
 }
 
 /* The town's request-block trampoline: fill a 0x40-byte block on the stack
@@ -5170,10 +5150,12 @@ void func_800C0EAC(s32 a, s32 b, s32 c, s32 d)
     (*sys)(blk);
 }
 
-void func_800C0F40(void) {
+void func_800C0F40(void)
+{
 }
 
-void func_800C0F48(void) {
+void func_800C0F48(void)
+{
 }
 
 /* 4 words -- its header reads `nonmatching func_800C0F50, 0x10`, and
@@ -5894,7 +5876,7 @@ void func_800C181C(void)
 void func_800C1854(void)
 {
     func_8003AFE0(1, 0x73);
-    func_80066F78(1);
+    SetDispMask(1);
     func_80041284(&D_80080E28);
     func_80041284(&D_800D1D54);
     func_8003C758(D_80080F48);
@@ -5983,7 +5965,7 @@ void func_800C1954(void)
     func_80053DA8(0x60C);
     func_800542BC();
     func_8003AFE0(0x13, 0xC6);
-    func_80066F78(1);
+    SetDispMask(1);
     func_80041284(&D_80080E28);
     func_80041284(&D_800D1D54);
 }
@@ -6197,8 +6179,8 @@ void func_800C1BA4(void)
 }
 
 /* A family of 2: two VRAM transfers to fixed addresses, each followed by
-   func_80067014(0). The two members differ only in which transfer entry point
-   they use -- func_800672D8 against func_8006733C -- which families.py shows
+   DrawSync(0). The two members differ only in which transfer entry point
+   they use -- LoadImage against StoreImage -- which families.py shows
    as two varying `jal`s, both real call differences.
 
    0x80020000 is materialised with a bare `lui` because its low half is zero,
@@ -6206,18 +6188,18 @@ void func_800C1BA4(void)
    neither is a symbol. */
 void func_800C1BD0(void)
 {
-    func_800672D8(D_800D43B0, (void *)0x80020000);
-    func_80067014(0);
-    func_800672D8(D_800D43B8, (void *)0x80024000);
-    func_80067014(0);
+    LoadImage(D_800D43B0, (void *)0x80020000);
+    DrawSync(0);
+    LoadImage(D_800D43B8, (void *)0x80024000);
+    DrawSync(0);
 }
 
 void func_800C1C1C(void)
 {
-    func_8006733C(D_800D43B0, (void *)0x80020000);
-    func_80067014(0);
-    func_8006733C(D_800D43B8, (void *)0x80024000);
-    func_80067014(0);
+    StoreImage(D_800D43B0, (void *)0x80020000);
+    DrawSync(0);
+    StoreImage(D_800D43B8, (void *)0x80024000);
+    DrawSync(0);
 }
 
 /* The range-table scanner the two functions below both drive: walk a
@@ -7011,7 +6993,8 @@ void func_800C2780(UnkTownActor *a, UnkTown2AE8 *b, s32 c)
     a->unk_50 = func_800C27DC;
 }
 
-void func_800C27DC(void) {
+void func_800C27DC(void)
+{
 }
 
 /* A family of 2: bind the descriptor D_800D4F88 names for this actor's +0x94
@@ -8887,7 +8870,8 @@ void func_800C46A8(UnkTownActor *a, UnkTown2AE8 *b, UnkTownRend *c)
     D_80082660[a->unk_60].unk_00 = 0;
     a->unk_54 = func_800C3FFC;
     a->unk_6C = func_8003BD84((a->unk_88 << 16) - b->unk_00,
-                              (a->unk_8A << 16) - b->unk_04) / 0x20000;
+                              (a->unk_8A << 16) - b->unk_04) /
+                0x20000;
     e = &D_80082660[a->unk_60];
     if (*(s8 *)((u8 *)e + 2) == -0x80)
     {

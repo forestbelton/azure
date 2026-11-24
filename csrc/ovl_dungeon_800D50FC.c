@@ -68,7 +68,7 @@ void func_800D4CB0(u8 *p, UnkVec *b, u8 *c);
        `sll $v0, $v0, 16` + `bgtz` rather than a compare.
 
    DECLARATIONS
-   s32 func_80069EF8();
+   s32 rand();
    END DECLARATIONS
    (D_800814A0 is already declared.  The unit also already carries
    `void func_800D50FC();` at the top, which C89 makes compatible with this
@@ -92,8 +92,8 @@ void func_800D50FC(u8 *p, u8 *b, u8 *c)
         break;
     case 0:
     case 4:
-        *(s32 *)(b + 0xC) = ((func_80069EF8() & 0x3FFF) - 0x2000) << 5;
-        *(s32 *)(b + 0x10) = ((func_80069EF8() & 0x3FFF) - 0x2000) << 5;
+        *(s32 *)(b + 0xC) = ((rand() & 0x3FFF) - 0x2000) << 5;
+        *(s32 *)(b + 0x10) = ((rand() & 0x3FFF) - 0x2000) << 5;
         break;
     case 3:
     case 7:
@@ -1119,7 +1119,7 @@ void func_800D707C(u8 *p, UnkVec *v)
    words the raw comparison verifies.
 
    `RotTransPers4` IS SPELLED BY ITS LIBRARY NAME. splat calls it
-   func_800654B0 (dungeon.bin_undefined_funcs_auto.txt:134) but
+   RotTransPers4 (dungeon.bin_undefined_funcs_auto.txt:134) but
    splat/common_syms.txt:115 carries `RotTransPers4 = 0x800654b0` and
    build/dungeon.bin links that script since 2026-11-15, so the psyq
    declaration in psyq/include/libgte.h:363 is the one to use and no local
@@ -1745,11 +1745,11 @@ void func_800D7FB8(u8 *p)
    Also worth keeping: case 0 FALLS THROUGH into case 1, and cases 1, 2, 3
    and 4 all end by sharing the `*(u16 *)(p + 0x4C) += 1;` increment, which
    jump2 cross-jumps -- writing each one out is correct and costs nothing.
-   `func_80069EF8() % 96` is a signed modulo and comes out as the target's
+   `rand() % 96` is a signed modulo and comes out as the target's
    `div`/`mfhi` pair.
 
    DECLARATIONS
-   NONE -- func_800478B8, func_80064710, func_80069EF8, func_800644B8 and
+   NONE -- func_800478B8, func_80064710, rand, func_800644B8 and
    func_80064584 all ride implicit declarations exactly as the surrounding
    landed code does, and D_800814A0 is already declared.
    END DECLARATIONS
@@ -1766,10 +1766,10 @@ void func_800D81D4(u8 *p, u8 *b, u8 *c)
     {
     case 0:
         *(u16 *)(p + 0x48) = 0x10;
-        i = func_80069EF8() % 96 - 0x30;
+        i = rand() % 96 - 0x30;
         *(s32 *)(b + 0x14) = (i << 0x10) / *(s16 *)(p + 0x48);
         *(s32 *)(p + 0x28) = (func_80064710(0x900 - i * i) << 0x10) / *(s16 *)(p + 0x48);
-        *(u16 *)(p + 0x18) = func_80069EF8();
+        *(u16 *)(p + 0x18) = rand();
         *(u16 *)(p + 0x4C) += 1;
     case 1:
         *(s32 *)(b + 0x8) += *(s32 *)(b + 0x14);
@@ -1807,13 +1807,13 @@ void func_800D81D4(u8 *p, u8 *b, u8 *c)
         if (c[0xC] >= 0xF1)
         {
             *(u16 *)(c + 0x10) = 0x60;
-            *(s16 *)(b + 0x16) = -(func_80069EF8() & 3);
+            *(s16 *)(b + 0x16) = -(rand() & 3);
             *(u16 *)(p + 0x4C) += 1;
         }
         break;
     case 5:
         *(s32 *)(b + 0x8) += *(s32 *)(b + 0x14);
-        *(s32 *)(b + 0x14) -= (func_80069EF8() & 0xFFF) << 6;
+        *(s32 *)(b + 0x14) -= (rand() & 0xFFF) << 6;
         *(s32 *)(p + 0x1C) -= 0x8000;
         *(u16 *)(p + 0x18) += ((-*(s16 *)(p + 0x48)) * 0x10 + 0x1E0) * *(s16 *)(p + 0x4A);
         *(s32 *)(c + 0xC) += 0xFFE7E7E8;

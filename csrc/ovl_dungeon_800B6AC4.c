@@ -342,7 +342,7 @@ void func_800B6AC4(u8 *p, UnkVec *b, u8 *c, u8 *d)
         *(u32 *)(n + 0x1C) |= 0x80000;
         *(u32 *)(n + 0x14) |= 0x104000;
         *(u16 *)(*(u8 **)(d + 0x60) + 0x98) |= 0xC;
-        func_80069E78(n + 0x34, func_8003C06C(n[0x13]));
+        strcpy(n + 0x34, func_8003C06C(n[0x13]));
         *(u32 *)(n + 0x18) = D_800835E4[D_800E3D7C[0x11]];
         while (D_800835E4[n[0x11] + 1] <= *(u32 *)(n + 0x18))
         {
@@ -1043,12 +1043,12 @@ void func_800B84E4(s16 *a, u8 *p, u8 *ot, s32 d)
         q->unk_10 = *(u32 *)(p + 0x10);
         q->unk_1C = *(u32 *)(p + 0x14);
         q->unk_28 = *(u32 *)(p + 0x14);
-        func_8006671C(q);
+        SetPolyGT4(q);
         if (dd != 0)
         {
             *((u8 *)q + 0x7) |= 2;
         }
-        func_8006658C(ot, q);
+        AddPrim(ot, q);
         q++;
     }
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
@@ -1458,10 +1458,10 @@ void func_800B9144(u8 *a, u8 *p, u8 *ot, s16 d)
     if (d != 0)
     {
         func_80067EF4(q, 0, 0);
-        func_8006658C(sp->unk_20, q);
+        AddPrim(sp->unk_20, q);
         q += 0xC;
     }
-    func_800649A0();
+    PushMatrix();
     x = *(u16 *)a;
     sp->unk_00 = x;
     y = *(u16 *)(a + 0x2);
@@ -1476,11 +1476,11 @@ void func_800B9144(u8 *a, u8 *p, u8 *ot, s16 d)
     sp->unk_40 = (s16)x + (s16)t20;
     sp->unk_44 = (s16)y + (s16)t22;
     sp->unk_48 = 0;
-    func_80064B90((MATRIX *)0x1F800050, (VECTOR *)0x1F800040);
-    func_80065820((SVECTOR *)&s->unk_16, (MATRIX *)0x1F800050);
-    func_80064BC0((MATRIX *)0x1F800050, (VECTOR *)0x1F800030);
-    func_80064CF0((MATRIX *)0x1F800050);
-    func_80064D80((MATRIX *)0x1F800050);
+    TransMatrix((MATRIX *)0x1F800050, (VECTOR *)0x1F800040);
+    RotMatrix((SVECTOR *)&s->unk_16, (MATRIX *)0x1F800050);
+    ScaleMatrix((MATRIX *)0x1F800050, (VECTOR *)0x1F800030);
+    SetRotMatrix((MATRIX *)0x1F800050);
+    SetTransMatrix((MATRIX *)0x1F800050);
     sp->unk_24 = s->unk_14;
     flag = (s32 *)0x1F800094;
     do
@@ -1527,10 +1527,10 @@ void func_800B9144(u8 *a, u8 *p, u8 *ot, s16 d)
                 sp->unk_70[3].vy = td;
                 sp->unk_70[2].vy = td;
             }
-            func_80065320(&sp->unk_70[0], &sp->unk_98, flag);
-            func_80065320(&sp->unk_70[1], &sp->unk_A0, flag);
-            func_80065320(&sp->unk_70[2], &sp->unk_A8, flag);
-            func_80065320(&sp->unk_70[3], &sp->unk_B0, flag);
+            RotTransSV(&sp->unk_70[0], &sp->unk_98, flag);
+            RotTransSV(&sp->unk_70[1], &sp->unk_A0, flag);
+            RotTransSV(&sp->unk_70[2], &sp->unk_A8, flag);
+            RotTransSV(&sp->unk_70[3], &sp->unk_B0, flag);
             *(s32 *)(q + 0x8) = sp->unk_98;
             *(s32 *)(q + 0x10) = sp->unk_A0;
             *(s32 *)(q + 0x18) = sp->unk_A8;
@@ -1594,7 +1594,7 @@ void func_800B9144(u8 *a, u8 *p, u8 *ot, s16 d)
                 *((u8 *)s + 0xF) = (sp->unk_24 & 4) ? (c | 2) : (c & 0xFD);
             }
             *(u32 *)(q + 0x4) = *(u32 *)((u8 *)s + 0xC);
-            func_8006658C(sp->unk_20, q);
+            AddPrim(sp->unk_20, q);
             q += 0x28;
         }
         else
@@ -1624,10 +1624,10 @@ void func_800B9144(u8 *a, u8 *p, u8 *ot, s16 d)
     if (d != 0)
     {
         func_80067EF4(q, 0, 1);
-        func_8006658C(sp->unk_20, q);
+        AddPrim(sp->unk_20, q);
         q += 0xC;
     }
-    func_80064A40();
+    PopMatrix();
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
 }
 
@@ -2488,7 +2488,7 @@ s32 func_800BABA8(u8 *p, UnkVec *b, u8 *c)
         z = sp->unk_04 - (*(s8 *)(p + i + 0x12) << 1);
         sp->unk_70[0].vz = z;
         sp->unk_70[1].vz = z + 0x40;
-        n = func_80069EF8();
+        n = rand();
         cc = *(s8 *)(p + i + 0x12);
         if (cc > 0x20)
         {
@@ -2519,19 +2519,19 @@ s32 func_800BABA8(u8 *p, UnkVec *b, u8 *c)
         }
         q->unk_16 = bb;
         q->unk_1E = bb;
-        sp->unk_C0 = func_80065420(&sp->unk_70[0], &q->unk_08, fa, fb);
+        sp->unk_C0 = RotTransPers(&sp->unk_70[0], &q->unk_08, fa, fb);
         q->unk_10.w = q->unk_08;
         q->unk_10.h[0] += 4;
-        sp->unk_C0 += func_80065420(&sp->unk_70[1], &q->unk_18, fa, fb);
+        sp->unk_C0 += RotTransPers(&sp->unk_70[1], &q->unk_18, fa, fb);
         q->unk_20.w = q->unk_18;
         q->unk_20.h[0] += 2;
         sp->unk_C0 >>= 1;
         *((u8 *)q + 0x3) = 8;
         *((u8 *)q + 0x7) = 0x3A;
-        func_8006658C(sp->unk_20 + sp->unk_C0 * 4, q);
+        AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
         q++;
         func_80067F20((u32 *)q, 0, 0, 0x60, 0);
-        func_8006658C(sp->unk_20 + sp->unk_C0 * 4, q);
+        AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
         q = (UnkDungeonG4 *)((u8 *)q + 0xC);
         p[0x11]++;
     }
@@ -2707,7 +2707,7 @@ void func_800BB14C(u8 *p, UnkVec *b, u8 *c)
    one, and only when the fourth argument's low halfword is zero, it emits a
    single 0x10-byte primitive from the two words at *a and *b; and whenever
    that halfword is NOT zero it falls through to the 0x60000000 tint
-   rectangle, a second mask primitive and func_80067E2C's draw-area
+   rectangle, a second mask primitive and SetDrawArea's draw-area
    primitive.
 
    THE ONE SPELLING FACT: `s16 dd = d;' AT THE TOP, WITH THE TAIL TEST
@@ -2768,14 +2768,14 @@ void func_800BB2E4(void *a, void *b, s32 *c, s32 d, void *e)
         q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
         *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
         func_80067EF4(q, 0, 0);
-        func_8006658C(r, q);
+        AddPrim(r, q);
         w[0] = *(u16 *)c + ((s16) * ((u16 *)c + 2) / 2);
         w[1] = *((u16 *)c + 1) + *((u16 *)c + 3);
         func_800B8FC8((u8 *)e, c, (s32 *)w, 0, 0);
         q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
         *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
         func_80067EF4(q, 1, 0);
-        func_8006658C(r, q);
+        AddPrim(r, q);
     }
     else
     {
@@ -2795,11 +2795,11 @@ void func_800BB2E4(void *a, void *b, s32 *c, s32 d, void *e)
         u[0x3] = 3;
         *(u32 *)(u + 0x4) = 0;
         u[0x7] = 0x40;
-        func_8006658C(r, u);
+        AddPrim(r, u);
         q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
         *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(q + 0xC);
         func_80067EF4(q, 0, 0);
-        func_8006658C(r, q);
+        AddPrim(r, q);
     }
     if (dd == 0)
     {
@@ -2819,15 +2819,15 @@ rect:
     *(s16 *)(u + 0xA) = t;
     *(u16 *)(u + 0xC) = *((u16 *)c + 2);
     *(u16 *)(u + 0xE) = *((u16 *)c + 3);
-    func_8006658C(r, u);
+    AddPrim(r, u);
     q = *(u8 **)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
     func_80067EF4(q, 0, 1);
-    func_8006658C(r, q);
+    AddPrim(r, q);
     q = *(u8 **)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
-    func_80067E2C(q, c);
-    func_8006658C(r, q);
+    SetDrawArea(q, c);
+    AddPrim(r, q);
 }
 
 /* The dungeon's five-spoke ring effect: prime the VRAM pair, lay the five
@@ -5629,16 +5629,16 @@ void func_800C0404(u8 *p, UnkVec *v, UnkSlot *r)
     e = *(u8 **)(g->unk_00 + 0x8D0);
     tag = g->unk_00 + 0x8B0;
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(e + 0xC);
-    func_80067E2C(e, g->unk_00);
-    func_8006658C(tag, e);
+    SetDrawArea(e, g->unk_00);
+    AddPrim(tag, e);
     for (i = 0; i < *(s16 *)(p + 0x52); i++)
     {
         e = *(u8 **)(g->unk_00 + 0x8D0);
         *(u32 *)(g->unk_00 + 0x8D0) = (u32)(e + 0x10);
-        n = (func_80069EF8() & 0x3F) + 0x340;
+        n = (rand() & 0x3F) + 0x340;
         *(s16 *)(e + 0xC) = n;
         *(s16 *)(e + 0x8) = n;
-        k = func_80069EF8() & 0x3F;
+        k = rand() & 0x3F;
         *(s16 *)(e + 0xA) = 0x180 - k;
         *(s16 *)(e + 0xE) = 0x1BF - k;
         do
@@ -5650,8 +5650,8 @@ void func_800C0404(u8 *p, UnkVec *v, UnkSlot *r)
             }
         } while (0);
         *(u32 *)(e + 0x4) = 0;
-        func_800667BC(e);
-        func_8006658C(tag, e);
+        SetLineF2(e);
+        AddPrim(tag, e);
     }
     if (*(s16 *)(p + 0x52) < 0x60)
     {
@@ -5659,8 +5659,8 @@ void func_800C0404(u8 *p, UnkVec *v, UnkSlot *r)
     }
     e = *(u8 **)(g->unk_00 + 0x8D0);
     *(u32 *)(g->unk_00 + 0x8D0) = (u32)(e + 0xC);
-    func_80067E2C(e, w);
-    func_8006658C(tag, e);
+    SetDrawArea(e, w);
+    AddPrim(tag, e);
     q.v[0] = 0x360;
     q.v[1] = 0x1B8;
     func_800B8FC8(*(u8 **)(p + 0x68), w, q.v, 1, 0);

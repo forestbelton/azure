@@ -276,71 +276,70 @@ void func_8008A288(s32 *p)
                     goto armdone;
                 }
                 goto other;
-                rgb:
-                {
-                    s32 *t;
-                    s32 x;
-                    s32 *base;
+            rgb:
+            {
+                s32 *t;
+                s32 x;
+                s32 *base;
 
-                    /* `c` FIRST, then the base in its own local.  The base
-                       has to be a local so the `la` is emitted ahead of the
-                       `sll` (0x8008A428 before 0x8008A430) -- with
-                       `&D_8008B2F0[c]` the address is one rtl insn of equal
-                       scheduling depth to the `sll` and loses the tie-break.
-                       And `c` has to come first so dbr steals IT, not the
-                       `la`, into the dispatch branch's delay slot at
-                       0x8008A410.  Measured: `&D_8008B2F0[c]` is 23 DIFF,
-                       base-before-c is 129. */
-                    c = i - 1;
-                    base = D_8008B2F0;
-                    t = base + c;
-                    x = *t + d;
-                    *t = x;
-                    if (x < 0)
-                    {
-                        *t = 0;
-                    }
-                    else if (x >= 0x101)
-                    {
-                        *t = 0x100;
-                    }
-                    if (c == 1)
-                    {
-                        func_80053DA8(0x516);
-                    }
-                    *(s32 *)&D_80080A98 = D_8008B2F0[0] < 0x100 ? D_8008B2F0[0] << 7 : 0x7FFF;
-                    *(s32 *)&D_80080A9C = D_8008B2F0[1] < 0x100 ? D_8008B2F0[1] << 7 : 0x7FFF;
-                    *(s32 *)&D_80080A94 = D_8008B2F0[2] < 0x100 ? D_8008B2F0[2] << 7 : 0x7FFF;
-                    func_80053DF0(D_80080A98);
-                    func_80053E14(D_80080A9C);
-                    func_80053DCC(D_80080A94);
+                /* `c` FIRST, then the base in its own local.  The base
+                   has to be a local so the `la` is emitted ahead of the
+                   `sll` (0x8008A428 before 0x8008A430) -- with
+                   `&D_8008B2F0[c]` the address is one rtl insn of equal
+                   scheduling depth to the `sll` and loses the tie-break.
+                   And `c` has to come first so dbr steals IT, not the
+                   `la`, into the dispatch branch's delay slot at
+                   0x8008A410.  Measured: `&D_8008B2F0[c]` is 23 DIFF,
+                   base-before-c is 129. */
+                c = i - 1;
+                base = D_8008B2F0;
+                t = base + c;
+                x = *t + d;
+                *t = x;
+                if (x < 0)
+                {
+                    *t = 0;
                 }
+                else if (x >= 0x101)
+                {
+                    *t = 0x100;
+                }
+                if (c == 1)
+                {
+                    func_80053DA8(0x516);
+                }
+                *(s32 *)&D_80080A98 = D_8008B2F0[0] < 0x100 ? D_8008B2F0[0] << 7 : 0x7FFF;
+                *(s32 *)&D_80080A9C = D_8008B2F0[1] < 0x100 ? D_8008B2F0[1] << 7 : 0x7FFF;
+                *(s32 *)&D_80080A94 = D_8008B2F0[2] < 0x100 ? D_8008B2F0[2] << 7 : 0x7FFF;
+                func_80053DF0(D_80080A98);
+                func_80053E14(D_80080A9C);
+                func_80053DCC(D_80080A94);
+            }
                 goto armdone;
-                other:
-                {
-                    s32 x;
+            other:
+            {
+                s32 x;
 
-                    /* RE-READ p[6] here rather than use `i`.  The target
-                       opens this arm with `lh $v0, 0xC($s0)` + nop
-                       (0x8008A508/0x50C) and only then forms c; spelling it
-                       `i - 4` lets the live `i` serve, dbr steals the
-                       subtract into the dispatch delay slot and the arm
-                       loses three words.  Measured: `i - 4` is 319 words,
-                       173 DIFF. */
-                    c = ((s16 *)p)[6] - 4;
-                    x = ((u16 *)p)[c + 7] + d;
-                    ((s16 *)p)[c + 7] = x;
-                    if ((s16)x < 0)
-                    {
-                        ((s16 *)p)[c + 7] = 0;
-                    }
-                    else if ((s16)x >= 0x101)
-                    {
-                        ((s16 *)p)[c + 7] = 0x100;
-                    }
+                /* RE-READ p[6] here rather than use `i`.  The target
+                   opens this arm with `lh $v0, 0xC($s0)` + nop
+                   (0x8008A508/0x50C) and only then forms c; spelling it
+                   `i - 4` lets the live `i` serve, dbr steals the
+                   subtract into the dispatch delay slot and the arm
+                   loses three words.  Measured: `i - 4` is 319 words,
+                   173 DIFF. */
+                c = ((s16 *)p)[6] - 4;
+                x = ((u16 *)p)[c + 7] + d;
+                ((s16 *)p)[c + 7] = x;
+                if ((s16)x < 0)
+                {
+                    ((s16 *)p)[c + 7] = 0;
                 }
-                armdone:
-                ;
+                else if ((s16)x >= 0x101)
+                {
+                    ((s16 *)p)[c + 7] = 0x100;
+                }
+            }
+            armdone:;
             }
         }
         if ((g->unk_08 & 9) == 9)
@@ -512,7 +511,7 @@ void func_8008A288(s32 *p)
    order and the halfword grouping applies here unchanged -- written that way
    it matched first try.
 
-   func_80066640 is SetSemiTrans and func_80066668 (used by func_8008896C) is
+   SetSemiTrans is SetSemiTrans and SetShadeTex (used by func_8008896C) is
    SetShadeTex, both named in splat/common_syms.txt, and libgpu.h declares
    both as real functions rather than macros, which is why they are `jal`s.
    The extra loop level costs `w` its saved register: with k, i and j all
@@ -794,18 +793,18 @@ void func_8008AEEC(s32 *p)
         }
         break;
     case 1:
-        {
-            s32 v;
+    {
+        s32 v;
 
-            v = p[4] - 0x101010;
-            p[4] = v;
-            if (v == 0)
-            {
-                h[1] = 0x3C;
-                h[0]++;
-            }
+        v = p[4] - 0x101010;
+        p[4] = v;
+        if (v == 0)
+        {
+            h[1] = 0x3C;
+            h[0]++;
         }
-        break;
+    }
+    break;
     case 2:
         if (h[1] <= 0)
         {
@@ -813,20 +812,20 @@ void func_8008AEEC(s32 *p)
         }
         break;
     case 3:
-        {
-            s32 v;
+    {
+        s32 v;
 
-            v = p[4] + 0x101010;
-            p[4] = v;
-            if (v == 0xC0C0C0)
-            {
-                p[4] = 0x808080;
-                h[1] = 0x5A;
-                h[0] = 0;
-                ((u16 *)p)[14] &= 0xFFFE;
-            }
+        v = p[4] + 0x101010;
+        p[4] = v;
+        if (v == 0xC0C0C0)
+        {
+            p[4] = 0x808080;
+            h[1] = 0x5A;
+            h[0] = 0;
+            ((u16 *)p)[14] &= 0xFFFE;
         }
-        break;
+    }
+    break;
     }
     if (q[11] & 0x8000)
     {

@@ -2950,12 +2950,12 @@ s16 func_800A9400(s16 x)
       emitted second.  `z' therefore has to be assigned exactly once -- the
       `if (q) { q = func_800990FC(); } else { ... }' device this park carried
       for two days gave it two sets and made those two words unreachable.
-      Same for `y': func_80069EF8's result needs its own single-set local, and
+      Same for `y': rand's result needs its own single-set local, and
       all three of q, y and z end up in $s3 because their ranges are disjoint.
 
    2. `if (y) { func_800C77D0(...); } else { func_800C77D0(...); }' -- a
       duplicated-arm device whose only purpose is a free reference on `y'.
-      Without it the dead `addu $s3, $v0, $zero' at word 70 (func_80069EF8's
+      Without it the dead `addu $s3, $v0, $zero' at word 70 (rand's
       result, never read on any path) is deleted and the whole file rotates:
       45 rows.  The condition must be `y' and the device must sit inside the
       `(s16)c == 0' arm, where `y' is defined.
@@ -3059,7 +3059,7 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e)
             *(s16 *)((u8 *)m + 0x2) = *(u16 *)(src + 0x2);
             *(s16 *)((u8 *)m + 0x6) = *(u16 *)(src + 0x6);
             *(s16 *)((u8 *)m + 0xA) = *(u16 *)(src + 0xA);
-            y = (u8 *)func_80069EF8();
+            y = (u8 *)rand();
             if ((D_80013714 & 1) == 0)
             {
                 o = *(u8 **)(a + 0x60);
@@ -8396,7 +8396,7 @@ void func_800B1768(s16 k, s16 x, s16 y, s16 d, s16 e, s16 f)
         }
         *(s32 *)(q + i * 4 + 0x50) = (s32)func_8004E298(u, D_800DF03C[j], 0);
         i++;
-        w = func_80069E98(D_800DF03C[j]) * 8;
+        w = strlen(D_800DF03C[j]) * 8;
         base = has * 10;
         arg = base + 0x80;
         func_800B1320(u, e != 0 ? (s16)(base + 0x76 - w) : arg, (s16)(-*(s8 *)(u + 0x3) - 0x9));
