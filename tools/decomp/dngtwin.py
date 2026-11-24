@@ -50,6 +50,46 @@ false copies are what this tool is for. It does not claim a clone; it claims
 a body worth reading. A lead that IS in the same `dngfam` family is marked
 `[CLONE]`, because then the answer is not to read it but to run `dngclone`.
 
+## WHAT THIS TOOL CANNOT SEE: A BLEND. USE THE CALLEE-SET GREP FOR THOSE
+
+A carved body is sometimes a BLEND -- the head of one landed or resident
+function, the tail of another, and a region with no twin at all. Its
+whole-body ratio against each source is LOW, because each source explains
+only a fraction, so it does not appear in the ranked list at any threshold
+and the function reads as original work.
+
+`func_b40_80173C20` (218 words, landed at 0 differing) is the case: its
+message head is `func_b21_80175E14` (22 words, ratio 0.183) and its
+four-state machine and tail are `func_b35_801728C4` (121 words, ratio 0.555).
+Neither is reachable from a ratio.
+
+**A LONGEST-RUN OR COVERAGE METRIC WAS TRIED AND DOES NOT DISCRIMINATE.**
+Measured, so that nobody builds it twice:
+
+* Longest common contiguous run: the real blend's best run is 20 opcodes
+  against `func_b35_801728C4` and 11 against `func_b21_80175E14`. The
+  matching blocks are short and scattered -- 20, 13, 13, 8, 7, 5, 7 -- so no
+  run threshold separates a blend source from a coincidence.
+* Coverage of the CANDIDATE by the target, over blocks of 5+ opcodes:
+  `func_b21_80175E14` scores 0.73 and is found -- along with **62 other
+  candidates** at 0.55 or better, several scoring HIGHER than either true
+  source. The spans are all nearly the full body. It finds bodies built from
+  the same idioms, not the blend.
+* The same coverage with REGISTERS KEPT (`dngfam.sig_insn` as the token):
+  **zero** candidates at 0.45. A blend's sources were allocated inside their
+  own functions, so they share opcodes and not registers.
+
+Registers are too strict and bare opcodes too loose, with no threshold in
+between. So there is no `--blend` mode: the method that works is semantic,
+not statistical. Account for your body's WHOLE CALLEE SET, and when the
+matched twin leaves a callee unexplained, grep on that callee alone:
+
+    grep -ln RotTransPers4 csrc/ovl_dungeon*.c csrc/ovl_dng_*.c
+
+That is how both known blends were found. See "WHEN A CARVED BODY'S CALLEE
+SET SPANS TWO RESIDENT FUNCTIONS, SUSPECT A BLEND" in
+`docs/matching-levers.md`.
+
 ## HOW TO READ A RATIO
 
     1.000       same control flow, different registers or constants. The C is
@@ -260,11 +300,12 @@ def main():
         # A target compares against itself at 1.000 and against its own
         # family at 1.000 too; drop only itself.
         sub = {k: v for k, v in pool.items() if k != f}
-        rows = rank(me, sub, a.stubs, a.ratio, a.top)
         print("\n%s  %d words  (ovl_dng_%s)" % (f, len(me[1]), me[0]))
+        rows = rank(me, sub, a.stubs, a.ratio, a.top)
         if not rows:
-            print("    no carved sibling at ratio >= %.2f -- read the call "
-                  "sequence, and try xsibs for a RESIDENT twin" % a.ratio)
+            print("    no carved sibling at ratio >= %.2f -- try xsibs for "
+                  "a RESIDENT twin, then the callee-set grep (see WHAT THIS "
+                  "TOOL CANNOT SEE)" % a.ratio)
         for r, otag, name, nw, same_fam, is_stub in rows:
             mark = " [CLONE -- run dngclone, do not read it]" if same_fam else ""
             mark += " [STILL A STUB -- assembly, not an answer]" if is_stub else ""
