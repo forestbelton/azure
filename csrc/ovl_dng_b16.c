@@ -167,7 +167,122 @@ typedef struct UnkDng74334SP
 void func_80044A50(UnkNode *);
 extern s32 D_801742E8;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170878);
+UnkNode *func_8003FD64(s32, void *);
+extern u8 D_80083498[];
+typedef union UnkDungeonSPXY
+{
+    s32 w;
+    u16 h[2];
+} UnkDungeonSPXY;
+typedef struct UnkDungeonSPA
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u8 pad_06[0x1A];
+    u8 *unk_20;
+    u8 pad_24[0x4C];
+    SVECTOR unk_70[2];
+    u8 pad_80[0x40];
+    s32 unk_C0;
+} UnkDungeonSPA;
+typedef struct UnkDungeonG4
+{
+    u32 unk_00;
+    u32 unk_04;
+    s32 unk_08;
+    u32 unk_0C;
+    UnkDungeonSPXY unk_10;
+    u8 unk_14;
+    u8 unk_15;
+    u8 unk_16;
+    u8 pad_17[0x1];
+    s32 unk_18;
+    u8 unk_1C;
+    u8 unk_1D;
+    u8 unk_1E;
+    u8 pad_1F[0x1];
+    UnkDungeonSPXY unk_20;
+} UnkDungeonG4;
+extern u8 D_80045340[];
+s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
+s32 func_800AA36C(u8 *, void *, u8 *, u8 *);
+void func_b16_80170A58(u8 *, UnkVec *, u8 *, u8 *);
+
+/* Spawn the kind-0x112 node this bank's scripts use for a thrown or placed
+   actor: arm it with the bank-local func_b16_80170A58 handler and the
+   D_b16_8017420C facing table, dress its slot from the b/c/d arguments, pick one
+   of three flag pairs off `a & 3', and hand it to func_800A9C18 and
+   func_800AA36C. 120 words, 0 differing, ON THE FIRST COMPILE.
+
+   The twin is the 113-word func_b03_80170854 (csrc/ovl_dng_b03.c) and every
+   one of its spellings held unchanged, so nothing here was fought for; read
+   its comment for the shape. Five deltas, all read off the listing:
+   `p[0x13]' is 2 rather than 3, the handler and the facing table are this
+   bank's func_b16_80170A58 and D_b16_8017420C / D_8017425C, the func_800A6D30 arm
+   does NOT set `*(u32 *)(p + 0x1C) |= 0x200' the way the twin's does, and the
+   tail gains `*(u32 *)(p + 0x1C) |= 0x40000;' and
+   `*(s16 *)(w + 0x92) = -0x20;' before the func_800AA36C call.
+   THIS COPY'S OWN CONSTANT: 0x2 -> 0x10 at 1 of 2 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+u8 *func_b16_80170878(s16 a, u16 b, u16 c, s16 d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *p;
+    u8 *w;
+    s32 k;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        w = p;
+        n->unk_10 = (u32)func_b16_80170A58;
+        p[0x13] = 16;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = d;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x25) = c;
+        *(u8 **)((u8 *)r + 0x2C) = D_b16_8017420C;
+        k = a & 3;
+        *((u8 *)r + 0x24) = b;
+        if (k == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x6000;
+            *(u32 *)(p + 0x1C) |= 0x6000;
+        }
+        else if (k >= 2)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        else if ((a & ~3) == 0)
+        {
+            if ((*(u32 *)(p + 0x14) & 0x200) == 0)
+            {
+                if ((func_800A6D30() & 1) != 0)
+                {
+                    func_800A48F0((s8 *)p, 1, (func_800A6D30() & 0x3F) | 0x20);
+                    *(u8 **)((u8 *)r + 0x2C) = D_8017425C;
+                }
+            }
+        }
+        func_800A9C18(n, m, r, a);
+        w[0x9A] = 0xFF;
+        *(s8 *)(w + 0x9C) = -1;
+        *(u32 *)(w + 0x8C) = (u32)func_b16_80171014;
+        *(u32 *)(p + 0x1C) |= 0x40000;
+        *(s16 *)(w + 0x92) = -0x20;
+        func_800AA36C(w, m, (u8 *)r, p);
+    }
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b16", func_b16_80170A58);
 

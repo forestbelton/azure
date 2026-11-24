@@ -14,7 +14,7 @@ void func_8009A3D0(s32 x, s32 y, s32 f);
 void func_8009A21C(s32 a, s32 b, s32 c);
 s32 func_8009A180(u8 *a, u8 *b);
 s16 func_800BCB04h(s32, s32, s16) __asm__("func_800BCB04");
-s32 func_b02_80171F9C(u8 *p, void *b, void *c, u8 *d);
+s32 func_b02_80171F9C(u8 *p, void *b, u8 *c, u8 *d);
 extern s16 D_8006CCD8[];
 extern s16 D_8006CCE8[];
 extern s16 D_8006CD00[];
@@ -94,19 +94,139 @@ void func_800A2B04(UnkVec *, s32, s32);
 s16 func_800A9400(s16);
 u32 func_800445E0(void);
 void func_b02_80175814(u8 *);
-void func_b02_80175D7C(u8 *);
+void func_b02_80175D7C(u8 *p);
 extern u8 D_80175F40[];
 extern u16 D_80175F6E;
 extern u8 D_800DCF50;
 extern u8 D_800DDAB8[];
 extern s32 D_8006CD58;
 s32 func_800CEEFC();
-void func_b02_801750E4(s32, s32, s32, s32, s32, s32, u8 *, u8 *, u8 *, s32, s32);
+void func_b02_801750E4(s32 a0, s32 a1, s32 a2, s32 a3, s32 ox, s32 oy, u8 *cu, u8 *cv, u8 *ot, s32 idx, s32 n);
 void func_b02_80174FC0(u8 *, s32, s32);
 UnkNode *func_8003FD64(s32, void *);
 extern u8 D_80175F90[];
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_801708B4);
+s16 func_800A2CB8(u8 *a, u8 *b);
+extern u8 D_80175E50[];
+extern u8 D_80175EA8[];
+extern u8 D_80083498[];
+extern u8 D_80175F70[];
+extern u8 D_80175FA8[];
+extern u8 D_80175FB4[];
+void func_800B835C(u8 *, s32 *, s32, s32);
+void func_b02_80175B1C(u8 *, UnkVec *, u8 *);
+typedef union UnkDungeonSPXY
+{
+    s32 w;
+    u16 h[2];
+} UnkDungeonSPXY;
+typedef struct UnkDungeonSPA
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u8 pad_06[0x1A];
+    u8 *unk_20;
+    u8 pad_24[0x4C];
+    SVECTOR unk_70[2];
+    u8 pad_80[0x40];
+    s32 unk_C0;
+} UnkDungeonSPA;
+typedef struct UnkDungeonG4
+{
+    u32 unk_00;
+    u32 unk_04;
+    s32 unk_08;
+    u32 unk_0C;
+    UnkDungeonSPXY unk_10;
+    u8 unk_14;
+    u8 unk_15;
+    u8 unk_16;
+    u8 pad_17[0x1];
+    s32 unk_18;
+    u8 unk_1C;
+    u8 unk_1D;
+    u8 unk_1E;
+    u8 pad_1F[0x1];
+    UnkDungeonSPXY unk_20;
+} UnkDungeonG4;
+void func_b02_801747B8(u8 *p, u8 *b, u8 *c);
+extern u8 D_80045340[];
+s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
+s32 func_800AA36C(u8 *, void *, u8 *, u8 *);
+void func_b02_80170A94(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_800A0134_w(u8 *, u8 *) __asm__("func_800A0134");
+
+/* Spawn the kind-0x112 node this bank's scripts use for a thrown or placed
+   actor: arm it with the bank-local func_b02_80170A94 handler and the
+   D_80175E40 facing table, dress its slot from the b/c/d arguments, pick one
+   of three flag pairs off `a & 3', and hand it to func_800A9C18 and
+   func_800AA36C. 120 words, 0 differing, ON THE FIRST COMPILE.
+
+   The twin is the 113-word func_b03_80170854 (csrc/ovl_dng_b03.c) and every
+   one of its spellings held unchanged, so nothing here was fought for; read
+   its comment for the shape. Five deltas, all read off the listing:
+   `p[0x13]' is 2 rather than 3, the handler and the facing table are this
+   bank's func_b02_80170A94 and D_80175E40 / D_80175EA0, the func_800A6D30 arm
+   does NOT set `*(u32 *)(p + 0x1C) |= 0x200' the way the twin's does, and the
+   tail gains `*(u32 *)(p + 0x1C) |= 0x40000;' and
+   `*(s16 *)(w + 0x92) = -0x20;' before the func_800AA36C call. */
+u8 *func_b02_801708B4(s16 a, u16 b, u16 c, s16 d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *p;
+    u8 *w;
+    s32 k;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        w = p;
+        n->unk_10 = (u32)func_b02_80170A94;
+        p[0x13] = 2;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = d;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x25) = c;
+        *(u8 **)((u8 *)r + 0x2C) = D_80175E40;
+        k = a & 3;
+        *((u8 *)r + 0x24) = b;
+        if (k == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x6000;
+            *(u32 *)(p + 0x1C) |= 0x6000;
+        }
+        else if (k >= 2)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        else if ((a & ~3) == 0)
+        {
+            if ((*(u32 *)(p + 0x14) & 0x200) == 0)
+            {
+                if ((func_800A6D30() & 1) != 0)
+                {
+                    func_800A48F0((s8 *)p, 1, (func_800A6D30() & 0x3F) | 0x20);
+                    *(u8 **)((u8 *)r + 0x2C) = D_80175EA0;
+                }
+            }
+        }
+        func_800A9C18(n, m, r, a);
+        w[0x9A] = 0xFF;
+        *(s8 *)(w + 0x9C) = -1;
+        *(u32 *)(w + 0x8C) = (u32)func_b02_801710EC;
+        *(u32 *)(p + 0x1C) |= 0x40000;
+        *(s16 *)(w + 0x92) = -0x20;
+        func_800AA36C(w, m, (u8 *)r, p);
+    }
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80170A94);
 
@@ -449,7 +569,185 @@ void func_b02_80171854(u8 *p, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80171F9C);
+/* The banked room script's "nudge into a neighbouring slot" branch: with the
+   D_80083460 gates clear ask func_800A04F0 what sits under the cursor, then
+   classify the heading delta into one of three windows and put the actor into
+   state 0x11, 0x17 or 0x18 with the matching bank-local facing table.
+   166 words, 0 differing.
+
+   The twin is the 113-word func_b03_80171DA0 (csrc/ovl_dng_b03.c), itself the
+   relinked twin of the resident overlay's func_800CA788; this copy is that
+   body with the single 0x40-window test replaced by the three-arm
+   classification and with a tail that also drains p + 0xA2 into p + 0x92.
+   Four of that comment's facts were re-measured here and all held: the
+   func_800A04F0 alias with its `s16' fourth parameter, the shared `-1' exit
+   label sitting in the SECOND func_800A2B5C test, `d[0x6D] -= 1' BEFORE the
+   func_8009C93C call, and `g = (u8 *)&D_80083460' as one pointer local reused
+   by all three gates. Its 8-byte leftover aggregate local is absent here --
+   the 0x38 frame is exactly the eight register saves plus func_8009C93C's
+   0x18 outgoing area -- and adding `s32 unused[2];' back is 166 words,
+   16 differing.
+
+   THE FACING TABLE IS READ BACK OUT OF c + 0x2C FOR THE func_80047784 CALL.
+   Every sibling in this unit keeps it in a local (`e = D_80175E70;
+   *(u8 **)(c + 0x2C) = e; func_80047784(c, e[...], 0);') because there is one
+   table; here the three arms store three different ones and the target
+   re-loads `lw $v1, 0x2C($s3)' at .Lb02_801721B0 instead of holding a
+   register across the merge. Carried in a local assigned in each arm it is
+   166 words, 2 differing -- the `lw' becomes the arm's register and the
+   arm-3 constant moves.
+
+   AND THE STATE BYTE IS A VARIABLE WHILE THE TABLE IS NOT. .Lb02_80172144 is
+   a four-insn tail shared by the r == 1 and r == 2 arms whose first insn is
+   `sb $v1, 0x9A($s1)' -- a register, not a constant -- so the 0x9A store,
+   the p + 0x98 `|= 8' and the +0x84/+0x85 pair are written ONCE after the
+   chain and the r == 3 arm jumps past them. Writing all three arms out in
+   full, which is what cross-jumping would have to merge, is 170 words and
+   24 differing: gcc 2.7.2's cross_jump compares constants exactly, so it
+   stops at the differing 0x11/0x17 and the merge point lands one insn late.
+
+   `return 0;' after func_800A2CB8 is the literal and the one at the end of
+   the classification chain is `return r;' -- the target's `addu $v0, $zero,
+   $zero' against `addu $v0, $s4, $zero' at .Lb02_801720AC, even though r is
+   provably 0 at both. Spelling both `return r;' is 165 words, 3 differing. */
+/* The banked room script's "nudge into a neighbouring slot" branch: with the
+   D_80083460 gates clear ask func_800A04F0 what sits under the cursor,
+   classify the heading delta into one of three 0x21/0x31/0x31-wide windows and
+   put the actor into state 0x11, 0x17 or 0x18 with the matching bank-local
+   facing table, then drain p + 0xA2 into p + 0x92 and return the window index.
+   166 words, 0 differing.
+
+   The twin is the 113-word func_b03_80171DA0 (csrc/ovl_dng_b03.c), itself the
+   relinked twin of the resident overlay's func_800CA788; this copy is that
+   body with the single 0x40 heading window replaced by the three-arm
+   classification and with the p + 0x92 tail added. Three of that comment's
+   facts carried: the func_800A04F0 alias with its `s16' fourth parameter,
+   `g = (u8 *)&D_80083460' as one pointer local reused by all three gates, and
+   no 8-byte leftover aggregate (the 0x38 frame is exactly the eight register
+   saves plus func_8009C93C's 0x18 outgoing area).
+
+   `r' IS `s16' AND THAT IS THE WHOLE RESIDUE. As `s32' the literal
+   `return 0;' after func_800A2CB8 comes out `addu $v0, $s4, $zero' -- cse has
+   r's pseudo in the zero equivalence class and spends it on the SImode
+   constant -- and the dispatch's `addu $v1, $s4, $zero' copy disappears:
+   165 words, 24 aligned differences. That is matching-levers.md's "A NARROW
+   RETURN-FLAG LOCAL STOPS cse SUBSTITUTING ITS REGISTER FOR A LITERAL
+   return 0". With `r' narrowed, `return 0;' and `return r;' at that gate are
+   both 0 differing; the literal is kept.
+
+   AND THE TWIN'S SHARED `-1' LABEL IS WRONG HERE: FOUR PLAIN `return -1;'.
+   The twin proves its own body needs the label inside the SECOND
+   func_800A2B5C test; spelled that way this body is 162 words,
+   32 differences, because the label then splits the classification's
+   `return r' off into a block where cse no longer knows `r' and splits the
+   0x92/0xA2 drain off from its own return-value move. reorg rebuilds the
+   shared `j .Lb02_80172208' / `addiu $v0, $zero, -0x1' block at
+   .Lb02_801720F0 from the four plain returns by itself.
+
+   THE THREE ARMS ARE WRITTEN OUT IN FULL. The four-insn tail they share at
+   .Lb02_80172144, starting at a REGISTER `sb $v1, 0x9A($s1)', is what
+   cross-jumping makes of three duplicated arms -- it stops at the differing
+   0x11/0x17 constant and leaves the `lhu' of p + 0x98 in each arm. Written
+   once through a state variable with a `goto' past it: 163 words,
+   57 differences.
+
+   func_800A0134 HAS TO COME THROUGH AN s32-RETURNING ALIAS. The landed
+   `s16 func_800A0134' makes `h = -func_800A0134(t, d)' a `sll'/`sra'
+   extension pair ahead of the target's bare `negu' -- 168 words,
+   6 differences -- and the landed declaration is used twice more in this unit
+   so it cannot simply be widened. And the facing table is READ BACK OUT OF
+   c + 0x2C for the func_80047784 call (`lw $v1, 0x2C($s3)' at
+   .Lb02_801721B0), not carried in a local the way every one-table sibling in
+   this unit does it. */
+s32 func_b02_80171F9C(u8 *p, void *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *t;
+    s32 h;
+    s16 r;
+
+    r = 0;
+    d[0x71] &= 0x7F;
+    g = (u8 *)&D_80083460;
+    if ((*(u16 *)(g + 0x2) & 0x2000) != 0)
+    {
+        return -1;
+    }
+    t = func_800A04F0_r(d, c[0x24], c[0x25], *(s16 *)(d + 0x2A));
+    if ((s16)func_800A2CB8(d, t) == 0)
+    {
+        return 0;
+    }
+    if ((*(u16 *)(g + 0x2) & 0x2000) != 0)
+    {
+        return -1;
+    }
+    if ((*(u16 *)(d + 0x46) & 0x8000) == 0 && (*(u16 *)(g + 0x2) & 0x8) != 0)
+    {
+        return -1;
+    }
+    h = -func_800A0134_w(t, d);
+    if ((u16)(h - 0x20) < 0x21)
+    {
+        r = 1;
+    }
+    else if ((u16)(h + 0x10) < 0x31)
+    {
+        r = 2;
+    }
+    else if ((u16)(h + 0x40) < 0x31)
+    {
+        r = 3;
+    }
+    else
+    {
+        return r;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return -1;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return -1;
+    }
+    p[0x9B] = 0;
+    if (r == 1)
+    {
+        *(s32 *)(p + 0x8C) = 0;
+        *(u8 **)(c + 0x2C) = D_80175E50;
+        p[0x9A] = 0x11;
+        *(u16 *)(p + 0x98) |= 8;
+        d[0x84] = 0x7C;
+        d[0x85] = 0;
+    }
+    else if (r == 2)
+    {
+        *(s32 *)(p + 0x8C) = 0;
+        *(u8 **)(c + 0x2C) = D_80175E70;
+        p[0x9A] = 0x17;
+        *(u16 *)(p + 0x98) |= 8;
+        d[0x84] = 0x7C;
+        d[0x85] = 0;
+    }
+    else
+    {
+        *(s32 *)(p + 0x8C) = 0;
+        *(u8 **)(c + 0x2C) = D_80175EA8;
+        p[0x9A] = 0x18;
+        d[0x84] = 0x7C;
+        d[0x85] = 0;
+        *(s32 *)(d + 0x1C) &= ~0x40000;
+    }
+    func_80047784(c, (*(u8 **)(c + 0x2C))[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, 0);
+    *(u16 *)(p + 0x92) -= *(u16 *)(p + 0xA2);
+    *(s16 *)(p + 0xA2) = 0;
+    *(s16 *)(p + 0x9E) = 0;
+    return r;
+}
 
 /* The banked room script's unconditional "same slot" entry: past the single
    D_80083462 0x2000 gate and the two func_800A2B5C tests, put the actor into
@@ -1323,7 +1621,82 @@ void func_b02_801747B8(u8 *p, u8 *b, u8 *c)
     *(s16 *)(p + n * 2 + 0x2C) = *(u16 *)(*(u8 **)(p + 0x1C) + 0xA);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80174910);
+/* Spawn three kind-0x12 nodes on the actor at `a', each carrying a copy of
+   the parent's +0x8/+0xC pointers and three copies of the sprite's 0x2/0x6/0xA
+   extents, and on the first of the three walk the tag chain at
+   (*(a + 0xC))[8] to the first entry whose +0x0 bit 0x20 is clear and
+   LoadImage its 0x10 x 1 strip across the whole 0x100-wide page.
+   113 words, 0 differing.
+
+   No twin: xsibs found nothing, and the func_8003FD64 + LoadImage callee pair
+   intersects no landed body. LoadImage is 0x800672D8 in
+   splat/common_syms.txt, which is what makes the sp + 0x10 block a RECT.
+
+   THE RECT IS FILLED y, h, w, x. The `lhu' of k + 0x6 has to issue ahead of
+   all three constant stores to cover its own load delay, which is what the
+   target's `lhu' at .Lb02_80174A1C followed by 1 / 0x10 / 0 and only then the
+   `andi'/`addiu'/`andi'/`srl' chain is. In the natural x, y, w, h order it is
+   5 aligned differences; in h, w, x, y it is 114 words and 10, because the
+   load then lands after the stores and needs a `nop'. */
+void func_b02_80174910(u8 *a, u8 *b)
+{
+    UnkNode *n;
+    u8 *e;
+    u8 *r;
+    u8 *k;
+    s32 i;
+    s32 t;
+    RECT rect;
+
+    for (i = 0; i < 3; i += 1)
+    {
+        n = func_8003FD64(0x12, a);
+        if (n != NULL)
+        {
+            e = (u8 *)n + 0x20;
+            n->unk_10 = (u32)func_b02_801747B8;
+            *(u32 *)(e + 0x18) = *(u32 *)(a + 0xC);
+            *(u32 *)(e + 0x1C) = *(u32 *)(a + 0x8);
+            t = *(u16 *)(*(u8 **)(a + 0x8) + 0x2);
+            *(s16 *)(e + 0x24) = t;
+            *(s16 *)(e + 0x22) = t;
+            *(s16 *)(e + 0x20) = t;
+            t = *(u16 *)(*(u8 **)(a + 0x8) + 0x6);
+            *(s16 *)(e + 0x2A) = t;
+            *(s16 *)(e + 0x28) = t;
+            *(s16 *)(e + 0x26) = t;
+            t = *(u16 *)(*(u8 **)(a + 0x8) + 0xA);
+            *(u8 **)(e + 0xC) = b;
+            *(s16 *)(e + 0x34) = i;
+            *(s16 *)(e + 0x30) = t;
+            *(s16 *)(e + 0x2E) = t;
+            *(s16 *)(e + 0x2C) = t;
+            r = (u8 *)n->unk_0C;
+            *(s16 *)(r + 0x1E) = 0x1000;
+            *(s16 *)(r + 0x1C) = 0x1000;
+            func_8004491C(n, (u32)D_80045340);
+            if (i == 0)
+            {
+                k = *(u8 **)(*(u8 **)(a + 0xC) + 0x8);
+                while ((k[0] & 0x20) != 0)
+                {
+                    k += 0xC;
+                }
+                rect.y = (u16)((*(u16 *)(k + 0x6) & 0xFFC0) - 0x40) >> 6;
+                rect.h = 1;
+                rect.w = 0x10;
+                rect.x = 0;
+                do
+                {
+                    LoadImage(&rect, (u32 *)D_80175F70);
+                    rect.x += 0x10;
+                } while ((s16)rect.x < 0x100);
+            }
+            *(s16 *)((u8 *)n->unk_0C + 0x12) -= 0x40;
+            *(s16 *)((u8 *)n->unk_0C + 0x10) = 0x20;
+        }
+    }
+}
 
 /* The 0x12 node's per-frame step for the bank's screen-wipe: state 0 emits
    the draw-area / 0x60000000 tint pair into D_80083160's 0x8D0 primitive ring
@@ -1509,9 +1882,233 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80174E98);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80174FC0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_801750E4);
+/* The 0x34-byte POLY_GT4 ribbon: step an angle by 0x80 a time from
+   `(s16)idx << 7', and for each step emit one Gouraud-textured quad whose four
+   corners are the previous and current sin/cos scaled by the four radius
+   arguments and offset by ox/oy, with the two colour words read out of *cu and
+   *cv. The prims come out of D_80083160's +0x8D0 ring and the advanced cursor
+   is written back. 165 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80175378);
+   No twin: xsibs found nothing at ratio 0.70 and the callee-set intersection
+   found no landed body that calls both func_80064584 and LoadImage-era
+   func_8006671C. SetPolyGT4 (0x8006671C) and AddPrim (0x8006658C) are
+   splat/common_syms.txt names, which is also how the 0x34 stride reads as
+   POLY_GT4.
+
+   THE FIRST SIX PARAMETERS ARE 16-BIT, AND THEY ARE LOCALS RATHER THAN A
+   NARROWED PROTOTYPE. Every one of them is spilled with `sh' and reloaded
+   with `lhu', so the pseudos are HImode and unsigned. Declaring the
+   parameters `u16' instead is byte-identical -- 0 differing either way, and
+   the already-landed caller func_b02_80174DA0 re-verifies at 0 differing with
+   either -- so the unit's existing s32 prototype is kept and the narrowing
+   happens in six locals. The caller pushes its two stack arguments as words,
+   which is what an s32 prototype gives. ALL SIX NARROWING ASSIGNMENTS GO
+   TOGETHER, AHEAD OF THE +0x8D0 READ: with `wx' through `w3' moved below it
+   the five parameter loads come out of sched2 in a different order and the
+   prologue's register saves follow them -- 6 differing.
+
+   TWO TEMPORARIES FOR *cu AND *cv, NOT ONE REUSED. With one, the two colour
+   words get the same pseudo and so the same register where the target has
+   $v1 and $v0, and the whole loop's callee-saved assignment rotates with it:
+   14 aligned differences -- `ps'/`pc' and `q'/`co' each swap their pair.
+
+   AND THE FOUR 0xFB V-BYTES GO AFTER THE EIGHT COORDINATE STORES, NOT WITH
+   THE U-BYTES. Before them the 0xFB quantity's live range is short enough for
+   local-alloc to rank it above the 1 and the 2 and hand it $t3 where the
+   target chains all three constants through $v0: 5 aligned differences. The
+   scheduler still emits the eight byte stores as one 1,1,2,2,FB,FB,FB,FB run
+   either way.
+
+   `*(s32 *)(q + 0x10)' IS STORED BEFORE `*(s32 *)(q + 0x4)' -- the other way
+   round is 2 differences. gcc's own strength reduction supplies the second
+   base register at q + 0x1A; writing that as an explicit `e = q + 0x1A' local
+   is also 0 differing. */
+void func_b02_801750E4(s32 a0, s32 a1, s32 a2, s32 a3, s32 ox, s32 oy, u8 *cu, u8 *cv, u8 *ot, s32 idx,
+                       s32 n)
+{
+    Unk80083160 *g;
+    u8 *q;
+    s32 s;
+    s32 co;
+    s32 ps;
+    s32 pc;
+    s32 ang;
+    s32 t;
+    s32 t2;
+    u16 w0;
+    u16 w1;
+    u16 w2;
+    u16 w3;
+    u16 wx;
+    u16 wy;
+    u16 m;
+    u16 i;
+
+    g = &D_80083160;
+    w0 = a0;
+    wx = ox;
+    wy = oy;
+    w1 = a1;
+    w2 = a2;
+    w3 = a3;
+    ang = (s16)idx << 7;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    s = func_80064584(ang) >> 4;
+    co = func_800644B8(ang) >> 4;
+    m = n;
+    for (i = idx; (s16)i < (s16)m; i += 1)
+    {
+        ang += 0x80;
+        ps = s;
+        pc = co;
+        s = func_80064584(ang) >> 4;
+        co = func_800644B8(ang) >> 4;
+        t = *(s32 *)cu;
+        *(s32 *)(q + 0x10) = t;
+        *(s32 *)(q + 0x4) = t;
+        t2 = *(s32 *)cv;
+        *(s32 *)(q + 0x28) = t2;
+        *(s32 *)(q + 0x1C) = t2;
+        SetPolyGT4((POLY_GT4 *)q);
+        q[0x24] = 1;
+        q[0xC] = 1;
+        q[0x30] = 2;
+        q[0x18] = 2;
+        *(s16 *)(q + 0x8) = wx + ((w2 * ps) >> 8);
+        *(s16 *)(q + 0xA) = wy + ((w3 * pc) >> 8);
+        *(s16 *)(q + 0x14) = wx + ((w2 * s) >> 8);
+        *(s16 *)(q + 0x16) = wy + ((w3 * co) >> 8);
+        *(s16 *)(q + 0x20) = wx + ((w0 * ps) >> 8);
+        *(s16 *)(q + 0x22) = wy + ((w1 * pc) >> 8);
+        *(s16 *)(q + 0x2C) = wx + ((w0 * s) >> 8);
+        *(s16 *)(q + 0x2E) = wy + ((w1 * co) >> 8);
+        q[0x19] = 0xFB;
+        q[0xD] = 0xFB;
+        q[0x31] = 0xFB;
+        q[0x25] = 0xFB;
+        *(u16 *)(q + 0x1A) = 0x133;
+        AddPrim(ot, q);
+        q += 0x34;
+    }
+    *(u8 **)(g->unk_00 + 0x8D0) = q;
+}
+
+/* The 32-element fan of semi-transparent Gouraud quads this bank's
+   kind-0x202-style node carries at +0x10, the relinked twin of the resident
+   overlay's func_800BABA8 (csrc/ovl_dungeon_800B6AC4.c) -- xsibs scores it
+   1.000 and it is the same body with EVERY p OFFSET TWO LOWER: the element
+   count is p + 0xF, the phase array p + i + 0x10, the "stick" flag p + 0xE
+   and the fan's angle p + 0xC, against the twin's 0x11, 0x12, 0x10 and 0xE.
+   215 words, 0 differing.
+
+   LANDED ON THE FIRST COMPILE WITH ALL THREE OF THAT TWIN'S MEASURED
+   SPELLINGS IN PLACE; none of their alternatives was re-measured on this body,
+   so the numbers in the twin's own comment are the only ones. The three are:
+   `s16 i = 0;' DECLARED AND INITIALISED IMMEDIATELY AFTER `g' with the loop
+   written `for (; i < 0x20; i++)' -- which is what puts `addu $s5, $zero,
+   $zero' at word 8, ahead of all three constant pointer locals, and so what
+   makes `sp' own the shared `lui 0x1F80' with `fb' an `addu'/`ori' off it;
+   `*(p + i + 0x10)' and NOT `p[i + 0x10]', for the target's index-second
+   `addu $v1, $s4, $v0'; and the two RotTransPers out-parameters kept as
+   CONSTANT ADDRESSES IN POINTER LOCALS rather than members of the scratchpad
+   struct, which is what gives the one-word `addu $a2, $s7, $zero' per call.
+   The +0x10 phase byte keeps both of its faces, as it does there: `u8' for
+   the increment and `(s8)' at every test and use.
+
+   The three scratchpad types are copied verbatim from
+   csrc/ovl_dungeon_decls.h, which this unit does not include. */
+s32 func_b02_80175378(u8 *p, UnkVec *b, u8 *c)
+{
+    Unk80083160 *g = &D_80083160;
+    s16 i = 0;
+    UnkDungeonSPA *sp = (UnkDungeonSPA *)0x1F800000;
+    s32 *fa = (s32 *)0x1F800090;
+    s32 *fb = (s32 *)0x1F800094;
+    UnkDungeonG4 *q;
+    s32 n;
+    s32 cc;
+    s32 z;
+    s32 r;
+    s32 gg;
+    s32 bb;
+
+    q = *(UnkDungeonG4 **)(D_80083160.unk_00 + 0x8D0);
+    p[0xF] = 0;
+    sp->unk_20 = D_80083160.unk_00 + 0xB0;
+    sp->unk_00 = *(u16 *)((u8 *)b + 0x2);
+    sp->unk_02 = *(u16 *)((u8 *)b + 0x6);
+    sp->unk_04 = *(u16 *)((u8 *)b + 0xA);
+    for (; i < 0x20; i++)
+    {
+        *(p + i + 0x10) += 4;
+        if ((s8) * (p + i + 0x10) >= 0x30)
+        {
+            if (p[0xE] != 0)
+            {
+                *(p + i + 0x10) = 0x30;
+                continue;
+            }
+            *(p + i + 0x10) = 0;
+        }
+        q->unk_04 = 0;
+        q->unk_0C = 0;
+        sp->unk_70[1].vx = sp->unk_70[0].vx =
+            sp->unk_00 + ((func_80064584((i + (*(s16 *)(p + 0xC) << 6)) << 7) << 4) >> 11);
+        sp->unk_70[1].vy = sp->unk_70[0].vy =
+            sp->unk_02 + ((func_800644B8((i + (*(s16 *)(p + 0xC) << 6)) << 7) << 4) >> 11);
+        z = sp->unk_04 - (*(s8 *)(p + i + 0x10) << 1);
+        sp->unk_70[0].vz = z;
+        sp->unk_70[1].vz = z + 0x40;
+        n = rand();
+        cc = *(s8 *)(p + i + 0x10);
+        if (cc > 0x20)
+        {
+            n = (s16)n / (cc - 0x20);
+        }
+        else if (cc < 0x10)
+        {
+            n = (s16)n / (0x10 - cc);
+        }
+        r = 0;
+        if ((*(u32 *)(*(u8 **)p + 0x14) & 0x1) != 0)
+        {
+            r = n;
+        }
+        q->unk_14 = r;
+        q->unk_1C = r;
+        gg = 0;
+        if ((*(u32 *)(*(u8 **)p + 0x14) & 0x4) != 0)
+        {
+            gg = n;
+        }
+        q->unk_15 = gg;
+        q->unk_1D = gg;
+        bb = 0;
+        if ((*(u32 *)(*(u8 **)p + 0x14) & 0x2) != 0)
+        {
+            bb = n;
+        }
+        q->unk_16 = bb;
+        q->unk_1E = bb;
+        sp->unk_C0 = RotTransPers(&sp->unk_70[0], &q->unk_08, fa, fb);
+        q->unk_10.w = q->unk_08;
+        q->unk_10.h[0] += 4;
+        sp->unk_C0 += RotTransPers(&sp->unk_70[1], &q->unk_18, fa, fb);
+        q->unk_20.w = q->unk_18;
+        q->unk_20.h[0] += 2;
+        sp->unk_C0 >>= 1;
+        *((u8 *)q + 0x3) = 8;
+        *((u8 *)q + 0x7) = 0x3A;
+        AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
+        q++;
+        func_80067F20((u32 *)q, 0, 0, 0x60, 0);
+        AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
+        q = (UnkDungeonG4 *)((u8 *)q + 0xC);
+        p[0xF]++;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_801756D4);
 
@@ -1523,4 +2120,49 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_801759CC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80175B1C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b02", func_b02_80175D7C);
+/* Spawn this bank's kind-0x202 node under the slot itself and arm it with the
+   bank-local func_b02_80175B1C handler and the D_80175FA8 sprite table.
+   49 words, 0 differing.
+
+   The twin is the 54-word func_800A5A18 (csrc/ovl_dungeon_800A4B88.c) at
+   xsibs ratio 0.796, and its own comment's fact -- TWO POINTER LOCALS, NOT
+   ONE REUSED, one for the +0x0C renderable and one for the payload base --
+   held here. Four deltas from it, all read off the listing: the kind is 0x202
+   and the pool argument is `p - 0x20' rather than D_80083498, the renderer's
+   +0x1E is 0x800 against its +0x1C's 0x1000 (the twin writes 0x1000 to both),
+   the payload stores are the slot pointer at +0x00 plus +0xA/+0xC where the
+   twin has +0x04/+0x66, and there is no func_800A56E0 tail call.
+
+   `*(s16 *)(q + 0xA)' MUST BE WRITTEN BEFORE `*(s16 *)(q + 0xC)' EVEN THOUGH
+   THE TARGET EMITS THEM THE OTHER WAY ROUND. The `lhu' of p + 0x2A has to be
+   hoisted ahead of the 0x30 constant to cover its own load delay, and the
+   reading is that this is what makes the two values' live ranges overlap and
+   so what puts p + 0x2A in $a2 and leaves $v0 to the 0x30. What is MEASURED is
+   the cost: with +0xC written first both take $v0 and the 0x1000340/0x200020
+   pair comes out in $a3/$a2 instead of the target's $t0/$a3 -- 49 words,
+   18 differing. `v[1]' assigned before `v[0]' is 14 differing on its own. */
+void func_b02_80175D7C(u8 *p)
+{
+    UnkNode *n;
+    u8 *s;
+    u8 *q;
+    s32 v[2];
+
+    n = func_8003FD64(0x202, p - 0x20);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_b02_80175B1C;
+        func_8004491C(n, (u32)D_80045340);
+        s = (u8 *)n->unk_0C;
+        *(u8 **)(s + 0x8) = D_80175FA8;
+        *(s16 *)(s + 0x1C) = 0x1000;
+        *(s16 *)(s + 0x1E) = 0x800;
+        q = (u8 *)n + 0x20;
+        *(u8 **)q = p;
+        *(s16 *)(q + 0xA) = *(u16 *)(p + 0x2A);
+        *(s16 *)(q + 0xC) = 0x30;
+        v[0] = 0x1000340;
+        v[1] = 0x200020;
+        func_800B835C(D_80175FB4, v, 1, 0);
+    }
+}
