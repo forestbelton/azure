@@ -22,12 +22,22 @@ whichever finishes first silently does B's work. That is not hypothetical:
 batch 8 gave one agent three ovl_dng_b28 stubs and cloning another agent's
 family landed all three mid-run.
 
-Units excluded by default:
-  * `ovl_dng_lo16' -- its second jump table is 4 mod 8 relative to the rodata
-    start, so a function of its that owns one cannot land until that segment
-    gets a matching `c' split (docs/dng-sweep.md). 73 of its stubs are
-    one-member, so there is no cheap work there either.
+Excluded by default:
+  * EVERY FUNCTION THAT OWNS A JUMP TABLE IN A UNIT WITH NO `.rodata'
+    SUBSEGMENT -- computed, not named. Such a function verifies at 0
+    differing and then moves the container, because ovlverify measures a
+    function's own words and not where its table lands. Today that is two
+    functions in ovl_dng_lo16, whose second table is 4 mod 8 relative to the
+    rodata start and needs a matching `c' split first (docs/dng-sweep.md).
   * anything named with --busy, for a unit an agent still holds.
+
+`ovl_dng_lo16' WAS EXCLUDED WHOLESALE AND THAT WAS WRONG. The blocker is
+real but it covers 2 of its 76 stubs, 157 of its 9,538 words; the other 74
+need nothing and were invisible to every batch pick for ten batches. The
+other half of the old rationale -- that 73 of its stubs are one-member, so
+the yield per agent is poor -- is a reason to RANK it last, which this script
+already does by scoring copies x words, and not a reason to hide it. Skipping
+a whole unit to express "expensive" silently converts it into "not work".
 
 ANYTHING THAT JOINS TWO OF THIS PROJECT'S "REMAINING WORK" VIEWS MUST
 FILTER THROUGH `dngfam.stubs()`. They do not agree: `dngfam` reads csrc's
@@ -44,6 +54,7 @@ Usage:
 import argparse
 import collections
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -61,6 +72,44 @@ def stub_rows():
         for _c, n, w in mem:
             out.append((len(mem), w, len(mem) * w, n, n.split("_")[1], key))
     return out
+
+
+PROJ = dngfam.PROJ
+
+
+def rodata_units():
+    """Unit tags that have a `.rodata' subsegment in the splat config."""
+    y = open(os.path.join(PROJ, "splat", "dungeon.bin.yaml")).read()
+    return set(re.findall(r"\.rodata,\s*ovl_dng_(\w+)", y))
+
+
+def owns_jtbl(tag, func):
+    try:
+        f = os.path.join(PROJ, "asm", "nonmatchings",
+                         "ovl_dng_%s" % tag, "%s.s" % func)
+        return "jtbl_" in open(f, errors="replace").read()
+    except OSError:
+        return False
+
+
+def drop_homeless_jtbl(rows):
+    """(kept rows, [(func, words)]) -- remove jump-table owners that cannot land.
+
+    A function that owns a `.rodata' jump table in a segment with no
+    `.rodata' subsegment VERIFIES AT 0 DIFFERING and still breaks the
+    container: ovlverify measures the function's own words, and the table is
+    appended past the code rather than landing at its address. That cost a
+    `size differs by +0x120' once already, so no agent should ever be handed
+    one of these.
+    """
+    have = rodata_units()
+    kept, blocked = [], []
+    for r in rows:
+        if r[4] not in have and owns_jtbl(r[4], r[3]):
+            blocked.append((r[3], r[1]))
+        else:
+            kept.append(r)
+    return kept, blocked
 
 
 def batch_yield(pick):
@@ -107,7 +156,7 @@ def main():
                     help="most functions to give one agent")
     ap.add_argument("--busy", default="",
                     help="comma-separated unit tags an agent still holds")
-    ap.add_argument("--skip", default="lo16",
+    ap.add_argument("--skip", default="",
                     help="comma-separated unit tags to leave alone")
     a = ap.parse_args()
 
@@ -115,6 +164,10 @@ def main():
     skip = {t for t in (a.skip.split(",") if a.skip else []) if t} | busy
 
     rows = stub_rows()
+    # Drop the functions whose jump table has nowhere to land. This is the one
+    # failure the per-function verifier cannot see, so it must be filtered
+    # here rather than trusted to an agent.
+    rows, blocked = drop_homeless_jtbl(rows)
     # A --busy TAG THAT MATCHES NO UNIT USED TO BE A SILENT NO-OP, and the
     # footer printed "held by a live agent and skipped: <tag>" anyway -- so an
     # invocation with the basename (`ovl_dng_b02') instead of the tag (`b02')
@@ -188,6 +241,9 @@ def main():
     if dropped:
         print("skipped, a family they hold is already claimed in this batch: "
               "%s" % ", ".join(dropped[:8]))
+    if blocked:
+        print("jump table with nowhere to land, NOT offered to any agent: %s"
+              % ", ".join("%s (%d words)" % b for b in sorted(blocked)))
     if busy:
         print("held by a live agent and skipped: %s" % ", ".join(sorted(busy)))
         print("plus %d stub(s) elsewhere sharing a family with one of those "

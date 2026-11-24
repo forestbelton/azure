@@ -1550,3 +1550,34 @@ message claimed rather than the message. The permuter's `base=?`, the
 footer's echoed tag, and `OK  byte-identical` lines that do not name a
 container are all the same defect in different clothes -- a report whose
 source is the request rather than the result.
+
+## SKIPPING A UNIT TO MEAN "EXPENSIVE" TURNED 9,381 WORDS INTO "NOT WORK"
+
+`dngpick.py` excluded `ovl_dng_lo16` by default for ten batches. The
+docstring gave two reasons and only one of them was a blocker:
+
+  * its second jump table is 4 mod 8 relative to the rodata start, so a
+    function owning one cannot land until that segment gets a matching `c`
+    split -- TRUE, and it covers **2 of its 76 stubs, 157 of its 9,538
+    words**;
+  * 73 of its stubs are one-member, so the yield per agent is poor -- true,
+    and not a blocker at all.
+
+The second reason is why the whole unit was named, and it is a reason to RANK
+it last, which this script already does by scoring `copies x words`. Ranking
+and excluding are not interchangeable: the ranking would have offered lo16 as
+soon as better work ran out, and the exclusion meant it never could. 74
+landable functions were invisible to every batch pick, and nothing would have
+surfaced them, because the tool reported the skip as a deliberate default.
+
+The fix is to exclude the two functions the blocker actually blocks, computed
+from the splat config rather than named -- `drop_homeless_jtbl()`, which
+drops a jump-table owner in a unit with no `.rodata` subsegment and PRINTS
+the ones it dropped. lo16 now ranks 25th of 83 units and will be picked when
+it is worth picking.
+
+The general rule, since this is the second time a protective default has
+quietly cost more than it saved: **a default that narrows the work must name
+what it removed, and must remove only what it can justify.** `--busy`
+confirmed a unit it had selected; `--skip lo16` suppressed 74 functions to
+protect 2. Both read as working configuration.
