@@ -115,6 +115,27 @@ def main():
     skip = {t for t in (a.skip.split(",") if a.skip else []) if t} | busy
 
     rows = stub_rows()
+    # A --busy TAG THAT MATCHES NO UNIT USED TO BE A SILENT NO-OP, and the
+    # footer printed "held by a live agent and skipped: <tag>" anyway -- so an
+    # invocation with the basename (`ovl_dng_b02') instead of the tag (`b02')
+    # reported protecting a live agent's unit while picking it as the batch's
+    # top row. That is the clone-collision failure for the fourth time, now
+    # wearing a confirmation message. Normalise both spellings and refuse an
+    # unknown one: a protective flag must never be satisfiable by a typo.
+    known = {r[4] for r in rows}
+    def norm(tags):
+        out = set()
+        for t in tags:
+            c = t[len("ovl_dng_"):] if t.startswith("ovl_dng_") else t
+            if c not in known:
+                raise SystemExit(
+                    "dngpick: `%s' matches no unit with stubs. Units are named "
+                    "by TAG (`b02'), not by basename. Known tags with stubs: %s"
+                    % (t, ", ".join(sorted(known))))
+            out.add(c)
+        return out
+    busy = norm(busy)
+    skip = norm(skip - {"lo16"}) | ({"lo16"} if "lo16" in skip else set())
     # Families already reachable from a busy unit: a landing there clones into
     # every member, so those members are not free work for anyone else.
     busy_fams = {r[5] for r in rows if r[4] in busy}

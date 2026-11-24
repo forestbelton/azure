@@ -1523,3 +1523,30 @@ So the rule for this tool: **run it with `run_in_background` and no `&`**, and
 read `base=` on the first line before believing anything else. In the
 foreground it reaches `base=3230` and drops to 2875 in sixty seconds at two
 jobs, which is what a working run looks like.
+
+## A PROTECTIVE FLAG THAT A TYPO CAN SATISFY IS NOT A GUARD
+
+`dngpick.py --busy` takes unit TAGS (`b02`). I invoked it with the basename
+(`ovl_dng_b02`), which matched no row, so `busy_fams` was empty and b02 -- the
+unit a live agent was holding -- came out as the batch's TOP PICK. The footer
+printed `held by a live agent and skipped: ovl_dng_b02` all the same, because
+it echoes the set it was given rather than what it matched.
+
+So the tool confirmed, in writing, that it had protected a unit it had just
+selected. **That is the clone-collision failure for the fourth time**, and the
+first three fixes were all about WHICH families to exclude -- none of them
+considered that the exclusion list might be empty for a reason that looks like
+success.
+
+`--busy` and `--skip` now normalise either spelling and REFUSE an unknown tag
+outright. A flag whose whole job is to prevent two agents colliding must not
+be satisfiable by a typo, and its confirmation message must come from the
+match, not from the argument.
+
+Three defects today, one shape: **the park's dropped typedef, the double-
+backgrounded permuter, and this.** Each produced output that read like
+success, and each would have been caught instantly by checking the thing the
+message claimed rather than the message. The permuter's `base=?`, the
+footer's echoed tag, and `OK  byte-identical` lines that do not name a
+container are all the same defect in different clothes -- a report whose
+source is the request rather than the result.
