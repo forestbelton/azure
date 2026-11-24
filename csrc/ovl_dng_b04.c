@@ -210,6 +210,13 @@ void func_800DAE44(u8 *, s16);
 s32 func_8003F270(void);
 extern s32 D_8008346C;
 
+s32 func_800A9E70(u8 *, void *, u8 *, u8 *);
+void func_800A020C(s32, u8 *);
+s32 func_800644B8(s32);
+s32 func_800BCB04x(s32, s32, s16) __asm__("func_800BCB04");
+extern u8 D_8006CCF8[];
+extern void (*D_80175198[])(u8 *, UnkVec *, u8 *, u8 *);
+
 u8 *func_b04_801708DC(s16 a, u16 b, u16 c, s16 d)
 {
     UnkNode *n;
@@ -308,7 +315,378 @@ u8 *func_b04_801708DC(s16 a, u16 b, u16 c, s16 d)
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b04", func_b04_80170BF8);
+/* The banked room script's MOVER: the per-frame driver this bank parks at the
+   actor's +0x8C chain head.  Integrate the b-vector, run the +0x9A handler out
+   of the bank-local D_80175198 array, then service the c + 0x14 0x8000 branch
+   -- the facing dress, the two-pair c + 0x2C table toggle, the +0xA8 lean
+   timer and the +0x92 servo -- and publish b + 0xA plus the 0x40 flag.
+   514 words, 0 differing, ON THE FIRST COMPILE.
+
+   It does NOT own a jump table: the listing has no .rodata block at all and
+   the +0x9A dispatch is an indirect call through D_80175198, not a switch.
+   The unit's table owners are the already-landed func_b04_80171400
+   (jtbl_b04_80170808) and func_b04_80172D74 (jtbl_b04_80170838 and
+   jtbl_b04_80170880), not this one.
+
+   THE TWIN IS THE LANDED 508-word func_b17_80170BB8 (csrc/ovl_dng_b17.c),
+   dngtwin 0.967 at +6 words -- the row dngtwin offered b17's own agent as a
+   stub last batch.  THE PROLOGUE IS BYTE-IDENTICAL: `addiu $sp, $sp, -0x30'
+   with $s0..$s6 and $ra, seven callee-saved registers in b17's save ORDER,
+   the seventh being the `m' lean accumulator.  b04, b17, b38 and b43 are one
+   frame family, which is why every allocation fact below reproduced.
+
+   THE +6 WORDS ARE TWO DELTAS THAT NEARLY CANCEL, both read off this listing:
+   the c + 0x2C toggle has FOUR arms here, not two (+10 words per copy, and
+   the block is written out twice), and the lean shift is UNCONDITIONAL
+   `m = n >> 10' where b17 selects on `p[0x9A] == 0x12' (-7 per copy).
+   +20 - 14 = +6.  The other deltas cost nothing: the +0x8C continuation is
+   func_b04_80171400, the handler array D_80175198, the divisor 20, and the
+   servo thresholds -0x20/-0x2A.
+
+   THE FOUR-ARM TOGGLE IS FOUR DUPLICATED else-if ARMS, NOT A SHARED POINTER.
+   D_80175148 -> D_80175140, D_80175140 -> D_80175148, D_80175170 ->
+   D_80175178, D_80175178 -> D_80175170, each arm storing c + 0x2C and
+   dressing through func_80047784.  jump2 cross-joins all four down to the
+   common tail at .Lb04_80170F54, which is why the second and fourth arms
+   reach it with their table already in $a1 and their comparison operand IS
+   that table pointer.  One shared `u8 *f' with a NULL guard and the dress
+   emitted once is 518 words / 43 aligned differences (b17 measured 33 for its
+   two-arm version of the same choice).
+
+   b17'S FACTS, EVERY ONE RE-MEASURED HERE WITH BOTH SPELLINGS, b17's own
+   figure last where it has one:
+
+     `q = p' alias dropped, every later site spelled `p'
+                                        511 words / 114 aligned  |  193
+     the facing index `k' inlined, `v' at all three sites
+                                        511 words /  80 aligned  |   82
+     `s32 k' instead of `s16 k'         514 words /  42 aligned  |   42
+     `w' as `s16' instead of `s32'      514 words /  20 aligned  |   20
+     the +0x9D gate as `||' with `p[0x9D] = 0' as the `then'
+                                        514 words /   7 aligned  |    7
+     the servo delta narrowed BEFORE the subtraction,
+       `(s16)r - *(s16 *)(q + 0x88)'    514 words /  14 aligned  |   14
+     `*(u16 *)(p + 0x98) &= 0x7FFF' deleted
+                                        510 words /  21 aligned  |    7
+     the same mask moved BELOW the toggle chain
+                                        518 words /  29 aligned  |   12 inside
+
+   FIVE REPRODUCE b17's PRICE TO THE DIGIT.  The alias is 114 here against
+   b17's 193 -- still the largest single fact on the body, and the mechanism is
+   b17's: the early p + 0x1C gate reads through $s1 and every site after the
+   dress block through $s2.
+
+   THE w/t ALLOCATION CROSS CARRIES, AND ALL FOUR CELLS REPRODUCE EXACTLY.
+   The signed p + 0x92 read is ONE SHARED `s32 w'; the narrowed servo delta is
+   a SEPARATE local per duplicated copy (`t' and `t2'):
+
+     w shared, t split (below)          514 words /   0 aligned  |    0
+     w shared, t also shared            514 words /  12 aligned  |   12
+     w inline at all sites, t shared    514 words /  12 aligned  |   12
+     w inline at all sites, t split     514 words /  12 aligned  |   12
+
+   Three of four cells are the identical 12 rows, so no one-variable sweep
+   reaches the answer; b38 and b17 recorded 12, 12, 12 for the same three.
+
+   THE DIVISOR IS 20, AND THE MAGIC CONSTANT IS THE DIAGNOSTIC.
+   `mult' by 0x66666667 then `sra $v0, $t0, 3' is / 20; `/ 40' keeps the same
+   multiplier and only moves the shift to 4, so it costs just the two shifts
+   (514 / 2), while b17's `/ 21' changes the multiplier to 0x30C30C31 and is
+   514 / 8.  A 2-row residue here means the shift, not the spelling.
+
+   THE LEAN SHIFT IS UNCONDITIONAL.  Restoring b17's `p[0x9A] == 0x12' select
+   is 526 words / 31 aligned differences -- twelve words of gate this listing
+   does not have.  b17 measured its own inversion of that gate as FREE, so the
+   fact there was never the direction but the presence.
+
+   MEASURED AND FREE, so NOT why this lands:
+     the b-vector integration as plain casts rather than COMPONENT_REFs
+       (both halves and the b + 0x14 accumulate)
+                                        514 words /   0 aligned
+     the +0xA8 bump as `*(s16 *)' instead of `*(u16 *)'
+                                        514 words /   0 aligned
+     `m = func_800644B8(...) >> 10' with no `n' intermediate
+                                        514 words /   0 aligned
+
+   NOT MEASURABLE -- these are masked relocations, so a 0 says nothing and
+   both were settled off the listing instead:
+     the ORDER of the two toggle PAIRS.  Writing the 0x70/0x78 pair first
+       reads 514 / 0 under ovlverify AND 0 aligned differences, and relcand
+       reads `ok' (the symbol SET is unchanged) -- but a standalone
+       `tools/cdkgcc -S' shows the two blocks genuinely permuted, with the
+       `lw $v1, 0x2C($s4)' moving with them.  The listing settles it: the
+       first `lui' is %hi(D_80175148), so the 0x48 arm is written first.
+     the 0x6000 arm's table comparison.  Written against D_80175148 instead
+       of D_80175140 it is 514 / 0 and relcand still reads `ok', because both
+       symbols are already in the function's set.  The listing's
+       `lui $v0, %hi(D_80175140)' before `sh $zero, 0xA8($s1)' is the only
+       authority. */
+void func_b04_80170BF8(u8 *p, UnkVec *b, u8 *c)
+{
+    void (*h)(u8 *, UnkVec *, u8 *, u8 *);
+    void (*h2)(u8 *, UnkVec *, u8 *, u8 *);
+    u8 *q;
+    u8 *e;
+    s16 dir;
+    s32 n;
+    s32 r;
+    s32 w;
+    s32 t;
+    s32 t2;
+    s32 v;
+    s16 k;
+    s32 m;
+
+    m = 0;
+    q = p;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        h = *(void (**)(u8 *, UnkVec *, u8 *, u8 *))(p + 0x8C);
+        if (h == (void (*)(u8 *, UnkVec *, u8 *, u8 *))func_b04_80171400)
+        {
+            h(p, b, c, p);
+        }
+        else
+        {
+            p[0x71] &= 0x7F;
+        }
+        return;
+    }
+    dir = (s8)p[0x6D];
+    if (func_800A9E70(p, b, c, p) != 0)
+    {
+        return;
+    }
+    h2 = *(void (**)(u8 *, UnkVec *, u8 *, u8 *))(p + 0x8C);
+    if (h2 != NULL)
+    {
+        h2(p, b, c, p);
+    }
+    D_80175198[p[0x9A]](p, b, c, p);
+    if (dir != *(s8 *)(p + 0x6D))
+    {
+        func_800AA36C(p, b, c, p);
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    if ((*(s32 *)(p + 0x1C) & 0x40000) == 0 && (*(u16 *)(p + 0x98) & 0x8) == 0)
+    {
+        b->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
+        p[0x9D]++;
+    }
+    else
+    {
+        p[0x9D] = 0;
+    }
+    *(s32 *)(p + 0x90) += b->unk_14;
+    if ((*(u16 *)(c + 0x14) & 0x8000) == 0)
+    {
+        v = ((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7;
+        k = v;
+        if (*(s16 *)(p + 0x94) != k)
+        {
+            e = *(u8 **)(c + 0x2C);
+            func_80047738(c, e[k], *(s8 *)(c + 0x4));
+            *(s16 *)(p + 0x94) = v;
+        }
+        if (D_8006CCF8[k] != 0)
+        {
+            *(u16 *)(c + 0x14) |= 1;
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) &= 0xFFFE;
+        }
+        if (p[0x9A] != 8)
+        {
+            func_800A020C(*(s32 *)(q + 0x1C), c + 0xC);
+        }
+        if ((*(s32 *)(q + 0x1C) & 0x20) == 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0x40) == 0)
+            {
+                func_800478B8(c);
+            }
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) |= 0x7000;
+            *(s32 *)(q + 0x1C) &= ~0x40000;
+        }
+        *(s32 *)(q + 0x1C) &= ~0x8000000;
+        if ((*(s32 *)(q + 0x1C) & 0x40000) != 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0x40) == 0)
+            {
+                if ((*(u16 *)(p + 0x98) & 0x8000) != 0)
+                {
+                    *(u16 *)(p + 0x98) &= 0x7FFF;
+                    if (*(u8 **)(c + 0x2C) == D_80175148)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175140;
+                        func_80047784(c, D_80175140[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                    else if (*(u8 **)(c + 0x2C) == D_80175140)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175148;
+                        func_80047784(c, D_80175148[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                    else if (*(u8 **)(c + 0x2C) == D_80175170)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175178;
+                        func_80047784(c, D_80175178[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                    else if (*(u8 **)(c + 0x2C) == D_80175178)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175170;
+                        func_80047784(c, D_80175170[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                }
+                if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+                {
+                    *(u16 *)(p + 0x98) |= 0x8000;
+                    if (*(u8 **)(c + 0x2C) == D_80175140)
+                    {
+                        *(s16 *)(p + 0xA8) = 0;
+                    }
+                }
+                n = func_800644B8((*(s16 *)(p + 0xA8) << 12) / 20);
+                m = n >> 10;
+                *(u16 *)(p + 0xA8) += 1;
+            }
+            if ((*(u16 *)(p + 0x98) & 0x8) == 0)
+            {
+                r = func_800BCB04x(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6), *(u16 *)(q + 0x88) - 0x20);
+                w = *(s16 *)(p + 0x92);
+                t = (s16)(r - *(u16 *)(q + 0x88));
+                if (t - 0x20 < w)
+                {
+                    *(u16 *)(p + 0x92) -= 8;
+                }
+                else if (w < t - 0x2A)
+                {
+                    *(u16 *)(p + 0x92) += 8;
+                }
+            }
+        }
+        else
+        {
+            *(s16 *)(p + 0xA8) = 0;
+            *(u16 *)(p + 0x98) &= 0x7FFF;
+            if ((*(u16 *)(p + 0x98) & 0x8) == 0)
+            {
+                r = func_800BCB04x(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6), *(u16 *)(q + 0x88) - 0x20);
+                r = (s16)r - *(s16 *)(q + 0x88);
+                if (r < *(s16 *)(p + 0x92))
+                {
+                    *(s16 *)(p + 0x92) = r;
+                    p[0x9D] = 0;
+                    b->unk_14 = 0;
+                    *(s32 *)(q + 0x1C) |= 0x8000000;
+                }
+            }
+        }
+    }
+    else
+    {
+        if ((*(u16 *)(c + 0x14) & 0x800) != 0)
+        {
+            *(u16 *)(c + 0x14) &= 0x8FFF;
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) |= 0x7000;
+        }
+        *(s32 *)(q + 0x1C) &= ~0x8000000;
+        if ((*(s32 *)(q + 0x1C) & 0x40000) == 0)
+        {
+            *(s16 *)(p + 0xA8) = 0;
+            *(u16 *)(p + 0x92) -= m;
+            m = 0;
+            if ((*(u16 *)(p + 0x98) & 0x8) == 0)
+            {
+                r = func_800BCB04x(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6), *(u16 *)(q + 0x88) - 0x20);
+                r = (s16)r - *(s16 *)(q + 0x88);
+                if (r < *(s16 *)(p + 0x92))
+                {
+                    *(s16 *)(p + 0x92) = r;
+                    p[0x9D] = 0;
+                    b->unk_14 = 0;
+                    *(s32 *)(q + 0x1C) |= 0x8000000;
+                }
+            }
+        }
+        else
+        {
+            if ((*(u16 *)(c + 0x14) & 0x40) == 0)
+            {
+                if ((*(u16 *)(p + 0x98) & 0x8000) != 0)
+                {
+                    *(u16 *)(p + 0x98) &= 0x7FFF;
+                    if (*(u8 **)(c + 0x2C) == D_80175148)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175140;
+                        func_80047784(c, D_80175140[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                    else if (*(u8 **)(c + 0x2C) == D_80175140)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175148;
+                        func_80047784(c, D_80175148[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                    else if (*(u8 **)(c + 0x2C) == D_80175170)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175178;
+                        func_80047784(c, D_80175178[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                    else if (*(u8 **)(c + 0x2C) == D_80175178)
+                    {
+                        *(u8 **)(c + 0x2C) = D_80175170;
+                        func_80047784(c, D_80175170[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+                    }
+                }
+                if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+                {
+                    *(u16 *)(p + 0x98) |= 0x8000;
+                    if (*(u8 **)(c + 0x2C) == D_80175140)
+                    {
+                        *(s16 *)(p + 0xA8) = 0;
+                    }
+                }
+                n = func_800644B8((*(s16 *)(p + 0xA8) << 12) / 20);
+                m = n >> 10;
+                *(u16 *)(p + 0xA8) += 1;
+            }
+            if ((*(u16 *)(p + 0x98) & 0x8) == 0)
+            {
+                r = func_800BCB04x(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6), *(u16 *)(q + 0x88) - 0x20);
+                w = *(s16 *)(p + 0x92);
+                t2 = (s16)(r - *(u16 *)(q + 0x88));
+                if (t2 - 0x20 < w)
+                {
+                    *(u16 *)(p + 0x92) -= 8;
+                }
+                else if (w < t2 - 0x2A)
+                {
+                    *(u16 *)(p + 0x92) += 8;
+                }
+            }
+        }
+        *(s16 *)(p + 0xA8) = 0;
+        *(u16 *)(p + 0x98) &= 0x7FFF;
+    }
+    if ((*(s32 *)(q + 0x1C) & 0x40000000) != 0)
+    {
+        *(s32 *)(q + 0x1C) &= 0xBFFFFFFF;
+        n = func_800BCB04x((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, *(u16 *)(q + 0x88) - 0x20);
+        if ((s16)n < 0x200)
+        {
+            *(u16 *)(p + 0x92) += *(u16 *)(q + 0x88) - n;
+            *(u16 *)(q + 0x88) = n;
+        }
+    }
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(q + 0x88) + *(u16 *)(p + 0x92) + m;
+    *(u16 *)(c + 0x14) |= 0x40;
+}
 
 /* The banked room script's IDLE handler -- the body this bank's spawner parks
    at the actor's +0x8C and the one the switch below re-installs through

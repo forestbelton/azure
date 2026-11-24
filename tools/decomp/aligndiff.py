@@ -1,6 +1,19 @@
 import sys, os, re, subprocess, difflib
 sys.path.insert(0, '/home/case/projects/azure/tools/decomp')
 import asmlib, ovlverify
+# THIS TOOL TAKES EXACTLY ONE FUNCTION, AND USED TO IGNORE THE REST IN SILENCE.
+# `ovlverify.py' accepts several names, so an agent that has learned its habits
+# writes `aligndiff.py copy.c funcA funcB' and gets a measurement of funcA with
+# funcB discarded.  agent-h113 lost a sweep of EIGHT spellings that way in
+# batch 27: every one read 0, because every one measured the other body in the
+# file -- and "all of these are free" is the direction that looks like success.
+# That is a distinct way a measurement lies from the four already recorded: the
+# tool measured a DIFFERENT FUNCTION than the one you changed.  Refuse instead.
+_names = [a for a in sys.argv[3:] if not a.startswith("-")]
+if _names:
+    sys.exit("aligndiff takes ONE function name; %d extra given (%s).\n"
+             "Run it once per function -- unlike ovlverify, it cannot take a list."
+             % (len(_names), ", ".join(_names)))
 src, func = sys.argv[1], sys.argv[2]
 
 # SAME GUARD AS ovlverify.py's, AND FOR THE SAME REASON. If FUNC is still an

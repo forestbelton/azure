@@ -35,7 +35,12 @@ passed `s32 *'.
 
 Usage:
     python3 tools/decomp/declcheck.py                 # every unit
-    python3 tools/decomp/declcheck.py ovl_dng_s69     # one unit
+    python3 tools/decomp/declcheck.py ovl_dng_s69     # one unit, from csrc/
+    python3 tools/decomp/declcheck.py ovl_dng_s69 --src /path/to/my/copy.c
+
+AN AGENT MUST PASS `--src'.  Without it this reads csrc/<unit>.c, the
+committed file, which does NOT hold the body being handed back -- so a clean
+result is vacuous.  See check()'s docstring.
 """
 import glob
 import os
@@ -51,15 +56,26 @@ WANT = re.compile(r"(implicit declaration|type mismatch with previous implicit|"
                   r"conflicting types|passing arg \d+ of)", re.I)
 
 
-def check(unit, tmp):
-    src = os.path.join(PROJ, "csrc", unit + ".c")
+def check(unit, tmp, src=None):
+    """`src' overrides csrc/<unit>.c -- an agent's private copy, usually.
+
+    WITHOUT IT THIS TOOL IS VACUOUS FOR AN AGENT.  Batch 27's briefs told five
+    agents to run `declcheck.py <unit>' before handing back, and it read only
+    `csrc/<unit>.c' -- the COMMITTED STUB FILE, which does not contain the body
+    being handed back.  A clean result said nothing at all about the new code.
+    agent-h115 spotted it and ran the underlying compile against its own file
+    instead; `ovlverify' and `relcand' have always taken a path, and now so
+    does this.
+    """
+    src = src or os.path.join(PROJ, "csrc", unit + ".c")
     if not os.path.exists(src):
         return None
     # The Makefile's own flags, RELATIVE, run from the project root -- psyq's
     # headers do not parse with absolute -I paths from another directory.
+    rel = os.path.relpath(os.path.abspath(src), PROJ)
     cmd = [CC, "-S", "-O2", "-Iinclude", "-Ipsyq/include", "-G0",
            "-o", os.path.join(tmp, unit + ".s"),
-           os.path.join("csrc", unit + ".c")]
+           rel if not rel.startswith("..") else os.path.abspath(src)]
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJ)
     out = (r.stderr or "") + (r.stdout or "")
     hits = [l.strip() for l in out.splitlines() if WANT.search(l)]
@@ -67,13 +83,19 @@ def check(unit, tmp):
 
 
 def main():
-    units = sys.argv[1:] or sorted(
+    argv = sys.argv[1:]
+    src = None
+    if "--src" in argv:
+        i = argv.index("--src")
+        src = argv[i + 1]
+        del argv[i:i + 2]
+    units = argv or sorted(
         os.path.basename(p)[:-2]
         for p in glob.glob(os.path.join(PROJ, "csrc", "ovl_dng_*.c")))
     nu = nbad = nhit = nfail = 0
     with tempfile.TemporaryDirectory() as tmp:
         for unit in units:
-            r = check(unit, tmp)
+            r = check(unit, tmp, src)
             if r is None:
                 print("%-24s NO SUCH UNIT" % unit)
                 continue
