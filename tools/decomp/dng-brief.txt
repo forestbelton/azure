@@ -357,6 +357,18 @@ your report under item 4.
   and `RotMatrix` were all being spelled as addresses too. The real name
   needs NO declaration -- it comes from `common.h` -- and it tells the next
   reader what the code does, which an address never will.
+* **`common_syms.txt` AND NOTHING ELSE.** Do NOT take a name from
+  `splat/<container>_symbol_addrs.txt`. Every name in `common_syms.txt` is a
+  resident library or BIOS routine at 0x8003c9f8..0x8006a3a8, below the
+  overlay slot, so it is valid whichever overlay is mapped. The
+  per-container files name code INSIDE the slot at 0x80088760..0x800f7700,
+  and an address in there is different code depending on which overlay is
+  loaded: `plt_dm_kicked = 0x80098A98` is a true name of TOWN.BIN's code and
+  a LIE in a dungeon unit, because when DUNGEON.BIN is mapped that address is
+  dungeon code.
+  It would LINK, the symbol exists, and the bytes would be identical -- so
+  neither the build nor `ovlverify` can catch it. The name would be the only
+  false thing in the file. `tools/decomp/symsafe.py` audits for exactly this.
 * A NEW TYPEDEF NAME MUST NOT COLLIDE WITH ONE ANOTHER AGENT IS INVENTING
   RIGHT NOW. You cannot see the other four. Check both places before naming
   one, and prefer a name that says which function it belongs to:

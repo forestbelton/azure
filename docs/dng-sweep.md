@@ -1437,3 +1437,33 @@ exists precisely because of the first four, and I still reached for a regex.
 a later agent nothing; `rand()` tells it the function picks a random number,
 which is the single most useful fact about the surrounding code. The check is
 one grep against `splat/common_syms.txt`.
+
+## A NAME FROM THE WRONG SYMBOL FILE WOULD BE UNCATCHABLE
+
+The rename above was safe, and it was safe by accident of which file I happened
+to read. Worth writing down properly, because the obvious next step -- "do the
+other symbol files too" -- is the mistake.
+
+`splat/common_syms.txt`'s 219 names are all at 0x8003c9f8..0x8006a3a8, below
+the overlay slot: resident library and BIOS routines, valid whichever overlay
+is mapped. The per-container `splat/<container>_symbol_addrs.txt` files name
+code INSIDE the shared slot at 0x80088760..0x800f7700, and an address in there
+is DIFFERENT CODE depending on which overlay is loaded. town.bin's
+`plt_dm_kicked = 0x80098A98` is a true name of TOWN.BIN's code and a lie in a
+dungeon unit, because with DUNGEON.BIN mapped that address is dungeon code.
+
+**And nothing in this project could catch it.** The symbol exists, so it
+links; the address is the same, so the bytes are identical; so `make
+containers` is byte-identical and `ovlverify` reports 0 differing. The name
+would be the only false thing in the file, and byte-exactness -- the one
+check this whole sweep rests on -- is structurally blind to it.
+
+`tools/decomp/symsafe.py` audits for it: per-container names that sit in the
+slot, used in the CODE (not comments) of a unit belonging to a different
+container. Currently 0. The brief now says `common_syms.txt` and nothing else,
+with the reason.
+
+That is the second check this session that byte-exactness cannot perform --
+the first was the jump table in `.rodata`, which `ovlverify` cannot see
+because it measures a function's own words. Both are worth remembering when
+"four containers byte-identical" starts to feel like proof of everything.
