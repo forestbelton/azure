@@ -331,6 +331,23 @@ your report under item 4.
   annotate one. Prefer a plain-C device (a `do { x; } while (0)` reference
   bump, a duplicated arm) to an `__asm__` one, and record the plain scores you
   rejected.
+* **MOST PLAIN-C "DEVICES" ARE PROBABLY MACRO RESIDUE, AND THAT IS A SEARCH
+  HINT.** We compile what the preprocessor emitted; the macro layer is gone
+  and unrecoverable in principle. `do { ... } while (0)` is the canonical
+  macro body, `if (1)` and a duplicated arm under an always-true guard are
+  what a configuration macro collapses to, and a value referenced more times
+  than the C needs is what a macro evaluating its argument repeatedly gives
+  for free.
+  So when a residue is `allocno_compare` wanting more references on one
+  value, do not sweep statements looking for one to wrap. Ask which COHERENT
+  UNIT OF WORK around that value would have been a macro -- a whole gate, a
+  whole publish, a whole teardown -- and wrap that. The macro boundary tells
+  you both where the braces go and how many references you get. That is why
+  `func_b28_8017357C` needed its wrapper around the `func_800AA888` call and
+  not around the state bump three lines up.
+  Say which you think it is in the comment: "device" if you could not find the
+  spelling, "macro residue" if you think you did and the macro is just not
+  recoverable.
 
 ## If one will not land
 

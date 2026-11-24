@@ -113,7 +113,44 @@ the one section you need.
 ### Decomp devices
 
 A device is a construct the original author would not have written that makes
-the bytes come out right. They are allowed. The project already ships one:
+the bytes come out right. They are allowed.
+
+**BUT THE CATEGORY IS SMALLER THAN IT LOOKS, BECAUSE WE COMPILE WHAT THE
+PREPROCESSOR EMITTED, NOT WHAT ANYONE WROTE.** The macro layer is the one
+part of the original source that is unrecoverable in principle: `cc1psx` saw
+expanded text, so a macro's shape survives in the bytes while the macro
+itself is gone. Three of the constructs this file calls devices are the
+ordinary residue of that layer and should not be apologised for:
+
+* **`do { ... } while (0)`** is the canonical multi-statement macro body. If a
+  reference bump wants one, the likeliest explanation is that the original
+  line WAS a macro call, and we are writing out what the preprocessor handed
+  the compiler.
+* **`if (1) { ... }`, and a duplicated arm under an always-true guard**, are
+  what a configuration macro or a two-arm macro collapses to once its
+  condition is a constant. The permuter reached
+  `if (p || k) { t = -t; } else { t = -t; }` on `func_b09_80170A84` by search;
+  a `#define`-shaped original reaches it by expansion.
+* **A value referenced more times than the C needs** is what a macro that
+  evaluates its argument repeatedly produces for free:
+  `#define STEP(a) do { if ((a)->f) g(a); h(a); } while (0)` gives three
+  references to one object with nothing artificial anywhere.
+
+That last one is the useful half, because it is predictive rather than
+consoling. When a residue is `allocno_compare` wanting N more references on
+one value, do not hunt for a statement to wrap: ask **which coherent unit of
+work around that value would have been a macro**, and wrap THAT. A macro has
+a boundary a person would recognise -- a whole gate, a whole publish, a whole
+teardown -- and its argument appears once per use inside it. That is both
+where the braces go and how many references you get, and it is why
+`func_b28_8017357C` needed the wrapper around its `func_800AA888` call rather
+than around the state bump three lines up: the call and its arguments are a
+unit, the bump is not.
+
+So: say in the comment which of the two a construct is. "Device" means we
+could not find the spelling. "Macro residue" means we probably did, and the
+macro is simply not recoverable. The measurement is identical either way and
+the honesty is cheap. The project already ships one:
 `csrc/unk_11F0C.c:194` has `__asm__ volatile("" ::"r"(q) : "memory")`, worth 13
 measured words, with a comment recording each job it does.
 
