@@ -186,7 +186,58 @@
    extern u8 D_80174AFC[];
    void func_b38_80170A70(u8 *, UnkVec *, u8 *, u8 *);
    void func_b38_80171138();
-   END DECLARATIONS */
+   END DECLARATIONS    THE BOUNDARY MOVE WAS TRIED AND IT DOES NOT WORK, 2026-11-24. This settles
+   the question the park has been waiting on, and the answer is that the yaml
+   is the wrong lever. What was done and what happened:
+
+     1. `[0xfa707c, c, ovl_dng_b38]' -> `[0xfa7080, c, ovl_dng_b38]', then
+        `make splat'. The data word at 0xfa7000 IMMEDIATELY resolved from the
+        bare `.word 0x80170880' to `.word func_b38_80170880' -- so that half of
+        agent-h66's evidence is exactly right, and the one-word-early `c' start
+        is real.
+     2. The stub had to be renamed in csrc too (`func_b38_8017087C' ->
+        `func_b38_80170880'), because the Makefile keeps only the listings an
+        INCLUDE_ASM names; without that rename splat emits the listing and the
+        build deletes it, which looks like splat failing to disassemble the
+        region.
+     3. The regenerated listing is **124 instruction words**, and THIS PARK'S
+        BODY MEASURES 124 words / 0 differing against it, both `ovlverify' and
+        `aligndiff'. **The body is correct. That is now proved, not argued.**
+     4. AND THE CONTAINER STILL FAILED: dungeon.bin came out 59f4c929 against
+        the reference 27f9fcc3, with every entry of the 0xfa7000 handler table
+        FOUR LOWER than the ROM's (built 0x8017087c / 0x80170a6c / 0x8017156c,
+        ref 0x80170880 / 0x80170a70 / 0x80171570).
+
+   WHY, AND IT IS THE THING TO REMEMBER: `.rodata, ovl_dng_b38' TAKES ITS SIZE
+   FROM THE COMPILER'S OUTPUT, NOT FROM THE YAML RANGE. The yaml range only
+   says which ROM bytes splat disassembles. `build/dungeon.bin.ld' does not pin
+   `.text'; TEXT_START is RODATA_END, and RODATA_END is wherever the 0x74 of
+   jump tables the C file emits happens to end. Moving the yaml boundary
+   therefore changed NOTHING about the link, and the text stayed at
+   0x8017087c.
+
+   So agent-h66's four-row table is wrong in its premise: there is no
+   combination of yaml edits that produces `rodata 0x78', and its explanation
+   of the earlier "+4 on every label" failure (the listing not regenerated) is
+   wrong too. BOTH failures have the same single cause -- the emitted rodata
+   size never moved.
+
+   WHAT WOULD ACTUALLY LAND IT: the unit's `.rodata' must grow by 4 bytes, so
+   the C file has to DEFINE the halfword table that occupies 0x8017087c. That
+   is `D_b38_80170874' -- the earlier ROM reading found the bytes there make it
+   six halfwords with a terminator, matching `D_b38_80170868'. Defining a const
+   array in the unit is a different and larger change from a boundary move, it
+   affects how every other bank-local table in the unit is declared, and it
+   should be decided deliberately rather than as a side effect of landing one
+   function. ovl_dng_b29 has the identical defect (its first word disassembles
+   as the nonsense `sltiu $zero, $s0, 0x4981', the next is a real
+   `addiu $sp, $sp, -0x40' prologue, and its data word `.word 0x80170890'
+   points at that prologue), so whatever is decided here applies there too.
+
+   THE PARK THEREFORE STAYS, with its body KNOWN-GOOD and the blocker named
+   precisely: not the C, not the boundary, but the unit's rodata size.
+
+*/
 
 /* Spawn the kind-0x112 node this bank's scripts use for a thrown or placed
    actor: arm it with the bank-local func_b38_80170A70 handler and the
