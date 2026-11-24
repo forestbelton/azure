@@ -359,7 +359,24 @@ your report under item 4.
   one block as you go; do not start a second.
 * Keep types honest. If a struct field's offset and width are all you know, a
   cast through `u8 *` is fine. Do not invent a struct you cannot witness.
-* **RE-MEASURE A PLAUSIBLE FACT BEFORE YOU WRITE IT DOWN.
+* **STRIP THE TWIN'S DEVICES BEFORE YOU COPY THEM.
+
+A twin's comment may name a `do { } while (0)`, a duplicated arm, an `if (1)`
+or a reference bump. Those are ALLOCATION FIXES for THAT body's register
+pressure, not facts about the shape. A relinked copy usually has different
+pressure, so the first thing to compile is the twin's body with every device
+REMOVED -- then add one back only if a measurement asks for it.
+
+Two agents hit this in one batch. One copied a twin's shared `goto` exit
+label and paid 32 aligned differences; four plain `return -1;` statements
+measured 0, because reorg rebuilds the shared block by itself. Another found
+its twin was line-for-line correct with one callee swapped and landed at 0
+differing only after deleting BOTH of the twin's devices.
+
+The same split applies to a twin's STATEMENTS versus its LABELS and LOCALS:
+copy the statements, re-derive the labels, the shared locals and the devices.
+
+RE-MEASURE A PLAUSIBLE FACT BEFORE YOU WRITE IT DOWN.
 
 When a body lands on the first compile, every spelling in it is UNMEASURED --
 you chose them, they worked, and you do not know which ones mattered. Do not

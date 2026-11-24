@@ -1148,8 +1148,8 @@ then read only the section you need.
 - A MODULO IN ITS OWN STATEMENT REUSES THE DIVIDEND'S PSEUDO  `:36258`
 - A PREDICTABLE-TRUE TWO-ARM GUARD IS A REFERENCE BUMP, AND ONLY ITS OPERAND MATTERS  `:36272`
 - A SHARED `goto` EXIT LABEL IS A cse BARRIER, AND ITS POSITION IS AN ALLOCATION FIX  `:36308`
-- THE BIASED BASE REGISTER A LOOP'S STORES SHARE IS ITS *LAST* MEMORY REFERENCE  `:36329`
-- MOVING A CONSTANT'S STORES FURTHER APART LOWERS ITS local-alloc RANK  `:36347`
+- THE BIASED BASE REGISTER A LOOP'S STORES SHARE IS ITS *LAST* MEMORY REFERENCE  `:36344`
+- MOVING A CONSTANT'S STORES FURTHER APART LOWERS ITS local-alloc RANK  `:36362`
 
 <!-- END INDEX -->
 
@@ -36325,6 +36325,21 @@ Four plain `return -1;` statements measure 0: reorg rebuilds the shared
 **Read this as an amendment to "A LANDED SIBLING'S FACTS CARRY, ITS
 ALLOCATION FIX DOES NOT": a shared-label POSITION is an allocation fix, not a
 fact.** Copy the twin's statements; re-derive its labels.
+
+AND THE SAME GOES FOR A TWIN'S DEVICES, which is the more common case.
+`func_s37_80024A5C` is its twin `func_800B8FC8` line for line with one callee
+swapped, and it landed at 126 words / 0 differing only after **both of the
+twin's devices were REMOVED** -- no `do { } while (0)` around the inner call,
+no `g++`/`g--` reference bump. The twin needs them; this copy needs their
+absence.
+
+So the rule across all three cases -- labels, devices, shared locals -- is
+the same, and it is worth stating plainly because the temptation runs the
+other way: **a device in a twin's comment is evidence that THAT body had a
+competition to resolve, not an instruction to resolve one here.** A relinked
+copy usually has different register pressure, and the cheapest thing to try
+first on a twin that is otherwise line-for-line is the body with every device
+stripped out.
 
 ## THE BIASED BASE REGISTER A LOOP'S STORES SHARE IS ITS *LAST* MEMORY REFERENCE
 
