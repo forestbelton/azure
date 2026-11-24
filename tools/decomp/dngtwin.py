@@ -436,7 +436,19 @@ def main():
             # code and took its references with it. That is the direction
             # that costs rows; see the section above.
             d = nw - len(me[1])
-            if d > 0:
+            if d == 1:
+                # MEASURED, batch 19: a ONE-word delta is usually a compare
+                # constant, not a statement. `if (x < 0)' is a single `bgez'
+                # where `if (x < 2)' is `slti'+`beqz'. func_b12_80172290
+                # landed first compile once its gate was read as `< 0' where
+                # the twin has `< 2' -- the twin's spelling measures 217/7, and
+                # an agent sent hunting for a missing statement would not have
+                # looked at the branch mnemonic.
+                mark = (" [1 WORD SHORTER -- most likely a COMPARE CONSTANT, "
+                        "not a missing statement: read the branch mnemonic, "
+                        "bgez/bltz/blez/bgtz/beqz/bnez are one word and a "
+                        "non-zero compare is two]") + mark
+            elif d > 1:
                 mark = (" [YOURS IS %d WORDS SHORTER -- find the MISSING "
                         "STATEMENTS first, see WHEN YOUR BODY IS SHORTER]"
                         % d) + mark
