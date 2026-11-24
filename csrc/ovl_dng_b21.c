@@ -181,6 +181,13 @@ s32 func_800A56E0(s32);
 void func_800A2B04(UnkVec *, s32, s32);
 extern s32 D_8008346C;
 
+void *func_800990FC(void);
+void *func_80099734(u8 *, u8 *);
+void *func_80099194(u8 *, u8 *);
+u8 *func_80099290(u8 *);
+s32 func_800A5720(void *);
+extern u8 D_8017646B[];
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_801708A4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80170AE0);
@@ -2214,7 +2221,21 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80175C94);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80175DA4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80175E14);
+/* The resident overlay's func_80099844 (csrc/ovl_dungeon.c) with the message
+   string a bank-local constant instead of a parameter, so the second saved
+   register it needs is gone: 22 words where the twin is 24. 0 differing. */
+void func_b21_80175E14(u8 *p)
+{
+    void *m;
+    void *h;
+
+    h = func_800990FC();
+    m = h;
+    h = func_80099734(p, h);
+    h = func_80099194(D_8017646B, h);
+    func_80099290(h);
+    func_800A5720(m);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b21", func_b21_80175E6C);
 

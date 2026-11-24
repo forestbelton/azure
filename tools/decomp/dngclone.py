@@ -929,6 +929,10 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="verify every member, write nothing")
     ap.add_argument("--only", help="comma-separated member function names")
+    ap.add_argument("--hold", default="",
+                    help="comma-separated unit tags a LIVE AGENT holds; their "
+                         "members are skipped so a clone cannot land work "
+                         "someone is still doing")
     ap.add_argument("-j", type=int, default=8)
     args = ap.parse_args()
 
@@ -959,6 +963,19 @@ def main():
     if args.only:
         want = set(args.only.split(","))
         members = [m for m in members if m in want]
+    # A CLONE CAN LAND A FUNCTION A LIVE AGENT IS STILL WORKING ON. Batch 8
+    # gave agent-h17 three ovl_dng_b28 stubs, and while it worked, cloning
+    # another agent's family reached into b28 and landed all three. Nothing
+    # was wrong -- h17's own bodies also measured 0 differing -- but it spent
+    # 611 words of its run on work that was already done, and it had to tell
+    # ME that rather than the other way round.
+    if args.hold:
+        held = {t for t in args.hold.split(",") if t}
+        skipped = [m for m in members if unit_of(m).split("_")[-1] in held]
+        members = [m for m in members if m not in skipped]
+        if skipped:
+            print("holding %d member(s) in a live agent's unit: %s"
+                  % (len(skipped), ", ".join(skipped)))
     print(f"{rep}: {len(members)} other members, {fam[0][2]} words each")
 
     by_unit = {}

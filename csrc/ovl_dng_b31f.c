@@ -73,6 +73,8 @@ s32 func_800A2B5C(void *d);
 s32 func_800C7930(u8 *a, u8 *b, s16 c, s32 e);
 u8 *func_8009C93C(u8 *a, u8 *b, s32 ang, u16 dist, u8 *e);
 
+void func_800478B8(u8 *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A908);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A928);
@@ -533,7 +535,22 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80170CE0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80170D44);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80170D60);
+/* 27 words, 0 differing. */
+/* The 0x312 spark's own step function: hand the renderable to func_800478B8,
+   and when its +0x14 reports 0x6000 mark the owning actor retired and set the
+   same bit in D_800814A0. No xsibs twin at ratio 0.40; written from the
+   listing. D_800814A0 is the PLAIN scalar here, not ovl_main_8008A288's
+   `D_800814A0_a[0]` array alias -- the `lui`/`lw %lo` pair is what the
+   non-array spelling emits. 27 words, 0 differing, first compile. */
+void func_b31f_80170D60(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    func_800478B8(c);
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80170DCC);
 

@@ -1012,3 +1012,55 @@ while the target wants that store in a branch's delay slot.
 
 That is a better outcome than a landing: the lever file now says when its own
 devices do not apply, and how to tell.
+
+## A CLONE RUN LANDED WORK A LIVE AGENT WAS STILL DOING
+
+agent-h17 finished its six `ovl_dng_b28` functions and then had to tell ME
+that three of them were already landed. They were, and I landed them:
+`func_b28_80173254` and `func_b28_8017357C` are family members of functions
+other batch-8 agents landed, and cloning those reached into b28 while h17 was
+working. 611 words of its run went on work that was already done.
+
+Nothing was WRONG -- h17's own bodies measure 0 differing too, and its
+`8017357C` is structurally identical to the clone's -- but this is a
+dispatcher defect and it was mine, not the agent's. Two fixes:
+
+* **`dngpick.py --busy` is family-aware now.** It already skipped a live
+  agent's units; it also drops every stub elsewhere that shares a FAMILY with
+  one of them, because a landing in a busy unit clones into its members
+  wherever they live. On the next batch that held 28 extra stubs.
+* **`dngclone.py --hold <tags>`** skips members in a named unit, so a clone
+  cannot reach into a unit an agent is holding even when the family was
+  picked before that agent started.
+
+The general shape, worth remembering because the sweep's parallelism rests on
+it: **the unit of exclusion is the FAMILY, not the unit.** Two agents in
+different units are only independent if no family spans them, and 1199 of
+this block's stubs started life as copies of a sibling.
+
+## What h17 and h19 did with the reference devices, together
+
+They are the best pair of measurements the sweep has produced on
+`allocno_compare`, and they disagree in a way that resolves the lever:
+
+* **h17 aimed a device.** `func_b28_8017357C`'s residue was 16 differences of
+  `p`/`b` swapped, and off `-da` it read `p` at 3*9/198 = 0.1364 against `b`'s
+  2*5/74 = 0.1351 -- a margin of one part in a hundred. A
+  `do { } while (0)` around `func_800AA888(p, b, c, d)` puts `b` at 2*6/74 =
+  0.1621 over `p`'s 3*10/198 = 0.1515. The SAME device around state 0's bump,
+  which is where `func_b09_80173D4C`'s lever puts it, changes nothing at all,
+  because it lifts `p` and `p` is not the one that needs lifting.
+* **h19 priced a device against plain C and chose plain C.**
+  `func_b44_80174438` is the same shape; it swept all fifteen `do-while`
+  positions (three reach 0, the rest 15 to 136, two cost a word) and took the
+  duplicated dress tail instead, because the twin already uses it and jump2
+  makes it word-free.
+* **And h19 showed the fix does not transfer.** `func_b44_80174110` and
+  `func_b44_80174438` are the same pair of banked tails `ovl_dng_b03` carries,
+  and they disagree: 80174110 measures 0 with the tail written once OR twice,
+  80174438 needs it twice. A twin's documented FACTS transfer; its ALLOCATION
+  fix must be priced per body.
+
+Then h17 withdrew the device it had reported, because the duplicated tail
+reached 0 without one and the house rule prefers plain C. Both spellings are
+in its comment with scores.

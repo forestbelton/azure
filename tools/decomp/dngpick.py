@@ -14,6 +14,14 @@ So ranking by family yield ranks the wrong 11%. This packs each unit by
 one-member group simply scores its own words -- and reports the units that
 pack best. Families still sort first on equal words, because a clone is free.
 
+`--busy` DOES TWO THINGS, AND THE SECOND ONE MATTERS MORE. It skips the named
+units, and it also skips every stub that shares a FAMILY with a stub in one
+of them -- because a landing in unit X clones into its family members
+wherever they live, so handing agent B a member of agent A's family means
+whichever finishes first silently does B's work. That is not hypothetical:
+batch 8 gave one agent three ovl_dng_b28 stubs and cloning another agent's
+family landed all three mid-run.
+
 Units excluded by default:
   * `ovl_dng_lo16' -- its second jump table is 4 mod 8 relative to the rodata
     start, so a function of its that owns one cannot land until that segment
@@ -43,16 +51,40 @@ import dngfam  # noqa: E402
 
 
 def stub_rows():
-    """[(copies, words, yield, func, unit tag)] for every remaining stub."""
+    """[(copies, words, yield, func, unit tag, family key)] per remaining stub."""
     stubs = dngfam.stubs()
     out = []
-    for g in dngfam.families(landed=False).values():
+    for key, g in dngfam.families(landed=False).items():
         mem = [(c, n, w) for c, n, w in g if n in stubs]
         if not mem:
             continue
         for _c, n, w in mem:
-            out.append((len(mem), w, len(mem) * w, n, n.split("_")[1]))
+            out.append((len(mem), w, len(mem) * w, n, n.split("_")[1], key))
     return out
+
+
+def batch_yield(pick):
+    """Words this selection is really worth, counting each family ONCE.
+
+    A `copies * words' yield per row DOUBLE-COUNTS when two members of one
+    family are both handed to the same agent: whichever lands first clones
+    into the other, so the second is not additional yield. agent-h19 was
+    given func_b44_80174A6C and func_b44_80174BC8, which `dngfam' calls one
+    2-member family -- they differ in two immediates, so they are not even
+    copies -- and the brief told it 348 words where the truth was 174. It
+    landed both separately and nothing was lost, but the figure was wrong and
+    an agent reading it would mis-price its own list.
+
+    So: a family contributes `members * words' once, and the picked rows of
+    that family contribute nothing further.
+    """
+    seen, total = set(), 0
+    for r in pick:
+        if r[5] in seen:
+            continue
+        seen.add(r[5])
+        total += r[0] * r[1]
+    return total
 
 
 def pack(rows, budget, limit):
@@ -82,17 +114,25 @@ def main():
     busy = {t for t in (a.busy.split(",") if a.busy else []) if t}
     skip = {t for t in (a.skip.split(",") if a.skip else []) if t} | busy
 
+    rows = stub_rows()
+    # Families already reachable from a busy unit: a landing there clones into
+    # every member, so those members are not free work for anyone else.
+    busy_fams = {r[5] for r in rows if r[4] in busy}
     by_unit = collections.defaultdict(list)
-    for r in stub_rows():
+    held = 0
+    for r in rows:
+        if r[4] in skip:
+            continue
+        if r[5] in busy_fams:
+            held += 1
+            continue
         by_unit[r[4]].append(r)
 
     scored = []
-    for tag, rows in by_unit.items():
-        if tag in skip:
-            continue
-        pick, w = pack(rows, a.budget, a.limit)
+    for tag, rows_u in by_unit.items():
+        pick, w = pack(rows_u, a.budget, a.limit)
         if pick:
-            scored.append((sum(r[2] for r in pick), w, tag, pick))
+            scored.append((batch_yield(pick), w, tag, pick))
     scored.sort(reverse=True)
 
     total = 0
@@ -104,6 +144,8 @@ def main():
     print("\n%d unit(s), %d words of yield" % (min(a.n, len(scored)), total))
     if busy:
         print("held by a live agent and skipped: %s" % ", ".join(sorted(busy)))
+        print("plus %d stub(s) elsewhere sharing a family with one of those "
+              "units -- a landing there would clone into them" % held)
 
 
 if __name__ == "__main__":
