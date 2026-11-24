@@ -120,7 +120,6 @@ extern u8 D_80045340[];
 s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
 void func_b03_80170A28(u8 *p, UnkVec *b, u8 *c);
 
-void func_b03_80170E54(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern s32 D_8008346C;
 s32 func_8003F270(void);
 s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n);

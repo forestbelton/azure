@@ -222,7 +222,6 @@ void func_800AA258(u8 *, void *, u8 *, u8 *);
 void func_800AA888(u8 *, void *, u8 *, u8 *);
 void func_800A9A04(u8 *);
 void func_b28_801737DC(u8 *p, u8 *b, u8 *c, u8 *d);
-void func_b28_801737DC(u8 *p, u8 *b, u8 *c, u8 *d);
 
 void *func_800990FC(void);
 void *func_80099734(u8 *, u8 *);

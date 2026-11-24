@@ -126,7 +126,6 @@ s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
 void func_b11_80170A28(u8 *p, UnkVec *b, u8 *c);
 
 void func_b11_801715F4(u8 *p, void *b, void *c, u8 *d);
-void func_b11_801715F4(u8 *p, void *b, void *c, u8 *d);
 void func_b11_8017139C(u8 *p, UnkVec *b, u8 *c, u8 *d);
 void func_b11_80171F64(u8 *p, UnkVec *b, u8 *c, u8 *d);
 s32 func_b11_8017207C(u8 *a, void *b, void *c, s32 d);

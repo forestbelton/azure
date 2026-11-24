@@ -139,7 +139,6 @@ typedef struct UnkDngB09A28Tbl
 } UnkDngB09A28Tbl;
 
 void func_b34_80172490(u8 *p, void *b, void *c, u8 *d);
-void func_b34_80172490(u8 *p, void *b, void *c, u8 *d);
 extern u32 D_800814A8;
 extern u8 D_80174EF8[];
 extern u8 D_80174EC0[];

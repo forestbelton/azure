@@ -524,8 +524,22 @@ def insert_decls(text, decls):
     existing declaration in scope, and a newly added typedef still precedes a
     newly added user of it because `decls' keeps the source order it came in.
     """
-    have = set(decl_block(text))
-    add = [d for d in decls if d not in have]
+    # COMPARE ON A WHITESPACE-NORMALISED FORM. An exact-text test misses a
+    # declaration the unit already carries in a different wrapping -- which
+    # is routine, because clang-format reflows a long prototype after a
+    # landing and the next clone then adds its own copy. 11 duplicated
+    # declarations had accumulated across 10 units that way; harmless to the
+    # link, and agent-h17 had to point out that one of them was sitting twice
+    # in a row in the file it was reading.
+    norm = lambda d: " ".join(d.split())
+    have = {norm(d) for d in decl_block(text)}
+    add, seen = [], set(have)
+    for d in decls:
+        k = norm(d)
+        if k in seen:
+            continue
+        seen.add(k)
+        add.append(d)
     if not add:
         return text
     _, end = decl_span(text)
@@ -762,6 +776,31 @@ def vary_consts(body, pairs, limit=12):
                      + (f" at {need} of {len(hits)} sites"
                         if len(hits) > need else
                         f" at all {len(hits)} sites" if len(hits) > 1 else ""))
+    # A DIFFERING IMMEDIATE THAT IS NOT IN THE SOURCE AT ALL MAY BE DERIVED
+    # FROM ONE THAT IS. `*(UnkDngS58Name12 *)((u8 *)n + 0x58) = ...' writes
+    # 0x58 in the C and emits lwl/lwr/swl/swr at 0x58, 0x5B, 0x5C, 0x5F, 0x60
+    # and 0x63. A sibling whose base is elsewhere differs at all six, and five
+    # of them appear nowhere in the source -- so substituting 0x58 is the
+    # whole job and the other five are consequences of it. Both members of
+    # func_s58_8002553C's family were refused over exactly that.
+    #
+    # The test is the DELTA: an unplaceable pair whose (new - old) matches a
+    # pair we are already substituting is a derived field of that same
+    # expression and needs nothing. Anything else is still refused, and the
+    # verify still decides.
+    if unsure:
+        deltas = {n - o for o, news in want.items()
+                  if len(set(news)) == 1 and _sites(body, ok, o)
+                  for n in [news[0]]}
+        left = []
+        for msg in unsure:
+            m = re.match(r"(-?0x[0-9a-f]+) differs at (\d+) site", msg)
+            if m and "does not appear in the code at all" in msg:
+                o = int(m.group(1), 16)
+                if any((o + d) != o and d in deltas for d in deltas):
+                    continue          # same delta as a substitution we make
+            left.append(msg)
+        unsure = left
     if unsure:
         return [], unsure
 

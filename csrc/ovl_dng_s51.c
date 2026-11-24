@@ -49,13 +49,148 @@ s32 func_80069EF8();
 void func_s51_80024734();
 s32 func_s51_800244E4(u8 *p, UnkVec *v);
 
+void func_s51_800249A0(u8 *p);
+typedef struct UnkDngS58Blk32
+{
+    u8 b[0x20];
+} UnkDngS58Blk32;
+typedef struct UnkDngS58Rec
+{
+    s16 a;
+    u16 b;
+} UnkDngS58Rec;
+typedef struct UnkDngS58Blk64
+{
+    u8 b[0x40];
+} UnkDngS58Blk64;
+typedef struct UnkDngS58Name12
+{
+    u8 b[0xC];
+} UnkDngS58Name12;
+extern s16 D_8002571C;
+
+extern u8 D_80045340[];
+extern u8 D_800256E0[];
+UnkNode *func_8003FC64(s32);
+void func_s51_80024104(u8 *p);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_8002405C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_80024104);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_800243D8);
+/* func_s51_80024104's own spawner, run as a step: allocate a 0x212 node, give
+   it 0xB frames at the payload's +0x2C and the owner `a` at +0x7C, park
+   func_s51_80024104 as its step, then clear the renderable -- 0x20 at +0x10,
+   0 at +0x06, the 0xC bits in +0x14, a black colour and a zero scale -- seed
+   its mover from the owner's name record and point the slot's +0x8 at the
+   node's own +0x58, into which the 12-byte D_800256E0 record is copied.
+   67 words, 0 differing, first compile.  The skeleton is func_800D4AB0
+   (csrc/ovl_dungeon_800CABA8.c): same 0x212/func_8004491C/D_80045340 sequence
+   and the same `n->unk_0C` RE-READ after the mover stores, which is what
+   keeps the second `lw 0xC($s0)`.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_800244E4);
+   Two shapes differ from that twin and both are read off this listing.  The
+   mover copy is THREE ALIGNED WORDS, not the twin's three halfwords: `m` and
+   `s` are unrelated pointers gcc cannot prove disjoint, so each `sw` pins the
+   next `lw` and the three load-delay slots stay `nop`.  And the 12-byte
+   record copy is a struct whose type has ALIGNMENT 1 (`u8 b[0xC]`), which is
+   what forces the `lwl`/`lwr` + `swl`/`swr` pairs instead of aligned `lw`s --
+   the same fact UnkDungeonName12 carries in csrc/ovl_dungeon_decls.h.
+   THIS COPY'S OWN CONSTANT: 0x2c -> 0x2a, 0x7c -> 0x60, 0x58 -> 0x92 at all 2 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s51_800243D8(u8 *a)
+{
+    UnkNode *n;
+    u8 *p;
+    u8 *s;
+    UnkVec *m;
+    UnkSlot *r;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        *(s16 *)(p + 0x2a) = 0xB;
+        *(u8 **)(p + 0x60) = a;
+        n->unk_10 = (u32)func_s51_80024104;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x20;
+        r->unk_06 = 0;
+        r->unk_14 |= 0xC;
+        s = *(u8 **)(a - 0x18);
+        m = n->unk_08;
+        m->unk_00 = *(s32 *)(s + 0x0);
+        m->unk_04 = *(s32 *)(s + 0x4);
+        m->unk_08 = *(s32 *)(s + 0x8);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0;
+        r->unk_1C = 0;
+        *((u8 *)r + 0xE) = 0;
+        *((u8 *)r + 0xD) = 0;
+        *((u8 *)r + 0xC) = 0;
+        *(UnkDngS58Name12 *)((u8 *)n + 0x92) = *(UnkDngS58Name12 *)D_800256E0;
+        r->unk_08 = (u32)((u8 *)n + 0x92);
+    }
+}
+
+/* One semi-transparent 1x1 TILE_1 and one DR_MODE per node of the tag chain,
+   projected through the 0x1F800000 scratchpad, with each node's colour word
+   scaled by the payload's +0x32 life over 128.  148 words, 0 differing, first
+   compile.  The twin is func_800D68F4 (csrc/ovl_dungeon_800D50FC.c), which is
+   this walk with a constant colour; that function's long note on the shape --
+   `addPrim` as a bitfield store, the two loop-hoisted masks in $s2/$s4,
+   `setTile1` plus `setSemiTrans` folding to one `sb 0x6A` -- applies here
+   unchanged.  The only relink is the scratchpad struct: this object's fields
+   sit at +0x00/+0x02/+0x04, +0x18, +0x20, +0x90/+0x94 and +0xC0 where the
+   resident original has them at +0x04/+0x06/+0x08, +0x1C, +0x24, +0xD0/+0xD4
+   and +0x100, which is what UnkDng73E94SP already describes.  The twin's three
+   dead colour `lbu`s are live here: they are `setRGB0`'s three operands, and
+   the three `mult`/`bgez`/`addiu 0x7F`/`sra 7` runs are the signed `/ 128`. */
+s32 func_s51_800244E4(u8 *p, UnkVec *v)
+{
+    UnkDng73E94SP *sp = (UnkDng73E94SP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkNode *n;
+    TILE_1 *t;
+    DR_MODE *dm;
+
+    sp->unk_18 = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_20 = D_80083160.unk_00 + 0xB0;
+    while (1)
+    {
+        sp->unk_00 = *(u16 *)((u8 *)v + 0x2);
+        sp->unk_02 = *(u16 *)((u8 *)v + 0x6);
+        sp->unk_04 = *(u16 *)((u8 *)v + 0xA);
+        t = (TILE_1 *)sp->unk_18;
+        sp->unk_18 = (u8 *)(t + 1);
+        sp->unk_C0 = RotTransPers((SVECTOR *)&sp->unk_00, (s32 *)&t->x0, &sp->unk_90, &sp->unk_94);
+        if ((u32)sp->unk_C0 < 0x1E0)
+        {
+            *(u32 *)&t->r0 = *(u32 *)(p + 0x8);
+            setRGB0(t, t->r0 * *(s16 *)(p + 0x32) / 128, t->g0 * *(s16 *)(p + 0x32) / 128,
+                    t->b0 * *(s16 *)(p + 0x32) / 128);
+            setTile1(t);
+            setSemiTrans(t, 1);
+            addPrim(sp->unk_20 + sp->unk_C0 * 4, t);
+            dm = (DR_MODE *)sp->unk_18;
+            sp->unk_18 = (u8 *)(dm + 1);
+            func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
+            addPrim(sp->unk_20 + sp->unk_C0 * 4, dm);
+        }
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)sp->unk_18;
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_80024734);
 
@@ -114,7 +249,42 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_800248B8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_8002492C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_800249A0);
+/* Spend 8 of the payload's +0x32 life counter, raise the engine's D_8002571C
+   tick, and when the counter runs out set the 0x8000 kill bit in the node's
+   -0x2 flags and in D_800814A0.  20 words, 0 differing.  The shape is
+   func_800999D4 (csrc/ovl_dungeon.c) plus the D_8002571C store.
+
+   THE DECREMENT MUST BE READ INTO AN `s16` LOCAL *BEFORE* THE D_8002571C
+   STORE.  Every folded spelling -- `if ((*(s16 *)(p + 0x32) -= 8) <= 0)`
+   with the store first, the early-return form, the counter behind a
+   `s16 *` local, a `do { } while (0)` around the store, and the
+   decrement/test split into two statements -- is 20 words and 11 differing,
+   and the same local written AFTER the store is 11 too.  The eleven rows are
+   one allocation: with the load after the store, the constant 1 is the only
+   block-local quantity alive over $v0, so local-alloc hands it $v0 and
+   global-alloc then gives `p` its incoming $a0; reading the counter first
+   keeps $v0/$v1 busy across the constant's range, so the constant takes $a0
+   and `p` is copied to $a1 by the target's entry `addu`.  That also buys the
+   schedule: `addiu $a0, $zero, 1` fills the `lhu`'s load-delay slot, where
+   the store-first forms spend a `nop` there.  Hoisting the result into an
+   `s32` instead loses the `sll 16`/`bgtz` pair: 19 words, 19 differing.
+   THIS COPY'S OWN CONSTANT: 0x32 -> 0x2a at all 2 sites, -0x8 -> -0x1.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s51_800249A0(u8 *p)
+{
+    s16 t;
+
+    t = *(s16 *)(p + 0x2a) - 1;
+    D_8002571C = 1;
+    *(s16 *)(p + 0x2a) = t;
+    if (t <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_800249F0);
 

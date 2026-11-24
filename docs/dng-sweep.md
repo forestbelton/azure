@@ -1064,3 +1064,53 @@ They are the best pair of measurements the sweep has produced on
 Then h17 withdrew the device it had reported, because the duplicated tail
 reached 0 without one and the house rule prefers plain C. Both spellings are
 in its comment with scores.
+
+## Three more `vary_consts` gaps, and the shape they share
+
+Every one of batch 8's clone refusals was a spelling the substituter could not
+see, and all three are now closed. The pattern across all seven of these
+(four earlier, three here) is worth stating once: **`const_pairs` reports a
+differing IMMEDIATE, and the question is always how that immediate is SPELLED
+in C.** The answers so far:
+
+1. the literal itself (`0x9`);
+2. a one's-complement mask -- `&= ~8` is `addiu -0x9`;
+3. a positive literal under a minus -- `dx - 0x10` is `addiu -0x10`, and the
+   substitution has to rewrite the OPERATOR;
+4. one C access emitting the immediate twice -- `*(s32 *)(p + 0xA8) +=` is a
+   load and a store, so five asm sites against four spellings is normal;
+5. fewer asm sites than spellings, which is the only genuinely ambiguous case
+   and enumerates placements for the verifier to choose between;
+6. **a DERIVED offset, new here.** `*(UnkDngS58Name12 *)((u8 *)n + 0x58)`
+   writes 0x58 once and emits `lwl`/`lwr`/`swl`/`swr` at 0x58, 0x5B, 0x5C,
+   0x5F, 0x60 and 0x63. A sibling with another base differs at all six and
+   five appear nowhere in the source. Substituting 0x58 is the whole job; the
+   test is that the unplaceable pair's DELTA matches one being substituted.
+   Both members of `func_s58_8002553C`'s family were refused over this.
+
+None of the seven ever produced a wrong landing -- each one cost a refusal,
+which is what makes `dngfam`'s loose hex normalisation safe. But six of the
+seven were found by a family failing rather than by design, so the rule going
+in: when a refusal says a constant "does not appear in the code", ask how the
+compiler could have derived it before assuming the family is wrong.
+
+`func_s65_8002405C` stayed refused at 1 differing, which is the tool being
+right: that member is genuinely different code and is 42 words of real work.
+
+## h17's three corrections to the dispatcher
+
+All three were things only an agent reading the actual files could see:
+
+* **`xsibs --min-words 40` hides the short twins.** Both of h17's 22-word
+  forwarders came back "none found" in a brief rendered at 40 and both sit at
+  ratio 0.900 to a landed 24-word body. The brief says 18 now. (I had already
+  hit this on the twin map and fixed it THERE without fixing the brief, which
+  is its own small lesson.)
+* **A duplicated declaration in `csrc/ovl_dng_b28.c`,** `func_b28_801737DC`
+  twice in a row. `insert_decls` deduped on exact text, and clang-format
+  reflows a long prototype after a landing, so the next clone adds its own
+  copy. 11 had accumulated across 10 units. It compares on a
+  whitespace-normalised form now.
+* **`-da` belongs in the brief next to the twin search.** h17 used it to rule
+  out a device BEFORE compiling it -- the obvious `do { } while (0)` lifts the
+  wrong allocno -- and that is the second agent to reach for it unprompted.

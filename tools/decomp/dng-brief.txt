@@ -124,7 +124,7 @@ then work the residue.
 
 ## RUN `xsibs.py` FIRST. IT ANSWERS "HAS THIS ALREADY BEEN WRITTEN" IN ONE GO.
 
-    python3 tools/decomp/xsibs.py @UNIT@ --min-words 40 --ratio 0.70 --top 60
+    python3 tools/decomp/xsibs.py @UNIT@ --min-words 18 --ratio 0.70 --top 200
 
 It compares each of the unit's stubs against every function LANDED ANYWHERE
 in the project -- read out of the reference images, so it does not need a
@@ -135,6 +135,11 @@ Two agents independently reported this as the single most useful first
 command, so it is now the first thing the brief tells you to do. The table
 above already names a twin and a ratio where one exists; `xsibs` is how you
 find the rest, and how you confirm those.
+
+**`--min-words 18`, NOT THE 40 THE TOOL'S OWN EXAMPLES USE.** A 22-word
+forwarder has a twin too: `func_b28_80174460` and `func_b28_801744B8` both
+came back "none found" in a brief rendered at 40 and both sit at ratio 0.900
+to a landed 24-word body. The floor costs one flag and hid two twins.
 
 **A RATIO IS A LEAD, NOT A PROMISE, AND A MISS IS NOT A VERDICT.** 0.9x means
 a starting body with deltas to read off your own listing, not an answer. And
@@ -232,6 +237,34 @@ A unit may also carry `const u8 D_<tag>_xxxxxxxx[] = { ... }` arrays near its
 functions. Those are its rodata between the tables, they are deliberate, and
 their POSITION IN THE FILE IS LOAD-BEARING -- cc1psx emits rodata in function
 order. Do not move one, do not reorder them, and do not make one `static`.
+
+## WHEN THE RESIDUE IS A REGISTER SWAP, READ `-da` RATHER THAN SWEEPING
+
+If your body is the right length and the differences are all one pair of
+locals holding each other's callee-saved register, that is
+`allocno_compare`'s ranking and there is arithmetic for it. Do NOT sweep
+spellings:
+
+    tools/cdkgcc -da -S -O2 -G0 -o probe.s probe.c      # in YOUR directory
+
+`.lreg` and `.greg` give every allocno's reference count and live length, and
+`global.c` ranks on `floor_log2(n_refs) * n_refs / live_length`. One
+two-second compile tells you which side needs lifting and by how much.
+
+`func_b28_8017357C` is the worked example: `p` at 3*9/198 = 0.1364 against
+`b`'s 2*5/74 = 0.1351, a margin of one part in a hundred. That ruled out the
+obvious device -- a `do { } while (0)` around the state bump, which is where
+an earlier lever puts it -- BEFORE compiling it, because that statement
+references `p` and `p` is the wrong side. Wrapping a statement that
+references `b` moved it.
+
+**And the fix does not transfer between bodies of the same twin.**
+`func_b44_80174110` and `func_b44_80174438` are the same pair of banked tails;
+one measures 0 with the shared tail written once or twice, the other needs it
+twice. A twin's documented FACTS carry over; its allocation fix is priced per
+body. `docs/matching-levers.md` has the entry and its amendment -- read both,
+because the devices also fail outright when the competition is local-alloc's
+rather than global's.
 
 ## Where the callees are already written
 

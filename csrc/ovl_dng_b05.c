@@ -116,7 +116,6 @@ void func_b05_80170A58(u8 *p, UnkVec *b, u8 *c);
 
 s32 func_800AA79C(u8 *, void *, u8 *, u8 *);
 void func_b05_80171624(u8 *p, void *b, void *c, u8 *d);
-void func_b05_80171624(u8 *p, void *b, void *c, u8 *d);
 void func_b05_801713CC(u8 *p, UnkVec *b, u8 *c, u8 *d);
 void func_b05_80171F94(u8 *p, UnkVec *b, u8 *c, u8 *d);
 s32 func_b05_801720AC(u8 *a, void *b, void *c, s32 d);

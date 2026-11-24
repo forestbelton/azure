@@ -155,7 +155,6 @@ extern u8 D_801759A8[];
 extern u8 D_801759B8[];
 
 void func_b10_80172730(u8 *p, UnkVec *b, u8 *c, u8 *d);
-void func_b10_80172730(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 UnkNode *func_8003FC64(s32);
 s32 func_8004491C(UnkNode *, u32);

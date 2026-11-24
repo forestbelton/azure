@@ -49,6 +49,26 @@ typedef struct UnkDng74334SP
 s32 func_80069EF8();
 void func_s39_8002515C();
 
+void func_s39_80025348(u8 *p);
+typedef struct UnkDngS58Blk32
+{
+    u8 b[0x20];
+} UnkDngS58Blk32;
+typedef struct UnkDngS58Rec
+{
+    s16 a;
+    u16 b;
+} UnkDngS58Rec;
+typedef struct UnkDngS58Blk64
+{
+    u8 b[0x40];
+} UnkDngS58Blk64;
+typedef struct UnkDngS58Name12
+{
+    u8 b[0xC];
+} UnkDngS58Name12;
+extern s16 D_800266BC;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_8002405C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_80024CD4);
@@ -192,7 +212,42 @@ void func_s39_80025228(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_80025348);
+/* Spend 8 of the payload's +0x32 life counter, raise the engine's D_800266BC
+   tick, and when the counter runs out set the 0x8000 kill bit in the node's
+   -0x2 flags and in D_800814A0.  20 words, 0 differing.  The shape is
+   func_800999D4 (csrc/ovl_dungeon.c) plus the D_800266BC store.
+
+   THE DECREMENT MUST BE READ INTO AN `s16` LOCAL *BEFORE* THE D_800266BC
+   STORE.  Every folded spelling -- `if ((*(s16 *)(p + 0x32) -= 8) <= 0)`
+   with the store first, the early-return form, the counter behind a
+   `s16 *` local, a `do { } while (0)` around the store, and the
+   decrement/test split into two statements -- is 20 words and 11 differing,
+   and the same local written AFTER the store is 11 too.  The eleven rows are
+   one allocation: with the load after the store, the constant 1 is the only
+   block-local quantity alive over $v0, so local-alloc hands it $v0 and
+   global-alloc then gives `p` its incoming $a0; reading the counter first
+   keeps $v0/$v1 busy across the constant's range, so the constant takes $a0
+   and `p` is copied to $a1 by the target's entry `addu`.  That also buys the
+   schedule: `addiu $a0, $zero, 1` fills the `lhu`'s load-delay slot, where
+   the store-first forms spend a `nop` there.  Hoisting the result into an
+   `s32` instead loses the `sll 16`/`bgtz` pair: 19 words, 19 differing.
+   THIS COPY'S OWN CONSTANT: 0x32 -> 0x2 at all 2 sites, -0x8 -> -0x1.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s39_80025348(u8 *p)
+{
+    s16 t;
+
+    t = *(s16 *)(p + 0x2) - 1;
+    D_800266BC = 1;
+    *(s16 *)(p + 0x2) = t;
+    if (t <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_80025398);
 
