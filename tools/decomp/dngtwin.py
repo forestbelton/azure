@@ -192,6 +192,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -211,8 +212,79 @@ def famkey(insns):
                                 for x in insns).encode()).hexdigest()
 
 
+OBJDUMP = os.environ.get("AZURE_OBJDUMP", "mips-linux-gnu-objdump")
+OBJ_FN = re.compile(r"^[0-9a-f]+ <(func_[A-Za-z0-9_]+)>:")
+OBJ_ROW = re.compile(r"^\s+[0-9a-f]+:\t(.*)")
+
+
+def unalias(t):
+    """Undo the two expansions `-M no-aliases' makes that a listing does not.
+
+    MEASURED, because getting this wrong is silent: a splat listing prints
+    `nop' and `b', while `-M no-aliases' prints `sll zero,zero,0x0' and
+    `beq zero,zero,...'. On one unit that is 126 nops against 0, and 193 `beq'
+    against 5 -- so almost every delay slot and unconditional branch
+    mismatched and the 0.98+ band came out EMPTY. `-M no-aliases' is still
+    required for everything else (`move'/`li' against `addu'/`addiu'); these
+    two just have to come back.
+    """
+    t = re.sub(r"^sll\s+zero,zero,0x0$", "nop", t)
+    return re.sub(r"^beq\s+zero,zero,", "b ", t)
+
+
+def landed_objs(minw):
+    """{func: (tag, [instruction text])} for LANDED bodies, from the objects.
+
+    WHY THIS EXISTS, and it is not an optimisation. `dngtwin' ranks a stub
+    against LANDED CARVED bodies, and it used to read their SPLAT LISTINGS --
+    which only survive by accident. The Makefile keeps a listing only while an
+    `INCLUDE_ASM' names it, so a landed function's listing is deleted; the ones
+    this tool was reading were stale leftovers from before those functions
+    landed. A full `make splat' regenerates from scratch and prunes them, and
+    on 2026-11-24 that emptied the landed pool completely: the sweep reported
+    1,050 stubs and ZERO siblings in every ratio band, which looks like the
+    block running out of cheap work and is really the corpus being gone.
+
+    The objects are the sound source. `build/csrc/UNIT.o' exists for every
+    landed body and the four containers are byte-identical, so that code IS
+    the target's. `-M no-aliases' is required: without it objdump prints
+    `move'/`li' where a listing has `addu'/`addiu' and no mnemonic matches.
+    """
+    out = {}
+    for o in sorted(glob.glob(os.path.join(PROJ, "build", "csrc",
+                                           "ovl_dng_*.o"))):
+        tag = os.path.basename(o)[len("ovl_dng_"):-2]
+        try:
+            txt = subprocess.run(
+                [OBJDUMP, "-d", "--no-show-raw-insn", "-M", "no-aliases", o],
+                capture_output=True, text=True, check=True).stdout
+        except (OSError, subprocess.CalledProcessError):
+            continue
+        cur, buf = None, []
+        for ln in txt.split("\n"):
+            m = OBJ_FN.match(ln)
+            if m:
+                if cur and len(buf) >= minw:
+                    out[cur] = (tag, buf)
+                cur, buf = m.group(1), []
+                continue
+            r = OBJ_ROW.match(ln)
+            if r and cur is not None:
+                buf.append(unalias(r.group(1).strip()))
+        if cur and len(buf) >= minw:
+            out[cur] = (tag, buf)
+    return out
+
+
 def carved(minw):
-    """{func: (unit tag, [opcode], famkey, is_stub)} over every carved listing."""
+    """{func: (unit tag, [opcode], famkey, is_stub)} over stubs AND landed bodies.
+
+    Stubs come from their splat listings; landed bodies from the built objects
+    (see `landed_objs'). `famkey' is only comparable WITHIN one source, since
+    the two spell operands differently (`$v0' against `v0', `-0x18' against
+    `-24'), so a cross-source clone flag is not claimed -- the RATIO is
+    mnemonic-only and is unaffected.
+    """
     stubs = dngfam.stubs()
     out = {}
     for d in sorted(glob.glob(os.path.join(PROJ, "asm", "nonmatchings",
@@ -224,6 +296,10 @@ def carved(minw):
             if len(b) < minw:
                 continue
             out[name] = (tag, opsig(b), famkey(b), name in stubs)
+    for name, (tag, b) in landed_objs(minw).items():
+        if name in out:
+            continue
+        out[name] = (tag, opsig(b), "obj:" + famkey(b), False)
     return out
 
 

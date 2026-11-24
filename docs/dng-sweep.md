@@ -1690,3 +1690,47 @@ than the one batch 12 lost three functions to.
 Worth re-measuring each batch -- it is one `--sweep` run, already in the
 pipeline -- because the net rate is the only number that says whether the
 briefs should still lead with twin facts.
+
+## THE POOL dngtwin RANKS AGAINST WAS STALE ARTIFACTS, AND IS NOW THE OBJECTS
+
+A discontinuity in the band table above, so do not compare numbers across it.
+
+`dngtwin` ranks a stub against LANDED CARVED bodies by comparing instruction
+streams, and it read those from `asm/nonmatchings/`. **Those listings only
+survive by accident.** The Makefile keeps a listing while an `INCLUDE_ASM`
+names it, so a landed function's listing is deleted -- the ones the tool was
+reading were leftovers from before those functions landed. A full `make splat`
+regenerates from scratch and prunes them.
+
+That happened on 2026-11-24 and the sweep came back **1,050 stubs and ZERO
+siblings in every band**, which reads exactly like the block running out of
+cheap work. It was the corpus being gone: `ovl_dng_b02` had 10 listings for its
+10 stubs and nothing for its 50 landed bodies.
+
+The fix reads landed bodies from `build/csrc/UNIT.o` instead. That is the
+sound source -- it exists for every landed body, and the four containers are
+byte-identical, so that code IS the target's. Two details were measured
+because getting them wrong is silent:
+
+* `build/csrc/UNIT.s` is NOT usable: it is pre-maspsx gas output full of
+  pseudo-instructions (`li`, `move`, `subu $sp,$sp,24`), so its mnemonics are
+  not the target's.
+* `objdump -M no-aliases` IS required (otherwise `move`/`li` appear where a
+  listing has `addu`/`addiu`) -- **but it also expands `nop` to
+  `sll zero,zero,0x0` and `b` to `beq zero,zero`.** On one unit that is 126
+  nops against 0 and 193 `beq` against 5, so nearly every delay slot
+  mismatched and the 0.98+ band came out EMPTY even after the fix. Both are
+  mapped back.
+
+Bands immediately after, on the same 1,050 stubs:
+
+    0.98+         3 stubs       218 words
+    0.90-0.97    67 stubs    10,048 words
+    0.80-0.89    94 stubs    16,442 words
+    0.70-0.79    81 stubs    12,988 words
+    none        805 stubs   147,905 words
+
+So ~70 stubs / 10,266 words of >= 0.90 work remain, against 113 / 19,596 on
+the old pool. Part of that is 25 bodies landed; part is that the two pools are
+not the same population. **Re-baseline the drain rate from here rather than
+reading the earlier projection across the change.**
