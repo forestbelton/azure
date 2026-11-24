@@ -73,6 +73,44 @@
    single basic block, which is what decomp-permuter's statement and
    temporary passes are for. The body below is the 6-difference one.
 
+
+   PERMUTER RUN, 2026-11-23, 45 minutes / 333,405 iterations / 8 jobs:
+   score 455 -> 20, which measures as 6 ALIGNED DIFFERENCES -> 3. Not a
+   landing, but the residue is halved and the remaining three rows are one
+   window: the target has `lh $v0, 0x38($s0)' / `lh $v1, 0x6($a3)' /
+   `subu $v0, $v0, $v1' and the candidate has the same three loads in the same
+   ORDER with $v0 and $v1 exchanged, so what is left is register allocation in
+   a three-instruction window, not scheduling and not instruction selection.
+
+   WHAT IT FOUND, and it is worth reading before trying again. Two changes
+   from the body above:
+
+     * a pointer local for ONE of the three velocity stores --
+       `new_var = p + 0x44;' then `*(s32 *)new_var += ...' -- which is what
+       fixes the FIRST abs block's load pair;
+     * a DUPLICATED ARM on the first abs, under an always-true guard:
+       `if (p || k) { t = -t; } else { t = -t; }'. `p' is a non-null
+       parameter, so the condition is a predictable true and both arms are
+       identical; this is the duplicated-arm device, not a semantic change.
+
+   Removing that device is a syntax error as the permuter left it (its `if
+   (t < 0x10)' lost a brace), so the device has NOT been priced on its own --
+   that is the first thing to measure next.
+
+   WHAT I TRIED AFTER IT, all on the candidate, none better than 3:
+     the second block as `t = p+0x38; t -= b+0x6;'              13
+     the second block through its own `u' local, then `t = u - b+0x6'  3
+     both halves of the second block in locals, `t = u - k'           3
+
+   So the second block does not respond to the treatment that fixed the
+   first, which is the same asymmetry the table above records -- the b + 0x2
+   load is alias-dependent on the three p stores and the b + 0x6 load is not.
+
+   The candidate's source is nonmatchings/func_b09_80170A84/output-20-1/.
+   I stopped here deliberately: this is a 123-word function with one sibling,
+   246 words of yield, and 1,433 stubs remain. It is a better park than it
+   was, not a landing.
+
    DECLARATIONS
    END DECLARATIONS
 

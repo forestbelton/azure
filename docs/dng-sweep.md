@@ -1180,3 +1180,60 @@ byte-identical first so only the headers moved, and re-verified. I also
 checked the one other agent I had integrated early (h9, five functions in
 ovl_dng_b06) against its final copy: all five identical, so b25 was the only
 casualty.
+
+## Batch 8 complete: 57.3%, and one park closed itself
+
+    agent  unit          landed  clones
+    h16    ovl_dng_s58      7      10
+    h17    ovl_dng_b28      6       2
+    h18    ovl_dng_s21      7       1
+    h19    ovl_dng_b44      6       6
+    h20    ovl_dng_b25      5       3
+
+31 of 31 representatives landed, no parks written. 56.1% -> 57.3%.
+
+**h18 closed h13's park without being asked to.** `func_s21_800255E8` is the
+two-member family whose other half was `docs/dng-parks/func_s20_80025A58.c`,
+parked at 7 aligned differences, and h18 landed it -- so the clone carried the
+fix across and `func_s20_80025A58` verified at 253/0 on its own. The park is
+retired.
+
+The fix is worth having in its own right: the residue was one window where a
+counter's `lhu`/`addiu`/`sh` and a corner's `lhu`/`lhu`/`subu`/`sh` interleave
+wrongly, and `sched.c`'s backward scan ties both stores on `INSN_PRIORITY`
+(a store's destination is a MEM, so `birthing_insn_p` can never boost it) and
+falls back to `INSN_LUID` -- source order. A single statement cannot split
+finely enough. Reading the counter BEFORE the corner, computing the corner
+into a local, storing the counter BETWEEN them and the corner LAST puts the
+four LUID groups in the order the target wants. h18 also closed h13's open
+question negatively: the "give the temporary a second flow-counted set"
+experiment is what a shared local does in plain C, and every version is worse
+(11, 19, 51), because the tie is decided before any boost can apply.
+
+**And batch 8 hit the clone collision twice more**, h17 three times and h18
+once, because the fix went into `dngpick` after batch 8 was already dispatched.
+Both agents' duplicated work verified identically to the clones, so nothing
+was lost but time. Batch 9 is the first picked with the family-aware `--busy`.
+
+## The permuter: 6 aligned differences to 3, not a landing
+
+45 minutes, 333,405 iterations, 8 jobs on `func_b09_80170A84`. Score 455 ->
+20, which measures as **6 aligned differences -> 3**, and the three left are
+one window of `$v0`/`$v1` exchanged with the loads already in the right order
+-- register allocation, not scheduling or selection.
+
+It found two things: a pointer local for one of three velocity stores, and a
+DUPLICATED ARM under an always-true guard (`if (p || k) { t = -t; } else
+{ t = -t; }` -- `p` is a non-null parameter). The second is this project's
+duplicated-arm device arrived at mechanically.
+
+I then tried three spellings of the second abs block, the treatment that
+fixed the first, and none beat 3 -- which is the same asymmetry the park's own
+table records, since one of the two loads is alias-dependent on the preceding
+stores and the other is not.
+
+Stopped there deliberately. It is a 123-word function with one sibling, 246
+words of yield, against 1,433 stubs remaining. The park is better than it was
+and says exactly what to measure next; that is the right outcome for the
+budget spent, and the honest summary is that the permuter halved a residue it
+could not close.
