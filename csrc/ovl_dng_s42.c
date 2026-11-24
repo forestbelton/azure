@@ -188,7 +188,79 @@ void func_s42_80024470(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s42", func_s42_80024590);
+/* The bank's "random value below n": six masked draws from func_80069EF8,
+   picked by the size of n, each retried until it falls under n. The mask and
+   shift pairs are read straight off the listing -- 0xC >> 2, 0xF0 >> 4,
+   0xFC >> 2, 0xFF0 >> 4, then 0xFFF and 0xFFFF unshifted -- and the six
+   bounds are the `slti' constants 5, 0x11, 0x41, 0x101, 0x1001 and the
+   fall-through. xsibs found no twin at ratio 0.70 and nothing in the project
+   reads func_80069EF8 this way, so this is plain decompilation.
+
+   Two shape facts read off the listing rather than guessed. The n == 0 test
+   shares its `addu $v0, $v1, $zero' with the LAST arm's fall-through at
+   .Lb25_80171768, so `r = 0' is initialised before the test and the last
+   `do' loop has NO `return' of its own -- the five earlier arms do, which is
+   what puts the return-value copy in each of their `beqz' delay slots and a
+   bare `nop' in the following `j'. The retry test is a signed `slt', so n and
+   r are both s32.
+
+   73 words, 0 differing, on the first compile; no alternative spelling was
+   measured, so nothing here is claimed to be load-bearing. No jump table and
+   no rodata of its own -- the listing opens at `glabel'. */
+s32 func_s42_80024590(s32 n)
+{
+    s32 r;
+
+    r = 0;
+    if (n != 0)
+    {
+        if (n < 5)
+        {
+            do
+            {
+                r = (func_80069EF8() & 0xC) >> 2;
+            } while (r >= n);
+            return r;
+        }
+        if (n < 0x11)
+        {
+            do
+            {
+                r = (func_80069EF8() & 0xF0) >> 4;
+            } while (r >= n);
+            return r;
+        }
+        if (n < 0x41)
+        {
+            do
+            {
+                r = (func_80069EF8() & 0xFC) >> 2;
+            } while (r >= n);
+            return r;
+        }
+        if (n < 0x101)
+        {
+            do
+            {
+                r = (func_80069EF8() & 0xFF0) >> 4;
+            } while (r >= n);
+            return r;
+        }
+        if (n < 0x1001)
+        {
+            do
+            {
+                r = func_80069EF8() & 0xFFF;
+            } while (r >= n);
+            return r;
+        }
+        do
+        {
+            r = func_80069EF8() & 0xFFFF;
+        } while (r >= n);
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s42", func_s42_800246B4);
 

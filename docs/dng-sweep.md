@@ -1114,3 +1114,48 @@ All three were things only an agent reading the actual files could see:
 * **`-da` belongs in the brief next to the twin search.** h17 used it to rule
   out a device BEFORE compiling it -- the obvious `do { } while (0)` lifts the
   wrong allocno -- and that is the second agent to reach for it unprompted.
+
+## h20 wrote down the `func_800D92C0` relink, which is 47 stubs' worth
+
+`func_b25_801726EC` is 456 words and the single most reusable landing of the
+sweep so far, because `func_800D92C0` is the twin `xsibs` names for more
+remaining stubs than any other. h20's comment records the 456-word variant as
+`func_b01_80171C34`'s 466-word body with FOUR deltas, and accounts for the
+whole ten-word saving:
+
+1. `s32 i` not `s16 i` for the sweep index -- which enables loop strength
+   reduction, so the `D_8006CD00` lookup becomes `lh $v0, 0($s1)` with an
+   `addiu $s1, $s1, 2` in the tail and the three index tests lose their
+   `sll`/`sra` pairs;
+2. the index table named INLINE, with NO `s16 *tbl` local -- a local is 457
+   words / 21 differences, because it drops the loop's insn count below gcc
+   2.7.2's invariant threshold (`loop.c:532/1631`) and the halfword test's
+   extension gets hoisted into the preheader;
+3. `D_8006CCD8` IS hoisted, as a `u8 *tb` set between `i = 0;` and the loop
+   and used `*(u8 *)(kk + (s32)tb)` -- kk FIRST, or the `addu` operands come
+   out swapped. That is the OPPOSITE of `func_b01_80171C34`'s two-set device;
+4. the tail is `i = (s16)func_800BCB04(...)` into the `s32 i`, not the
+   `s16`-returning `func_800BCB04h` alias.
+
+And the devices do not carry: `func_b01_80171C34`'s `do { return; } while (0)`
+must be REMOVED (460 words / 30 differences with it) while its
+`cc2 = 0x80000000` do-while is kept verbatim. That is the third independent
+demonstration that **a twin's facts transfer and its devices must be
+re-priced.**
+
+## A clone can hit an arity disagreement in the TARGET unit
+
+`func_b25_8017165C` cloned into one of its three members and failed the third:
+`too few arguments to function func_b31f_8016ADB8`. A body already landed in
+`ovl_dng_b31f` calls that function with fewer arguments than the cloned
+definition declares -- the original is K&R and passes whatever is in the
+argument registers, which compiles fine as asm and not at all against a
+prototype.
+
+`fix_forward_decl` handles the mirror of this (a stale forward DECLARATION of
+the function being added); this is a landed CALLER, so the fix is a unit-local
+alias declaration of the shorter arity, which leaves both landed bodies alone.
+73 words, one member, so it is recorded rather than automated -- but if this
+recurs, the alias is the pattern and `csrc/ovl_dng_b28.c` already carries a
+worked example of two arities of one symbol coexisting (`func_800BCB04` and
+`func_800BCB04h`).
