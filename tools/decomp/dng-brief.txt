@@ -190,6 +190,17 @@ forwarder has a twin too: `func_b28_80174460` and `func_b28_801744B8` both
 came back "none found" in a brief rendered at 40 and both sit at ratio 0.900
 to a landed 24-word body. The floor costs one flag and hid two twins.
 
+**`ovlverify` CANNOT SEE WHICH DATA SYMBOL A RELOCATED LOAD NAMES, SO THE
+LISTING IS THE ONLY AUTHORITY FOR A RELINKED TABLE'S IDENTITY.** It masks the
+relocated fields, which is correct and which means a dress site loading the
+WRONG bank-local table measures 0 differing. `func_b31_801716F4` has three
+dress sites and its 0x80000 arm must load `D_8017555C` where the other two
+load `D_80175554`; writing one table at all three also measures 365 words and
+0 aligned differences, and `--raw` does not help -- the relocation COUNT is
+unchanged by a wrong symbol of the same kind. So read every `%hi`/`%lo` pair
+out of your listing and check the symbol, even when the body is already at 0.
+`tools/decomp/relocheck.py` audits this across the block.
+
 **WHEN `xsibs` NAMES A RESIDENT TWIN, INVERT THE INDEX BEFORE USING IT.**
 (`dngtwin` now does this for you in the common case. This grep still finds
 the sibling whose own ratio to you is below `dngtwin`'s floor but which names
@@ -499,6 +510,15 @@ IF A CALLEE HAS A REAL NAME, USE IT.** Before declaring
   annotate one. Prefer a plain-C device (a `do { x; } while (0)` reference
   bump, a duplicated arm) to an `__asm__` one, and record the plain scores you
   rejected.
+  **`if (1)` IS NOT A SUBSTITUTE FOR `do { } while (0)` IN A REFERENCE BUMP.**
+  `flow.c:2122` counts a reference once per ENCLOSING LOOP, and `if (1)` is
+  not a loop: on `func_b21_80172538` the `do`-wrapper lands at 0 differing and
+  `if (1)` around the same statement is 7, the same as no device at all. Use
+  `if (1)` for a pure scheduling barrier, not for an allocation priority.
+  **AND DO NOT PRESENT A DEVICE'S SCOPE AS A MEASURED FACT** unless you
+  measured the alternatives. On that same function three different scopes all
+  measure 0 differing, so the target does not constrain the choice; say that
+  in the comment instead of implying the kept scope is the macro's.
 * **MOST PLAIN-C "DEVICES" ARE PROBABLY MACRO RESIDUE, AND THAT IS A SEARCH
   HINT.** We compile what the preprocessor emitted; the macro layer is gone
   and unrecoverable in principle. `do { ... } while (0)` is the canonical
