@@ -106,6 +106,30 @@
    words (w costs 2 words as an s32), and m merged with a separate w still
    needs the move, so the two halves have to move together.
 
+   PERMUTER RUN, 2026-11-24, AND IT FOUND NOTHING -- recorded as the
+   quantified negative the protocol asks for. Scaffolded from the CONFLICT
+   MERGE build (the 470/7 variant described above, not this parked body),
+   because that build already has the loop head and the device's lui exactly
+   right and leaves all 7 rows in the 0x2000 arm:
+
+       35m, 107,719 candidates, 51.3/s, 6 jobs, base=390 best=230
+
+   `best < base' so permrun reports IMPROVED, AND THAT IS MISLEADING HERE.
+   Its best candidate wraps the `func_800A9A0C(d); return;' pair of the
+   d[0x12] arm in `if (1) { }'. Rebuilt and measured with the project's own
+   tools, that candidate is **470 words and the SAME 7 aligned differences**,
+   row for row -- the `move $v1, $v0' and the two $v1/$v0 rows are untouched.
+
+   SO THE PERMUTER'S SCORE IS NOT ALIGNED DIFFERENCES ON THIS PROJECT. A
+   390 -> 230 improvement in its metric bought zero improvement in ours. Do
+   not read `best=N < base=M' in nonmatchings/permlog.tsv as progress; rebuild
+   the winning source and run aligndiff before believing it. Only `best=0' is
+   self-evidently worth gating.
+
+   The floor therefore stands at 2 aligned differences for the parked body
+   below and 7 for the merge variant, and the next step is NOT more permuter
+   time on this function.
+
    EVERY SPELLING MEASURED, with its aligned difference count at 470 words
    unless a word count is given.
 

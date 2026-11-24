@@ -56,6 +56,34 @@
    but only once `i' is the variable it feeds.  A plain `s32 i' with `(s16)i'
    at every use instead grows the frame to -0x48: 541 words, 210 differences.
 
+   PERMUTER RUN, 2026-11-24, NEGATIVE -- the quantified result the protocol
+   asks for:
+
+       40m, 113,102 candidates, 47.1/s, 6 jobs, base=665 best=525
+
+   permrun prints IMPROVED and it means nothing here.  The winning candidate's
+   only semantic change is a chained assignment, `y = j = ...' in the 0x20000
+   arm, giving `j' an extra write.  Rebuilt into the unit and measured with
+   aligndiff:
+
+       y = D_80082E80[0x25] + k2        (as parked)        537 /  25
+       y = j = D_80082E80[0x25] + k2    (the candidate)    537 /  25   FREE
+       y = k2 + D_80082E80[0x25]        (free on its own)  537 /  25
+       y = j = k2 + D_80082E80[0x25]                       537 /  29
+
+   So the device is FREE in the parked spelling and COSTS 4 in an operand
+   order that is itself free, and in no combination does it beat 25.  The
+   permuter improved its own score by 21% for nothing.  THE PERMUTER'S SCORE
+   IS NOT ALIGNED DIFFERENCES -- see docs/matching-levers.md.
+
+   WORTH KEEPING, because it is a fact about this body: THE OPERAND ORDER OF
+   THAT ADDITION IS FREE ON ITS OWN AND LOAD-BEARING ONCE `j' IS WRITTEN IN
+   THE SAME STATEMENT.  Re-measure the rows recorded free below after any
+   device goes in.
+
+   The floor stands at 25, and more permuter time on this function is not the
+   next step.
+
    WHAT IS LEFT, 25 rows in three clusters, all register-naming or
    scheduling, no missing or extra instruction:
 
