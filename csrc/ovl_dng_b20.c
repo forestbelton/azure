@@ -225,7 +225,29 @@ typedef struct UnkDngB20Name12
 extern u8 D_80175324[];
 void func_b20_80173C0C();
 
-/* WIP func_b20_8017087C */
+/* Wire a newly spawned node to its owner: park the owner at the node's
+   +0x60, re-send it through func_8004491C/D_80045340, clear the renderable
+   (0x20 at the slot's +0x10, the 0xC bits in +0x14), seed the mover's three
+   halfwords from the caller's record and then, through a RE-READ of
+   n->unk_0C, set the 0x1000 scale pair and a 0x80 grey.  41 words,
+   0 differing, first compile.  2 copies (dngfam.py).
+
+   IT IS THE RESIDENT func_800D4BD4 (csrc/ovl_dungeon_800CABA8.c) WITHOUT ITS
+   TAIL: the +0xC view copies, the 0x7DCF at +0x12, the 0x100 bit and the
+   func_8003DB94 call are all absent here, +0x1E/+0x1C carry 0x1000 instead
+   of the twin's 0x800, the owner lands at n+0x60 rather than at p+0x24, and
+   the three 0x80 bytes at +0xE/+0xD/+0xC are func_800D4AB0's, not
+   func_800D4BD4's.  The twin's one documented fact DOES hold: n->unk_0C is
+   READ TWICE, because the halfword stores through the mover pointer wipe
+   cse's memory table.
+
+   THREE PARAMETERS, NOT THE TWIN'S FOUR.  The sole caller
+   func_b20_80172BCC sets only $a0..$a2 -- `addu $a2, $s4, $zero' is the
+   `jal's delay slot and nothing writes $a3 -- so the fourth parameter the
+   resident's call sites witness has no witness here.
+
+   `--raw' is 3 differing: one `jal', one `lui' and one `addiu', all
+   relocations. */
 void func_b20_8017087C(UnkNode *n, u8 *b, u8 *c)
 {
     u8 *r;
@@ -1790,7 +1812,44 @@ void func_b20_80173BD4(u8 *p)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b20", func_b20_80173C0C);
 
-/* WIP func_b20_80173CFC */
+/* This bank's spawner for the 0x212 decoration node: five frames at the
+   actor's +0x44, func_b20_80173C0C as the node's step, the renderable
+   cleared to 0x60/0xC, the mover seeded from the caller's vector with the
+   third channel pulled 0x28 back, and then -- through a RE-READ of
+   n->unk_0C -- a 6 at +0x06, the caller's s16 as both scale halves, a 0x30
+   grey over six bytes, a 12-bit random spin at +0x1A and the 12-byte
+   D_80175324 record copied to the node's own +0x9A for the slot's +0x08 to
+   point at.  81 words, 0 differing, first compile.  1 copy (dngfam.py).
+
+   THE TWIN IS THE LANDED CARVED func_s58_8002553C (csrc/ovl_dng_s58.c), NOT
+   the resident func_800D4AB0 xsibs names at 0.805.  s58's body already
+   carries the two things that matter: the 0x212/func_8004491C/D_80045340
+   sequence with n->unk_0C RE-READ after the mover stores, and the 12-byte
+   record copy through a struct whose type has ALIGNMENT 1 (`u8 b[0xC]'),
+   which is what forces the `lwl'/`lwr' + `swl'/`swr' pairs rather than
+   aligned `lw's -- the same fact UnkDungeonName12 carries in
+   csrc/ovl_dungeon_decls.h, spelled here as the unit-local
+   UnkDngB20Name12.
+
+   Four shapes differ from s58 and each is read off this listing: the mover
+   copy is THREE HALFWORDS at +0x2/+0x6/+0xA (s58's is three aligned words),
+   `r->unk_06 = 6' sits in the SECOND n->unk_0C group rather than the first,
+   the scale pair takes the s16 fourth parameter instead of 0, and the
+   colour is 0x30 over six bytes rather than s58's three.
+
+   THE FIRST COLOUR BYTE IS `p[0]', THROUGH THE SAME `p = (u8 *)n + 0x20'
+   LOCAL AS p[1] AND p[2].  cse rewrites that one MEM back to
+   `sb $v0, 0x20($s2)' -- the node base plus 0x20 -- while p[1] and p[2] stay
+   `0x1($s0)'/`0x2($s0)', so the asymmetry in the listing is cse's and not a
+   second pointer.
+
+   func_b20_80173C0C is still an INCLUDE_ASM stub above and only its ADDRESS
+   is taken here, so it is declared unprototyped; its listing reads $a0 and
+   $a2, so three parameters at least, but nothing in this unit witnesses the
+   arity.
+
+   `--raw' is 9 differing: 3 `jal's, 3 `lui's and 3 `addiu's, all
+   relocations. */
 void func_b20_80173CFC(u8 *a, UnkVec *b, u8 *c, s16 d)
 {
     UnkNode *n;
@@ -1948,7 +2007,59 @@ void func_b20_80174BE8(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-/* WIP func_b20_80174D14 */
+/* The bank's nine-state white-out cutscene, run off the slot's +0x9B: step
+   the counter, hand func_80041588 the D_8017530C command stream and its
+   D_801753A8 handshake byte, turn the actor to face 2, swap the HUD pair
+   through func_8003F540/func_8003E4FC, open with func_800C77D0 and
+   func_b20_80174724, ease D_80083160's three colour bytes while the
+   D_801753A9 handshake is pending, spawn the 0x12 node whose driver is
+   func_b20_80174BE8, wait for its +0x14 to carry one of 0xE000, then
+   func_800ADC4C the replacement in, re-aim it and finally raise 0x8000 in
+   the node's -0x2 and in D_800814A0 and drop D_80083460's +0xA counter.
+   330 words, 0 differing.  1 copy (dngfam.py).
+
+   NO TWIN ANYWHERE.  xsibs finds nothing for this stub even at
+   `--ratio 0.45', and the callee-set grep (func_800A504C, func_800ADC4C,
+   func_8003F540, func_800445E0, func_800C77D0 all together) leads only to
+   csrc/ovl_dungeon_800A4B88.c, which has no function of this shape.  It is
+   plain decompilation off the listing -- but the IDIOMS are this unit's own
+   landed func_b20_80174BE8 below, which is the node driver state 4 installs:
+   `g = (u8 *)&D_80083160' with the three +0xA8..+0xAA bytes eased by
+   `(q[i] - g[i]) / *(s16 *)(p + 0x96)', and the countdown spelled
+   `(s16)(--*(u16 *)(p + 0x96)) <= 0' -- `lhu', `addiu -1', `sh', `sll 16',
+   `bgtz', no `sra' and no second load.
+
+   THIS FUNCTION OWNS jtbl_b20_80170858 (9 entries, states 0..8).  Every
+   state has a label of its own, no two share an arm and there is no
+   `default': the `sltiu $v1, 0x9' gate sends everything else to the
+   epilogue.  States 1, 2, 5 and 7 fall through to their successors.
+
+   TWO ALLOCATION FACTS ARE LOAD-BEARING, and both were measured by reverting
+   them.
+
+   (1) STATE 3'S D_801753A9 FLAG MUST BE READ INTO A LOCAL BEFORE THE +0x96
+   RESTORE STORE.  The target's `beqz' delay slot holds that `sh', which
+   needs the `lbu' of the flag to come FIRST; sched1 will not lift a load of
+   a global over a store through a parameter pointer, so with the restore
+   written ahead of the test the body is still 330 words but 15 of the 18
+   aligned differences are that one region re-ordered -- the `sh' lands
+   before the `lbu' and the load delay stays a `nop'.
+
+   (2) STATE 6'S `d - 0x20' MUST BE THE SAME LOCAL AS STATES 4/5/7'S SLOT
+   POINTER.  Given its own local the pointer is referenced in one basic block
+   only, local-alloc takes it and hands it a call-clobbered $a0: 330 words,
+   3 aligned differences (`addiu $a0,$s2,-0x20' and the `lw'/`sw' through
+   it).  Shared with the pointer states 4, 5 and 7 use, reg_basic_block makes
+   it global-alloc's and it comes out $s0, which is the target's.
+
+   func_800498A0's resident definition (csrc/unk_1C540.c) returns `u8', but
+   state 4 reads its result as a signed word -- `func_800498A0(d) - 1' is
+   tested with `sll 16'/`bgez' and goes negative -- and state 3 indexes
+   D_800DCEEC with it through a bare `sll 2' and no zero-extension, so this
+   unit declares it `s32'.
+
+   `--raw' is 74 differing and all 74 are relocations: 21 `jal's, 6 `j's and
+   47 `%hi'/`%lo' halves. */
 void func_b20_80174D14(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     u8 *g;

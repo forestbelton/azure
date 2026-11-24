@@ -80,6 +80,13 @@ def build(agent_text, funcs, text):
         body, _ = dngclone.definition(agent_text, f)
         if body is None:
             raise SystemExit(f"{f} is not defined in the agent copy")
+        bad = dngclone.placeholder_comment(body)
+        if bad:
+            raise SystemExit(
+                f"{f}'s comment still says `{bad}' -- this looks like a LIVE "
+                f"agent's working copy. An interim \"LANDED\" means the body "
+                f"verifies, not that the write-up is done; wait for the "
+                f"hand-back. Nothing was written.")
         bodies[f] = body
     have = set(dngclone.decl_block(text))
     # needed_decls is per-body and the agent's copy carries the whole unit's

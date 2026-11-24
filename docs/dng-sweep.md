@@ -1362,3 +1362,37 @@ renaming uses inside landed bodies. Pure cosmetics against a re-verification
 cost, so it is recorded here and not done. The agents' own choice to keep
 `UnkDng26478` and `UnkDng265C8` separate IS justified: same shape, different
 objects, and h13 said so explicitly.
+
+## I DID IT AGAIN: integrated a live agent's copy, and now there is a guard
+
+Two batches ago I integrated h20's working file on an interim "LANDED" line,
+shipped two `/* WIP3 */` comments into `csrc/`, wrote the rule into this
+document, and committed it. Then I did exactly the same thing to h23: three
+`/* WIP ... */` markers in `csrc/ovl_dng_b20.c`, and this time **a clone
+inherited one** -- `func_b42_80170DD0` carried `/* WIP func_b20_8017087C */`
+into a unit no agent had ever opened.
+
+Both agents found it and told me. Neither time did the code suffer: the bodies
+verified, and re-syncing from the final copies with the bodies asserted
+byte-identical changed only the headers.
+
+Writing the rule down did not work, so the rule is now mechanical.
+`placeholder_comment()` matches WIP / TODO / FIXME / XXX / HACK /
+PLACEHOLDER in a body's leading comment, and:
+
+* **`dngland` refuses to splice** such a body and writes nothing, saying that
+  an interim "LANDED" means the body verifies and not that the write-up is
+  done;
+* **`dngclone` refuses to clone** such a representative, because that is how
+  the marker reached b42.
+
+The general point, which is the one I keep having to relearn: **when a
+process failure repeats, the fix belongs in the tool and not in the
+documentation.** I had already written "integrate on the hand-back" in this
+file in a section titled DO NOT INTEGRATE FROM A LIVE AGENT'S COPY. It did
+not survive the next batch's impatience.
+
+h23 also noted the other half of the same mistake: the snapshot in `csrc/`
+had my own reconciled prototype for `func_b20_8017102C` where its copy keeps
+the unit's pre-existing unprototyped form. Both verify; the hazard is ending
+up with both, which the re-sync resolved.

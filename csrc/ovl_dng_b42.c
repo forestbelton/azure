@@ -188,7 +188,29 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80170A0C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80170B48);
 
-/* WIP func_b42_80170DD0
+/* Wire a newly spawned node to its owner: park the owner at the node's
+   +0x60, re-send it through func_8004491C/D_80045340, clear the renderable
+   (0x20 at the slot's +0x10, the 0xC bits in +0x14), seed the mover's three
+   halfwords from the caller's record and then, through a RE-READ of
+   n->unk_0C, set the 0x1000 scale pair and a 0x80 grey.  41 words,
+   0 differing, first compile.  2 copies (dngfam.py).
+
+   IT IS THE RESIDENT func_800D4BD4 (csrc/ovl_dungeon_800CABA8.c) WITHOUT ITS
+   TAIL: the +0xC view copies, the 0x7DCF at +0x12, the 0x100 bit and the
+   func_8003DB94 call are all absent here, +0x1E/+0x1C carry 0x1000 instead
+   of the twin's 0x800, the owner lands at n+0x60 rather than at p+0x24, and
+   the three 0x80 bytes at +0xE/+0xD/+0xC are func_800D4AB0's, not
+   func_800D4BD4's.  The twin's one documented fact DOES hold: n->unk_0C is
+   READ TWICE, because the halfword stores through the mover pointer wipe
+   cse's memory table.
+
+   THREE PARAMETERS, NOT THE TWIN'S FOUR.  The sole caller
+   func_b20_80172BCC sets only $a0..$a2 -- `addu $a2, $s4, $zero' is the
+   `jal's delay slot and nothing writes $a3 -- so the fourth parameter the
+   resident's call sites witness has no witness here.
+
+   `--raw' is 3 differing: one `jal', one `lui' and one `addiu', all
+   relocations.
    THIS COPY'S OWN CONSTANT: 0x60 -> 0x48.
    The rest of this comment is the family representative's and its other
    numbers are its own.

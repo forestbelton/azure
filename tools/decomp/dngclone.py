@@ -588,6 +588,30 @@ def const_pairs(rep, member):
     return out
 
 
+PLACEHOLDER = re.compile(r"\b(WIP|TODO|FIXME|XXX|HACK|PLACEHOLDER)\b")
+
+
+def placeholder_comment(body):
+    """The marker text if `body`'s leading comment is a placeholder, else None.
+
+    A GUARD AGAINST INTEGRATING A LIVE AGENT'S WORKING FILE. Twice now I have
+    run dngland against an agent's copy on an interim "LANDED" message rather
+    than waiting for its hand-back, and twice the bodies were right while the
+    comments were still `/* WIP3 */' and `/* WIP func_b20_8017087C */'. The
+    second time a CLONE inherited the marker, so it reached a unit no agent
+    had ever opened.
+
+    The comments are the most valuable thing the sweep produces after the
+    code -- a later agent greps a twin's header for its measured facts -- so a
+    placeholder is worse than nothing. Writing the rule in the docs did not
+    stop me repeating it; this does.
+    """
+    i = body.find("*/")
+    head = body[:i] if i != -1 else body[:400]
+    m = PLACEHOLDER.search(head)
+    return m.group(1) if m else None
+
+
 def code_view(text):
     """`text` with every comment character replaced by a space.
 
@@ -982,6 +1006,13 @@ def main():
     if rep_body is None:
         raise SystemExit(f"{rep} is not defined in {src} -- land it first")
     rep_decls = needed_decls(decl_block(rep_text), rep_body)
+    bad = placeholder_comment(rep_body)
+    if bad:
+        raise SystemExit(
+            "%s's comment still says `%s' -- it is a placeholder, and cloning "
+            "would copy it into every member. Re-sync the representative from "
+            "the agent's FINAL copy first (see placeholder_comment)."
+            % (rep, bad))
     local_sigs = local_callee_sigs(rep_text, rep_body)
 
     # `landed=True` BECAUSE THE REPRESENTATIVE IS ALREADY LANDED by the time
