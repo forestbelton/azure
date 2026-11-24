@@ -147,8 +147,8 @@ extern const u8 D_b10_80170854[];
 extern s32 D_8008346C;
 void func_800A2B04(UnkVec *, s32, s32);
 s32 func_800A56E0(s32);
-void func_b10_80174670(u8 *, u16, u16, s16);
-void func_b10_8017442C(u8 *, u16, u16, s16);
+void func_b10_80174670(u8 *p, u16 x, u16 y, s16 z);
+void func_b10_8017442C(u8 *p, u16 x, u16 y, s16 z);
 
 s32 func_800644B8(s32);
 extern u8 D_801759A8[];
@@ -160,12 +160,16 @@ UnkNode *func_8003FC64(s32);
 s32 func_8004491C(UnkNode *, u32);
 void func_8003DB94(void *, void *, s32);
 extern u8 D_800DEC70[];
-void func_b10_80170B0C(u8 *, UnkVec *, u8 *);
+void func_b10_80170B0C(u8 *p, UnkVec *b, u8 *c);
 
 void func_800AD4D0(u8 *);
 void func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
 extern u8 D_801759C8[];
 extern u8 D_80175998[];
+
+void func_800419EC(u16, u32);
+void func_80099C58(s16, s16, s16, s16, s16);
+u8 *func_8009C12C(u8 *, u8 *, s16, s16);
 
 s32 func_b10_8017092C(u8 *p, UnkVec *v)
 {
@@ -209,7 +213,77 @@ s32 func_b10_8017092C(u8 *p, UnkVec *v)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80170B0C);
+/* The +0x10 step of the 0x212 particle node that func_b09_80170DDC spawns:
+   integrate the payload's velocity at +0x40..+0x48 into the mover and its
+   acceleration at +0x4C..+0x54 into the velocity; kill the node once the
+   mover's two integer halves have come within 0x10 of the spawn point at
+   +0x36/+0x38; fade the three colour bytes by p[i] * p+0x32 / p+0x34 into
+   the slot's +0xC..+0xE, wind the slot's +0x1C/+0x1E down by 0xC8 with a
+   floor of 0, drop the +0x32 life by 8, re-register through func_800478B8
+   and kill the node when the life runs out. 123 words, 0 differing.
+   2 members (dngfam.py: this and func_b10_80170B0C).
+
+   THIS WAS PARKED AT 6 ALIGNED DIFFERENCES, taken to 3 by a 45-minute
+   permuter run and to 2 by two duplicated-arm devices
+   (docs/dng-parks/, agent-h11). ALL OF THAT RESIDUE IS THE PROXIMITY TEST
+   BEING WRITTEN AS TWO MANUAL BLOCKS. The park's shape --
+   `u = b+0x2; t = p+0x36 - u; if (t < 0) t = -t; if (t < 0x10) { ... }'
+   nested -- is 123 words and 6 aligned differences, RE-MEASURED HERE. One
+   `&&' chain with an inline `abs()' on each half is 0:
+
+     if (abs(*(s16 *)(p + 0x36) - *(s16 *)((u8 *)b + 0x2)) < 0x10 &&
+         abs(*(s16 *)(p + 0x38) - *(s16 *)((u8 *)b + 0x6)) < 0x10)
+
+   With no `t' and no `u' there is no local for the b + 0x2 load to be
+   alias-dependent through, so the whole scheduling window the park was
+   fighting -- and the allocno competition on `k' the permuter was fighting
+   -- does not exist. `abs' expands to mips.md's two-word in-place `abssi2'
+   arm, `bgez'/real-`nop'/`negu' on one register, which is what the target
+   has. The lead was dngtwin.py's 0.773 func_b19_80170A64
+   (csrc/ovl_dng_b19.c, 102 words, landed), whose comment names that arm.
+
+   THE ONE OTHER LOAD-BEARING SPELLING, and the park's measurement of it
+   survives the rewrite at a lower price: `k = *(u16 *)(c + 0x1C);
+   k -= 0xC8;' as TWO statements gives the loaded value and `k' one
+   quantity, the target's `lhu $a0' / `addiu $v0, $a0' / `addu $a0, $v0'.
+   The single statement `k = *(u16 *)(c + 0x1C) - 0xC8;' is 123 words, 2
+   aligned differences (the park measured 15 against 13 on its own body).
+   `k' must stay `s16'. */
+void func_b10_80170B0C(u8 *p, UnkVec *b, u8 *c)
+{
+    s16 k;
+
+    b->unk_00 += *(s32 *)(p + 0x40);
+    b->unk_04 += *(s32 *)(p + 0x44);
+    b->unk_08 += *(s32 *)(p + 0x48);
+    *(s32 *)(p + 0x40) += *(s32 *)(p + 0x4C);
+    *(s32 *)(p + 0x44) += *(s32 *)(p + 0x50);
+    *(s32 *)(p + 0x48) += *(s32 *)(p + 0x54);
+    if (abs(*(s16 *)(p + 0x36) - *(s16 *)((u8 *)b + 0x2)) < 0x10 &&
+        abs(*(s16 *)(p + 0x38) - *(s16 *)((u8 *)b + 0x6)) < 0x10)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    c[0xC] = p[0] * *(s16 *)(p + 0x32) / *(s16 *)(p + 0x34);
+    c[0xD] = p[1] * *(s16 *)(p + 0x32) / *(s16 *)(p + 0x34);
+    c[0xE] = p[2] * *(s16 *)(p + 0x32) / *(s16 *)(p + 0x34);
+    k = *(u16 *)(c + 0x1C);
+    k -= 0xC8;
+    if (k < 0)
+    {
+        k = 0;
+    }
+    *(s16 *)(c + 0x1C) = k;
+    *(s16 *)(c + 0x1E) = k;
+    *(s16 *)(p + 0x32) = *(u16 *)(p + 0x32) - 8;
+    func_800478B8(c);
+    if (*(s16 *)(p + 0x32) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spawn one of this bank's particle nodes from an existing node's mover: a
    0x212 node whose +0x10 step is func_b10_80170B0C, placed at the parent
@@ -1741,9 +1815,142 @@ void func_b10_801743F4(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_8017442C);
+/* Walk the actor's own circular room list (the h + 0x5C chain, payloads at
+   node + 0x20) and, for every other actor standing on cell (x, y) within
+   0x40 of height z, either knock it over -- clear its +0x28, lay -1 in its
+   +0x64, func_800419EC(6, 0xC), the 0x80B/0x601 cue and a func_80099C58
+   flash whose x/y come from the eight {dx, dy} pairs at D_b10_80170854
+   indexed by (g + 0x2A >> 7) & 0x1C -- or, when its +0x13 is outside
+   0x33..0x36, re-aim it through func_8009C12C. 145 words, 0 differing.
+   2 members (dngfam.py: this and func_b10_8017442C). No twin: dngtwin.py's
+   only offer is that clone, which is still a stub.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80174670);
+   THIS WAS PARKED AT 19 ALIGNED DIFFERENCES (docs/dng-parks/, agent-h11).
+   Every spelling the park's table credits was right; the one row it could
+   not reach was a missing register-to-register copy, and the answer is that
+   THE PARAMETER `p' IS REUSED AS THE LOOP CURSOR.
+
+   `h = p' then `g = h' alone is two pseudos and one copy, because `p' dies
+   at `h = p' and regmove folds it into the parameter's own
+   `addu <p>, $a0, $zero'. Letting `p' carry the cursor keeps it live, so
+   the fold cannot happen and the chain is the target's three pseudos:
+   p ($s0, shared with the cursor) -> h ($s2, the pre-loop loads and both
+   loop compares) -> g ($s1, the four spawn-site reads). Measured on the
+   smaller func_b09_80174800 below, which has the identical chain: a
+   separate `e' cursor is 73 words and 15 aligned differences, this form 74
+   and 0.
+
+   MEASURED AND FREE, so NOT the reason this lands: `g = p' in place of
+   `g = h' (145 words, 0 -- cse makes `h' the canonical register of the
+   quantity either way, because it outlives `p'). The park's own table
+   carries the rest: the height tests must put m + 0xA on the LEFT, the
+   func_80099C58 index and its fifth argument share one sign extension, and
+   the 0x80B/0x601 cue is a ternary. */
+void func_b10_8017442C(u8 *p, u16 x, u16 y, s16 z)
+{
+    UnkDngB09A28Tbl t;
+    u8 *q;
+    u8 *m;
+    u8 *v;
+    u8 *w;
+    u8 *h;
+    u8 *g;
+
+    t = *(UnkDngB09A28Tbl *)D_b10_80170854;
+    h = p;
+    g = h;
+    v = *(u8 **)(h - 0x14);
+    w = *(u8 **)(h - 0x18);
+    p = *(u8 **)(h + 0x5C) + 0x20;
+    while (p != h)
+    {
+        q = *(u8 **)(p - 0x14);
+        m = *(u8 **)(p - 0x18);
+        if (q[0x24] == x && q[0x25] == y && *(s16 *)(m + 0xA) <= z + 0x40 &&
+            *(s16 *)(m + 0xA) > z - 0x40)
+        {
+            if ((u32)(p[0x13] - 0x33) < 4)
+            {
+                p[0x28] = 0;
+                *(s16 *)(p + 0x64) = -1;
+                func_800419EC(6, 0xC);
+                func_800A56E0(p[0x13] == 0x34 ? 0x80B : 0x601);
+                func_80099C58((s16)(*(u16 *)(w + 0x2) +
+                                    ((UnkDngB09A28 *)((u8 *)&t +
+                                                      (((s16) * (u16 *)(g + 0x2A) >> 7) & 0x1C)))
+                                            ->unk_00 *
+                                        0x20),
+                              (s16)(*(u16 *)(w + 0x6) +
+                                    ((UnkDngB09A28 *)((u8 *)&t +
+                                                      (((s16) * (u16 *)(g + 0x2A) >> 7) & 0x1C)))
+                                            ->unk_02 *
+                                        0x20),
+                              (s16)(*(u16 *)(w + 0xA) - 0x20), *(s16 *)(g + 0x14),
+                              (s16) * (u16 *)(g + 0x2A));
+            }
+            else
+            {
+                func_8009C12C(g, v, *(s16 *)(g + 0x2A), 1);
+            }
+        }
+        p = *(u8 **)(p + 0x5C) + 0x20;
+    }
+}
+
+/* The same room-list walk as func_b09_801745BC above and the smaller of the
+   pair: for every other actor on cell (x, y) within 0x38 of height z whose
+   +0x13 is OUTSIDE 0x33..0x36, set g+0x84 to 0x7C, g+0x85 to g[0x26] * 3 / 2
+   and re-aim it through func_8009C93C. 74 words, 0 differing.
+   2 members (dngfam.py: this and func_b10_80174670).
+
+   THIS IS WHERE THE func_b09_801745BC PARK'S MISSING COPY WAS FOUND, because
+   it is the same p -> h -> g pseudo chain in a quarter of the words. THE
+   PARAMETER `p' CARRIES THE LOOP CURSOR. With a separate `u8 *e' cursor and
+   the same aliases the body is 73 words and 15 aligned differences: `p' dies
+   at `h = p', regmove folds that copy into the parameter's own
+   `addu <p>, $a0, $zero', and the eight callee-saved registers all land one
+   place over. Keeping `p' live as the cursor is 74 words and 0.
+
+   MEASURED AND FREE, all 74 words / 0 aligned differences, so NONE of them
+   is the reason this lands:
+     * `g = p' in place of `g = h';
+     * `g[0x26] * 3 / 2' in place of `(g[0x26] * 3) >> 1' -- gcc proves the
+       `lbu' * 3 non-negative and drops the rounding correction either way;
+     * the +0x13 gate written `if ((u32)(p[0x13] - 0x33) < 4) { } else { }'
+       with the work in the `else' instead of `>= 4' with one arm.
+
+   The height tests put m + 0xA on the LEFT, which is the func_b09_801745BC
+   park's measured fact and was not re-measured here. `--raw' is 1 differing,
+   the one `jal'. */
+void func_b10_80174670(u8 *p, u16 x, u16 y, s16 z)
+{
+    u8 *q;
+    u8 *m;
+    u8 *v;
+    u8 *h;
+    u8 *g;
+
+    h = p;
+    g = h;
+    v = *(u8 **)(h - 0x14);
+    p = *(u8 **)(h + 0x5C) + 0x20;
+    while (p != h)
+    {
+        q = *(u8 **)(p - 0x14);
+        m = *(u8 **)(p - 0x18);
+        if (q[0x24] == x && q[0x25] == y && *(s16 *)(m + 0xA) <= z + 0x38 &&
+            *(s16 *)(m + 0xA) > z - 0x38)
+        {
+            if ((u32)(p[0x13] - 0x33) >= 4)
+            {
+                g[0x84] = 0x7C;
+                g[0x85] = (g[0x26] * 3) >> 1;
+                func_8009C93C(g, v, *(s16 *)(g + 0x2A), 1, NULL);
+            }
+        }
+        p = *(u8 **)(p + 0x5C) + 0x20;
+    }
+}
 
 /* State 0x17, built out of the banked room scripts' shared idioms rather
    than from one twin: the D_80083462 gate, then func_800A2B5C either

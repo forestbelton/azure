@@ -96,8 +96,13 @@ extern u8 D_80026478[];
 void func_800B835C(u8 *, s32 *, s32, s32);
 extern s16 D_80026474;
 UnkNode *func_s21_8002522C(u8 *p, s16 ry, s16 rx, s16 rz, void *tmpl);
-void func_s21_800262AC(s16 x, s16 y, s16 z);
+UnkNode *func_s21_800262AC(s16 x, s16 y, s16 z);
 void func_s21_80024CD4(u8 *p, UnkVec *v, u8 *c);
+
+extern u8 D_80026490[];
+extern u16 D_800269C8;
+s32 func_8003FA44(s32);
+UnkNode *func_8003FD64(s32, void *);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s21", func_s21_80024050);
 
@@ -487,7 +492,130 @@ s32 func_s21_80024ED0(u8 *p, UnkVec *v, UnkSlot *s)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s21", func_s21_8002522C);
+/* The 0x202 spawner for func_s21_80024CD4's step and func_s21_80024ED0's
+   renderer.  It seeds the new mover's position from the caller's own position
+   offset by rcos/rsin of `ry' scaled by `rx' (>> 15) and by `rz >> 3' in z,
+   clamps the z component at D_800269C8, copies the unoffset position into the
+   mover's +0xE/+0x12/+0x16 interpolation target, writes 0x40E020 into the
+   renderable's colour word, records the three angles and the current ring
+   cursor in the payload, and -- while the cursor is under 0x71 -- writes the
+   interpolation target into BOTH trail-ring banks at D_800265C8[cursor] and
+   D_800265C8[cursor + 0x10] and bumps the cursor.  115 words, 0 differing.
+
+   LANDED OUT OF docs/dng-parks/func_s21_8002522C.c, WHICH STOOD AT 1
+   DIFFERING.  Its residue was one word: target word 82, the `sh' in the
+   `beqz' delay slot, `sh $a3, 0x22($v1)' where the park's body had
+   `sh $a2, ...'.  $a3 is the raw `lhu' of D_80026476 and $a2 its sign
+   extension -- the same sixteen bits, so a register choice, not a value.
+   The park had measured the catch-22 exactly: `*(s16 *)(q + 0x22) = c'
+   stores the raw register the target stores but sched1 then leaves the store
+   AHEAD of the `sll', `q' dies before the shift temp is born, local-alloc
+   gives both $v0 and reorg can no longer sink the store into the delay slot
+   (9 differing); `= e' defers the store but stores the sign extension
+   (1 differing).
+
+   THE DEVICE THAT CLOSES IT, AND IT COSTS NO WORD:
+
+       do
+       {
+           e = (s16)c;
+       } while (0);
+       *(s16 *)(q + 0x22) = c;
+
+   The `do { } while (0)' is a pure scheduling barrier -- loop NOTEs, no
+   instruction -- so it pins the sign extension ahead of the store without
+   making the store depend on it.  The store then keeps the RAW value and is
+   still the last insn before the branch, which is what reorg sinks into the
+   delay slot.  MEASURED, all 115 words unless stated:
+
+     do-while around `e = (s16)c;', store `= c'   (this body)     0
+     do-while around BOTH that and the store                      0
+     one do-while containing both statements                      0
+     ... the same device one statement earlier (before the +0x18
+         store instead of after it)                               2
+     ... the device before all three other `q' stores  114 words, 12
+     do-while around the STORE only, `= c'                        9
+     `if (1) { *(s16 *)(q + 0x22) = c; }'                         7
+     no device, `= e'                       (the park's body)     1
+     no device, `= c'                                             9
+     `e = (s16)c; g = e < 0x71;' then store `= c', `if (g)'       7
+     ... with `g' computed before `e', or after the store         7
+     `e = c; e = (s16)e;' then store `= c'                        7
+     `e = c << 16; e >>= 16;' then store `= c'                    9
+     `(s16)c' hoisted above all four `q' stores     114 words,   10
+
+   PROBABLY MACRO RESIDUE, not a hand-written `do { } while (0)': narrowing
+   the ring cursor to a signed halfword is exactly the body of a one-line
+   macro, and a macro body in this tree is a `do { } while (0)'.  I could not
+   find a device-free spelling and the park's own list rules out the obvious
+   ones.
+
+   THE PARK'S FOUR SPELLING FACTS ALL HOLD and are still in the body: the two
+   ring banks are CHAINED assignments (two separate statements reload all
+   three values for the second bank: 121 words, 44 aligned differences),
+   `f = e + 0x10' is an INDEX LOCAL (inline, loop.c folds the 0x80 into the
+   base and deletes the `addiu/sll/addu'), `c = (u16)D_80026476;' is what
+   turns the unit's `extern s16 D_80026476' into the target's `lhu', and
+   D_800269C8 is read twice -- `lh' for the compare and `lhu' for the store --
+   which is why it is declared `u16' with an explicit `(s16)' on the compare.
+
+   The five-argument signature is the one func_s21_80024CD4 calls with (the
+   fifth argument on the stack at 0x10($sp)); func_s21_80024CD4 re-verified
+   at 127 words / 0 differing with this body in place.
+
+   raw 16 == the 13 relocations plus three local branch targets: R_MIPS_26 on
+   func_8003FD64, func_8004491C, func_80064584 and func_800644B8, and
+   HI16/LO16 pairs on func_s21_80024CD4, func_s21_80024ED0, D_800269C8 (one
+   HI, two LO), D_80026476 (one HI, two LO) and D_800265C8. */
+UnkNode *func_s21_8002522C(u8 *p, s16 ry, s16 rx, s16 rz, void *tmpl)
+{
+    UnkNode *n;
+    u8 *m;
+    u8 *r;
+    u8 *q;
+    u32 c;
+    s32 e;
+    s32 f;
+
+    n = func_8003FD64(0x202, tmpl);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s21_80024CD4;
+        func_8004491C(n, (u32)func_s21_80024ED0);
+        m = (u8 *)n->unk_08;
+        *(s16 *)(m + 0x2) = *(u16 *)(p + 0x2) + ((func_80064584(ry) * rx) >> 15);
+        *(s16 *)(m + 0x6) = *(u16 *)(p + 0x6) + ((func_800644B8(ry) * rx) >> 15);
+        *(s16 *)(m + 0xA) = *(u16 *)(p + 0xA) + (rz >> 3);
+        if ((s16)D_800269C8 < *(s16 *)(m + 0xA))
+        {
+            *(s16 *)(m + 0xA) = D_800269C8;
+        }
+        *(s16 *)(m + 0xE) = *(u16 *)(p + 0x2);
+        *(s16 *)(m + 0x12) = *(u16 *)(p + 0x6);
+        *(s16 *)(m + 0x16) = *(u16 *)(p + 0xA);
+        r = (u8 *)n->unk_0C;
+        *(u32 *)(r + 0xC) = 0x40E020;
+        q = (u8 *)n + 0x20;
+        c = (u16)D_80026476;
+        *(s16 *)(q + 0x16) = ry;
+        *(s16 *)(q + 0x1C) = rz;
+        *(s16 *)(q + 0x18) = rx;
+        do
+        {
+            e = (s16)c;
+        } while (0);
+        *(s16 *)(q + 0x22) = c;
+        if (e < 0x71)
+        {
+            f = e + 0x10;
+            D_800265C8[f].unk_00 = D_800265C8[e].unk_00 = *(u16 *)(m + 0xE);
+            D_800265C8[f].unk_02 = D_800265C8[e].unk_02 = *(u16 *)(m + 0x12);
+            D_800265C8[f].unk_04 = D_800265C8[e].unk_04 = *(u16 *)(m + 0x16);
+            D_80026476 = c + 1;
+        }
+    }
+    return n;
+}
 
 /* The +0x10 step of func_s21_800254FC's 0x202 node: bump the counter,
    integrate the mover's velocity into its position, damp the two horizontal
@@ -988,7 +1116,101 @@ void func_s21_80025E48(u8 *p, UnkVec *v, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s21", func_s21_800262AC);
+/* The 0x202 spawner for func_s21_80025E48's three-ring sweep: 48 nodes in a
+   3 x 16 nest, all at the same position, each tagged with its ring index j at
+   the payload's +0x24 and its slot index i at +0x22, and each pointing its
+   renderable's +0x8 at D_80026490.  Returns the LAST node allocated, which is
+   what func_s21_80024050's case 3 stores at p+0x2C and case 4 polls for the
+   kill bit.  86 words, 0 differing.
+
+   NO TWIN: dngtwin's best sibling is func_s69_80025FCC at 0.684 and it is
+   still an INCLUDE_ASM.  Written from the listing against the unit's own
+   landed spawners (func_s21_8002495C, func_s21_800254FC) for the
+   func_8003FC64 / `n->unk_10 = step' / func_8004491C(n, tag) idiom.
+
+   THE ONE SPELLING FACT, worth 6 differences: BOTH CONDITIONAL CONSTANTS ARE
+   WRITTEN `!= 0' FIRST.  `(i != 0) ? 0x202 : 2' and `(j != 0) ? 0x100 : 0x800'
+   give the target's `beqz' with the SECOND arm's constant in the delay slot;
+   written `(i == 0) ? 2 : 0x202' and `(j == 0) ? 0x800 : 0x100' both come out
+   `bnez' with the arms swapped -- 86 words, 6 aligned differences, 3 per site.
+
+   THREE MORE FACTS, ALL MEASURED:
+
+   * THE SIX MOVER STORES ARE PAIRED, FAR FIELD FIRST: +0xE then +0x2, +0x12
+     then +0x6, +0x16 then +0xA.  Position-first (+0x2 then +0xE, ...) is 4
+     aligned differences and so is grouping the three +0xE/+0x12/+0x16 stores
+     ahead of the three position stores -- the pairing is what lets one
+     register serve both stores of a pair with no reload.
+   * `*(s16 *)(r + 0x1C) = *(u16 *)(r + 0x1E);' IS A READ-BACK.  Writing the
+     conditional expression a second time instead duplicates the whole
+     `beqz'/`j' selection: 92 words, 34 aligned differences.  (Contrast
+     func_s21_800254FC, whose two 0x1000 scales ARE the literal written twice.)
+   * `q = (u8 *)n + 0x20;' IS A POINTER LOCAL.  The target's `addiu $v1, $s0,
+     0x20' is that local; spelled as seven `*(s16 *)((u8 *)n + 0x3A)'-style
+     offsets off the node the addiu folds into each store's displacement and
+     the body is 85 words, 11 aligned differences.
+
+   MEASURED AND FREE, so NOT the reason this lands: where the +0x1C read-back
+   sits.  Moved up to directly after the +0x1E store (ahead of +0x14, +0x10
+   and +0x8) it is still 86 words, 0 differing.
+
+   raw 11 == 9 relocations plus 2 local `j' targets the mask does not cover:
+   R_MIPS_26 on func_8003FA44, func_8003FC64 and func_8004491C, and HI16/LO16
+   pairs on func_s21_80025E48, D_80026490 and func_800CEEFC.
+
+   The declaration had to CHANGE: this unit already declared
+   `void func_s21_800262AC(s16, s16, s16)' for func_s21_80024CD4.  It returns
+   the node.  func_s21_80024CD4 re-verified at 127 words / 0 differing with
+   the new prototype. */
+UnkNode *func_s21_800262AC(s16 x, s16 y, s16 z)
+{
+    UnkNode *n;
+    u8 *m;
+    u8 *r;
+    u8 *q;
+    s32 i;
+    s32 j;
+
+    if (func_8003FA44(0x30) == 0)
+    {
+        return NULL;
+    }
+    for (j = 2; j >= 0; j--)
+    {
+        for (i = 0xF; i >= 0; i--)
+        {
+            n = func_8003FC64((i != 0) ? 0x202 : 2);
+            if (n != NULL)
+            {
+                n->unk_10 = (u32)func_s21_80025E48;
+                func_8004491C(n, (u32)func_800CEEFC);
+                m = (u8 *)n->unk_08;
+                *(s16 *)(m + 0xE) = x;
+                *(s16 *)(m + 0x2) = x;
+                *(s16 *)(m + 0x12) = y;
+                *(s16 *)(m + 0x6) = y;
+                *(s16 *)(m + 0x16) = z;
+                *(s16 *)(m + 0xA) = z;
+                r = (u8 *)n->unk_0C;
+                *(s16 *)(r + 0x6) = 0x10;
+                *(s16 *)(r + 0x1E) = (j != 0) ? 0x100 : 0x800;
+                *(s16 *)(r + 0x14) = 0xC;
+                *(s16 *)(r + 0x10) = 0x20;
+                *(u32 *)(r + 0x8) = (u32)D_80026490;
+                *(s16 *)(r + 0x1C) = *(u16 *)(r + 0x1E);
+                q = (u8 *)n + 0x20;
+                *(s16 *)(q + 0x1A) = 0x8;
+                *(s16 *)(q + 0x64) = 0x8;
+                *(s16 *)(q + 0x22) = i;
+                *(s16 *)(q + 0x24) = j;
+                *(s16 *)(q + 0x5C) = x;
+                *(s16 *)(q + 0x5E) = y;
+                *(s16 *)(q + 0x60) = z;
+            }
+        }
+    }
+    return n;
+}
 
 /* Apply status kind 0x17 at a strength scaled off the second parameter, then
    print the D_800E1D28 message, both gated on func_8009D218 coming back zero.

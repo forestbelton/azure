@@ -182,7 +182,61 @@ typedef struct UnkDngB20Name12
     u8 b[0xC];
 } UnkDngB20Name12;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_801708D4);
+void func_800478B8(u8 *);
+extern s8 D_800DCECC[];
+
+/* The thrown slot's project-and-settle step: push the mover at b and the
+   slot's own vector at p+0xA8 through RotTransPers, set c+0x6 from the
+   DIFFERENCE of the two depths less twice the D_800DCECC facing byte, send
+   the view through func_800478B8, and raise 0x8000 in the node's -0x2 and
+   in D_800814A0 when the +0x96 countdown runs out. 78 words, 0 differing,
+   first compile. 2 members (dngfam.py: this and func_b42_801708D4).
+
+   IT IS THE ~45-WORD TAIL OF THE LANDED func_b23_80170874
+   (csrc/ovl_dng_b23.c, 151 words) with that body's velocity decay, its
+   c+0x1C/+0x1E wind and its `m < 0xA' colour ease all absent, and with
+   three parameters instead of four. Two of b23's facts were re-measured
+   here and one of them does NOT hold:
+
+     * THE FRAME SHAPE IS LOAD-BEARING. RotTransPers's second out-parameter
+       is EIGHT bytes, `s32 sxy[2]', which is what puts the third and fourth
+       at sp+0x20 and sp+0x24. A plain `s32 sxy' with `&sxy' at both calls
+       is 78 words, 2 aligned differences.
+     * THE D_800DCECC BYTE IS `* 2', NOT `<< 1' -- 79 words, 3 aligned
+       differences written as a shift.
+     * MEASURED AND FREE, so NOT the reason this lands: the countdown test.
+       b23 records `(s16)(--*(u16 *)(p + 0x96)) <= 0' as a fact; here
+       `*(s16 *)(p + 0x96) -= 1;' followed by a separate reload-and-test is
+       ALSO 78 words / 0 differing, so on this body it is not a lever.
+
+   `--raw' is 10 differing and all 10 are relocations -- 3 `jal's and 7
+   `%hi'/`%lo' halves. */
+void func_b42_801708D4(u8 *p, UnkVec *b, u8 *c)
+{
+    SVECTOR sv;
+    s32 sxy[2];
+    s32 pz;
+    s32 flag;
+    UnkVec *q;
+    s32 r;
+
+    sv.vx = *(u16 *)((u8 *)b + 0x2);
+    sv.vy = *(u16 *)((u8 *)b + 0x6);
+    sv.vz = *(u16 *)((u8 *)b + 0xA);
+    r = RotTransPers(&sv, sxy, &pz, &flag);
+    q = *(UnkVec **)(p + 0xA8);
+    sv.vx = *(u16 *)((u8 *)q + 0x2);
+    sv.vy = *(u16 *)((u8 *)q + 0x6);
+    sv.vz = *(u16 *)((u8 *)q + 0xA);
+    *(s16 *)(c + 0x6) = r - RotTransPers(&sv, sxy, &pz, &flag) -
+                        D_800DCECC[((D_80083228 + *(s16 *)(p + 0x94) + 0x100) >> 9) & 7] * 2;
+    func_800478B8(c);
+    if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80170A0C);
 

@@ -173,6 +173,9 @@ s32 func_b19_80170884(u8 *p, UnkVec *v);
 
 void func_b19_80170BFC(u8 *p, UnkVec *v);
 
+extern u8 D_801742E0[];
+extern u8 D_801742E8[];
+
 s32 func_b19_80170884(u8 *p, UnkVec *v)
 {
     UnkDng708A4SP *sp = (UnkDng708A4SP *)0x1F800000;
@@ -1601,7 +1604,132 @@ void func_b19_801729A8(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b19", func_b19_80172A24);
+/* The resident overlay's func_800D991C (csrc/ovl_dungeon_800D50FC.c) in this
+   bank's allocation -- the three-case +0x9B switch that falls through arm to
+   arm, the two-numerator divide in case 1, the `-= 1' countdown tail, the
+   D_80083460 + 0x8 decrement and the func_800AD9B4 handler install.
+   223 words, 0 differing on the first compile.
+
+   Copied from the landed func_b36_801723D4 (csrc/ovl_dng_b36.c, also 223
+   words, 1.000 on dngtwin's opcode stream) with four operand deltas, all of
+   them this copy's own: the facing tables are D_801742E0 (case 0) and
+   D_801742E8 (case 2) for b36's D_80174A94/D_80174A9C; the sub-counter is
+   p + 0xA4 where b36 uses p + 0x9E (the accumulator p + 0xA0 is the same);
+   case 1's step shifts by 10 and not b36's 9; and the installed handler is
+   func_b19_80171650.
+
+   Re-measured in THIS body -- all three of func_b36_801723D4's named facts
+   hold, with their own numbers:
+
+   THE TAIL GATE'S 0x2000 ARM MUST BE THE `then'. Written with the arms the
+   other way round the function is still 223 words but the (d + 0x46) arm is
+   emitted after the func_800A0818 arm: 17 aligned differences.
+
+   THE 0x410 AND 0x20000 TESTS STAY NESTED. Folded into one
+   `(v & 0x410) == 0 && (v & 0x20000) != 0' it is 10 aligned differences --
+   fold_truthop merges them.
+
+   THE FIRST NUMERATOR IS THE THREE-STATEMENT FORM and the second the
+   two-statement one, which is the resident's asymmetry. As one expression the
+   first is 1 aligned difference. 
+   THIS COPY'S OWN CONSTANT: 0xa4 -> 0x9e at all 6 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b19_80172A24(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 u;
+    s32 w;
+    s32 v;
+    u16 x;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x6000) == 0)
+        {
+            break;
+        }
+        *(u8 **)(c + 0x2C) = D_801742E0;
+        func_80047784(c, D_801742E0[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(u16 *)(p + 0x98) |= 8;
+        *(s32 *)(d + 0x1C) &= ~0x8000000;
+        *(s16 *)(p + 0x9e) = 5;
+        *(s32 *)(p + 0xA0) = 0;
+        p[0x9B] += 1;
+    case 1:
+        *(s32 *)(p + 0x90) -= *(s32 *)(p + 0xA0);
+        if (*(s16 *)(p + 0x9e) != 0)
+        {
+            u = c[0x24] << 6;
+            w = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            u -= w;
+            b->unk_0C = (u << 16) / *(s16 *)(p + 0x9e);
+            w = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - w) << 16) / *(s16 *)(p + 0x9e);
+            *(s32 *)(p + 0xA0) = -func_800644B8(*(s16 *)(p + 0x9e) * 409) << 10;
+        }
+        *(s32 *)(p + 0x90) += *(s32 *)(p + 0xA0);
+        if ((*(s16 *)(p + 0x9e) -= 1) < 0)
+        {
+            *(s32 *)(p + 0x90) = 0;
+            *(u16 *)(p + 0x98) &= ~8;
+            *(s32 *)(d + 0x1C) |= 0x8000000;
+            p[0x9B] += 1;
+        }
+    case 2:
+        if ((*(s32 *)(d + 0x1C) & 0x8000000) != 0)
+        {
+            *(u16 *)(p + 0x98) &= ~8;
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            *(u8 **)(c + 0x2C) = D_801742E8;
+            func_80047784(c, D_801742E8[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            p[0x9B] += 1;
+        }
+        break;
+    }
+
+    if ((*(s16 *)(p + 0x96) -= 1) > 0)
+    {
+        return;
+    }
+    b->unk_14 = 0;
+    b->unk_10 = 0;
+    b->unk_0C = 0;
+    func_800A2B04(b, c[0x24], c[0x25]);
+    func_800AD594(d, 4);
+    func_800A4ACC(d);
+    g = (u8 *)&D_80083460;
+    if (*(s16 *)(g + 0x8) != 0)
+    {
+        *(u16 *)(g + 0x8) -= 1;
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) != 0)
+    {
+        if ((*(u16 *)(d + 0x46) & 0x8000) != 0)
+        {
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+    }
+    else if ((v & 0x410) == 0)
+    {
+        if ((v & 0x20000) != 0)
+        {
+            *(s16 *)(d + 0x2A) =
+                func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+        }
+    }
+    if ((s16)func_800AD9B4(c, d) > 0)
+    {
+        *(u32 *)(p + 0x8C) = (u32)func_b19_80171650;
+        func_800A9A04(d);
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming

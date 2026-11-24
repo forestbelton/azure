@@ -308,9 +308,63 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80025CE8);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80025FB0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80026060);
+/* A renderable's facing step: point the slot's +0x00 element at its sheet's
+   +0xC plus 22 bytes per frame of the signed +0x04 index, step that index by
+   one towards the sign of *b, then clamp it into [lo, hi] -- raising the
+   slot's 0x4000 flag when it was clamped and clearing it when it was not.
+   The three clamp arms share the one `sh 0x14($t0)' because jump2
+   cross-jumps them. No twin anywhere: dngtwin finds nothing above 0.62
+   landed, and the resident units have nothing at this shape.
+   51 words, 0 differing, FIRST COMPILE.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_8002612C);
+   LOAD-BEARING, measured: the `lo' test must be the FIRST arm. With the
+   `hi' test first it is 51 words / 11 differing. Measured and FREE at 51
+   words / 0 differing, so neither is why this lands: the 0x4000 flag store
+   written before the clamp store in each arm rather than after, and the
+   whole body written through `UnkSlot *s' field accesses (unk_00/unk_04/
+   unk_08/unk_14) instead of `u8 *s' with casts -- the slot type is
+   witnessed here by +0x04 as a signed byte, +0x08 as a pointer and +0x14 as
+   the flag halfword, and it measures identically either way. */
+void func_s72_80026060(u8 *s, s16 *b, s16 lo, s16 hi)
+{
+    *(s32 *)s = *(s32 *)(*(u8 **)(s + 0x8) + 0xC) + *(s8 *)(s + 0x4) * 22;
+    if (*b > 0)
+    {
+        *(s8 *)(s + 0x4) = *(s8 *)(s + 0x4) + 1;
+    }
+    else if (*b < 0)
+    {
+        *(s8 *)(s + 0x4) = *(s8 *)(s + 0x4) - 1;
+    }
+    if (*(s8 *)(s + 0x4) < lo)
+    {
+        *(s8 *)(s + 0x4) = lo;
+        *(u16 *)(s + 0x14) |= 0x4000;
+    }
+    else if (hi < *(s8 *)(s + 0x4))
+    {
+        *(s8 *)(s + 0x4) = hi;
+        *(u16 *)(s + 0x14) |= 0x4000;
+    }
+    else
+    {
+        *(u16 *)(s + 0x14) &= 0xBFFF;
+    }
+}
+
+/* Point the slot's +0x00 element at its sheet's +0xC plus 22 bytes per frame
+   of `d' -- func_s69_80025840's head without the step or the clamp.
+   12 words, 0 differing, FIRST COMPILE.
+
+   LOAD-BEARING, measured: `d' must be an `s16' PARAMETER. As `s32' the
+   `sll'/`sra' promotion pair disappears and the body is 10 words /
+   12 differing. Measured and FREE at 12 words / 0 differing: `d * 11 * 2'
+   in place of `d * 22' -- fold reassociates it to the same
+   sll/addu/sll/subu/sll chain. */
+void func_s72_8002612C(u8 *s, s16 d)
+{
+    *(s32 *)s = *(s32 *)(*(u8 **)(s + 0x8) + 0xC) + d * 22;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_8002615C);
 

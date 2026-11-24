@@ -95,6 +95,12 @@ void func_s20_80025868(u8 *p, UnkVec *v, u8 *c);
 
 void func_800478B8(u8 *);
 
+UnkNode *func_s20_8002569C(u8 *p, s16 ry, s16 rx, s16 rz, void *tmpl);
+void func_s20_80025160(u8 *p, UnkVec *v, u8 *c);
+extern u16 D_80026878;
+UnkNode *func_8003FD64(s32, void *);
+s32 func_s20_80025340(u8 *p, UnkVec *v, UnkSlot *s);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_80024064);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_80024804);
@@ -362,7 +368,134 @@ s32 func_s20_80025340(u8 *p, UnkVec *v, UnkSlot *s)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_8002569C);
+/* The 0x202 spawner for func_s20_80025160's step and func_s20_80025340's
+   renderer.  It seeds the new mover's position from the caller's own position
+   offset by rcos/rsin of `ry' scaled by `rx' (>> 15) and by `rz >> 3' in z,
+   clamps the z component at D_80026878, copies the unoffset position into the
+   mover's +0xE/+0x12/+0x16 interpolation target, writes 0x40E020 into the
+   renderable's colour word, records the three angles and the current ring
+   cursor in the payload, and -- while the cursor is under 0x71 -- writes the
+   interpolation target into BOTH trail-ring banks at D_80026478[cursor] and
+   D_80026478[cursor + 0x10] and bumps the cursor.  115 words, 0 differing.
+
+   LANDED OUT OF docs/dng-parks/func_s20_8002569C.c, WHICH STOOD AT 1
+   DIFFERING.  Its residue was one word: target word 82, the `sh' in the
+   `beqz' delay slot, `sh $a3, 0x22($v1)' where the park's body had
+   `sh $a2, ...'.  $a3 is the raw `lhu' of D_s20_8002632A and $a2 its sign
+   extension -- the same sixteen bits, so a register choice, not a value.
+   The park had measured the catch-22 exactly: `*(s16 *)(q + 0x22) = c'
+   stores the raw register the target stores but sched1 then leaves the store
+   AHEAD of the `sll', `q' dies before the shift temp is born, local-alloc
+   gives both $v0 and reorg can no longer sink the store into the delay slot
+   (9 differing); `= e' defers the store but stores the sign extension
+   (1 differing).
+
+   THE DEVICE THAT CLOSES IT, AND IT COSTS NO WORD:
+
+       do
+       {
+           e = (s16)c;
+       } while (0);
+       *(s16 *)(q + 0x22) = c;
+
+   The `do { } while (0)' is a pure scheduling barrier -- loop NOTEs, no
+   instruction -- so it pins the sign extension ahead of the store without
+   making the store depend on it.  The store then keeps the RAW value and is
+   still the last insn before the branch, which is what reorg sinks into the
+   delay slot.  MEASURED, all 115 words unless stated:
+
+     do-while around `e = (s16)c;', store `= c'   (this body)     0
+     do-while around BOTH that and the store                      0
+     one do-while containing both statements                      0
+     ... the same device one statement earlier (before the +0x18
+         store instead of after it)                               2
+     ... the device before all three other `q' stores  114 words, 12
+     do-while around the STORE only, `= c'                        9
+     `if (1) { *(s16 *)(q + 0x22) = c; }'                         7
+     no device, `= e'                       (the park's body)     1
+     no device, `= c'                                             9
+     `e = (s16)c; g = e < 0x71;' then store `= c', `if (g)'       7
+     ... with `g' computed before `e', or after the store         7
+     `e = c; e = (s16)e;' then store `= c'                        7
+     `e = c << 16; e >>= 16;' then store `= c'                    9
+     `(s16)c' hoisted above all four `q' stores     114 words,   10
+
+   PROBABLY MACRO RESIDUE, not a hand-written `do { } while (0)': narrowing
+   the ring cursor to a signed halfword is exactly the body of a one-line
+   macro, and a macro body in this tree is a `do { } while (0)'.  I could not
+   find a device-free spelling and the park's own list rules out the obvious
+   ones.
+
+   THE PARK'S FOUR SPELLING FACTS ALL HOLD and are still in the body: the two
+   ring banks are CHAINED assignments (two separate statements reload all
+   three values for the second bank: 121 words, 44 aligned differences),
+   `f = e + 0x10' is an INDEX LOCAL (inline, loop.c folds the 0x80 into the
+   base and deletes the `addiu/sll/addu'), `c = (u16)D_s20_8002632A;' is what
+   turns the unit's `extern s16 D_s20_8002632A' into the target's `lhu', and
+   D_80026878 is read twice -- `lh' for the compare and `lhu' for the store --
+   which is why it is declared `u16' with an explicit `(s16)' on the compare.
+
+   The five-argument signature is the one func_s20_80025160 calls with (the
+   fifth argument on the stack at 0x10($sp)); func_s20_80025160 re-verified
+   at 127 words / 0 differing with this body in place.
+
+   raw 16 == the 13 relocations plus three local branch targets: R_MIPS_26 on
+   func_8003FD64, func_8004491C, func_80064584 and func_800644B8, and
+   HI16/LO16 pairs on func_s20_80025160, func_s20_80025340, D_80026878 (one
+   HI, two LO), D_s20_8002632A (one HI, two LO) and D_80026478. 
+   THIS COPY'S OWN CONSTANT: 0x40e020 -> 0xe04020.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+UnkNode *func_s20_8002569C(u8 *p, s16 ry, s16 rx, s16 rz, void *tmpl)
+{
+    UnkNode *n;
+    u8 *m;
+    u8 *r;
+    u8 *q;
+    u32 c;
+    s32 e;
+    s32 f;
+
+    n = func_8003FD64(0x202, tmpl);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s20_80025160;
+        func_8004491C(n, (u32)func_s20_80025340);
+        m = (u8 *)n->unk_08;
+        *(s16 *)(m + 0x2) = *(u16 *)(p + 0x2) + ((func_80064584(ry) * rx) >> 15);
+        *(s16 *)(m + 0x6) = *(u16 *)(p + 0x6) + ((func_800644B8(ry) * rx) >> 15);
+        *(s16 *)(m + 0xA) = *(u16 *)(p + 0xA) + (rz >> 3);
+        if ((s16)D_80026878 < *(s16 *)(m + 0xA))
+        {
+            *(s16 *)(m + 0xA) = D_80026878;
+        }
+        *(s16 *)(m + 0xE) = *(u16 *)(p + 0x2);
+        *(s16 *)(m + 0x12) = *(u16 *)(p + 0x6);
+        *(s16 *)(m + 0x16) = *(u16 *)(p + 0xA);
+        r = (u8 *)n->unk_0C;
+        *(u32 *)(r + 0xC) = 0xe04020;
+        q = (u8 *)n + 0x20;
+        c = (u16)D_s20_8002632A;
+        *(s16 *)(q + 0x16) = ry;
+        *(s16 *)(q + 0x1C) = rz;
+        *(s16 *)(q + 0x18) = rx;
+        do
+        {
+            e = (s16)c;
+        } while (0);
+        *(s16 *)(q + 0x22) = c;
+        if (e < 0x71)
+        {
+            f = e + 0x10;
+            D_80026478[f].unk_00 = D_80026478[e].unk_00 = *(u16 *)(m + 0xE);
+            D_80026478[f].unk_02 = D_80026478[e].unk_02 = *(u16 *)(m + 0x12);
+            D_80026478[f].unk_04 = D_80026478[e].unk_04 = *(u16 *)(m + 0x16);
+            D_s20_8002632A = c + 1;
+        }
+    }
+    return n;
+}
 
 /* The +0x10 step of func_s21_800254FC's 0x202 node: bump the counter,
    integrate the mover's velocity into its position, damp the two horizontal
