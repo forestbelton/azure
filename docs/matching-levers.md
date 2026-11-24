@@ -1181,15 +1181,15 @@ then read only the section you need.
 - A DEVICE'S SCOPE IS USUALLY NOT EVIDENCE ABOUT WHERE THE MACRO WAS  `:37217`
 - `ovlverify` CANNOT SEE WHICH DATA SYMBOL A RELOCATED LOAD NAMES  `:37238`
 - ALLOCATION FACTS FOLLOW THE FRAME; SHAPE FACTS FOLLOW THE SHAPE  `:37259`
-- EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE  `:37319`
-- A FOURTH OUTCOME FOR A TWIN'S FACT: NOT APPLICABLE  `:37353`
-  - THE POSITIVE SIDE OF THE FRAME RULE, MEASURED ACROSS 19 FACTS  `:37376`
-- `synth_mult` FACTORS A CONSTANT MULTIPLY, AND NOT THE WAY THE TARGET DID  `:37393`
-- A LOCAL WRITTEN AND NEVER READ CAN STILL BE LOAD-BEARING  `:37417`
-- A PARAMETER'S DECLARED WIDTH IS AN ALLOCATION LEVER EVEN WHEN EVERY USE IS A BYTE STORE  `:37436`
-  - AND A LIMIT ON THE FRAME RULE, FROM THE SAME FUNCTION  `:37464`
-- A TWIN'S PRICES DO NOT SURVIVE INTO A JUMP-TABLE OWNER  `:37476`
-  - AND A "PAIR" OF FACTS CAN BE TWO FACTS OF VERY DIFFERENT WEIGHT  `:37497`
+- EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE  `:37335`
+- A FOURTH OUTCOME FOR A TWIN'S FACT: NOT APPLICABLE  `:37369`
+  - THE POSITIVE SIDE OF THE FRAME RULE, MEASURED ACROSS 19 FACTS  `:37392`
+- `synth_mult` FACTORS A CONSTANT MULTIPLY, AND NOT THE WAY THE TARGET DID  `:37409`
+- A LOCAL WRITTEN AND NEVER READ CAN STILL BE LOAD-BEARING  `:37433`
+- A PARAMETER'S DECLARED WIDTH IS AN ALLOCATION LEVER EVEN WHEN EVERY USE IS A BYTE STORE  `:37452`
+  - AND A LIMIT ON THE FRAME RULE, FROM THE SAME FUNCTION  `:37480`
+- A TWIN'S PRICES DO NOT SURVIVE INTO A JUMP-TABLE OWNER  `:37492`
+  - AND A "PAIR" OF FACTS CAN BE TWO FACTS OF VERY DIFFERENT WEIGHT  `:37513`
 
 <!-- END INDEX -->
 
@@ -37314,7 +37314,23 @@ gets wrong.
 The two facts that HELD there are source-shape facts (an unreferenced
 aggregate local that sets the frame size, and a unary minus that stops a
 reassociation); the three that inverted are all allocation or frame facts.
-That is the split holding at eight-for-eight across two units.
+
+**AND IT IS THE FRAME, NOT THE OBJECT -- SETTLED BY ONE UNIT CARRYING BOTH.**
+That inversion looked like it might be a property of `ovl_dng_b43` (this bank
+uses six saves, so its twins' seven-save devices never fit). It is not.
+Measured on two functions in that same unit:
+
+    func_b43_80171768   -0x38, SEVEN saves ($s0..$s6), $s0 holds
+                        `g = (u8 *)&D_80083460' -- the pointer local is
+                        CORRECT here, the same spelling the park found wrong
+    func_b43_80170AA4   -0x30, SIX saves ($s0..$s5) -- the DIRECT
+                        `D_80083462' symbol is correct, as the park needed
+
+So one object carries both allocations, and the pointer-local-versus-direct-
+symbol choice is predicted by the PROLOGUE'S SAVED REGISTER LIST and by
+nothing else -- not the unit, not the bank, not the twin's ratio. Ten facts
+for ten across three units now, with no inversion anywhere the frames agreed
+and inversions only where they did not.
 
 ## EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE
 

@@ -115,9 +115,219 @@ s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e);
 void func_800DA840(SVECTOR *src, s16 a);
 s32 func_800A56E0(s32);
 
+s32 func_800A9E70(u8 *, void *, u8 *, u8 *);
+s32 func_800AA36C(u8 *, void *, u8 *, u8 *);
+void func_80047738(u8 *, s16, s16);
+void func_800478B8(u8 *);
+void func_800A020C(s32, u8 *);
+s32 func_800BCB04(s32, s32, s16);
+void func_80042984(u8 *);
+extern u8 D_8006CCF8[];
+extern void (*D_80174018[])(u8 *, UnkVec *, u8 *, u8 *);
+void func_b43_80170AA4(u8 *p, UnkVec *b, u8 *c);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80170898);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b43", func_b43_80170AA4);
+/* The banked room script's per-frame actor driver, the relinked twin of the
+   landed carved func_b45_80170A28 in csrc/ovl_dng_b45.c (267 words), which is
+   itself the resident overlay's func_800D8728. 305 words, 0 differing.
+   The frame matches b45's exactly -- addiu $sp, $sp, -0x30 and SIX
+   callee-saved saves $s0..$s5, with the D_80083462 gate read through the
+   DIRECT symbol and not a pointer local -- so b45 lends both its shape and
+   its allocation facts, and all five of the facts its comment names are in
+   this body unchanged: the two separate +0x8C handler locals h and h2, the
+   s16 k1/k2 facing indices, the q alias for p, and the u8 * facing-table
+   subscript.
+
+   THIS COPY'S DELTAS FROM b45, read off the listing:
+     * func_b45_80170E54 -> func_b43_80170F68 and D_80173CAC -> D_80174018;
+     * a 38-word BLOCK b45 does not have, between the +0x6D re-aim and the
+       c+0x14 dress: with p+0x98's 0x8000 bit set it bumps the p+0xAC
+       counter, resets it to -8 and plays func_800A56E0(0x60B) once the
+       counter's >> 2 reaches 2, and publishes p+0xA6 plus the counter's
+       magnitude to c+0x12; with the bit clear it resyncs p+0xAA from
+       p+0x14 & 7 through func_80042984.
+
+   THREE SPELLINGS MEASURED ON THIS BODY, all inside that new block:
+     * THE FACING READ IS THROUGH q, NOT p. b45 writes
+       ((D_80083228 + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7 and here the
+       listing has lh $v1, 0x2A($s2), the q register: spelled b45's way with
+       p it is 1 aligned difference, with q it is 0.
+     * THE p+0xA6 ADDEND NEEDS ITS OWN LOCAL, READ BEFORE THE if. As
+       *(u16 *)(p + 0xA6) + t inside the final statement the load lands after
+       the negu instead of in the lhu's load-delay slot: 307 words and 9
+       aligned differences. Hoisted into u it is 305 words. With the
+       magnitude written as a ternary instead of an if it is 307 / 9 as well.
+     * THE SUM IS A READ-MODIFY-WRITE ON THAT LOCAL. u += t; then the store
+       gives addu $v1, $v1, $v0, tying the result to u's register; both
+       *(s16 *)(c + 0x12) = t + u and t += u give addu $v0, ... and are
+       2 aligned differences. Reading u before t (C1) is 0 as well, so only
+       the hoist and the RMW are constrained, not their order. */
+void func_b43_80170AA4(u8 *p, UnkVec *b, u8 *c)
+{
+    void (*h)(u8 *, UnkVec *, u8 *, u8 *);
+    void (*h2)(u8 *, UnkVec *, u8 *, u8 *);
+    u8 *q;
+    u8 *e;
+    s16 dir;
+    s32 r;
+    s32 v;
+    s16 k1;
+    s16 k2;
+    s32 n;
+    s32 t;
+    s32 u;
+
+    q = p;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        h = *(void (**)(u8 *, UnkVec *, u8 *, u8 *))(p + 0x8C);
+        if (h == (void (*)(u8 *, UnkVec *, u8 *, u8 *))func_b43_80170F68)
+        {
+            h(p, b, c, p);
+        }
+        else
+        {
+            p[0x71] &= 0x7F;
+        }
+        return;
+    }
+    dir = (s8)p[0x6D];
+    if (func_800A9E70(p, b, c, p) != 0)
+    {
+        return;
+    }
+    h2 = *(void (**)(u8 *, UnkVec *, u8 *, u8 *))(p + 0x8C);
+    if (h2 != NULL)
+    {
+        h2(p, b, c, p);
+    }
+    D_80174018[p[0x9A]](p, b, c, p);
+    if (dir != *(s8 *)(p + 0x6D))
+    {
+        func_800AA36C(p, b, c, p);
+    }
+    if ((*(u16 *)(p + 0x98) & 0x8000) != 0)
+    {
+        n = *(u16 *)(p + 0xAC) + 1;
+        *(s16 *)(p + 0xAC) = n;
+        if (((s16)n >> 2) >= 2)
+        {
+            *(s16 *)(p + 0xAC) = -8;
+            func_800A56E0(0x60B);
+        }
+        t = (s16) * (u16 *)(p + 0xAC) >> 2;
+        u = *(u16 *)(p + 0xA6);
+        if (t < 0)
+        {
+            t = -t;
+        }
+        u += t;
+        *(s16 *)(c + 0x12) = u;
+    }
+    else if ((*(s32 *)(p + 0x14) & 0x7) != *(s16 *)(p + 0xAA))
+    {
+        func_80042984(p);
+        *(s16 *)(p + 0xAA) = *(u16 *)(p + 0x14) & 0x7;
+    }
+    if ((*(u16 *)(c + 0x14) & 0x8000) == 0)
+    {
+        v = ((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7;
+        k1 = v;
+        k2 = v;
+        if (*(s16 *)(p + 0x94) != k1)
+        {
+            e = *(u8 **)(c + 0x2C);
+            if (e != NULL)
+            {
+                func_80047738(c, e[k1], *(s8 *)(c + 0x4));
+            }
+            *(s16 *)(p + 0x94) = v;
+        }
+        if (D_8006CCF8[k2] != 0)
+        {
+            *(u16 *)(c + 0x14) |= 1;
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) &= 0xFFFE;
+        }
+        if ((*(s32 *)(q + 0x1C) & 0x20) == 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0x40) == 0)
+            {
+                func_800478B8(c);
+            }
+        }
+        else
+        {
+            *(u16 *)(c + 0x14) |= 0x7000;
+        }
+        func_800A020C(*(s32 *)(q + 0x1C), c + 0xC);
+    }
+    else if ((*(u16 *)(c + 0x14) & 0x800) != 0)
+    {
+        *(u16 *)(c + 0x14) &= 0x8FFF;
+    }
+    else
+    {
+        *(u16 *)(c + 0x14) |= 0x7000;
+    }
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    if ((*(u16 *)(p + 0x98) & 0x8) != 0)
+    {
+        p[0x9D] = 0;
+    }
+    else
+    {
+        b->unk_14 += (*(s8 *)(p + 0x9D) * 5) << 14;
+        p[0x9D]++;
+    }
+    *(s32 *)(p + 0x90) += b->unk_14;
+    if ((*(u16 *)(p + 0x98) & 0x4) == 0)
+    {
+        r = func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6), *(u16 *)(q + 0x88) - 0x20);
+        if ((s16)r < 0x200)
+        {
+            if (*(s16 *)(p + 0x92) + *(s16 *)(q + 0x88) < (s16)r)
+            {
+                *(u32 *)(q + 0x1C) &= 0xF7FFFFFF;
+            }
+            else if ((s16)r >= *(s16 *)(q + 0x88))
+            {
+                *(s32 *)(p + 0x90) = 0;
+                b->unk_14 = 0;
+                *(u32 *)(q + 0x1C) |= 0x8000000;
+                p[0x9D] = 0;
+            }
+            else
+            {
+                b->unk_14 = 0;
+                *(u32 *)(q + 0x1C) |= 0x8000000;
+                p[0x9D] = 0;
+                *(s16 *)(p + 0x92) = r - *(u16 *)(q + 0x88);
+            }
+            if ((*(u32 *)(q + 0x1C) & 0x40000000) != 0)
+            {
+                *(u32 *)(q + 0x1C) &= 0xBFFFFFFF;
+                r = func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, *(u16 *)(q + 0x88) - 0x20);
+                *(u16 *)(p + 0x92) += *(u16 *)(q + 0x88) - r;
+                *(u16 *)(q + 0x88) = r;
+            }
+        }
+        else
+        {
+            *(u32 *)(q + 0x1C) &= 0xF7FFFFFF;
+        }
+    }
+    else
+    {
+        *(u32 *)(q + 0x1C) &= 0xF7FFFFFF;
+    }
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(q + 0x88) + *(u16 *)(p + 0x92);
+    *(u16 *)(c + 0x14) |= 0x40;
+}
 
 /* The banked room script's main actor handler and the bank's default +0x8C
    continuation: the three early bails, the D_80173FB8 facing-table swap, and
