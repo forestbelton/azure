@@ -106,6 +106,70 @@
    first, which is the same asymmetry the table above records -- the b + 0x2
    load is alias-dependent on the three p stores and the b + 0x6 load is not.
 
+   DISPATCHER PASS, 2026-11-23, no permuter -- just ovlverify on a ladder.
+   TWO CLAIMS ABOVE ARE WRONG and the mechanism is now known exactly.
+
+   (A) THE POINTER LOCAL IS WORTH NOTHING. The note above credits
+   `new_var = p + 0x44' with fixing the first abs block's load pair. It does
+   not. With the duplicated arm present, the body measures 3 WITH the pointer
+   local and 3 WITHOUT it; with the arm removed, 13 either way. The device was
+   doing all ten rows and the pointer local none of them.
+
+   (B) THE DEVICE IS A REFERENCE BUMP ON `k' AND NOTHING ELSE:
+
+       if (p || k) { t = -t; } else { t = -t; }     3   (the permuter's)
+       if (k)     { t = -t; } else { t = -t; }      3   <- k alone suffices
+       if (p)     { t = -t; } else { t = -t; }     13   <- p is irrelevant
+       if (1)     { t = -t; }                      13
+       do { t = -t; } while (0);                   13
+       t = 0 - t;                                  13
+       t = -t + (k - k);                           13
+
+   So it is not the duplicated arm, not the predictable branch and not the
+   block structure: it is ONE MORE FLOW-COUNTED USE OF `k', and only of `k'.
+   `if (1)' and `do { } while (0)' -- the two macro-residue shapes -- add no
+   reference and buy nothing, which is a useful negative result for a body
+   whose residue is an allocno competition.
+
+   NATURAL SPELLINGS THAT ADD THAT USE, all measured, none as good:
+
+       t = k - *(s16 *)(p + 0x36);                 10
+       t = k; t -= *(s16 *)(p + 0x36);             10
+       q = p+0x36 named, t = q - k, abs t = k - q  10
+       the same with q named after k               10
+       t = t < 0 ? k - *(s16 *)(p + 0x36) : t;     15
+
+   The reversed subtraction is the semantically honest way to write the abs
+   and it does add the use, but it changes the INSTRUCTION -- a real `subu'
+   with swapped operands where the target negates -- so it trades ten rows
+   for three. Naming the `p + 0x36' load as well does not recover them, which
+   rules out a reload as the cause.
+
+   (C) THE SECOND BLOCK DOES RESPOND, which the note above denies. It was
+   tried with locals only. The same guard on the second abs takes the body
+   from 3 to 2:
+
+       first block guarded, second plain                3
+       second block given its own `s16 m'               3   (m vs k: no effect)
+       first and second BOTH guarded, shared k          2
+       first and second BOTH guarded, own m             2
+
+   WHERE THAT LEAVES IT. Two aligned differences, and the price is TWO
+   duplicated-arm guards. docs/landing-a-function.md's rule is that a device
+   is a last resort, and two of them in a 123-word body for a result that is
+   still not a landing is not a trade worth carrying -- so THE BODY BELOW IS
+   STILL THE CLEAN 6-DIFFERENCE ONE, deliberately, and the 2-difference
+   version is this table rather than code.
+
+   WHAT I WOULD TRY NEXT, now that the axis is known: the goal is one more
+   flow-counted use of `k' that costs no instruction. Nothing in the source
+   wants one, so the remaining candidates are on the OTHER side of the
+   competition -- lower the pseudo `k' is losing to rather than raise `k',
+   which is the lever docs/matching-levers.md records for func_s56_80024388
+   (merging two returns to DROP a reference). Read `-da`'s .lreg/.greg to
+   name that pseudo first; I did not, and that is the next step rather than
+   another sweep of spellings.
+
    The candidate's source is nonmatchings/func_b09_80170A84/output-20-1/.
    I stopped here deliberately: this is a 123-word function with one sibling,
    246 words of yield, and 1,433 stubs remain. It is a better park than it
