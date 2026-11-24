@@ -1145,8 +1145,8 @@ then read only the section you need.
 - A PAIRED CLEAR AND SET ON ONE WORD IS TWO STATEMENTS, NOT ONE COMBINED MASK  `:36149`
 - THE ORDER OF A GROUP OF STORES DECIDES WHICH cse RELOADS SURVIVE  `:36171`
 - A LOAD FIRST IN A BLOCK KEEPS A CONDITIONAL BRANCH'S DELAY SLOT EMPTY  `:36208`
-- A MODULO IN ITS OWN STATEMENT REUSES THE DIVIDEND'S PSEUDO  `:36239`
-- A PREDICTABLE-TRUE TWO-ARM GUARD IS A REFERENCE BUMP, AND ONLY ITS OPERAND MATTERS  `:36253`
+- A MODULO IN ITS OWN STATEMENT REUSES THE DIVIDEND'S PSEUDO  `:36255`
+- A PREDICTABLE-TRUE TWO-ARM GUARD IS A REFERENCE BUMP, AND ONLY ITS OPERAND MATTERS  `:36269`
 
 <!-- END INDEX -->
 
@@ -36224,6 +36224,22 @@ and BOTH of the target's nops are lost.
 delay slot.** So when the load is the FIRST insn of the block, reorg has
 nothing eligible to hoist into the slot and it stays empty exactly as the
 target has it. Splitting the shift from the mask is what puts the load first.
+
+CONFIRMED INDEPENDENTLY on `func_b01_801714D4` (337 words), where the
+spelling was a two-way table test rather than a shift and a mask. Loading
+`*(u8 **)(c + 0x2C)` into a local AHEAD of the table pointer makes the block
+after the gate open with the `lw`, and the target's empty
+`beq $v0, $v1` delay slot survives. Written the other way round -- the table
+assigned first, the load inside the comparison -- the `lui` for the table
+fills the slot and the body is **336 words, one SHORT, with 5 aligned
+differences**: the missing `nop`, the displaced `lui`, and three branch rows
+that realign behind them.
+
+**Note the signature: ONE WORD SHORT.** That is the same tell as the cse
+reload entry below -- a candidate shorter than the target usually means an
+optimisation fired that the original compile did not get, and a filled delay
+slot is one of the two cheapest ways for that to happen. Do not read a short
+body as "nearly right".
 
 This is the general form of several entries above that ask for a statement
 split without saying why the split works. **If a target leaves a branch delay

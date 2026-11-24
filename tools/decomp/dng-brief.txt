@@ -359,7 +359,23 @@ your report under item 4.
   one block as you go; do not start a second.
 * Keep types honest. If a struct field's offset and width are all you know, a
   cast through `u8 *` is fine. Do not invent a struct you cannot witness.
-* **IF A CALLEE HAS A REAL NAME, USE IT.** Before declaring
+* **RE-MEASURE A PLAUSIBLE FACT BEFORE YOU WRITE IT DOWN.
+
+When a body lands on the first compile, every spelling in it is UNMEASURED --
+you chose them, they worked, and you do not know which ones mattered. Do not
+write them up as levers. `ovlverify` on one name takes a couple of seconds,
+so flip the two or three that look load-bearing and SAY WHICH ONES WERE FREE:
+
+    "Measured and free at 91 words / 0 differing, so it is NOT the reason
+     this lands: the two tail stores in the other order."
+
+An agent that did this on five first-compile landings found TWO of its five
+plausible facts were free. A comment that claims a lever the next agent then
+builds on is worse than no comment at all, because the next agent will spend
+its budget preserving something that never mattered -- and the comments in
+this tree are the only record of what has actually been measured.
+
+IF A CALLEE HAS A REAL NAME, USE IT.** Before declaring
   `s32 func_80069EF8();`, check:
 
       grep -iE "= 0x80069ef8;" splat/common_syms.txt
