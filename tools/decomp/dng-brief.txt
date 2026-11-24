@@ -68,6 +68,12 @@ The failures are loud and misleading -- `unrecognized opcode 'macro'`, `junk
 at end of line`, `symbol already defined` on unrelated functions -- and look
 like a defect in your source. They are not.
 
+**`tools/cdkgcc -da` WRITES ITS DUMPS TO THE CURRENT DIRECTORY**, so a probe
+run from the repo root drops `probe.c.lreg`, `probe.c.greg` and the rest into
+the repo. `cd` into `@WORKDIR@` first, or pass absolute `-I` paths and run it
+from there, and check `git status` afterwards. An agent that leaves those
+files behind puts them in the dispatcher's next commit.
+
 **KEEP EVERY WORKING FILE INSIDE `@WORKDIR@/`.** That directory is yours.
 
 ## NEVER RUN `make`, `make splat`, `make containers`, OR ANY BUILD

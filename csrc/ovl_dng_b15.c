@@ -749,7 +749,61 @@ s32 func_b15_80172920(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b15", func_b15_80172AAC);
+/* State 8..10's second half, the 0.982 relink of the landed func_b01_80172548
+   (csrc/ovl_dng_b01.c, 56 words) -- read that comment for the shape: the
+   two func_800A2B5C tests on either side of the func_800C7930 push, both
+   compared as halfwords, and the actor stores in listing order 0x8C, 0x9A,
+   0x9B. Two deltas, both read off this unit's own listing:
+
+   1. THE `*(s16 *)(p + 0x96) = 0' STORE IS ABSENT HERE. b01 emits
+      `sh $zero, 0x96($s1)' after the 0x9B store; this listing goes straight
+      from `sb $zero, 0x9B($s1)' to the 0x6D reload.
+   2. `d[0x85] = 6', not b01's 0. The listing has
+      `addiu $v0, $zero, 0x6' / `sb $v0, 0x85($s0)' where b01 has
+      `sb $zero, 0x85($s0)'. 6 is this object's constant throughout --
+      func_b31f_8016C720 above carries the same 0x4 -> 0x6 re-dress.
+
+   56 words, 0 differing, on the first compile with those two changes.
+
+   MEASURED AND FREE, so it is NOT the reason this lands: the D_80083462
+   gate. Written through func_b31f_8016C720's pointer form instead,
+   `*(u16 *)((u8 *)&D_80083460 + 0x2) & 0x2000', this body is also 56 words
+   and 0 aligned differences -- gcc folds the two to the same `lui %hi' /
+   `lhu %lo' pair, so the listing cannot tell them apart and the symbol
+   spelling below is a readability choice only.
+
+   MEASURED AND LOAD-BEARING: the two tail stores in the order 0x84 then
+   0x85. Swapped they are 56 words and 4 aligned differences.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. 
+   THIS COPY'S OWN CONSTANT: 0x6 -> 0x4.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b15_80172AAC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    d[0x71] &= 0x7F;
+    if ((D_80083462 & 0x2000) != 0)
+    {
+        return;
+    }
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    func_800C7930(d - 0x20, (u8 *)b, 8, 0x300);
+    if ((s16)func_800A2B5C(d) != 0)
+    {
+        return;
+    }
+    *(s32 *)(p + 0x8C) = 0;
+    p[0x9A] = 0x11;
+    p[0x9B] = 0;
+    d[0x6D] -= 1;
+    func_8009C93C(d, c, *(s16 *)(d + 0x2A), 1, NULL);
+    d[0x84] = 0x7C;
+    d[0x85] = 4;
+}
 
 /* THE PARAMETER COPY HAS TO LEAVE THE PROLOGUE'S UNSCHEDULABLE PREFIX. The
    target saves and copies its four parameters in the order $s1, $s2, $s3,

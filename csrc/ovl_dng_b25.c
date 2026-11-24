@@ -27,7 +27,7 @@ s32 func_800AC5C8();
 s32 func_800AC480();
 
 s32 func_800ABDBC();
-void func_b25_80171F1C();
+void func_b25_80171F1C(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
 s32 func_800AB778();
 
@@ -91,7 +91,101 @@ extern s16 D_8006CD00[];
 extern u16 D_80082EA4;
 extern UnkDngRoom2970 D_800E2970_s[] __asm__("D_800E2970");
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80170A44);
+extern u8 D_80083498[];
+extern u8 D_80045340[];
+s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
+s32 func_800AA36C(u8 *, void *, u8 *, u8 *);
+void func_b25_80171964(u8 *, UnkVec *, u8 *, u8 *);
+extern u8 D_800E23C8[];
+void func_800D6FEC(u8 *p, u8 *b, u8 *c);
+typedef struct UnkDngB01Word48
+{
+    u32 w[0xC];
+} UnkDngB01Word48;
+extern u8 D_800E2368[];
+extern u8 D_800E2370[];
+s32 func_800644B8(s32);
+extern u8 D_800E23A0[];
+extern u8 D_800E2358[];
+extern u8 D_800E2378[];
+extern u8 D_800DCF5B;
+extern u32 D_800814A8;
+s32 func_800AA924(u8 *p, void *b, u8 *c, u8 *t);
+s32 func_800AAB10(u8 *p, void *b, u8 *c, u8 *d);
+void func_800AAF00(u8 *a, UnkVec *b, u8 *c, s32 t, void (*h)());
+s16 func_800A1C58(u8 *p);
+s16 func_8009FB34(u16 x, u16 y);
+void func_b25_801724B0();
+s32 func_b25_801731DC(u8 *a, void *b, void *c, s32 d);
+void func_b25_801730A4(u8 *, UnkVec *, u8 *, u8 *);
+void func_b25_801754F0(u8 *, UnkVec *, u8 *, u8 *);
+void func_b25_80175BE0(u8 *, UnkVec *, u8 *, u8 *);
+
+/* The banked room script's SPAWNER for the mover-follower actor, the relinked
+   twin of func_b55_80170E18 (csrc/ovl_dng_b55.c) at dngtwin 0.978 -- itself
+   built from the resident func_800D6FEC (csrc/ovl_dungeon_800D50FC.c), which
+   this copy installs DIRECTLY as the node's +0x10 driver instead of a
+   bank-local one: allocate a 0x112 node off D_80083498, seed the two
+   countdowns at +0x96 and +0xAA, park the caller's mover at +0xB0, COPY THE
+   CALLER'S 0x30-BYTE RENDERABLE TEMPLATE over the slot, overwrite the scale
+   pair, the three greys, +0x10, +0x12 and +0x6, add the 0xC bits, hand the
+   node to func_8004491C/D_80045340, dress it from D_800E23C8 and seed the
+   node's own mover from the caller's. 93 words, 0 differing, ON THE FIRST
+   COMPILE.
+
+   Six deltas from that twin, all read off the listing: the countdowns are 4
+   and at +0xAA/+0xB0 rather than 7 at +0xa8/+0xac, the greys are 0x80 not
+   0x50, the +0x10 driver is the resident func_800D6FEC itself, the facing
+   table is the resident D_800E23C8, the twin's `*(u16 *)(r + 0x22) = 0xFFF1'
+   is replaced by `*(s16 *)(r + 0x6) = -6', and the last mover halfword is
+   `b + 0xA PLUS b + 0x16' rather than b + 0xA alone.
+
+   TWO OF THE TWIN'S FACTS RE-MEASURED ON THIS BODY, ONE HELD AND ONE IS
+   FREE. The template copy's word-aligned struct holds: with
+   `u8 w[0x30]' in UnkDngB01Word48 instead of `u32 w[0xC]' cc1psx emits the
+   runtime alignment test and an lwl/lwr path and the body is 120 words /
+   105 differing. +0x12 through a `u16' lvalue holds: through `s16' the
+   constant is truncated at tree level and comes out `addiu $zero' instead of
+   `ori $zero' -- 93 words, 1 differing, that word and nothing else.
+   Measured and FREE at 93 words / 0 differing, so it is NOT the reason this
+   lands: the `*(s16 *)(r + 0x6) = -6' store moved ahead of the
+   `*(u16 *)(r + 0x14) |= 0xC'. The order below is the one the listing reads
+   literally, with the +0x6 store in the `lhu 0x14' load-delay slot. */
+void func_b25_80170A44(void *a, u8 *b, void *src, u8 *e)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *w;
+    u8 *r;
+
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        w = (u8 *)n + 0x20;
+        *(s16 *)(w + 0x96) = 4;
+        *(s16 *)(w + 0xAA) = 4;
+        n->unk_10 = (u32)func_800D6FEC;
+        *(u8 **)(w + 0xB0) = b;
+        r = (u8 *)n->unk_0C;
+        *(UnkDngB01Word48 *)r = *(UnkDngB01Word48 *)src;
+        *(s16 *)(r + 0x1E) = 0x1000;
+        *(s16 *)(r + 0x1C) = 0x1000;
+        r[0xE] = 0x80;
+        r[0xD] = 0x80;
+        r[0xC] = 0x80;
+        *(s16 *)(r + 0x10) = 0x20;
+        *(u16 *)(r + 0x12) = 0xFF80;
+        *(u16 *)(r + 0x14) |= 0xC;
+        *(s16 *)(r + 0x6) = -6;
+        func_8004491C(n, (u32)D_80045340);
+        *(u8 **)(r + 0x2C) = D_800E23C8;
+        func_80047784(r, D_800E23C8[((D_80083228 + *(s16 *)(e + 0x2A) + 0x100) >> 9) & 7], 0);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)(b + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)(b + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)(b + 0xA) + *(u16 *)(b + 0x16);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80170BB8);
 
@@ -278,11 +372,364 @@ s32 func_b25_8017165C(s32 n)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80171780);
+/* Spawn the kind-0x112 node this bank's scripts use for a thrown or placed
+   actor, the relinked twin of func_b16_80170878 (csrc/ovl_dng_b16.c) at
+   dngtwin 0.988 -- arm it with a bank-local handler and the D_800E2348 facing
+   table, dress its slot from the b/c/d arguments, pick one of three flag
+   pairs off `a & 3', and hand it to func_800A9C18 and func_800AA36C.
+   121 words, 0 differing, ON THE FIRST COMPILE.
+
+   Four deltas from that twin, all read off the listing: `p[0x13]' is 0x19,
+   the handler and the +0x8C body are this object's func_b25_80171964 and
+   func_b25_80171F1C, both facing tables are the RESIDENT D_800E2348 /
+   D_800E23A8 rather than bank-local ones, and there is an extra
+   `*(s16 *)(p + 0x9E) = 0;' ahead of the `a & 3' chain.
+
+   TWO SPELLINGS MEASURED ON THIS BODY. `*(s16 *)(p + 0x9E) = 0' must sit
+   AFTER the `r + 0x24' store, not before it: moved one statement up it is
+   121 words / 2 differing, because the target fills the `bne $v1, $v0' delay
+   slot with that `sh'. And `w = p' must be assigned at the TOP of the
+   `n != NULL' block, not just before the tail that uses `w': written late it
+   is 120 words / 84 differing, every word after the dress displaced. */
+u8 *func_b25_80171780(s16 a, u16 b, u16 c, s16 d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *p;
+    u8 *w;
+    s32 k;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        w = p;
+        n->unk_10 = (u32)func_b25_80171964;
+        p[0x13] = 0x19;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = d;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x25) = c;
+        *(u8 **)((u8 *)r + 0x2C) = D_800E2348;
+        k = a & 3;
+        *((u8 *)r + 0x24) = b;
+        *(s16 *)(p + 0x9E) = 0;
+        if (k == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x6000;
+            *(u32 *)(p + 0x1C) |= 0x6000;
+        }
+        else if (k >= 2)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        else if ((a & ~3) == 0)
+        {
+            if ((*(u32 *)(p + 0x14) & 0x200) == 0)
+            {
+                if ((func_800A6D30() & 1) != 0)
+                {
+                    func_800A48F0((s8 *)p, 1, (func_800A6D30() & 0x3F) | 0x20);
+                    *(u8 **)((u8 *)r + 0x2C) = D_800E23A8;
+                }
+            }
+        }
+        func_800A9C18(n, m, r, a);
+        w[0x9A] = 0xFF;
+        *(s8 *)(w + 0x9C) = -1;
+        *(u32 *)(w + 0x8C) = (u32)func_b25_80171F1C;
+        *(u32 *)(p + 0x1C) |= 0x40000;
+        *(s16 *)(w + 0x92) = -0x20;
+        func_800AA36C(w, m, (u8 *)r, p);
+    }
+    return p;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80171964);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80171F1C);
+/* The banked room script's IDLE handler -- the body parked at the actor's
+   +0x8C by func_b25_80171780 and func_b25_801733B4, and the one the switch
+   below re-installs through func_800AAF00. OWNS A JUMP TABLE:
+   jtbl_b25_80170808 at rodata offset 0x0, twelve entries for the +0x46 state
+   1..12, with 4 and 11 carrying the default label rather than arms of their
+   own. 357 words, 0 differing.
+
+   THE TWIN IS THE LANDED func_b01_801714D4 (csrc/ovl_dng_b01.c), 337 words,
+   at dngtwin 0.960, and its three inherited facts are the shape here too:
+   the func_b25_801726EC and func_800A9A0C tails are WRITTEN OUT at all their
+   sites rather than `goto'-ed (three and four sites), there is ONE TABLE
+   LOCAL PER DRESS SITE, and arm B's D_800814A8 is a POINTER LOCAL assigned
+   before the d + 0x2A store with the call result held in `m'.
+   The 0x1000 escape calls func_b25_801724B0 WITH NO ARGUMENTS AT ALL --
+   nothing writes $a0..$a3 before the `jal' -- which is why it is declared
+   with empty parens even though this unit defines it with four.
+
+   Deltas from that twin, all read off the listing: every facing table is a
+   RESIDENT global here (D_800E23A8 / D_800E23A0 / D_800E2348 / D_800E2358 /
+   D_800E2378) rather than a bank-local one; the +0x9A gate's dress is a
+   ONE-WAY table test, not the twin's two-way D_801740E0 / D_801740E8 pair;
+   func_800AAF00's fourth argument is (s32)D_800E2378 and not 0; the switch's
+   cases 8, 9 and 10 are three separate arms where the twin folds them into
+   one; and the 0x80000 arm hands off to func_b25_8017531C.
+
+   CASE 10 IS WRITTEN BEFORE CASE 9. The jump table sends state 9 to the
+   d + 0x1C 0x20000 gate over func_b25_80175BE0 and state 10 to the
+   D_800DCF5B gate over func_b25_801754F0, but the D_800DCF5B block is
+   emitted FIRST, so the source lists case 10 first. In numeric order the
+   two blocks swap places: 357 words, 8 aligned differences.
+
+   THE TWIN'S OWN MEASURED DELAY-SLOT FACT HOLDS EVEN THOUGH THE TABLE TEST
+   IS ONE-WAY HERE: c + 0x2C must be loaded INTO A LOCAL (`f') AHEAD OF
+   `e2', so that the block after the +0x9A gate OPENS WITH THE `lw'. The
+   target leaves the `beq $v0, $v1' delay slot at 0x80172098 EMPTY, because a
+   MEM cannot be moved into a conditional branch's delay slot (may_trap_p)
+   and the `lui' for D_800E2348 sits behind the `lw'. With the load inside
+   the comparison instead, that `lui' fills the slot: 356 words -- one SHORT
+   -- with 5 aligned differences, the `nop' and the displaced `lui' plus
+   three branch rows that realign behind them. The same figures the twin
+   measured on b01.
+
+   THE TWIN'S OTHER TWO FACTS WERE RE-MEASURED HERE AND BOTH HOLD. Writing
+   the shared tails out costs nothing and folding them costs a great deal:
+   the four func_800A9A0C sites through one `goto' label are 356 words / 127
+   aligned differences, with `p' and `d' exchanging $s0/$s1 from the
+   prologue down, and the three func_b25_801726EC sites through one label are
+   356 words / 27. One table local shared between the two dress sites rather
+   than one each is 357 words / 2 differing. `w = (u8 *)D_800814A8' as a
+   POINTER LOCAL assigned BEFORE the d + 0x2A store is load-bearing too:
+   read as `*(u8 *)(D_800814A8 + 0x9A)' at the comparison it is 358 words /
+   18 differing.
+
+   Measured and FREE at 357 words / 0 differing, so it is NOT the reason this
+   lands: the final tail's two D_80082E80 lookups through a pointer local
+   instead of inline.
+
+   THE TABLE'S CONTENT AND ITS PLACE IN .rodata ARE BOTH RIGHT. An earlier
+   version of this comment claimed the opposite -- that cc1psx emits a
+   compiler-generated jump table at function-body output time while
+   file-scope `const' data is emitted at parse time, so this unit's six
+   `D_b25_*' arrays must precede the table whatever the file order, leaving it
+   at rodata 0xd8 where the ROM wants 0x0. That conclusion is FALSE and the
+   built object disproves it. `mips-linux-gnu-objdump -t build/csrc/
+   ovl_dng_b25.o' gives .rodata = 0x23c with this layout:
+
+       0x000  this function's table (cc1psx's `$L95', no symbol)
+       0x030  jtbl_b25_80170838      0x048  jtbl_b25_80170850
+       0x068  jtbl_b25_80170870      0x084  D_b25_8017088C
+       0x0a8  jtbl_b25_801708B0      0x0c0  jtbl_b25_801708C8
+       0x118  jtbl_b25_80170920      0x138  D_b25_80170940
+       0x148  D_b25_80170950         0x180  D_b25_80170988
+       0x18c  D_b25_80170994         0x1b0  D_b25_801709B8
+       0x1e8  jtbl_b25_801709F0
+
+   which is the ROM's order exactly, arrays interleaved between tables and
+   this table first. `make check` and `make containers` pass with it landed
+   and all four containers are byte-identical.
+
+   WHY THE EARLIER MEASUREMENT WENT WRONG, because it is an easy mistake to
+   repeat: compiling the unit standalone through `asmlib.compile_asm' does
+   NOT expand the `INCLUDE_ASM' stubs, so the still-stubbed tables that
+   normally arrive through their listings' own `.section .rodata' are absent
+   and the only rodata left is the C file's own. In that reduced object the
+   arrays really do come out ahead of the table. The real build assembles the
+   maspsx-expanded source, where the stub blocks sit at their textual
+   positions and interleave, and the linker script places
+   `build/csrc/ovl_dng_b25.o(.rodata)' as ONE unit -- so the object's
+   internal order is the final order, and it is correct.
+
+   Two further claims in that earlier version are therefore also withdrawn:
+   that this contradicts `docs/dng-sweep.md' section 3 (it does not -- a const
+   array declared between two functions does land between their tables), and
+   that `ovl_dng_b05' is broken today (it is not; the containers have been
+   byte-identical with func_b05_80170E84 landed for several batches).
+
+   THE RULE THIS LEAVES: a rodata-ordering question can only be answered from
+   the REAL build or from the container, never from a standalone compile of
+   one unit. `ovlverify' measures a function's own words and cannot see
+   placement at all, which is why the build gate exists. */
+void func_b25_80171F1C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+    s32 v;
+    u16 x;
+    u8 *e;
+    u8 *e2;
+    u8 *f;
+    s32 m;
+    u8 *w;
+
+    if ((D_80083462 & 0x1000) != 0)
+    {
+        p[0x9A] = 0xE;
+        func_b25_801724B0();
+        return;
+    }
+    if (d[0x25] == 0)
+    {
+        func_800AA79C(p, b, c, d);
+        if (*(u8 **)(c + 0x2C) != D_800E23A8)
+        {
+            e = D_800E23A0;
+            *(u8 **)(c + 0x2C) = e;
+            func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        return;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x200) != 0)
+    {
+        if (*(u8 **)(c + 0x2C) == D_800E23A8)
+        {
+            p[0x9A] = 0xD;
+            p[0x9B] = 1;
+            *(u32 *)(p + 0x8C) = 0;
+            *(s32 *)(d + 0x1C) &= ~0x40000;
+            return;
+        }
+        if (func_800AA924(p, b, c, D_800E23A0) != 0)
+        {
+            return;
+        }
+    }
+    if ((D_80083462 & 0x2000) == 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if (p[0x9A] != 0xE)
+        {
+            p[0x9A] = 0xE;
+        }
+        f = *(u8 **)(c + 0x2C);
+        e2 = D_800E2348;
+        if (f != e2)
+        {
+            *(u8 **)(c + 0x2C) = e2;
+            func_80047784(c, e2[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            c[5] = 1;
+            *(s16 *)(p + 0xA2) = 0;
+            *(s16 *)(p + 0x9E) = 0;
+        }
+        *(s32 *)(d + 0x1C) |= 0x40000;
+        *(u16 *)(p + 0x98) &= ~8;
+        if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, D_800E2358) != 0)
+        {
+            return;
+        }
+        if ((*(s32 *)(d + 0x1C) & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            *(u16 *)(p + 0x92) -= *(u16 *)(p + 0xA2);
+            *(s16 *)(p + 0xA2) = 0;
+            *(s16 *)(p + 0x9E) = 0;
+            func_b25_8017531C(p, (u8 *)b, c, d);
+            return;
+        }
+        if ((s16)func_800A1C58(d) != 0)
+        {
+            func_800AAB10(p, b, c, d);
+        }
+    }
+    n = func_8009FB34(c[0x24], c[0x25]);
+    c[0x26] = n;
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x20) != 0)
+        {
+            func_800A9A0C(d);
+            return;
+        }
+        if (*(u16 *)(c + 0x24) == D_80082EA4)
+        {
+            func_b25_801726EC(p, b, c, d);
+            return;
+        }
+        if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+        {
+            if ((D_80083462 & 0x2000) != 0 &&
+                (s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+            {
+                return;
+            }
+            if ((s16)func_b25_801731DC(p, b, c, 0) == 0)
+            {
+                return;
+            }
+            *(u16 *)(d + 0x46) |= 0x4000;
+            if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+            {
+                func_b25_801726EC(p, b, c, d);
+                return;
+            }
+        }
+        switch (*(u16 *)(d + 0x46) & 0x3FFF)
+        {
+        case 8:
+            if ((s16)func_b25_80172E80(p, b, c, d) != 0)
+            {
+                return;
+            }
+            func_b25_801730A4(p, b, c, d);
+            return;
+        case 10:
+            if (D_800DCF5B != 0)
+            {
+                func_800A9A0C(d);
+                return;
+            }
+            func_b25_801754F0(p, b, c, d);
+            return;
+        case 9:
+            if ((*(s32 *)(d + 0x1C) & 0x20000) == 0)
+            {
+                func_800A9A0C(d);
+                return;
+            }
+            func_b25_80175BE0(p, b, c, d);
+            return;
+        case 5:
+        case 6:
+        case 7:
+            m = func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+            w = (u8 *)D_800814A8;
+            *(s16 *)(d + 0x2A) = m;
+            if (w[0x9A] != 0x11)
+            {
+            case 12:
+                func_800A9A0C(d);
+                return;
+            }
+        case 1:
+        case 2:
+        case 3:
+            func_800AAF00(p, b, c, (s32)D_800E2378, func_b25_80171F1C);
+            return;
+        default:
+            func_b25_801726EC(p, b, c, d);
+            return;
+        }
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) == 0)
+    {
+        if ((s8)n < 0 || (D_800E2970_s[(s8)n].unk_0C & 2) == 0)
+        {
+            if ((v & 0x430) == 0)
+            {
+                if ((s16)func_8009FD7C(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25]) != 0)
+                {
+                    *(s16 *)(d + 0x2A) =
+                        func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+                }
+            }
+        }
+    }
+}
 
 /* The banked room script's step-the-walk handler: advance the actor one cell
    of its queued path, swap in the resident D_800E2348 facing table, re-aim
@@ -754,7 +1201,140 @@ void func_b25_80173320(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_801733B4);
+/* The banked room script's fall-and-land state machine, the relinked twin of
+   func_b10_80172C54 (csrc/ovl_dng_b10.c) at dngtwin 0.976 -- itself the
+   relinked resident func_800D991C (csrc/ovl_dungeon_800D50FC.c): the same
+   p[0x9B] fallthrough switch, the same `(num << 16) / step' interpolation
+   into b->unk_0C/unk_10 and the same
+   func_800A2B04 / func_800AD594 / func_800A4ACC / func_800AD9B4 tail.
+   248 words, 0 differing, FIRST COMPILE.
+
+   Five deltas from that twin, all read off the listing: the three facing
+   tables are the RESIDENT D_800E2368 / D_800E2370 / D_800E2348 rather than
+   bank-local ones; the step counter is p + 0xAA, not p + 0x9E; case 0's
+   entry gate is `(*(s16 *)(p + 0xAA) += 1) < 2' in place of the
+   c + 0x14 0x6000 test; case 1's fall-out writes
+   `*(s16 *)(p + 0x92) = -0x10' where the twin zeroes p + 0x90; and case 3
+   adds `*(s16 *)(p + 0x9E) = 0;' after its func_80047784 call.
+
+   THREE SPELLINGS MEASURED ON THIS BODY, TWO LOAD-BEARING AND ONE FREE.
+   D_80083460 MUST GO THROUGH THE `g' POINTER LOCAL: written inline at both
+   +0x8 references it is 247 words -- one SHORT -- with 54 differing. The
+   first numerator must be THREE statements (`u = c[0x24] << 6;
+   w = *(s16 *)(b + 0x2) - 0x20; u -= w;') while the second stays inline:
+   folded into one expression it is 248 words / 1 differing. Measured and
+   FREE at 248 words / 0 differing, so it is NOT the reason this lands: the
+   `*(s16 *)(p + 0x92) = -0x10' and `*(u16 *)(p + 0x98) &= ~8' stores in the
+   other order -- the target puts the +0x92 `sh' in the `lhu 0x98'
+   load-delay slot either way.
+
+   The tail guard is nested ifs rather than an `&&' chain and the D_80082E80
+   lookups stay inline, both inherited from the twin unchanged and NOT
+   re-measured here. */
+void func_b25_801733B4(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 u;
+    s32 w;
+    s32 v;
+    u16 x;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(s16 *)(p + 0xAA) += 1) < 2)
+        {
+            break;
+        }
+        *(u8 **)(c + 0x2C) = D_800E2368;
+        func_80047784(c, D_800E2368[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(u16 *)(p + 0x98) |= 8;
+        *(s32 *)(d + 0x1C) &= ~0x8000000;
+        *(s16 *)(p + 0xAA) = 5;
+        *(s32 *)(p + 0xA4) = 0;
+        p[0x9B] += 1;
+    case 1:
+        *(s32 *)(p + 0x90) -= *(s32 *)(p + 0xA4);
+        if (*(s16 *)(p + 0xAA) != 0)
+        {
+            u = c[0x24] << 6;
+            w = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            u -= w;
+            b->unk_0C = (u << 16) / *(s16 *)(p + 0xAA);
+            w = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - w) << 16) / *(s16 *)(p + 0xAA);
+            *(s32 *)(p + 0xA4) = -func_800644B8(*(s16 *)(p + 0xAA) * 409) << 10;
+        }
+        *(s32 *)(p + 0x90) += *(s32 *)(p + 0xA4);
+        if ((*(s16 *)(p + 0xAA) -= 1) < 0)
+        {
+            *(s16 *)(p + 0x92) = -0x10;
+            *(u16 *)(p + 0x98) &= ~8;
+            *(s32 *)(d + 0x1C) |= 0x8000000;
+            p[0x9B] += 1;
+        }
+    case 2:
+        if ((*(s32 *)(d + 0x1C) & 0x8000000) != 0)
+        {
+            *(u16 *)(p + 0x98) &= ~8;
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            *(u8 **)(c + 0x2C) = D_800E2370;
+            func_80047784(c, D_800E2370[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7],
+                          0);
+            p[0x9B] += 1;
+        }
+        break;
+    case 3:
+        if (*(u8 **)(c + 0x2C) != D_800E2348)
+        {
+            *(u8 **)(c + 0x2C) = D_800E2348;
+            func_80047784(c, D_800E2348[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7],
+                          0);
+            *(s16 *)(p + 0x9E) = 0;
+        }
+        break;
+    }
+
+    if ((*(s16 *)(p + 0x96) -= 1) > 0)
+    {
+        return;
+    }
+    b->unk_14 = 0;
+    b->unk_10 = 0;
+    b->unk_0C = 0;
+    func_800A2B04(b, c[0x24], c[0x25]);
+    func_800AD594(d, 4);
+    func_800A4ACC(d);
+    g = (u8 *)&D_80083460;
+    if (*(s16 *)(g + 0x8) != 0)
+    {
+        *(u16 *)(g + 0x8) -= 1;
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) != 0)
+    {
+        if ((*(u16 *)(d + 0x46) & 0x8000) != 0)
+        {
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+    }
+    else if ((v & 0x410) == 0)
+    {
+        if ((v & 0x20000) != 0)
+        {
+            *(s16 *)(d + 0x2A) =
+                func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+        }
+    }
+    if ((s16)func_800AD9B4(c, d) > 0)
+    {
+        *(u32 *)(p + 0x8C) = (u32)func_b25_80171F1C;
+        func_800A9A04(d);
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming

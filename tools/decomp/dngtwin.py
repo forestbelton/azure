@@ -90,6 +90,38 @@ That is how both known blends were found. See "WHEN A CARVED BODY'S CALLEE
 SET SPANS TWO RESIDENT FUNCTIONS, SUSPECT A BLEND" in
 `docs/matching-levers.md`.
 
+## WHEN YOUR BODY IS SHORTER THAN ITS TWIN, REFERENCES WERE REMOVED
+
+The high-ratio pick has one failure mode and the word-count delta predicts
+it, which is why it is printed. `func_b42_80173730` is 178 words at ratio
+0.947 against a 198-word twin, and the 20 words it is MISSING are what cost
+its agent the batch's only real fight: the twin's absent arm carried THREE
+references on one pointer, so flow counts that pointer at 7 references where
+the twin had 10, `global.c`'s `allocno_compare` ranks it below its neighbour,
+and the two swap registers -- 19 aligned differences, every row that one
+exchange.
+
+**So a high ratio with a NEGATIVE delta means the relink DELETED code, and
+deleted code takes its references with it.** The first thing to try is not a
+spelling: it is to find a block the twin reaches by `goto` or by falling into
+a shared label and WRITE IT OUT TWICE. jump2 cross-jumps the copies back into
+the single block the target has, so the duplication costs no words and pays
+the references back. One duplicate, one compile.
+
+**AND AIM FOR THE NEXT POWER OF TWO, NOT FOR "MORE".** `allocno_compare`'s
+priority is `floor_log2(n_refs) * n_refs / live_length`, so references buy
+nothing until one crosses a power-of-two boundary. On that body 7 references
+over 84 insns scores `2*7/84 = 0.167` and loses to a neighbour's
+`3*9/114 = 0.237`; the duplicate took it to 8 over 90, and 8 is the first
+count whose `floor_log2` is 3, so `3*8/90 = 0.267` wins. SIX references would
+have been worth no more than seven. When `allocno_compare` is the residue,
+count to the next power of two and stop.
+
+A POSITIVE delta is the ordinary case and means the relink ADDED something --
+an arm, a state, a call. Additive deltas are cheap at any size: one body in
+this batch gained a whole new state over its twin and still landed on the
+first compile.
+
 ## HOW TO READ A RATIO
 
     1.000       same control flow, different registers or constants. The C is
@@ -309,8 +341,16 @@ def main():
         for r, otag, name, nw, same_fam, is_stub in rows:
             mark = " [CLONE -- run dngclone, do not read it]" if same_fam else ""
             mark += " [STILL A STUB -- assembly, not an answer]" if is_stub else ""
-            print("    %.3f  %-24s %4d words  csrc/ovl_dng_%s.c%s"
-                  % (r, name, nw, otag, mark))
+            # The delta is the TWIN's words minus yours, so a POSITIVE
+            # delta means YOUR body is the shorter one -- the relink deleted
+            # code and took its references with it. That is the direction
+            # that costs rows; see the section above.
+            d = nw - len(me[1])
+            if d > 0:
+                mark = (" [YOURS IS %d WORDS SHORTER -- references were "
+                        "REMOVED, see WHEN YOUR BODY IS SHORTER]" % d) + mark
+            print("    %.3f  %-24s %4d words (%+d vs yours)  "
+                  "csrc/ovl_dng_%s.c%s" % (r, name, nw, d, otag, mark))
 
 
 if __name__ == "__main__":

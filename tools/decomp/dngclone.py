@@ -279,6 +279,23 @@ def reconcile_decls(decls, unit_text):
             out.append(d)
             continue
         name = mm.group(1)
+        # AN EMPTY-PAREN DECLARATION IS DELIBERATE AND MUST SURVIVE. The
+        # rewrite below exists to stop two agents' conflicting parameter TYPES
+        # from colliding, and a K&R `f();' declares no types to conflict: in
+        # C89 it is the "unspecified arguments" form, compatible with any
+        # later prototyped definition, and an agent writes it precisely when
+        # the target CALLS the function with fewer arguments than it takes.
+        # Rewriting it to the definition's prototype turns that call into
+        # `too few arguments' and the whole landing is refused.
+        # func_b25_80171F1C (batch 13) is the case: its 0x1000 escape calls
+        # func_b25_801724B0 with NOTHING in $a0..$a3 while that function is
+        # defined in the same unit with four parameters. Passing the caller's
+        # own four parameters instead is not equivalent -- by that point they
+        # live in callee-saved registers, so the call costs four `addu's and
+        # the body measures 67 differing.
+        if re.search(r"\(\s*\)\s*;?\s*$", decl_code(d).strip()):
+            out.append(d)
+            continue
         sig = def_signature(unit_text, name)
         if sig:
             out.append(sig)
