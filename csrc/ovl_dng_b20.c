@@ -247,6 +247,14 @@ void func_b20_80173C0C();
 
    `--raw' is 3 differing: one `jal', one `lui' and one `addiu', all
    relocations. */
+s32 func_8003F270(void);
+s32 func_800A05A4(u8 *, s32, s32, s16, s32);
+s32 func_800A94A0(u8 *, u8 *, s32, u8 *);
+void func_800A2B04(UnkVec *, s32, s32);
+extern s32 D_8008346C;
+extern u8 D_8017539C[];
+void func_b20_80170920();
+
 void func_b20_8017087C(UnkNode *n, u8 *b, u8 *c)
 {
     u8 *r;
@@ -785,7 +793,109 @@ void func_b20_8017102C(u8 *p, UnkVec *b, u8 *c, u8 *d)
     func_80047784(c, e3[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b20", func_b20_80171590);
+/* The banked room script's step-the-walk handler: advance the actor one cell
+   of its queued path, swap in the D_b20_801752AC facing table, re-aim the
+   sprite, and either stop at state 0xF or hand on to func_b20_80171F58.
+   160 words, 0 differing, FIRST COMPILE.
+
+   The twin is the LANDED func_b44_801716B4 in csrc/ovl_dng_b44.c (145 words,
+   dngtwin 0.905; func_b42_80171C3C, func_b40_80171438 and func_b36_801713F8
+   are the same 145-word body).  Same prologue shape, same frame -0x38, same
+   seven saves.  Its gate orientation HOLDS: func_b20_80171F58 is called only
+   on `!(D_80083462 & 0x80) && !(c[0x14] & 0x8000)', with 0xF as the else arm,
+   which is the resident func_800D904C's gate inverted.
+
+   ITS DEVICE INVERTS AND MUST BE STRIPPED.  b44 needs the phantom zero
+   `x + ((x + x) - x - x)' on func_800A0818's first argument or `d' and `x'
+   exchange callee-saved registers; written that way HERE it is 160 words and
+   29 aligned differences -- almost exactly the 28 b44 records for having NO
+   device, with the sign flipped.  This copy wants the plain `x'.
+
+   THE 15 EXTRA WORDS ARE A DUPLICATED ARM, NOT REFERENCES.  b44 gates on
+   `(s16)t == 3' alone; this copy runs the SAME inner gate for `(s16)t == 2'
+   as well, written as two separate `if' arms with their own copies of the
+   0x80 and 0x8000 tests.  jump.c then cross-jumps their tails, which is why
+   both arms land on the one func_b20_80171F58 call and the one
+   `sb 0xF, 0x9A'.  Collapsed to `((s16)t == 2 || (s16)t == 3) && ...' it is
+   144 words and 26 aligned differences: the `||' emits ONE copy of the two
+   tests and the target has two.
+
+   This copy also stores `*(s16 *)(p + 0xA4) = t;' after the call, which b44
+   has no counterpart for.  Everything else -- the two un-hoisted
+   `d + *(s16 *)(d + 0x8A)' index reloads, the 0x300/0x3000 select written
+   inline twice, `n = d[0x71]' as an `s32' off a `lbu' -- is b44's and is
+   taken as given, not re-measured. */
+void func_b20_80171590(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 r;
+    s32 t;
+    s32 n;
+    s32 x;
+    s32 y;
+
+    if (*(s8 *)(d + 0x71) > 0 && d[0x71] > *(s16 *)(d + 0x8A))
+    {
+        if (*(u8 **)(c + 0x2C) != D_b20_801752AC)
+        {
+            *(u8 **)(c + 0x2C) = D_b20_801752AC;
+            func_80047784(c, D_b20_801752AC[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        x = c[0x24];
+        y = c[0x25];
+        func_8009A3D0(x, y, (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        r = func_800A0818(x, y, *(d + *(s16 *)(d + 0x8A) + 0x74), *(d + *(s16 *)(d + 0x8A) + 0x7C),
+                          (u16 *)(p + 0x98));
+        t = func_8009A66C((s16)r, c, d, 0x20);
+        c[0x24] = *(d + *(s16 *)(d + 0x8A) + 0x74);
+        c[0x25] = *(d + *(s16 *)(d + 0x8A) + 0x7C);
+        *(s16 *)(d + 0x8A) = *(u16 *)(d + 0x8A) + 1;
+        func_8009A21C(c[0x24], c[0x25], (*(u32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        *(s16 *)(d + 0x2A) = r;
+        if ((s16)t == 2)
+        {
+            if ((D_80083462 & 0x80) == 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+            {
+                func_b20_80171F58(p, b, c, d);
+                *(s16 *)(p + 0xA4) = t;
+            }
+            else
+            {
+                p[0x9A] = 0xF;
+            }
+        }
+        else if ((s16)t == 3)
+        {
+            if ((D_80083462 & 0x80) == 0 && (*(u16 *)(c + 0x14) & 0x8000) == 0)
+            {
+                func_b20_80171F58(p, b, c, d);
+                *(s16 *)(p + 0xA4) = t;
+            }
+            else
+            {
+                p[0x9A] = 0xF;
+            }
+        }
+        else
+        {
+            p[0x9A] = 0xF;
+        }
+        *(s32 *)(p + 0x8C) = 0;
+        *(u32 *)(d + 0x1C) |= 0x40000000;
+        if ((D_80083462 & 0x80) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        else
+        {
+            *(s16 *)(p + 0x96) = 8;
+            n = d[0x71];
+            if (n > 0)
+            {
+                *(s16 *)(p + 0x96) = 8 / n;
+            }
+        }
+    }
+}
 
 /* The banked room script's walk step, the relinked twin of the resident
    overlay's func_800D92C0 (csrc/ovl_dungeon_800D50FC.c) with three extra
@@ -1377,7 +1487,253 @@ void func_b20_80172944(u8 *p, void *b, void *c, void *d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b20", func_b20_801729A8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b20", func_b20_80172BCC);
+/* The actor's +0x9B state machine for the three-slot carry, FOUR states here:
+   state 0 picks the slot triple out of (d + 0x46) & 0x3FFF and hands it to
+   func_800A94A0, state 1 waits on func_8003F270 and then SPAWNS the 0x212
+   node, state 2 runs the c + 0x4 / c + 0x14 gates, and state 3 re-arms the
+   bank-local D_801752B4 facing table and re-installs func_b20_8017102C.
+   325 words, 0 differing, FIRST COMPILE.
+
+   OWNS jtbl_b20_80170838 (rodata +0x30, .align 3): seven live entries for
+   state 0's FIRST switch over the 0x3FFF field plus one 0x00000000 pad word
+   (7 * 4 = 0x1C, padded to 0x20).  Entries in order, cases 1..7:
+     +0x00  .Lb20_80172CF0   case 1 -> g = d + 0x8
+     +0x04  .Lb20_80172CE8   case 2 -> g = d + 0xB
+     +0x08  .Lb20_80172CE0   case 3 -> g = d + 0xE
+     +0x0C  .Lb20_80172CF8   case 4 -> the `default', g = NULL
+     +0x10  .Lb20_80172CA0   case 5 -> k = 1, falls into case 1
+     +0x14  .Lb20_80172C98   case 6 -> k = 1, falls into case 2
+     +0x18  .Lb20_80172C90   case 7 -> k = 1, falls into case 3
+     +0x1C  0x00000000       pad
+   The SECOND switch -- the (d + 0x1C) & 0x2000 `else' -- has three cases and
+   compiles to a compare chain, no table.
+
+   The twin is the LANDED func_b16_801725A4 in csrc/ovl_dng_b16.c (269 words,
+   dngtwin 0.825), itself out of func_b28_80172A58.  ALL FOUR of b16's priced
+   facts HOLD here, re-measured on this body:
+     `k' as `s32' instead of `s16'                    324 words /  8
+     the sign fixes as `if (x < 0) x = -x;'           324 words / 15
+     the compare chain's arms ascending 1, 2, 3       327 words / 11
+     `&D_80083460' direct instead of the `g2' local   324 words /  8
+   and so do both of its FREE facts: the TABLE switch's arms ascending
+   (5,1 / 6,2 / 7,3) is 325 / 0, and `D_8006DE24[g[0]].pad_11[1] == 2' with
+   no tbl/i/e locals is 325 / 0.  The locals form is kept only to match b16.
+
+   THIS COPY'S OWN DELTAS from b16, all read off the listing: state 0 has NO
+   func_800BB044 call before `p[0x9B]++'; state 2 tests `c[0x4] == 5' (b16
+   has 4, b28 3) and adds `*(s16 *)(p + 0x96) = 0x20' and `p[0x9B]++' inside
+   the gate; state 3 is b16's state 2 with a new head -- `if (*(u32 *)(g2 +
+   0xC) == 0) *(s16 *)(p + 0x96) = 0;' outside the 0xE000 gate -- and the
+   facing table is D_801752B4; and state 1 is entirely new.
+
+   STATE 1 IS THE 0x212 SPAWN AND IT IS func_b20_80173CFC's, not b16's: the
+   same func_8003FC64(0x212) / re-read of n->unk_0C / 12-byte UnkDngB20Name12
+   copy (alignment 1, which is what forces the `lwl'/`lwr' + `swl'/`swr'
+   pairs), but the func_8004491C and the renderable clear are inside
+   func_b20_8017087C, which is called with THREE arguments, the node's step
+   is func_b20_80170920, the mover's +0xA is pulled 0x1E back, and the colour
+   and scale bytes are all zero.  ONE MEASURED FACT OF ITS OWN: the pair of
+   0xA stores goes through a `w = (u8 *)n + 0x20' pointer local, as in
+   func_b20_80173CFC; written direct as `*(s16 *)((u8 *)n + 0x44)' it is
+   324 words / 7 aligned differences.
+
+   The two `func_800A56E0' calls -- 0x703 in state 1 and 0xB4 in state 3 --
+   are ONE `jal' in the listing; jump.c cross-joins them.  All nine `jal's
+   and all twelve %hi/%lo pairs were read out of the listing and checked by
+   hand. */
+void func_b20_80172BCC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    Unk8006DE24 *tbl;
+    u8 *g;
+    u8 *e;
+    u8 *m;
+    u8 *q;
+    u8 *g2;
+    u8 *w;
+    s16 k;
+    s32 i;
+    s32 x;
+    s32 y;
+    UnkNode *n;
+    UnkVec *mv;
+    UnkSlot *r;
+
+    k = 0;
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u32 *)(d + 0x1C) & 0x2000) != 0)
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 7:
+                k = 1;
+            case 3:
+                g = d + 0xE;
+                break;
+            case 6:
+                k = 1;
+            case 2:
+                g = d + 0xB;
+                break;
+            case 5:
+                k = 1;
+            case 1:
+                g = d + 0x8;
+                break;
+            default:
+                g = NULL;
+                break;
+            }
+        }
+        else
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 3:
+                g = d + 0xE;
+                break;
+            case 2:
+                g = d + 0xB;
+                break;
+            case 1:
+                g = d + 0x8;
+                break;
+            default:
+                g = NULL;
+                break;
+            }
+        }
+        if (g[0] != 0)
+        {
+            *(u16 *)(p + 0x98) &= 0xFF7F;
+            if (k != 0)
+            {
+                m = (u8 *)D_800814A8;
+                *(s32 *)(d + 0x60) = (s32)m;
+                q = *(u8 **)(m - 0x14);
+                d[0x72] = q[0x24];
+                d[0x73] = q[0x25];
+            }
+            else
+            {
+                tbl = D_8006DE24;
+                i = g[0];
+                e = (u8 *)&tbl[i];
+                if (e[0x12] == 2)
+                {
+                    m = *(u8 **)(d + 0x60);
+                    if (m != NULL)
+                    {
+                        q = *(u8 **)(m - 0x14);
+                        d[0x72] = q[0x24];
+                        d[0x73] = q[0x25];
+                    }
+                }
+                else
+                {
+                    *(s32 *)(d + 0x60) =
+                        func_800A05A4(d, c[0x24], c[0x25], *(s16 *)(d + 0x2A), 0x10);
+                    x = *(s8 *)(d + 0x72);
+                    y = *(s8 *)(d + 0x73);
+                    d[0x72] = __builtin_abs(x);
+                    d[0x73] = __builtin_abs(y);
+                }
+            }
+            if (func_800A94A0(d, g, k, p + 0x98) != 0)
+            {
+                p[0x9B] += 1;
+            }
+        }
+        else
+        {
+            *(s32 *)((u8 *)b + 0x14) = 0;
+            *(s32 *)((u8 *)b + 0x10) = 0;
+            *(s32 *)((u8 *)b + 0xC) = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            D_8008346C = 0;
+            *(u16 *)(D_800814A8 + 0xA6) -= 1;
+            func_800A4ACC(d);
+            d[0x6D] -= 1;
+            *(u32 *)(p + 0x8C) = (u32)func_b20_8017102C;
+            d[0x73] = 0;
+            d[0x72] = 0;
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+        break;
+    case 1:
+        if (func_8003F270() != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x800;
+            break;
+        }
+        *(u16 *)(c + 0x14) &= 0xF7FF;
+        p[0x9B] += 1;
+        n = func_8003FC64(0x212);
+        if (n != NULL)
+        {
+            func_b20_8017087C(n, p, (u8 *)b);
+            w = (u8 *)n + 0x20;
+            *(s16 *)(w + 0x24) = 0xA;
+            *(s16 *)(w + 0x26) = 0xA;
+            n->unk_10 = (u32)func_b20_80170920;
+            mv = n->unk_08;
+            *(s16 *)((u8 *)mv + 0xA) = *(u16 *)((u8 *)mv + 0xA) - 0x1E;
+            r = (UnkSlot *)n->unk_0C;
+            r->unk_10 = 0x60;
+            r->unk_06 = 6;
+            r->unk_1E = 0;
+            r->unk_1C = 0;
+            *((u8 *)r + 0xE) = 0;
+            *((u8 *)r + 0xD) = 0;
+            *((u8 *)r + 0xC) = 0;
+            *(UnkDngB20Name12 *)((u8 *)n + 0x9A) = *(UnkDngB20Name12 *)D_8017539C;
+            r->unk_08 = (u32)((u8 *)n + 0x9A);
+        }
+        func_800A56E0(0x703);
+        break;
+    case 2:
+        if ((*(s8 *)(c + 0x4) == 5 && (*(u16 *)(c + 0x14) & 0x1000) != 0) ||
+            (*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0x20;
+            *(u16 *)(p + 0x98) |= 0x80;
+            p[0x9B] += 1;
+        }
+        break;
+    case 3:
+        g2 = (u8 *)&D_80083460;
+        if (*(u32 *)(g2 + 0xC) == 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            *(s32 *)((u8 *)b + 0x14) = 0;
+            *(s32 *)((u8 *)b + 0x10) = 0;
+            *(s32 *)((u8 *)b + 0xC) = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            if (*(u8 **)(c + 0x2C) != D_801752B4)
+            {
+                *(u8 **)(c + 0x2C) = D_801752B4;
+                func_80047784(c, D_801752B4[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7],
+                              0);
+            }
+            if (*(u32 *)(g2 + 0xC) == 0)
+            {
+                *(u16 *)(g2 + 0xA) -= 1;
+                *(u32 *)(p + 0x8C) = (u32)func_b20_8017102C;
+                func_800A4ACC(d);
+                d[0x73] = 0;
+                d[0x72] = 0;
+                d[0x6D] -= 1;
+                *(u16 *)(d + 0x46) &= 0x7FFF;
+                func_800A56E0(0xB4);
+            }
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b20", func_b20_801730E0);
 
@@ -1886,7 +2242,123 @@ void func_b20_80173CFC(u8 *a, UnkVec *b, u8 *c, s16 d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b20", func_b20_80173E40);
+/* One semi-transparent gouraud quad for the slot, bracketed by two 0xC-byte
+   DR_MODEs: compose the slot's rotation with the camera matrix in the
+   0x1F800000 scratchpad, publish a DR_MODE on the resident OT root at
+   g->unk_00 + 0xB0, then RotAverage4 the four SVECTORs taken off the
+   payload's +0x44..+0x5B into a 0x24-byte POLY_G4 at the +0x8D0 cursor and --
+   when the OT index is in range and at least one corner is on screen -- give
+   it the payload's four colour words at +0x4..+0x13, the element's +0x1 flag
+   byte and a second DR_MODE.  312 words, 0 differing.
+
+   The twin is the LANDED func_s67_8002408C in csrc/ovl_dng_s67.c (310 words,
+   dngtwin 0.942): same signature, same UnkDng74334SP scratchpad, same
+   PushMatrix/RotMatrix/ReadRotMatrix/CompMatrix/ScaleMatrix/SetTransMatrix/
+   SetRotMatrix chain, same `- d - 6', same four on-screen tests, same
+   s->unk_0C[3] flag byte.  TWO of its facts were re-measured here and HOLD:
+   `e = (u8 *)s->unk_08;' BEFORE `sp->unk_28 = s->unk_14;' (the other order is
+   312 words / 3 aligned differences), and the four on-screen tests joined
+   with `|' and not `||' (`||' is 315 words / 20).
+
+   ITS THIRD FACT INVERTS.  The twin spells the tag as the `setPolyG4' MACRO
+   plus `setSemiTrans(q, 1)', which folds to two `sb's; this copy makes a real
+   CALL to SetPolyG4 and keeps only `setSemiTrans(q, 1)' as an `ori 0x2' at
+   +0x7.  The macro here is 310 words / 17 aligned differences.
+
+   WHAT ELSE IS THIS COPY'S OWN: the vertex halfword triples sit at +0x44
+   stride 6 (not the twin's +0x54), the four colour words at p+0x4/+0x8/+0xC/
+   +0x10 (not +0xC..+0x18), and func_80067F20's THIRD argument is 0 at both
+   sites where the twin passes 1 -- that one constant is 2 aligned
+   differences, and it was the whole residue of the first compile.
+
+   All 14 `jal's and the one relocated symbol (D_80083160) were read out of
+   the listing by hand; there is no other %hi/%lo pair in it. */
+void func_b20_80173E40(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
+{
+    UnkDng74334SP *sp = (UnkDng74334SP *)0x1F800000;
+    Unk80083160 *g;
+    MATRIX m;
+    u8 *q;
+    u8 f;
+    u8 *e;
+
+    g = &D_80083160;
+    sp->unk_24 = g->unk_00 + 0xB0;
+    sp->unk_74.t[0] = *(s16 *)((u8 *)v + 0x2);
+    sp->unk_74.t[1] = *(s16 *)((u8 *)v + 0x6);
+    sp->unk_74.t[2] = *(s16 *)((u8 *)v + 0xA);
+    s->unk_14 |= 0x8000;
+    PushMatrix();
+    sp->unk_34.vx = sp->unk_34.vy = sp->unk_34.vz = 0x2000;
+    sp->unk_A4.vx = s->unk_16;
+    sp->unk_A4.vz = s->unk_1A;
+    sp->unk_A4.vy = s->unk_18;
+    RotMatrix(&sp->unk_A4, &sp->unk_74);
+    ReadRotMatrix(&m);
+    CompMatrix(&m, &sp->unk_74, &sp->unk_54);
+    ScaleMatrix(&sp->unk_54, &sp->unk_34);
+    SetTransMatrix(&sp->unk_54);
+    SetRotMatrix(&sp->unk_54);
+    e = (u8 *)s->unk_08;
+    sp->unk_28 = s->unk_14;
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q + 0xC;
+    func_80067F20((u32 *)q, 0, 0, GetTPage(0, 0, 0, 0), 0);
+    addPrim(g->unk_00 + 0xB0, q);
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q + 0x24;
+    sp->unk_B0[0].vx = *(u16 *)(p + 0x44);
+    sp->unk_B0[1].vx = *(u16 *)(p + 0x4A);
+    sp->unk_B0[2].vx = *(u16 *)(p + 0x50);
+    sp->unk_B0[3].vx = *(u16 *)(p + 0x56);
+    sp->unk_B0[0].vy = *(u16 *)(p + 0x46);
+    sp->unk_B0[1].vy = *(u16 *)(p + 0x4C);
+    sp->unk_B0[2].vy = *(u16 *)(p + 0x52);
+    sp->unk_B0[3].vy = *(u16 *)(p + 0x58);
+    sp->unk_B0[0].vz = *(u16 *)(p + 0x48);
+    sp->unk_B0[1].vz = *(u16 *)(p + 0x4E);
+    sp->unk_B0[2].vz = *(u16 *)(p + 0x54);
+    sp->unk_B0[3].vz = *(u16 *)(p + 0x5A);
+    sp->unk_100 = RotAverage4(&sp->unk_B0[0], &sp->unk_B0[1], &sp->unk_B0[2], &sp->unk_B0[3],
+                              (s32 *)(q + 0x8), (s32 *)(q + 0x10), (s32 *)(q + 0x18),
+                              (s32 *)(q + 0x20), &sp->unk_D0, &sp->unk_D4) -
+                  d - 6;
+    if ((u32)sp->unk_100 < 0x1E0)
+    {
+        if (((u16)(*(u16 *)(q + 0x8) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0xA) + 0x20) < 0x121) |
+            ((u16)(*(u16 *)(q + 0x10) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x12) + 0x20) < 0x121) |
+            ((u16)(*(u16 *)(q + 0x18) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x1A) + 0x20) < 0x121) |
+            ((u16)(*(u16 *)(q + 0x20) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x22) + 0x20) < 0x121))
+        {
+            s->unk_14 &= 0x7FFF;
+            f = e[1];
+            s->unk_0C[3] = f;
+            if ((sp->unk_28 & 0x8) != 0)
+            {
+                if ((sp->unk_28 & 0x4) != 0)
+                {
+                    s->unk_0C[3] = f | 0x2;
+                }
+                else
+                {
+                    s->unk_0C[3] = f & 0xFD;
+                }
+            }
+            *(s32 *)(q + 0x4) = *(s32 *)(p + 0x4);
+            *(s32 *)(q + 0xC) = *(s32 *)(p + 0x8);
+            *(s32 *)(q + 0x14) = *(s32 *)(p + 0xC);
+            *(s32 *)(q + 0x1C) = *(s32 *)(p + 0x10);
+            SetPolyG4(q);
+            setSemiTrans(q, 1);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, q);
+            q = *(u8 **)(g->unk_00 + 0x8D0);
+            *(u32 *)(g->unk_00 + 0x8D0) = (u32)q + 0xC;
+            func_80067F20((u32 *)q, 0, 0, GetTPage(0, 1, 0, 0), 0);
+            addPrim(sp->unk_24 + sp->unk_100 * 4, q);
+        }
+    }
+    PopMatrix();
+}
 
 /* Walk the tag chain from `p` and hand every node to func_b20_80173E40 with a
    zero fourth argument.  21 words, 0 differing, first compile.

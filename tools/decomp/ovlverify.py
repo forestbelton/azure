@@ -268,14 +268,30 @@ def rom_target(func):
             f"no listing for {func} and no reference fallback: need both "
             f"{elf} and {ref}. Build the container first.")
 
-    addr = size = None
-    for ln in subprocess.run(
-            ["mips64-linux-gnu-nm", "-S", "--defined-only", elf],
-            capture_output=True, text=True).stdout.splitlines():
+    # The SYMBOL'S OWN SECTION, not the first section whose range contains
+    # its address.
+    #
+    # WHY, and it produced silent garbage for a whole block before it was
+    # caught on 2026-11-24. This used to find the address with `nm' and then
+    # scan `objdump -h' for the first section with `vma <= addr < vma + sz'.
+    # That is sound for town/main/slus, where sections do not overlap -- and
+    # the docstring's 763-function positive control was run there. It is WRONG
+    # for the carved DUNGEON.BIN: 115 of its 116 objects share the one RAM
+    # window at 0x80170800, so the first matching section is almost never the
+    # right object, and the fallback read another object's bytes. The symptom
+    # was `func_b20_8017523C' reporting 14 words / 14 differing with target
+    # words like 06C6AC3A that are not MIPS instructions at all, while the
+    # candidate's were correct -- and dngland's regression guard turned that
+    # into a refusal to land a good batch.
+    #
+    # `objdump -t' names the section per symbol, which disambiguates exactly.
+    addr = size = sect = None
+    for ln in subprocess.run(["mips64-linux-gnu-objdump", "-t", elf],
+                             capture_output=True, text=True).stdout.splitlines():
         p = ln.split()
-        # Skip the `.NON_MATCHING` aliases, which share an address and size.
-        if len(p) == 4 and p[2] in "tT" and p[3] == func:
-            addr, size = int(p[0], 16), int(p[1], 16)
+        # `8017523c g     F .ovl_dng_b20\t00000038 func_b20_8017523C'
+        if len(p) >= 5 and p[-1] == func and "F" in p[1:3]:
+            addr, sect, size = int(p[0], 16), p[-3], int(p[-2], 16)
             break
     if addr is None:
         raise SystemExit(f"no listing for {func}, and no such text symbol "
@@ -285,11 +301,10 @@ def rom_target(func):
     for ln in subprocess.run(["mips64-linux-gnu-objdump", "-h", elf],
                              capture_output=True, text=True).stdout.splitlines():
         p = ln.split()
-        if len(p) >= 6 and p[0].isdigit():
-            vma, lma, sz = int(p[3], 16), int(p[4], 16), int(p[2], 16)
-            if vma <= addr < vma + sz:
-                off = addr - vma + lma
-                break
+        if len(p) >= 6 and p[0].isdigit() and p[1] == sect:
+            vma, lma = int(p[3], 16), int(p[4], 16)
+            off = addr - vma + lma
+            break
     if off is None:
         raise SystemExit(
             f"{func} at {addr:08X} is in no section of {elf}. If a build is "
