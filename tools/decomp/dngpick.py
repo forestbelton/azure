@@ -182,10 +182,45 @@ def batch_yield(pick):
     return total
 
 
-def pack(rows, budget, limit):
-    """Greedy: best yield per word first, then biggest, to the word budget."""
+def pack(rows, budget, limit, cheap=None, size_first=False):
+    """Greedy to the word budget: CHEAPEST-FIRST, then most replicated.
+
+    THIS USED TO SORT BY `(-copies, -words)' AND THAT WAS MEASURED WRONG IN
+    BATCH 13. Ranking by replication is right for choosing a UNIT and says
+    nothing about whether a body is already written in landed C, so this
+    function packed each unit with its BIGGEST functions -- which meant that
+    on the rare occasion the unit ranking did reach a cheap unit, the pick
+    took that unit's expensive functions anyway.
+
+    Batch 12 (size-first) against batch 13 (cheapness-first), same five-agent
+    shape and the same word budget:
+
+        batch 12   23 functions   19 landed, 3 parked    yields 1008-1200
+        batch 13   24 functions   24 landed, 0 parked    yields  815-1027
+                                  20 of them on the FIRST COMPILE
+
+    The yields are the same to within noise and the landing rate is not, so
+    there is no trade here to balance: a function whose body already exists
+    at ratio 0.90+ is simply cheaper to land for the same words. The tiers
+    are coarse on purpose -- inside a tier, replication is still the right
+    tiebreak, because a clone is free.
+
+    `cheap` is {func: best landed-sibling ratio} from dngtwin's sweep; with
+    none, or with `size_first`, this falls back to the old ordering. See
+    docs/matching-levers.md on what the ratio does NOT tell you: it predicts
+    how much is shared, not that what differs is cheap.
+    """
+    def tier(r):
+        if size_first or not cheap:
+            return 0
+        c = cheap.get(r[3], 0.0)
+        for i, lo in enumerate((0.98, 0.95, 0.90, 0.80, 0.70)):
+            if c >= lo:
+                return i
+        return 9
+
     pick, w = [], 0
-    for r in sorted(rows, key=lambda r: (-r[0], -r[1])):
+    for r in sorted(rows, key=lambda r: (tier(r), -r[0], -r[1])):
         if w + r[1] > budget or len(pick) >= limit:
             continue
         pick.append(r)
@@ -204,6 +239,10 @@ def main():
                     help="comma-separated unit tags an agent still holds")
     ap.add_argument("--skip", default="",
                     help="comma-separated unit tags to leave alone")
+    ap.add_argument("--size-first", action="store_true",
+                    help="the pre-batch-13 ordering: pack each unit by "
+                         "descending words and ignore the twin sweep. "
+                         "Measured worse (see pack()); kept for comparison")
     a = ap.parse_args()
 
     busy = {t for t in (a.busy.split(",") if a.busy else []) if t}
@@ -248,12 +287,35 @@ def main():
             continue
         by_unit[r[4]].append(r)
 
+    cheap = cheapness()
     scored = []
     for tag, rows_u in by_unit.items():
-        pick, w = pack(rows_u, a.budget, a.limit)
+        pick, w = pack(rows_u, a.budget, a.limit, cheap, a.size_first)
         if pick:
             scored.append((batch_yield(pick), w, tag, pick))
-    scored.sort(reverse=True)
+    # RANK UNITS BY THEIR PICK'S *CHEAP* YIELD FIRST, total yield second.
+    # Packing each unit cheapest-first is not enough on its own: the unit
+    # RANKING was still pure yield, so the first run of this change picked a
+    # unit with 0 of 840 words at >= 0.90 (its cheap work had landed the batch
+    # before) while b43 sat unpicked at 74%. Expected words landed per
+    # agent-run is yield x P(land), and batch 13 measured P(land) at 24/24 for
+    # cheap work against batch 12's 19/23 for expensive -- so a unit's cheap
+    # words are worth more than its total. Units with no cheap rows score 0
+    # here and are still ordered among themselves by total yield, which is
+    # what fills a batch once the cheap work runs out.
+    def cheap_yield(pick):
+        seen, tot = set(), 0
+        for r in pick:
+            if r[5] in seen or cheap.get(r[3], 0.0) < 0.90:
+                continue
+            seen.add(r[5])
+            tot += r[0] * r[1]
+        return tot
+
+    if a.size_first or not cheap:
+        scored.sort(reverse=True)
+    else:
+        scored.sort(key=lambda t: (cheap_yield(t[3]), t[0]), reverse=True)
 
     # THE PICKED UNITS MUST NOT SHARE A FAMILY WITH EACH OTHER EITHER.
     # `--busy' guards against a family spanning THIS batch and a live agent's
@@ -277,7 +339,6 @@ def main():
         if len(chosen) >= a.n:
             break
 
-    cheap = cheapness()
     total = 0
     for y, w, tag, pick in chosen:
         total += y
