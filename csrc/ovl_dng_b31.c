@@ -130,9 +130,196 @@ typedef struct UnkDngB09A28Tbl
     UnkDngB09A28 unk_00[8];
 } UnkDngB09A28Tbl;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_801708A0);
+void func_800478B8(u8 *);
+s32 func_80065420(SVECTOR *, s32 *, s32 *, s32 *);
+extern s8 D_800DCECC[];
+extern u32 D_800814A0;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_80170AFC);
+/* The tumble-and-settle step of the thrown-slot machine: decay b's three
+   velocity components by 9/10 (the third by 8/10), wind c+0x1C/+0x1E on by
+   0x32, project both b and the slot's own vector at p+0xA8 through
+   func_80065420 (RotTransPers) and set c+0x6 from the DIFFERENCE of the two
+   depths less twice the D_800DCECC facing byte, then, once p+0x96 is under
+   10, square the sprite up and ease its three colour bytes, re-send the view
+   through func_800478B8 and raise 0x8000 in the node's -0x2 and in
+   D_800814A0 when the countdown runs out.
+
+   No xsibs twin at ratio 0.70 and none in the resident overlay; written from
+   the listing. Two facts carried in from landed code, both re-measured here:
+   the countdown test is `(s16)(--*(u16 *)(p + 0x96)) <= 0'
+   (func_b08_8017451C's form -- `lhu'/`addiu -1'/`sh'/`sll 16'/`bgtz', no
+   `sra' and no reload), and the D_800DCECC byte is `* 2', not `<< 1'.
+
+   THE SPELLING FACT, worth one word of the 151: c+0x12 takes its 0xFF80
+   through a `u16' destination. Through `*(s16 *)' the constant folds signed
+   and gcc emits `addiu $v1, $zero, -0x80' where the target has
+   `ori $v1, $zero, 0xFF80' -- 151 words, 1 differing
+   (docs/matching-levers.md :24832).
+
+   THE FRAME SHAPE IS LOAD-BEARING: func_80065420's second out-parameter is
+   EIGHT bytes (`s32 sxy[2]'), which is what puts the third and fourth at
+   sp+0x20 and sp+0x24 rather than sp+0x1C and sp+0x20. A plain `s32 sxy'
+   leaves a hole where the target has none and moves two `addiu's.
+
+   151 words, 0 differing. */
+void func_b31_801708A0(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    SVECTOR sv;
+    s32 sxy[2];
+    s32 pz;
+    s32 flag;
+    UnkVec *q;
+    s32 r;
+    s32 v;
+    s32 m;
+
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_08 += b->unk_14;
+    b->unk_0C = b->unk_0C * 9 / 10;
+    b->unk_10 = b->unk_10 * 9 / 10;
+    b->unk_14 = b->unk_14 * 8 / 10;
+    if (*(u16 *)(c + 0x1C) == 0)
+    {
+        *(s16 *)(c + 0x1E) = 0x400;
+        *(s16 *)(c + 0x1C) = 0x400;
+    }
+    v = *(u16 *)(c + 0x1E) + 0x32;
+    *(s16 *)(c + 0x1E) = v;
+    *(s16 *)(c + 0x1C) = v;
+    sv.vx = *(u16 *)((u8 *)b + 0x2);
+    sv.vy = *(u16 *)((u8 *)b + 0x6);
+    sv.vz = *(u16 *)((u8 *)b + 0xA);
+    r = func_80065420(&sv, sxy, &pz, &flag);
+    q = *(UnkVec **)(p + 0xA8);
+    sv.vx = *(u16 *)((u8 *)q + 0x2);
+    sv.vy = *(u16 *)((u8 *)q + 0x6);
+    sv.vz = *(u16 *)((u8 *)q + 0xA);
+    *(s16 *)(c + 0x6) = r - func_80065420(&sv, sxy, &pz, &flag) -
+                        D_800DCECC[((D_80083228 + *(s16 *)(p + 0x94) + 0x100) >> 9) & 7] * 2;
+    m = *(s16 *)(p + 0x96);
+    if (m < 0xA)
+    {
+        *(s16 *)(c + 0x10) = 0x20;
+        *(u16 *)(c + 0x12) = 0xFF80;
+        *(u16 *)(c + 0x14) |= 0xC;
+        v = (m << 7) / 10;
+        c[0xE] = v;
+        c[0xD] = v;
+        c[0xC] = v;
+    }
+    func_800478B8(c);
+    if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The slot's OTHER tumble step, and NOT the same function as
+   func_b23_80170874 above despite both being 151 words: they share only the
+   ~45-word tail (the two func_80065420 projections, the D_80083228 /
+   D_800DCECC facing fix-up into c+0x6, func_800478B8 and the countdown into
+   the node's -0x2 and D_800814A0). The heads are different work -- this one
+   has no velocity decay at all, squares the sprite up under a count of 0x15
+   rather than 10 and dividing by 20 rather than 10, winds c+0x1C/+0x1E on by
+   a FIVE-STEP ladder off p+0x96, and derives c+0x22 from the sprite data at
+   c+0x8. No xsibs twin at ratio 0.70; written from the listing.
+
+   Three things read off the listing rather than carried over:
+   (1) The two reads of p+0x96 are SEPARATE locals -- the ladder's `lh' is a
+   second load, not the compare's register, because the three `sb's to c
+   between them wipe cse's memory table.
+   (2) The ladder's five arms each reload `lhu 0x1E' for themselves and the
+   two `sh's are written ONCE after the chain, which is why the four taken
+   arms are `j' to a common join and the fifth falls into it.
+   (3) c+0x22 is `-(x / 0x1000) / 2' in that order: `bgez'/`addiu 0xFFF'/
+   `sra 12', then `negu', then the `srl 31'/`addu'/`sra 1' halve.
+
+   The frame is func_b23_80170874's, for the same reason: func_80065420's
+   second out-parameter is eight bytes (`s32 sxy[2]'), so the third and
+   fourth sit at sp+0x20 and sp+0x24.
+
+   151 words, 0 differing, first compile -- the tail cost nothing because
+   func_b23_80170874 had already brought func_80065420, D_800DCECC and
+   D_800814A0 into the unit. */
+void func_b31_80170AFC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    SVECTOR sv;
+    s32 sxy[2];
+    s32 pz;
+    s32 flag;
+    UnkVec *q;
+    u8 *t;
+    s32 m;
+    s32 n;
+    s32 w;
+    s32 x;
+    s32 r;
+
+    m = *(s16 *)(p + 0x96);
+    if (m < 0x15)
+    {
+        x = (m << 7) / 20;
+        c[0xE] = x;
+        c[0xD] = x;
+        c[0xC] = x;
+    }
+    n = *(s16 *)(p + 0x96);
+    if (n >= 0x2B)
+    {
+        w = *(u16 *)(c + 0x1E) + 0x2BC;
+    }
+    else if (n >= 0x28)
+    {
+        w = *(u16 *)(c + 0x1E) + 0x226;
+    }
+    else if (n >= 0x26)
+    {
+        w = *(u16 *)(c + 0x1E) + 0x190;
+    }
+    else if (n >= 0x24)
+    {
+        w = *(u16 *)(c + 0x1E) + 0xC8;
+    }
+    else if (n >= 0x1A)
+    {
+        w = *(u16 *)(c + 0x1E) + 0x64;
+    }
+    else
+    {
+        goto wound;
+    }
+    *(s16 *)(c + 0x1E) = w;
+    *(s16 *)(c + 0x1C) = w;
+wound:
+    t = *(u8 **)(c + 0x8);
+    x = (t[0xB] + *(s8 *)(t + 0x3)) * *(u16 *)(c + 0x1E);
+    *(s16 *)(c + 0x22) = -(x / 0x1000) / 2;
+    if (*(s16 *)(p + 0xA2) == 0)
+    {
+        sv.vx = *(u16 *)((u8 *)b + 0x2);
+        sv.vy = *(u16 *)((u8 *)b + 0x6);
+        sv.vz = *(u16 *)((u8 *)b + 0xA);
+        r = func_80065420(&sv, sxy, &pz, &flag);
+        q = *(UnkVec **)(p + 0xA8);
+        sv.vx = *(u16 *)((u8 *)q + 0x2);
+        sv.vy = *(u16 *)((u8 *)q + 0x6);
+        sv.vz = *(u16 *)((u8 *)q + 0xA);
+        *(s16 *)(c + 0x6) = r - func_80065420(&sv, sxy, &pz, &flag) -
+                            D_800DCECC[((D_80083228 + *(s16 *)(p + 0x94) + 0x100) >> 9) & 7] * 2;
+    }
+    else
+    {
+        *(s16 *)(c + 0x6) = 4;
+    }
+    func_800478B8(c);
+    if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_80170D58);
 

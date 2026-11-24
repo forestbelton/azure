@@ -1289,3 +1289,64 @@ New lever (1112), also found twice independently in this batch: **a block
 emitted in the wrong place at the right word count is usually an inverted
 two-arm gate.** 17 and 7 aligned differences in the two measured cases, and it
 is one character to test.
+
+## THE CLONE COLLISION, THIRD TIME, AND THE ACTUAL FIX
+
+Batch 9 gave `b12`, `b18` and `b20` to three different agents, and all three
+units hold a member of one 345-word family. Whichever landed first cloned
+into the other two, so h23 arrived to find `func_b20_8017102C` already done
+and h21 and h22 duplicated each other's 345-word work.
+
+I had "fixed" this after batch 8 and the fix was incomplete.
+`dngpick --busy` excludes families that span THIS batch and a LIVE agent's
+unit; it said nothing about two units inside the same batch. Batch 9 was
+picked with no agents running, so the guard never engaged.
+
+The picker now builds the batch by taking units in rank order and **skipping
+any whose selection would re-use a family already claimed by a unit already
+chosen**. On the next pick that rejected `s18`, `s59` and `b07` by name.
+
+Three occurrences, and the lesson is about the shape of the fix rather than
+the bug: twice I patched the case in front of me (first the clone tool, then
+the cross-batch pick) without asking what the invariant was. The invariant is
+that **a family is claimed by at most one agent, ever** -- not "not by a busy
+unit", not "not by another batch". Both earlier fixes are special cases of it
+and neither implied the other.
+
+## Batch 9 complete: 58.2%
+
+    agent  unit          landed  clones
+    h21    ovl_dng_b12      4       ?
+    h22    ovl_dng_b18      3       2
+    h23    ovl_dng_b20      4       1
+    h24    ovl_dng_b23      5       6
+    h25    ovl_dng_b35      5       3
+
+21 of 21 representatives landed, no parks. 57.3% -> 58.2%.
+
+Three of h24's five and three of h23's four had no twin at any ratio and were
+read off the listing; h23's `func_b20_80174D14` (330 words) landed using two
+idioms from a function **in its own unit that it installs as a handler**,
+which is where the twin search has ended up: read your neighbours before you
+search the project.
+
+## Two refinements to the callee-set recipe, from the agents that used it
+
+* **h24: `grep -l` on single callees is useless in this block** -- one callee
+  returns 15 to 35 files. What worked was scoring whole function bodies
+  against five to seven callees at once, which ranked the right twin first
+  both times it was tried. The intersection form in the brief works when the
+  symbols are distinctive; the scorer works generally.
+* **h25: pick the symbols the TAIL uses.** For `func_b35_801728C4` the
+  `func_800xxxxx` callees found nothing and two distinctive globals found it
+  immediately, because those are what the shared teardown touches.
+
+## A redundant typedef, noted and left alone
+
+`ovl_dng_s19`, `s20` and `s21` each define TWO typedefs of the identical
+scratchpad shape -- `UnkDng73E94SP` (which 33 other units use) and a
+locally-named second one. Both are referenced, so consolidating means
+renaming uses inside landed bodies. Pure cosmetics against a re-verification
+cost, so it is recorded here and not done. The agents' own choice to keep
+`UnkDng26478` and `UnkDng265C8` separate IS justified: same shape, different
+objects, and h13 said so explicitly.

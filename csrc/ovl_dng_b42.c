@@ -138,13 +138,82 @@ s32 func_800A56E0(s32);
 extern s32 D_8008346C;
 extern u8 D_801760CC[];
 
+typedef struct UnkDng73E94SP
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    u8 pad_06[0x12];
+    u8 *unk_18;
+    u8 pad_1C[0x4];
+    u8 *unk_20;
+    u8 pad_24[0x6C];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x28];
+    s32 unk_C0;
+} UnkDng73E94SP;
+typedef struct UnkDng74334SP
+{
+    u8 pad_00[0xC];
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    Unk3DBD0W unk_18;
+    u8 pad_1C[0x8];
+    u8 *unk_24;
+    u16 unk_28;
+    u8 pad_2A[0xA];
+    VECTOR unk_34;
+    u8 pad_44[0x10];
+    MATRIX unk_54;
+    MATRIX unk_74;
+    u8 pad_94[0x10];
+    SVECTOR unk_A4;
+    u8 pad_AC[0x4];
+    SVECTOR unk_B0[4];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng74334SP;
+typedef struct UnkDngB20Name12
+{
+    u8 b[0xC];
+} UnkDngB20Name12;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_801708D4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80170A0C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80170B48);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80170DD0);
+/* WIP func_b42_80170DD0
+   THIS COPY'S OWN CONSTANT: 0x60 -> 0x48.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b42_80170DD0(UnkNode *n, u8 *b, u8 *c)
+{
+    u8 *r;
+    UnkVec *m;
+
+    *(u8 **)((u8 *)n + 0x48) = b;
+    func_8004491C(n, (u32)D_80045340);
+    r = (u8 *)n->unk_0C;
+    *(s16 *)(r + 0x10) = 0x20;
+    *(u16 *)(r + 0x14) |= 0xC;
+    m = n->unk_08;
+    *(s16 *)((u8 *)m + 0x2) = *(u16 *)(c + 0x2);
+    *(s16 *)((u8 *)m + 0x6) = *(u16 *)(c + 0x6);
+    *(s16 *)((u8 *)m + 0xA) = *(u16 *)(c + 0xA);
+    r = (u8 *)n->unk_0C;
+    *(s16 *)(r + 0x1E) = 0x1000;
+    *(s16 *)(r + 0x1C) = 0x1000;
+    r[0xE] = 0x80;
+    r[0xD] = 0x80;
+    r[0xC] = 0x80;
+}
 
 /* The banked room script's SPAWNER for the state-9 actor: allocate a 0x112
    node off D_80083498, install func_b42_8017103C as the node's +0x10 driver,

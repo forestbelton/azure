@@ -162,6 +162,11 @@ void func_8003DB94(void *, void *, s32);
 extern u8 D_800DEC70[];
 void func_b10_80170B0C(u8 *, UnkVec *, u8 *);
 
+void func_800AD4D0(u8 *);
+void func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
+extern u8 D_801759C8[];
+extern u8 D_80175998[];
+
 s32 func_b10_8017092C(u8 *p, UnkVec *v)
 {
     UnkDng708A4SP *sp = (UnkDng708A4SP *)0x1F800000;
@@ -1186,7 +1191,127 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80173080);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80173280);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_8017380C);
+/* The 0x800D1C70..0x800D4634 state machine with a FOURTH state. Same base as
+   the resident func_800D9C7C (csrc/ovl_dungeon_800D50FC.c) and the carved
+   func_b01_80173294: the same switch on p[0x9B], the same `stop:' label
+   reached from state 0's `else' by `goto', the same func_800AAA54 bail-out,
+   the same divide-by-step-count state and the same D_80083460+0x10 /
+   handler-install tail. Five deltas, all read off the listing:
+
+   (1) The seeds have MOVED OUT of state 0 into state 1 and are driven by the
+   countdown instead: state 0 only arms `0x96 = 4', state 1 decrements and
+   scales by 19 while the counter is still positive and by 18 on the tick it
+   reaches zero. There is no `-= D_8006CCD8[k] << 14' decay and no quarter
+   decay anywhere, so state 1 does not fall through from state 0 -- it breaks.
+   (2) The D_8006CCD8 index is NOT a local: all four lookups recompute
+   `(*(u16 *)(d + 0x6A) >> 9) & 7' and each gets its own `%hi'/`%lo'.
+   (3) The counter's two reads are NOT the same form and are not
+   interchangeable. State 1 wants the compound assignment's VALUE in an s32
+   (`sll 16' AND `sra 16', because `n' is tested twice -- `blez' then
+   `bnez'); state 2's tail wants a POST-decrement, which shifts the OLD
+   `lhu' (`sll $v0' with the new value already in $v1) where a pre-decrement
+   shifts the new one.
+   (4) state 2's divide is `<< 16', not func_b01_80173294's `<< 15' -- and it
+   keeps that body's split numerators: the first three-statement
+   (`goal = c[0x24] << 6; now = b2 - 0x20; goal -= now;'), the second left
+   two-statement.
+   (5) func_800AAA54's fourth argument is the bank-local D_801759C8, and the
+   tail carries an extra arm the resident has not got: if c+0x2C still holds
+   D_80175998 it is swapped for D_80175988 and re-sent through
+   func_80047784, the same pointer-local shape as func_b23_80172664 above.
+   The installed handler is the bank-local func_b10_801717F4.
+
+   198 words, 0 differing. */
+void func_b10_8017380C(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *t;
+    s32 n;
+    s32 goal;
+    s32 now;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        func_800AD4D0(d);
+        *(s16 *)(p + 0x96) = 4;
+        p[0x9B] += 1;
+        if (d[0x28] != 0)
+        {
+            if (*(u16 *)(c + 0x14) & 0x8000)
+            {
+                *(s16 *)(p + 0x96) = 0;
+                p[0x9B] = 3;
+            }
+        }
+        else
+        {
+            goto stop;
+        }
+        return;
+    case 1:
+        n = (*(s16 *)(p + 0x96) -= 1);
+        if (n > 0)
+        {
+            b->unk_0C = D_8006CCD8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 19;
+            b->unk_10 = D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 19;
+        }
+        else if (n == 0)
+        {
+            b->unk_0C = D_8006CCD8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 18;
+            b->unk_10 = D_8006CCE8[(*(u16 *)(d + 0x6A) >> 9) & 7] << 18;
+            *(s16 *)(p + 0x96) = 6;
+            p[0x9B] += 1;
+        }
+        return;
+    case 2:
+        if (d[0x28] == 0)
+        {
+        stop:
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800AAA54(p, b, c, D_801759C8);
+            return;
+        }
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            goal = c[0x24] << 6;
+            now = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            goal -= now;
+            b->unk_0C = (goal << 16) / *(s16 *)(p + 0x96);
+            now = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - now) << 16) / *(s16 *)(p + 0x96);
+        }
+        if ((*(s16 *)(p + 0x96))-- > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        p[0x9B] += 1;
+        return;
+    case 3:
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        if (*(u8 **)(c + 0x2C) == D_80175998)
+        {
+            t = D_80175988;
+            *(u8 **)(c + 0x2C) = t;
+            func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b10_801717F4;
+        return;
+    }
+}
 
 /* A bare forwarder: one call, nothing in the delay slot, no argument set up
    at all. The empty-paren declaration is what lets it pass its own incoming

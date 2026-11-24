@@ -4,7 +4,7 @@ void func_8009A3D0(s32, s32, s32);
 s32 func_800A0818(s16, s16, s16, s16, u16 *);
 s32 func_8009A66C(u32, u8 *, u8 *, s16);
 void func_8009A21C(s32, s32, s32);
-void func_b26_80171D14(u8 *, UnkVec *, u8 *, u8 *);
+void func_b26_80171D14(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern void (*D_80174198[])(u8 *, UnkVec *, u8 *, u8 *);
 
 extern u32 D_800814A8;
@@ -96,6 +96,33 @@ s32 func_800AC7EC();
 s32 func_800AB1C0();
 void func_800AD594(u8 *, s32);
 void func_800A4ACC(u8 *);
+
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+extern u8 D_8017387C[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_80170874);
 
@@ -648,7 +675,28 @@ void func_b26_801715CC(u8 *p, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_80171D14);
+/* State 0x10 with a 0x9E countdown of 2, and hand c the bank-local
+   D_8017387C byte the facing at d+0x2A selects, through func_80047784 rather
+   than the resident twin's func_8003DB94. 27 words, 0 differing.
+   Shape is func_800D9820's (ratio 0.923): the table base is a POINTER LOCAL
+   because it is used twice -- stored at c+0x2C and indexed -- but here the
+   table is bytes and the index a plain subscript (`sra 9`, `andi 7`), not the
+   resident's byte offset into a pointer array.
+   THIS COPY'S OWN CONSTANT: 0x2 -> 0x8, 0x9e -> 0xa4.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b26_80171D14(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *t;
+
+    p[0x9A] = 0x10;
+    p[0x9B] = 0;
+    *(s16 *)(p + 0xa4) = 8;
+    t = D_8017387C;
+    *(u8 **)(c + 0x2C) = t;
+    func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b26", func_b26_80171D80);
 

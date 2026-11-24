@@ -4,7 +4,7 @@ void func_8009A3D0(s32, s32, s32);
 s32 func_800A0818(s16, s16, s16, s16, u16 *);
 s32 func_8009A66C(u32, u8 *, u8 *, s16);
 void func_8009A21C(s32, s32, s32);
-void func_b34_80172BD8(u8 *, UnkVec *, u8 *, u8 *);
+void func_b34_80172BD8(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern void (*D_80173CEC[])(u8 *, UnkVec *, u8 *, u8 *);
 extern void (*D_80174198[])(u8 *, UnkVec *, u8 *, u8 *);
 
@@ -152,6 +152,8 @@ void func_b34_8017224C(u8 *p, UnkVec *b, u8 *c, u8 *d);
 void func_b34_80172E08(u8 *p, UnkVec *b, u8 *c, u8 *d);
 s32 func_b34_80172F20(u8 *a, void *b, void *c, s32 d);
 void func_b34_80174824(u8 *p, UnkVec *b, u8 *c, u8 *d);
+
+extern u8 D_80174EC8[];
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_801708BC);
 
@@ -1099,7 +1101,24 @@ void func_b34_80172490(u8 *p, void *b, void *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b34", func_b34_80172BD8);
+/* State 0x10 with a 0x9E countdown of 2, and hand c the bank-local
+   D_80174EC8 byte the facing at d+0x2A selects, through func_80047784 rather
+   than the resident twin's func_8003DB94. 27 words, 0 differing.
+   Shape is func_800D9820's (ratio 0.923): the table base is a POINTER LOCAL
+   because it is used twice -- stored at c+0x2C and indexed -- but here the
+   table is bytes and the index a plain subscript (`sra 9`, `andi 7`), not the
+   resident's byte offset into a pointer array. */
+void func_b34_80172BD8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *t;
+
+    p[0x9A] = 0x10;
+    p[0x9B] = 0;
+    *(s16 *)(p + 0x9E) = 2;
+    t = D_80174EC8;
+    *(u8 **)(c + 0x2C) = t;
+    func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+}
 
 /* The banked room script's "same slot" branch, the relinked twin of the
    resident overlay's func_800CA788: with the D_80083460 gates clear, ask

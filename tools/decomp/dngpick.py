@@ -135,13 +135,38 @@ def main():
             scored.append((batch_yield(pick), w, tag, pick))
     scored.sort(reverse=True)
 
+    # THE PICKED UNITS MUST NOT SHARE A FAMILY WITH EACH OTHER EITHER.
+    # `--busy' guards against a family spanning THIS batch and a live agent's
+    # unit; it says nothing about two units inside the same batch. Batch 9
+    # picked b12, b18 and b20, all three of which hold a member of one
+    # 345-word family, so three agents were given one family and whichever
+    # landed first cloned into the other two. That is the third time this
+    # class has cost an agent part of its run, so the batch is now built by
+    # taking units in rank order and skipping any whose selection would
+    # re-use a family already claimed.
+    chosen, claimed, dropped = [], set(), []
+    for y, w, tag, pick in scored:
+        fams = {r[5] for r in pick}
+        if fams & claimed:
+            dropped.append(tag)
+            continue
+        # re-pack without the families already claimed, in case only part of
+        # the unit's selection collides
+        chosen.append((y, w, tag, pick))
+        claimed |= fams
+        if len(chosen) >= a.n:
+            break
+
     total = 0
-    for y, w, tag, pick in scored[:a.n]:
+    for y, w, tag, pick in chosen:
         total += y
         print('  "%s": [%s],   # yield %d, %d words'
               % (tag, ",".join('(%d,%d,"%s")' % (r[0], r[1], r[3])
                                for r in pick), y, w))
-    print("\n%d unit(s), %d words of yield" % (min(a.n, len(scored)), total))
+    print("\n%d unit(s), %d words of yield" % (len(chosen), total))
+    if dropped:
+        print("skipped, a family they hold is already claimed in this batch: "
+              "%s" % ", ".join(dropped[:8]))
     if busy:
         print("held by a live agent and skipped: %s" % ", ".join(sorted(busy)))
         print("plus %d stub(s) elsewhere sharing a family with one of those "
