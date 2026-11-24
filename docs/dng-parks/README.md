@@ -23,3 +23,29 @@ Nothing here is built. The function is still an `INCLUDE_ASM` stub in
 and put the copy count in the header. A residue on a 46-copy representative
 is worth 46 times what the word count says, and that is what decides whether
 it is worth another day.
+
+### AND A PARK IS A PARK FOR THE FAMILY, SO CHECK FOR ONE BEFORE WRITING ONE
+
+`func_s20_80026010` and `func_s21_80025BA0` are one family -- the same 170-word
+body -- and they are parked in TWO FILES, by two agents, at 23 and 16 aligned
+differences. Each file's header says the other member "is still an
+`INCLUDE_ASM`, so there was no landed sibling to read": both agents found the
+twin STUB and neither looked for a PARK on it. That is a whole agent-run of
+duplicated measurement, and it is invisible unless someone asks.
+
+So before you write a new file here:
+
+    python3 tools/decomp/dngfam.py FUNC          # every member of the family
+    ls docs/dng-parks/                           # is any member already parked?
+
+If one is, **update that file instead of writing a second one.** A park that
+moves from 23 differences to 16 with ten more rows in its table is the result;
+a second file at 16 that does not know about the first is two results that
+cannot be read together.
+
+If the figures came from two different C SHAPES -- as those two did -- say so
+in the file and keep both tables. The disagreement is evidence: those two
+parks appear to contradict each other on whether the array-ref or the integer
+address form matches, and the resolution (symbol base vs pointer-local base)
+is a spelling neither agent tested. You only see that with both tables in
+front of you.

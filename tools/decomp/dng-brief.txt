@@ -122,7 +122,47 @@ That prints a first draft against `ctx.c`'s type context. Read
 `docs/m2c-pitfalls.md` before you trust it. Get it compiling, then measure,
 then work the residue.
 
-## RUN `xsibs.py` FIRST. IT ANSWERS "HAS THIS ALREADY BEEN WRITTEN" IN ONE GO.
+## RUN `dngtwin.py` FIRST. IT SEES THE 2,500 LANDED CARVED BODIES `xsibs` CANNOT.
+
+    python3 tools/decomp/dngtwin.py --unit @UNIT@
+
+For each remaining stub it ranks the CARVED bodies already landed in
+`csrc/ovl_dng_*.c` by opcode-sequence similarity, and prints the file to open.
+A hit here is better than a resident twin by construction: a landed carved
+sibling has already absorbed the relink -- the bank-local facing table, the
+`func_80047784` byte-table call, whatever device its allocation needed -- so
+the only thing left is your delta.
+
+**WHY THIS IS A SEPARATE TOOL AND NOT A FLAG ON `xsibs`.** `xsibs` builds its
+landed side out of the REFERENCE IMAGES: `nm -n` for symbols, `objdump -h`
+for the section map, image bytes for instructions. 115 of the 116 carved
+objects are OVERLAYS SHARING ONE RAM WINDOW at 0x8017xxxx or 0x8002xxxx -- all
+at the same addresses, all in the one dungeon.bin ELF -- so `nm -n`
+interleaves 115 objects' symbols at colliding addresses and the "a function
+ends at the next symbol" rule measures from one object's symbol to a
+different object's. Measured: `xsibs`'s landed pool is 3,366 functions, of
+which 189 are carved, and all 189 are `func_lo16_*` -- the one carved segment
+outside the shared slot. Every landed body in the 115 banked objects, around
+2,500 functions, is absent from every `xsibs` run. `dngtwin` compares LISTING
+AGAINST LISTING instead, which works because splat regenerates a landed
+function's listing too.
+
+**HOW TO READ ITS RATIO.** 1.000 = same control flow, different registers or
+constants, so expect to change operands and nothing else. 0.90-0.99 = a few
+instructions' delta. 0.75-0.90 = same kind of routine, real differences,
+worth reading. Below 0.75 = a lead, read the call sequence instead.
+
+A row marked `[CLONE -- run dngclone]` is an exact `dngfam` family member: do
+not read it, land yours and let `dngclone.py` write the other. A row marked
+`[STILL A STUB]` is assembly, not an answer -- but it tells you two stubs are
+one job, which is worth knowing before you measure the same residue twice.
+
+**AND A RATIO IS A REASON TO OPEN THE C, NEVER TO COPY IT.** The twin's
+`do { } while (0)`, its spread stores and its split statements are fixes for
+ITS allocation. Strip them, compile, measure, and add back only what your own
+listing asks for. See STRIP THE TWIN'S DEVICES BEFORE YOU COPY THEM below.
+
+## THEN `xsibs.py`, FOR THE RESIDENT TWIN.
 
     python3 tools/decomp/xsibs.py @UNIT@ --min-words 18 --ratio 0.70 --top 200
 
@@ -131,10 +171,13 @@ in the project -- read out of the reference images, so it does not need a
 listing to have survived -- on the opcode stream with registers, immediates
 and jump targets masked. That is exactly what survives a relink.
 
-Two agents independently reported this as the single most useful first
-command, so it is now the first thing the brief tells you to do. The table
-above already names a twin and a ratio where one exists; `xsibs` is how you
-find the rest, and how you confirm those.
+It compares against every function landed anywhere in the project, which for
+the RESIDENT overlays -- dungeon.bin's own 0x800894A0 code, town.bin,
+main.bin, slus_006.14 -- is exactly right and is what it is for. Two agents
+independently reported it as the most useful first command and for eleven
+batches it was. It is now the SECOND command, because the pool it cannot
+reach is the one that has already absorbed the relink. Run both: a function
+with no carved sibling often has a resident one, and the reverse.
 
 **`--min-words 18`, NOT THE 40 THE TOOL'S OWN EXAMPLES USE.** A 22-word
 forwarder has a twin too: `func_b28_80174460` and `func_b28_801744B8` both
@@ -142,6 +185,9 @@ came back "none found" in a brief rendered at 40 and both sit at ratio 0.900
 to a landed 24-word body. The floor costs one flag and hid two twins.
 
 **WHEN `xsibs` NAMES A RESIDENT TWIN, INVERT THE INDEX BEFORE USING IT.**
+(`dngtwin` now does this for you in the common case. This grep still finds
+the sibling whose own ratio to you is below `dngtwin`'s floor but which names
+your resident twin in its header, so it is the fallback, not a duplicate.)
 Three agents have now found that the resident function `xsibs` names is the
 WRONG body to start from, because a carved sibling has already absorbed the
 relink -- and one grep finds it, because every carved landing names its own
@@ -458,7 +504,29 @@ hardest of the five. Write your best body to
 
     docs/dng-parks/<func>.c
 
-**the moment it is your best, not at the end of your run.** `/tmp` is not
+**BUT CHECK WHETHER A FAMILY MEMBER IS ALREADY PARKED FIRST.**
+
+    python3 tools/decomp/dngfam.py <func>     # every member of the family
+    ls docs/dng-parks/                        # is any member already there?
+
+`func_s20_80026010` and `func_s21_80025BA0` are one family -- the same
+170-word body -- and they sit in TWO park files, written by two agents, at 23
+and 16 aligned differences. Each file's header says the other member "is
+still an `INCLUDE_ASM`, so there was no landed sibling to read": both agents
+found the twin STUB and neither looked for a PARK on it. That is an
+agent-run of duplicated measurement. If a member is already parked, UPDATE
+THAT FILE -- new body, new figure, your rejected spellings appended to its
+table -- rather than writing a second one. Landing either member lands both.
+
+If your figure came from a different C SHAPE than the existing park's, keep
+BOTH tables and say which shape each belongs to. The disagreement is
+evidence: those two parks look like they contradict each other on whether the
+array-ref or the integer address form matches, and the resolution -- one
+tested the array ref off the SYMBOL, the other off a POINTER LOCAL hoisted
+into the preheader -- is a third spelling neither agent tried. You only see
+that with both tables in front of you.
+
+Write the file **the moment it is your best, not at the end of your run.** `/tmp` is not
 durable -- a cleanup once took four finished functions and five unit copies
 with it. Rewrite that file each time your best improves. Do not `git add` it.
 A parked function must NOT be left spliced into your copy: revert it to its

@@ -1,5 +1,55 @@
 /* PARK: func_s20_80026010, csrc/ovl_dng_s20.c, agent-h13, 2026-11-23.
 
+   !! THIS FUNCTION IS PARKED TWICE. THE OTHER PARK IS BETTER. !!
+   Dispatcher note, 2026-11-23, batch 12.
+
+   `docs/dng-parks/func_s21_80025BA0.c' is THE SAME BODY -- one dngfam family,
+   2 members, 170 words each -- parked separately by a later agent and
+   reaching 16 ALIGNED DIFFERENCES against this file's 23. Landing either
+   member lands both, via `dngclone.py'. So the figure to beat is 16 and the
+   body to start from is that file's.
+
+   NEITHER AGENT KNEW OF THE OTHER. Both headers say the twin member "is
+   still an INCLUDE_ASM, so there was no landed sibling to read" -- each saw
+   the twin STUB and neither thought to look for a PARK on it. That is the
+   duplication this directory's README now has a rule against: a park is a
+   park for a FAMILY, so run `dngfam.py FUNC' and grep this directory for
+   every member's name BEFORE writing a new file.
+
+   READ THIS FILE ANYWAY; IT IS NOT REDUNDANT. It reached a worse figure by a
+   DIFFERENT C SHAPE, so its measurements are complementary rather than
+   superseded:
+
+     * the full `-da' / local-alloc analysis of the register tie is HERE and
+       nowhere else: the `combine_regs' chain on `c', per-pseudo
+       `qty_n_refs' and `qty_death - qty_birth', and the arithmetic for what
+       it would take to flip the sort,
+     * both free-reference devices measured and both COSTING words on this
+       shape (`do { } while (0)' 175 words / 63,55,53,42,42,42;
+       `__asm__("" ::"r"(m))' 174 words / 72 at four positions), with the
+       mechanism: a scheduling barrier anywhere in that loop body moves the
+       giv as well,
+     * the duplicated-tail recipe measured and blocked for a stated reason --
+       the target stores +0x4C in the `bgez' DELAY SLOT, ahead of the branch,
+       and jump2 cross-joins tails after the join.
+
+   BUT EVERY NUMBER HERE WAS MEASURED ON THIS SHAPE, NOT ON THE 16-DIFFERENCE
+   ONE. Carrying one across without re-measuring is exactly the habit the
+   brief's RE-MEASURE A PLAUSIBLE FACT section was written about, and a park's
+   numbers are the most plausible-looking facts available.
+
+   ONE APPARENT CONTRADICTION BETWEEN THE TWO PARKS, AND ITS RESOLUTION --
+   which may be the lever neither agent reached. This file states the integer
+   address form is LOAD-BEARING: `(u32)D_80026478' with an explicit `<< 3',
+   and records plain array refs `&D_80026478[...]' costing 167 words / 68
+   differing. The s21 park reaches 16 USING plain array refs, `t[i]'. Those do
+   not conflict: this file tested the array ref off the SYMBOL, and the s21
+   body uses it off a POINTER LOCAL assigned inside the loop, which loop.c
+   hoists into the preheader -- that park lists the preheader position as one
+   of its four load-bearing facts. The third combination, the integer form off
+   a pointer local, is tested in neither file.
+
+
    TARGET 170 words. BEST BUILT 170 words, 23 ALIGNED DIFFERENCES
    (tools/decomp/aligndiff.py; ovlverify also reports 23). 2 members, 170
    words each, 340 words total (tools/decomp/dngfam.py: func_s20_80026010,
