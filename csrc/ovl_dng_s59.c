@@ -54,6 +54,11 @@ UnkNode *func_8003FD64(s32, void *);
 s32 func_s59_80024598(u8 *p, UnkVec *v);
 void func_s59_800247E8(u8 *p, UnkVec *v);
 
+typedef struct UnkDngS67Dirs
+{
+    u8 unk_00[0x20];
+} UnkDngS67Dirs;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s59", func_s59_8002406C);
 
 /* Walk the tag chain from `p` and hand every node to func_s59_8002406C with a
@@ -245,9 +250,93 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s59", func_s59_800249E0);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s59", func_s59_80024AB4);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s59", func_s59_80024B98);
+/* Spend one frame of the payload's +0x3A life counter, raise the bank's
+   D_80025FF4 busy flag, fade all four of the record's 3-byte colours at
+   +0xC..+0x1A in proportion to the counter over its +0x3C limit, and kill the
+   node when the counter runs out.  57 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s59", func_s59_80024C7C);
+   The twin is csrc/ovl_dungeon_800D50FC.c's func_800D6804, which is the same
+   fade and the same `D_800814A0 |= 0x8000' kill tail over ONE colour at a
+   +0x32/+0x34 counter pair; the relink moves the counter to +0x3A/+0x3C and
+   turns the three scalings into a four-element loop.
+
+   THE TWO SPELLING FACTS, both measured on this body:
+
+     The counter decrement is SPLIT AROUND the D_80025FF4 store -- `t = load
+     - 1; D_80025FF4 = 1; store t;' -- so the load is live across the global
+     store and block 0 needs a THIRD scratch register, which takes $a0 away
+     from `p' and is exactly the target's `addu $a2, $a0, $zero' parameter
+     copy.  Written as one statement (`*(s16 *)(p + 0x3A) -= 1;' either side
+     of the store) it is 56 words / 57 differing -- one word SHORT, with
+     every register shifted down one.  Probably macro residue: a tick macro
+     whose store the flag set interleaves.
+
+     The loop is indexed, not a walking pointer: `p[i * 4 + 0xC]' keeps the
+     giv's base at `p' with displacements 0xC..0x1E, where `c = p; ...;
+     c += 4' lets gcc bias the base to `p + 0xE' and store at -2/-1/0
+     (56 words / 57 differing).
+   THIS COPY'S OWN CONSTANT: 0x3a -> 0x38 at all 6 sites, 0x3c -> 0x3a at all 3 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s59_80024B98(u8 *p)
+{
+    s32 i;
+    u16 t;
+
+    t = *(u16 *)(p + 0x38) - 1;
+    D_80025FF4 = 1;
+    *(u16 *)(p + 0x38) = t;
+    for (i = 0; i < 4; i++)
+    {
+        p[i * 4 + 0xC] = p[i * 4 + 0x1C] * *(s16 *)(p + 0x38) / *(s16 *)(p + 0x3a);
+        p[i * 4 + 0xD] = p[i * 4 + 0x1D] * *(s16 *)(p + 0x38) / *(s16 *)(p + 0x3a);
+        p[i * 4 + 0xE] = p[i * 4 + 0x1E] * *(s16 *)(p + 0x38) / *(s16 *)(p + 0x3a);
+    }
+    if (*(s16 *)(p + 0x38) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The same tick as func_s67_80024834 for a record with ONE 3-byte colour: one
+   frame off the +0x3A counter, D_80025FF4 raised, the slot's +0xC..+0xE faded
+   as `counter * 0x80 / limit', the +0x8C byte counter stepped down, the
+   slot's +0x1A spun by the payload's +0x40, and the node killed when the
+   counter runs out.  37 words, 0 differing.
+
+   Landed off func_s67_80024834's two facts, already in this unit: the
+   decrement is split around the D_80025FF4 store for the same reason, and the
+   three colour bytes are ONE CHAINED assignment written `[0] = [1] = [2]',
+   which is what emits 0xE, 0xD, 0xC in that order.
+
+   THIS BODY'S OWN FACT: the quotient also goes through a local, so the whole
+   `sll 16 / sra 9 / div / mflo' chain lands BEFORE the D_80025FF4 store.
+   With the division written inline at the three-byte assignment the store
+   sinks no further than the second insn: 37 words, 18 differing.
+   THIS COPY'S OWN CONSTANT: 0x3a -> 0x38 at all 3 sites, 0x3c -> 0x3a, 0x8c -> 0x84, 0x40 -> 0x44.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s59_80024C7C(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    u16 t;
+    s32 c;
+
+    t = *(u16 *)(p + 0x38) - 1;
+    c = ((s16)t << 7) / *(s16 *)(p + 0x3a);
+    D_80025FF4 = 1;
+    *(u16 *)(p + 0x38) = t;
+    s->unk_0C[0] = s->unk_0C[1] = s->unk_0C[2] = c;
+    p[0x84] -= 1;
+    s->unk_1A += *(u16 *)(p + 0x44);
+    if (*(s16 *)(p + 0x38) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s59", func_s59_80024D10);
 
