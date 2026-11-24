@@ -1515,9 +1515,27 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b20", func_b20_801729A8);
      the sign fixes as `if (x < 0) x = -x;'           324 words / 15
      the compare chain's arms ascending 1, 2, 3       327 words / 11
      `&D_80083460' direct instead of the `g2' local   324 words /  8
-   and so do both of its FREE facts: the TABLE switch's arms ascending
-   (5,1 / 6,2 / 7,3) is 325 / 0, and `D_8006DE24[g[0]].pad_11[1] == 2' with
-   no tbl/i/e locals is 325 / 0.  The locals form is kept only to match b16.
+   and so does its FREE fact that `D_8006DE24[g[0]].pad_11[1] == 2' with no
+   tbl/i/e locals is 325 / 0.  The locals form is kept only to match b16.
+
+   CORRECTION, from agent-h91 on func_b22_8017472C (the identical seven-arm
+   shape over jtbl_b22_80170850).  This comment used to claim that the TABLE
+   switch's arms ascending (5,1 / 6,2 / 7,3) is a MEASURED FREE FACT at
+   325 / 0.  That is free to the TOOLS and WRONG IN THE CONTAINER.  The three
+   `k = 1' arms are each a bare `li' plus a `j', so nothing but their
+   ADDRESSES distinguishes them and only the jump table carries those -- and
+   ALL THREE tools are blind to that: ovlverify and aligndiff MASK the `j'
+   target, and relcand compares the call SET, not the sequence, so two
+   exchanged arms are the same set (measured on func_b22_8017472C: the
+   permuted spelling reads `ok (8 data symbols, 12 calls)', with relcand
+   proven live on that body by a callee swap, which it flags by name): compiling the unit standalone and
+   reading the emitted `.word $L...' list shows ascending puts entry[4] FIRST
+   where descending puts it THIRD, permuting two of the seven entries, while
+   both spellings read 325 words / 0 differing, 0 aligned differences
+   and a clean relcand.
+   The code below keeps the DESCENDING spelling and is correct; it is only
+   the free claim that was wrong.  Do not take the arms' order from a clean
+   measurement on this shape -- take it from the entry addresses.
 
    THIS COPY'S OWN DELTAS from b16, all read off the listing: state 0 has NO
    func_800BB044 call before `p[0x9B]++'; state 2 tests `c[0x4] == 5' (b16

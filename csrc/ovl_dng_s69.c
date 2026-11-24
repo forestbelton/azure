@@ -28,7 +28,7 @@ typedef struct UnkDng264D4SP
 } UnkDng264D4SP;
 void func_s69_800245A0(u8 *, UnkVec *, u8 *, u8 *);
 
-void func_s69_800260D4(u8 *, UnkVec *, UnkSlot *);
+void func_s69_800260D4(u8 *p, UnkVec *v, UnkSlot *s);
 UnkNode *func_s69_8002614C(s16 x, s16 y, s16 z, s16 a, s16 leaf);
 extern u8 D_80045340[];
 extern u8 D_800287B0[];
@@ -340,7 +340,44 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s69", func_s69_80025D28);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s69", func_s69_80025FCC);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s69", func_s69_800260D4);
+/* The +0x10 step of the 0x202 burst node this bank's recursive spawner parks:
+   bump the bank's u16 counter, fade the slot's RGB triple at +0xC..+0xE by one
+   quarter each, and raise the kill bit on the node flag at -0x2 and on
+   D_800814A0 once the red channel drops under 4.
+   30 words, 0 differing, FIRST COMPILE.
+   TWIN: the landed func_s21_800248E4 in csrc/ovl_dng_s21.c (dngtwin 0.967,
+   30 words). Deltas: this bank's counter, `>> 2' for its `>> 3' and a guard
+   of 4 for its 8. Of its three stated facts:
+     - HOLDS: the three fades are SEPARATE statements, not a chain. Written
+       `[0] = [1] = [2] = [0] - ([0] >> 2)' it is 26 words / 17 aligned
+       differences -- the chain has one value where the target has three
+       lbu/srl/subu runs.
+     - HOLDS: the guard RE-READS the byte (a second `lbu 0xC'). Guarding on
+       the computed value through an `s32' local is 29 words / 18 aligned
+       differences.
+     - FREE, so its reason is weaker than stated: it says `>> 2' and not
+       `/ 4' because the bytes are u8 and the shift needs no sign
+       correction. Both spellings are 30 words / 0 -- an unsigned divide by
+       a power of two is the same `srl', so nothing selects the shift.
+   This copy's own measured facts: the counter bump must be the FIRST
+   statement (after the three fades it is 33 words / 23 aligned differences),
+   and the kill tail is FREE as an `if' or as an early `return' with the
+   teardown flat (30 / 0 either way).
+   The third parameter is `UnkSlot *', which is what csrc/ovl_dng_s69.c
+   already declares for this family's other member; as `u8 *c' with
+   `c[0xC]' casts it is also 30 words / 0. */
+void func_s69_800260D4(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    D_80027452++;
+    s->unk_0C[0] -= s->unk_0C[0] >> 2;
+    s->unk_0C[1] -= s->unk_0C[1] >> 2;
+    s->unk_0C[2] -= s->unk_0C[2] >> 2;
+    if (s->unk_0C[0] < 4)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* The recursive burst at the bank's D_800287B0 aim point. Called with
    leaf != 0 it spawns ONE 0x212 node at (x, y, z) with func_s69_800260D4 as

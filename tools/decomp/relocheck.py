@@ -130,7 +130,20 @@ def canon(sym):
 def calls(text):
     return collections.Counter(canon(m.group(1)) for m in CALL.finditer(text))
 # Resident code starts at 0x8003c9f8; nothing below that can be a bank table.
-LOW = 0x8003C9F8
+# The lowest address any LOADED image covers.  This was 0x8003C9F8 -- the
+# resident CODE start -- until agent-h95 hand-audited an s-unit in batch 23 and
+# found this filter was excluding four of its five data symbols.  The s-objects
+# load at vram 0x80024000, so their BANK-LOCAL data lives at 0x80026xxx and
+# 0x80027xxx, BELOW the old threshold: every s-unit's table references were
+# being silently skipped by both this tool and relocheck.py, which is exactly
+# the wrong-bank-table defect they exist to catch.
+#
+# The exclusion itself is still right -- an address in no loaded image is one
+# splat INFERRED from a lui/lhu pair, and the C that matches is usually a bare
+# constant -- but the boundary is the lowest loaded VRAM, not the resident code
+# start.  The original false alarm that motivated the filter (D_80013714 at
+# 0x80013714) is still below this and still excluded.
+LOW = 0x80024000
 
 
 def interesting(name):
