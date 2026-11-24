@@ -444,10 +444,12 @@ def main():
                 # the twin has `< 2' -- the twin's spelling measures 217/7, and
                 # an agent sent hunting for a missing statement would not have
                 # looked at the branch mnemonic.
-                mark = (" [1 WORD SHORTER -- most likely a COMPARE CONSTANT, "
-                        "not a missing statement: read the branch mnemonic, "
-                        "bgez/bltz/blez/bgtz/beqz/bnez are one word and a "
-                        "non-zero compare is two]") + mark
+                mark = (" [1 WORD SHORTER -- TWO candidates, both one word: "
+                        "a COMPARE CONSTANT against zero (bgez/bltz/blez/"
+                        "bgtz/beqz/bnez cost one word, a non-zero compare "
+                        "two), or a SINGLE STORE whose value is already in a "
+                        "register (an `sh $zero' is one word). Check the "
+                        "branch mnemonics AND the store list]") + mark
             elif d > 1:
                 mark = (" [YOURS IS %d WORDS SHORTER -- find the MISSING "
                         "STATEMENTS first, see WHEN YOUR BODY IS SHORTER]"
