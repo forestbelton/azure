@@ -1313,16 +1313,28 @@ that **a family is claimed by at most one agent, ever** -- not "not by a busy
 unit", not "not by another batch". Both earlier fixes are special cases of it
 and neither implied the other.
 
-## Batch 9 complete: 58.2%
+## Batch 9: 58.2% with FOUR of five agents in
 
     agent  unit          landed  clones
-    h21    ovl_dng_b12      4       ?
     h22    ovl_dng_b18      3       2
-    h23    ovl_dng_b20      4       1
+    h23    ovl_dng_b20      3       1    (its 4th was done by a clone)
     h24    ovl_dng_b23      5       6
     h25    ovl_dng_b35      5       3
+    h21    ovl_dng_b12      -       -    STILL RUNNING
 
-21 of 21 representatives landed, no parks. 57.3% -> 58.2%.
+16 representatives landed, no parks. 57.3% -> 58.2%.
+
+**CORRECTION.** The first version of this section said "21 of 21
+representatives landed" and gave h21 four landings with a `?` for its clones.
+That was wrong: h21 had not handed back, I never ran `dngland` on it, and
+three of its four functions are still `INCLUDE_ASM` in `csrc/ovl_dng_b12.c`.
+It has three landed in its own copy and is still working the fourth
+(`func_b12_80173FDC`, 364 words, no twin at any ratio, 132 aligned
+differences at last report).
+
+I wrote a `?` into a results table instead of going to look, and then
+summarised the table as complete. The `?` was the signal and I summarised
+past it.
 
 Three of h24's five and three of h23's four had no twin at any ratio and were
 read off the listing; h23's `func_b20_80174D14` (330 words) landed using two
