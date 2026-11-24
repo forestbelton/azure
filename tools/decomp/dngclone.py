@@ -195,6 +195,22 @@ def fix_forward_decl(text, func):
     rather than deleting it, because something in the unit may need the
     forward reference, and the caller re-verifies every function the unit
     defines afterwards.
+
+    EXCEPT AN EMPTY-PAREN DECLARATION, WHICH IS LEFT ALONE. In C89 `f();'
+    declares unspecified arguments, so it does not conflict with a later
+    prototyped definition and it is not stale -- an agent writes it precisely
+    when the target CALLS the function with fewer arguments than it takes, and
+    rewriting it to the real prototype turns that call into `too few
+    arguments' and refuses the whole landing.
+
+    func_b38_80171138 (batch 15) is the case: its 0x1000 escape calls
+    func_b38_80171670 with NOTHING in $a0..$a3, so the four incoming registers
+    reach it untouched, and func_b38_80171670's own definition -- four
+    parameters -- lands in the SAME dngland call. With the declaration
+    rewritten the call site costs four `move's and the unit does not compile.
+    This is the same hazard reconcile_decls had, reached from the other
+    direction: there the K&R declaration met an existing definition, here it
+    meets one arriving beside it.
     """
     sig = def_signature(text, func)
     if not sig:
@@ -205,6 +221,8 @@ def fix_forward_decl(text, func):
     for d in decl_block(text):
         mm = DECLARED.search(d)
         if mm and mm.group(1) == func and " ".join(d.split()) != sig:
+            if re.search(r"\(\s*\)\s*;?\s*$", decl_code(d).strip()):
+                continue
             block = block.replace(d, sig, 1)
             changed = True
     return text[:start] + block + text[end:] if changed else text
