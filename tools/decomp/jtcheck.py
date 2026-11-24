@@ -36,6 +36,25 @@ A disagreement is reported rather than resolved: the bound can be absent when
 the index is already known in range, and the zero word can be a legitimate
 entry if some arm really is at address 0 (it never is here).
 
+## THE "N DISTINCT TARGET(S)" COLUMN IS NOT AN ARM-ORDER TEST
+
+It counts how many labels the table points at, i.e. how much SHARING there is
+between entries.  It says nothing about whether an arm's CODE can be told apart
+after cross-joining, and the dispatcher wrongly used it that way in two batch-26
+briefs.
+
+agent-h109 disproved it on a 7-entry table whose targets were ALL DISTINCT:
+permuting two arms measured 434 words / 0 differing under `ovlverify' and 0
+aligned differences under `aligndiff', while a standalone `tools/cdkgcc -S'
+showed the emitted table's last two entries swapped.  Those arms were each just
+`j <label>' plus `li 1', and both tools mask a `j' target field.
+
+The real test is PER ARM: does this arm contain a distinguishing instruction
+other than a masked `j'/branch target?  Walk each arm's block to its first
+`j'/`jal'/branch and compare the word sequences with `j' targets masked.  An
+arm that reduces to a masked jump plus instructions identical to another arm's
+is invisible to all three tools no matter how distinct its table entry is.
+
 Usage:
     python3 tools/decomp/jtcheck.py                      # every unit
     python3 tools/decomp/jtcheck.py ovl_dng_b55          # one unit

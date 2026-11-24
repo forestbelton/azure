@@ -168,6 +168,14 @@ typedef struct UnkDngB36TriSet
     UnkDngB36Tri unk_00[3];
 } UnkDngB36TriSet;
 
+/* Forward declarations added in batch 26: each of these is called ABOVE its
+ * own definition in this file and had NO declaration in scope, so K&R C gave
+ * it an implicit `int (...)'.  The emitted code happened to be identical --
+ * all arguments are pointers and no result is used -- so ovlverify read 0 and
+ * relcand read ok, which is why this went unnoticed.  tools/decomp/declcheck.py
+ * finds it; see docs/matching-levers.md. */
+void func_b32_80171684(u8 *p, UnkVec *b, u8 *c, u8 *d);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80170908);
 
 u8 *func_b32_80170AF4(s16 a, u16 b, u16 c, s16 d)

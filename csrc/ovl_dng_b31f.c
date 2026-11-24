@@ -161,6 +161,14 @@ s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
 void func_b31f_8016F2E0(u8 *p, UnkVec *b, u8 *c);
 void func_b31f_80172160(void);
 
+/* Forward declarations added in batch 26: each of these is called ABOVE its
+ * own definition in this file and had NO declaration in scope, so K&R C gave
+ * it an implicit `int (...)'.  The emitted code happened to be identical --
+ * all arguments are pointers and no result is used -- so ovlverify read 0 and
+ * relcand read ok, which is why this went unnoticed.  tools/decomp/declcheck.py
+ * finds it; see docs/matching-levers.md. */
+void func_b31f_8016DAA4(u8 *p, void *b, void *c, void *d);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A908);
 
 /* The octant classifier, 53 words, 0 differing: the second member of
@@ -1939,7 +1947,7 @@ void func_b31f_8017021C(void)
    * `r = 0' MUST BE THE GATE'S `else' ARM, not an initialiser above the
      gate: `r = 0;' before the `if' is 96 words and 7 aligned differences.
 
-   No jump table and no rodata of its own -- the listing opens at `glabel'. 
+   No jump table and no rodata of its own -- the listing opens at `glabel'.
    THIS COPY'S OWN CONSTANT: 0xae -> 0xb0.
    The rest of this comment is the family representative's and its other
    numbers are its own.
@@ -2260,7 +2268,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80170C3C);
    then 0x96 (swapped, 7 words / 4 aligned differences -- only the second
    store reaches the delay slot).
 
-   No jump table and no rodata of its own -- the listing opens at `glabel'. 
+   No jump table and no rodata of its own -- the listing opens at `glabel'.
    THIS COPY'S OWN CONSTANT: 0x9b -> 0x9a.
    The rest of this comment is the family representative's and its other
    numbers are its own.
@@ -2559,7 +2567,7 @@ void func_b31f_80171D90(u8 *p, UnkVec *b)
    0xFFFE0000 in 80171E60. No symbol differs between them, so nothing
    relinked.
 
-   No jump table and no rodata of its own -- the listing opens at `glabel'. 
+   No jump table and no rodata of its own -- the listing opens at `glabel'.
    THIS COPY'S OWN CONSTANT: 0x10000 -> 0xfffe0000.
    The rest of this comment is the family representative's and its other
    numbers are its own.

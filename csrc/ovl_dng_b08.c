@@ -1443,9 +1443,20 @@ void func_b08_80172830(u8 *p, UnkVec *b, u8 *c, u8 *d)
    `sh 0x98($s3)' into the delay slot and every table arm shifts.
 
    THE INNER (three-case) SWITCH'S ARMS MUST BE WRITTEN 3, 2, 1.  Ascending
-   1, 2, 3 is 341 words / 265 (the twin's 318/10).  The TABLE switch's own arm
-   order is FREE both ways: written 5/1, 6/2, 7/3 instead of 7/3, 6/2, 5/1 it
-   is also 339 / 0 differing, so that one is NOT a reason this lands.
+   1, 2, 3 is 341 words / 265 (the twin's 318/10).
+
+   CORRECTION, batch 26.  This comment used to say the TABLE switch's own arm
+   order is FREE both ways, because writing 5/1, 6/2, 7/3 instead of
+   7/3, 6/2, 5/1 also measures 339 / 0 differing.  That is NOT MEASURABLE, not
+   free, and the distinction matters: agent-h109 permuted two arms of the
+   identical shape in ovl_dng_b37 and measured 434 / 0 under ovlverify AND 0
+   aligned differences under aligndiff while a standalone `tools/cdkgcc -S'
+   showed the emitted table's last two entries SWAPPED.  Both tools mask a
+   `j' target field, so three arms that each reduce to `j <label>' plus
+   `li 1' are indistinguishable to them however distinct their table entries
+   are.  The DESCENDING order kept below is correct -- dungeon.bin is
+   byte-identical, which is the only check that can see a table's words -- but
+   do not read the 0 as evidence, and do not inherit this as a free fact.
 
    `D_8008346C = 0' GOES BEFORE THE D_800814A8 DECREMENT.  After it, 340
    words / 170 (the twin's 317/9).

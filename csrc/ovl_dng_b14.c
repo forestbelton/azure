@@ -271,6 +271,14 @@ s16 func_8009FD40(u8 *, u8 *);
 void func_b14_801745E0(u8 *p, UnkVec *b, u8 *c);
 void func_b14_8017487C(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
+/* Forward declarations added in batch 26: each of these is called ABOVE its
+ * own definition in this file and had NO declaration in scope, so K&R C gave
+ * it an implicit `int (...)'.  The emitted code happened to be identical --
+ * all arguments are pointers and no result is used -- so ovlverify read 0 and
+ * relcand read ok, which is why this went unnoticed.  tools/decomp/declcheck.py
+ * finds it; see docs/matching-levers.md. */
+void func_b14_801747D0(u8 *p, void *b, void *c, u8 *d);
+
 u8 *func_b14_80170894(s16 a, u16 b, u16 c, s16 d)
 {
     UnkNode *n;

@@ -44,6 +44,20 @@ UnkNode *func_s62_80024B2C(s16 x, s16 y, s16 z, s16 a, s16 leaf);
 void func_s62_80024AB4(u8 *p, UnkVec *v, UnkSlot *s);
 void func_s62_8002654C(u8 *p);
 
+void func_s62_80026240(u8 *d, u8 *s);
+typedef struct UnkDngS69Rec18
+{
+    s16 h[9];
+} UnkDngS69Rec18;
+typedef struct UnkDngS69SP
+{
+    u8 pad_00[0x40];
+    VECTOR unk_40;
+    MATRIX unk_50;
+    u8 pad_70[0x60];
+    MATRIX unk_D0;
+} UnkDngS69SP;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_80024064);
 
 /* The step func_s62_800244EC parks, in three states on *(s16 *)(p + 0x2C).
@@ -446,7 +460,40 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_80024DAC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_80025F54);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_80026240);
+/* Dress a 0x20-byte record from one 22-byte animation frame: the frame's
+   first 18 bytes verbatim, then its three signed bytes at +0x12..+0x14
+   widened into words at the record's +0x14, +0x18 and +0x1C. The source is
+   the slot's +0x00 element pointer that func_s69_80025840 / func_s69_8002590C
+   step 22 bytes per frame; all three callers (func_s69_8002501C twice,
+   func_s69_80025AAC once) pass `*(u8 **)(slot + 0x0)'.
+   28 words, 0 differing.
+
+   dngfam: 2 members, func_s62_80026240 is the other. The two listings are
+   BYTE-IDENTICAL in all 28 instruction words and NEITHER names a single
+   func_/D_/jtbl_ symbol beyond its own glabel, so there is no bank-local
+   symbol and no per-copy immediate to get wrong here; dngclone --dry-run
+   verifies the member at 28/28/0 and relcand reads `ok (0 data symbols,
+   0 calls)' on both.
+
+   THE ONE FACT, and it is what the whole body turns on: the 18-byte head is a
+   struct assignment through an 18-byte type OF HALFWORDS, `s16 h[9]'. The
+   alignment is the mechanism -- align 2 makes expand_block_move emit four
+   unaligned lwl/lwr/swl/swr word pairs and then an ALIGNED, SIGN-EXTENDING
+   `lh'/`sh' for the trailing halfword, which is exactly the target. Measured
+   alternatives:
+     `u8 b[0x12]' (align 1): 29 words / 4 aligned differences -- the trailing
+       halfword splits into lb/lb/sb/sb.
+     `u8 b[0x10]' plus a separate `*(s16 *)(d + 0x10) = *(s16 *)(s + 0x10)':
+       28 words / 1 aligned difference, the lone row being `lhu' where the
+       target has `lh'. A plain HImode move never sign-extends; only the block
+       move's tail does. */
+void func_s62_80026240(u8 *d, u8 *s)
+{
+    *(UnkDngS69Rec18 *)d = *(UnkDngS69Rec18 *)s;
+    *(s32 *)(d + 0x14) = *(s8 *)(s + 0x12);
+    *(s32 *)(d + 0x18) = *(s8 *)(s + 0x13);
+    *(s32 *)(d + 0x1C) = *(s8 *)(s + 0x14);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_800262B0);
 
