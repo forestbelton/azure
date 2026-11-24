@@ -141,6 +141,19 @@ forwarder has a twin too: `func_b28_80174460` and `func_b28_801744B8` both
 came back "none found" in a brief rendered at 40 and both sit at ratio 0.900
 to a landed 24-word body. The floor costs one flag and hid two twins.
 
+**WHEN `xsibs` NAMES A RESIDENT TWIN, INVERT THE INDEX BEFORE USING IT.**
+Three agents have now found that the resident function `xsibs` names is the
+WRONG body to start from, because a carved sibling has already absorbed the
+relink -- and one grep finds it, because every carved landing names its own
+twin in its header:
+
+    grep -rn "func_800D07C8" csrc/ovl_dng_*.c
+
+`func_s17_80024188` (351 words) is the case to remember: `xsibs` offered
+`func_800D07C8` at 0.750 and the right body was the landed
+`func_b14_80173B4C`, which that grep finds in one shot. It landed on the
+first compile. Do this before you read the resident original, every time.
+
 **A RATIO IS A LEAD, NOT A PROMISE, AND A MISS IS NOT A VERDICT.** 0.9x means
 a starting body with deltas to read off your own listing, not an answer. And
 when `xsibs` finds NOTHING, that is useful too -- it says go straight to plain

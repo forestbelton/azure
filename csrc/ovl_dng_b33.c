@@ -124,6 +124,9 @@ typedef struct UnkDng74334SP
 } UnkDng74334SP;
 extern u8 D_8017419C[];
 
+void func_800478B8(u8 *);
+void func_800DBA90(u8 *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_8017086C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_80170B64);
@@ -967,7 +970,79 @@ void func_b33_80173EAC(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_80173EE4);
+/* The two-state fade step of the node at p, switched on the s16 at p + 0x4C:
+   state 0 re-sends the view, drops its +0x4/+0x5 pair once the +0x14 flags
+   carry one of 0x6000, steps the +0xC colour down by 0x181818 and advances
+   the state when its low byte falls under 0x30; then it swings p + 0x8 by
+   0xA, parks `-(((s16)(p + 0x8) >> 2) ** 2) >> 4' in p + 0x4 and builds
+   func_800DBA90's 0x20-byte matrix record out of p + 0x4, the output vector
+   and two eight-byte copies of p + 0x14 and p + 0xC, then writes the
+   rotated vector back into b + 0x2 / +0x6 / +0xA. State 1 is the standard
+   teardown: raise 0x8000 in the node's -0x2 and in D_800814A0.
+   98 words, 0 differing.
+
+   No twin: no landed body in the block calls func_800DBA90, and the resident
+   overlay's two callers (func_800DB3F8 and func_800DB660,
+   csrc/ovl_dungeon_800D50FC.c) build the record for a different primitive.
+   What came from func_800DB660 is the RECORD'S TYPE: `u8 rec[0x20]', which
+   is both why it sits at 0x10($sp) with the output vector at 0x30($sp) and
+   why the two field copies are `lwl'/`lwr' pairs with no runtime alignment
+   test -- a `u8' array is alignment 1, so cc1psx expands an 8-byte copy
+   straight into one unaligned load pair and one unaligned store pair per
+   word. The copies are `memcpy(rec + k, p + n, 8)' with both pointers u8 *,
+   which is the only spelling that keeps that alignment (see
+   docs/matching-levers.md, "`memcpy's ALIGNMENT COMES OFF THE POINTER
+   EXPRESSION").
+
+   THE p + 0x8 STORE IS WRITTEN AFTER THE SHIFT THAT FEEDS THE SQUARE, AND
+   THE SHIFTED VALUE NEEDS ITS OWN LOCAL. The target's `sh $v1, 0x8($s1)'
+   sits between the `mult' and its `mflo', in the multiply's latency, which
+   sched can only do if the store comes after the `sll'/`sra' in the insn
+   stream. Written `*(s16 *)(p + 0x8) = k; k = (s16)k >> 2;' -- one local,
+   store first -- the body is still 98 words but the store is emitted
+   immediately and it is 5 aligned differences. */
+void func_b33_80173EE4(u8 *p, u8 *b, u8 *c)
+{
+    u8 rec[0x20];
+    SVECTOR vec;
+    s32 j;
+    s32 k;
+
+    switch (*(s16 *)(p + 0x4C))
+    {
+    case 0:
+        func_800478B8(c);
+        if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+        {
+            c[0x4] = 0;
+            c[0x5] = 0;
+        }
+        *(s32 *)(c + 0xC) += 0xFFE7E7E8;
+        if (c[0xC] < 0x30)
+        {
+            *(s16 *)(p + 0x4C) = *(u16 *)(p + 0x4C) + 1;
+        }
+        k = *(u16 *)(p + 0x8) + 0xA;
+        j = (s16)k >> 2;
+        *(s16 *)(p + 0x8) = k;
+        *(s16 *)(p + 0x4) = -(j * j) >> 4;
+        *(u8 **)rec = p + 0x4;
+        *(u8 **)(rec + 0x4) = (u8 *)&vec;
+        memcpy(rec + 0x8, p + 0x14, 8);
+        memcpy(rec + 0x10, p + 0xC, 8);
+        *(s16 *)(rec + 0x18) = 1;
+        *(s16 *)(rec + 0x1A) = 1;
+        func_800DBA90(rec);
+        *(s16 *)(b + 0x2) = vec.vx;
+        *(s16 *)(b + 0x6) = vec.vy;
+        *(s16 *)(b + 0xA) = vec.vz;
+        break;
+    case 1:
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b33", func_b33_8017406C);
 

@@ -1467,3 +1467,35 @@ That is the second check this session that byte-exactness cannot perform --
 the first was the jump table in `.rodata`, which `ovlverify` cannot see
 because it measures a function's own words. Both are worth remembering when
 "four containers byte-identical" starts to feel like proof of everything.
+
+## THE PERMUTER RAN FOR 50 MINUTES AND DID NOTHING, AND THE SYMPTOM LOOKS LIKE SUCCESS
+
+`permrun.py` on `func_b12_80173FDC` came back `base=? best=? 0 iterations`.
+That is not a dead permuter; it means `base.c` never compiled, and my own
+memory note names this exact symptom. Compiling it by hand says
+`UnkDngB12Name8' undeclared`.
+
+`parkresidue.decls_of()` extracts a park's declarations LINE BY LINE, and
+agent-h21's park invented a typedef:
+
+    typedef struct UnkDngB12Name8
+    {
+        u8 b[0x8];
+    } UnkDngB12Name8;
+
+None of those four lines is a declaration-shaped LINE, so all four were
+dropped silently and the park's body could not compile. It now accumulates a
+brace-balanced statement and emits it whole.
+
+**This is the sixth line-oriented assumption about C source to be wrong in
+this sweep** -- after `decl_block`'s statement splitting, `needed_decls`'
+comment, `def_match`'s definition pattern, `decl_block`'s semicolon, and my
+own regex for removing a declaration during the rename. Every one was fixed
+by handling a brace-balanced or comment-masked statement instead of a line,
+and I keep writing the line version first.
+
+Worth noting what the cost was this time: fifty minutes of eight-way CPU
+producing nothing, reported in a format that reads like a result. The log
+line `base=?` is the only tell, and `permrun.py`'s docstring already says to
+read only the verdict -- which is exactly how a silent failure hides. I only
+looked because the number was implausible for a 97-difference body.

@@ -67,9 +67,54 @@ extern s16 D_800259AC;
 
 s32 func_s38_800248EC(u8 *p, UnkVec *v);
 
+void func_s38_8002404C(u8 *, UnkVec *, UnkSlot *, s16);
+typedef struct UnkDng264D4Vec
+{
+    u16 unk_00;
+    u16 unk_02;
+    u16 unk_04;
+    u8 pad_06[0x2];
+} UnkDng264D4Vec;
+typedef struct UnkDng264D4SP
+{
+    u8 pad_00[0x30];
+    s32 unk_30;
+    s32 unk_34;
+    s32 unk_38;
+    u8 pad_3C[0x28];
+    s32 unk_64;
+    s32 unk_68;
+    s32 unk_6C;
+    SVECTOR unk_70[4];
+    u8 pad_90[0x8];
+    UnkDng264D4Vec unk_98[4];
+} UnkDng264D4SP;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s38", func_s38_8002404C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s38", func_s38_80024898);
+/* The engine's node walk, func_80046398 of csrc/unk_19434.c, relinked here
+   with func_s38_8002404C as the visitor: it is variant A -- the slot's
+   +0x06 as the visitor's fourth argument -- exactly as
+   csrc/ovl_dungeon_800B6AC4.c's func_800BC054 has it, and xsibs scores it
+   1.000 against slus_006.14's func_80046398. Nothing was changed.
+   21 words, 0 differing, first compile. */
+s32 func_s38_80024898(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    UnkNode *n;
+
+    for (;;)
+    {
+        func_s38_8002404C(p, v, s, s->unk_06);
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
+            return 0;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *)n->unk_0C;
+    }
+}
 
 /* One semi-transparent 1x1 TILE_1 and one DR_MODE per node of the tag chain,
    projected through the 0x1F800000 scratchpad, with each node's colour word

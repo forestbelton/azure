@@ -116,10 +116,28 @@ def decls_of(path):
     region = m.group(1) if m else header
     explicit = m is not None
     out = []
-    for line in region.split("\n"):
-        line = line.strip()
+    # A TYPEDEF SPANS LINES AND THIS USED TO BE LINE-ORIENTED, so an invented
+    # struct was dropped silently: none of `typedef struct X', `{',
+    # `u8 b[0x8];' or `} X;' is a declaration-shaped LINE, and the park's
+    # body then failed to compile with `UnkDngB12Name8' undeclared -- which
+    # the permuter reports only as `base=?' with zero iterations, the same
+    # symptom as a dead permuter. Accumulate a brace-balanced statement
+    # first, and emit it whole.
+    lines, i = [l for l in region.split("\n")], 0
+    pending, depth = [], 0
+    for raw in lines:
+        line = raw.strip()
         if line.startswith("*"):
             line = line[1:].strip()
+        if pending or re.match(r"^(typedef|struct|union|enum)\b", line):
+            pending.append(line)
+            depth += line.count("{") - line.count("}")
+            if depth <= 0 and line.endswith(";"):
+                block = "\n".join(pending)
+                if block not in out:
+                    out.append(block)
+                pending, depth = [], 0
+            continue
         if not DECL_LINE.match(line) or line in out:
             continue
         if not line.startswith(("extern", "typedef")) and "(" in line:
