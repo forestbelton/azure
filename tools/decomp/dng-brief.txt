@@ -119,8 +119,25 @@ the verifier masked is really a relocation and not a constant address.
 
 ## Getting a first draft
 
-These units are fresh: every function is still `INCLUDE_ASM` and the unit has
-no declaration block yet. There is no park file and no prior attempt.
+**DO NOT ASSUME YOUR UNIT IS FRESH -- IT ALMOST CERTAINLY IS NOT.** This
+paragraph used to say every function was still `INCLUDE_ASM` and the unit had
+no declaration block. That was true for the first few batches and is now
+wrong for most units: by batch 15 a typical carved unit has fifteen to thirty
+LANDED functions and a declaration block of a hundred lines or more
+(`ovl_dng_b26` had 20 and 126 when an agent was handed it under the old
+wording). Check, because three things follow from it:
+
+* **Read the unit's own landed bodies before you go looking elsewhere.** The
+  best twin is often two listings away in your own file, and it has already
+  absorbed this bank's relink.
+* **Most of your declarations are already there.** Add only what is missing,
+  append to the ONE existing block, and never start a second one.
+* **A park may exist for a function in your unit**, and it may carry a priced
+  fact table for the whole unit rather than just that function. `ls
+  docs/dng-parks/` for your tag before you start.
+
+Run `grep -c INCLUDE_ASM csrc/@UNIT@.c` against the number of `glabel`s in
+`asm/nonmatchings/@UNIT@/` if you want the split.
 
     tools/m2c asm/nonmatchings/@UNIT@/<func>.s
 
