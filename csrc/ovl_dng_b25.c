@@ -100,7 +100,32 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80170D34);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80171010);
 
-/* WIP3 */
+/* The banked room script's 0x211 burst spawner: the resident overlay's
+   func_800D5DCC (csrc/ovl_dungeon_800D50FC.c) relinked, with the same
+   `n->unk_08' RE-DEREFERENCED AT EVERY STATEMENT and the same `b' kept
+   NARROW so the table index shifts logically -- both of those facts are the
+   twin's and its comment carries the measurements. func_b15_80170F2C
+   (csrc/ovl_dng_b15.c) is the nearer landed relink by word count but it is
+   the WRONG twin: it takes its position offsets from the caller and has no
+   D_800E2468 row at all.
+
+   Seven deltas from func_800D5DCC, every one read off the listing: the z
+   seed is `- 0x58' not `- 0x14'; the row entries are `* 18', which is the
+   `sll 3'/`addu'/`sll 1' triple; there is NO `*(s16 *)((u8 *)n->unk_0C +
+   0x6) = 6' write at all; the three velocities come from func_80069EF8
+   rather than rand() and are `<< 4' on ALL THREE axes where the twin is
+   6/6/5; the constant drift is `t[k] * 0x1C0000' (`sll 3'/`subu'/`sll 18')
+   not 0x160000; the +0x32/+0x34 life is 0xC; and BOTH hung functions are
+   RESIDENT -- the step is func_800D707C and func_8004491C is handed
+   func_800D68F4 -- where every other relink in this block substitutes
+   bank-local ones.
+
+   106 words, 0 differing, on the first compile. Measured afterwards and all
+   equally 0, so nothing here is claimed to be load-bearing: the row entries
+   as `(t[k] * 9) << 1', the velocities as `* 16' instead of `<< 4', the
+   drift as `(t[k] * 7) << 18', and the row index hoisted into a local of its
+   own ahead of the D_800E2468 subscript. No jump table and no rodata of its
+   own -- the listing opens at `glabel'. */
 void func_b25_801711DC(UnkNode *a, s16 b, u8 *c)
 {
     UnkNode *n;
@@ -132,7 +157,31 @@ void func_b25_801711DC(UnkNode *a, s16 b, u8 *c)
     }
 }
 
-/* WIP5 */
+/* One frame of the fading burst func_b25_801711DC spawns, and the resident
+   func_800D5CA0's body (csrc/ovl_dungeon_800D50FC.c) with a THIRD PARAMETER:
+   integrate the mover, halve each of its three velocities -- the three
+   `srl 31'/`addu'/`sra 1' triples are a signed `/= 2', and `>>= 1' would
+   drop the correction -- then fade the colour and count down to the kill.
+   A leaf with no frame at all; the `addu $t0, $a0, $zero' is `p' moved out
+   of $a0 so the mover loads can use it.
+
+   Four deltas from the twin, all read off the listing. The fade is ONE value
+   written to three bytes of the THIRD parameter at +0xE, +0xD and +0xC in
+   that order, not three per-channel multiplies: `x' has to be a local,
+   because gcc 2.7.2 has no alias analysis and each `c[...]' store kills the
+   cached p + 0xC and p + 0xE, so writing the expression out three times is
+   66 words and 12 aligned differences -- three divides. The life pair is
+   p + 0xC / p + 0xE where the twin uses p + 0x32 / p + 0x34, so the same
+   halfword the fade divides is also the countdown. There is no
+   `*(s32 *)(p + 0x8) = *(s32 *)(p + 0x4)' colour-forward copy. And the kill
+   test is `if (--*(s16 *)(p + 0xC) <= 0)' -- `lhu', `addiu -1', `sh', then
+   `sll 16'/`bgtz' -- on that same halfword.
+
+   54 words, 0 differing, on the first compile. `* 128' is written rather
+   than `<< 7' only because the load is `lh' and the twin's own note makes
+   that the safer form; measured here both are 0, as is
+   `c[0xC] = c[0xD] = c[0xE] = x;' in place of the three statements. No jump
+   table and no rodata of its own -- the listing opens at `glabel'. */
 void func_b25_80171384(u8 *p, UnkVec *v, u8 *c)
 {
     s32 x;

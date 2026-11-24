@@ -1159,3 +1159,24 @@ alias declaration of the shorter arity, which leaves both landed bodies alone.
 recurs, the alias is the pattern and `csrc/ovl_dng_b28.c` already carries a
 worked example of two arities of one symbol coexisting (`func_800BCB04` and
 `func_800BCB04h`).
+
+## DO NOT INTEGRATE FROM A LIVE AGENT'S COPY
+
+h20 sent an interim line saying all five of its functions were landed, and I
+ran `dngland` against its working file before the hand-back arrived. The
+BODIES were right -- all five verify at 0 differing and the clone of the
+456-word one is byte-identical -- but two of them still carried `/* WIP3 */`
+and `/* WIP5 */` where the real comments were about to go, and that is what
+reached `csrc/`. The agent caught it and told me.
+
+The comments are the most valuable thing this sweep produces after the code.
+A body with a placeholder comment is worse than one with none, because the
+next agent greps for a twin's header and finds nothing where something should
+be. So: **an interim "LANDED" means the body verifies, not that the work is
+finished.** Integrate on the hand-back.
+
+Re-synced both comments from the agent's final copy, asserting the bodies were
+byte-identical first so only the headers moved, and re-verified. I also
+checked the one other agent I had integrated early (h9, five functions in
+ovl_dng_b06) against its final copy: all five identical, so b25 was the only
+casualty.
