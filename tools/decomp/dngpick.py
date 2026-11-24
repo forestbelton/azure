@@ -53,6 +53,7 @@ Usage:
 """
 import argparse
 import collections
+import json
 import os
 import re
 import sys
@@ -110,6 +111,34 @@ def drop_homeless_jtbl(rows):
         else:
             kept.append(r)
     return kept, blocked
+
+
+def cheapness():
+    """{func: best landed-carved ratio} from dngtwin's sweep cache, or {}.
+
+    A SECOND MULTIPLIER THIS SCRIPT DOES NOT RANK ON, AND SHOULD NOT HIDE.
+    `copies x words' prices replication. It says nothing about whether the
+    body is already written: `dngtwin.py --sweep' finds 173 stubs and 35,938
+    words within a few instructions of a landed carved sibling, and the units
+    where that fraction is largest are the ones this ranking buries, because
+    being cheap and being replicated are independent and the cheap ones tend
+    to be one-member groups:
+
+        b43  68% of its stub words at >= 0.90      b06 53%   b14 53%
+        b41  48%   b36 46%   b15 42%   b31 37%     b38 35%   b21 34%
+
+    Reported, not ranked on. Words per agent-run is still the objective and a
+    cheap unit with no replication can be worth less than an expensive one
+    with eleven copies -- but that is a judgement for whoever reads the pick,
+    and it cannot be made against a number the tool does not print. If the
+    cache is missing or stale this returns {} and the pick is unchanged;
+    re-run `dngtwin.py --sweep' after each batch.
+    """
+    try:
+        d = json.load(open(os.path.join(PROJ, "docs", "dng-twinsweep.json")))
+    except (OSError, ValueError):
+        return {}
+    return {k: (v["best"][0][0] if v["best"] else 0.0) for k, v in d.items()}
 
 
 def batch_yield(pick):
@@ -231,13 +260,44 @@ def main():
         if len(chosen) >= a.n:
             break
 
+    cheap = cheapness()
     total = 0
     for y, w, tag, pick in chosen:
         total += y
         print('  "%s": [%s],   # yield %d, %d words'
               % (tag, ",".join('(%d,%d,"%s")' % (r[0], r[1], r[3])
                                for r in pick), y, w))
+        if cheap:
+            near = [(r[3], cheap.get(r[3], 0.0)) for r in pick]
+            nw = sum(r[1] for r in pick if cheap.get(r[3], 0.0) >= 0.90)
+            hits = ", ".join("%s %.2f" % (f.split("_", 2)[2], c)
+                             for f, c in sorted(near, key=lambda x: -x[1])
+                             if c >= 0.80)
+            print("        %d of %d picked words have a >= 0.90 landed "
+                  "sibling%s" % (nw, w, (" -- " + hits) if hits else ""))
     print("\n%d unit(s), %d words of yield" % (len(chosen), total))
+    if cheap:
+        # The cheapest units NOT picked. This ranking cannot see them, so it
+        # prints them rather than leaving the reader to re-derive the sweep.
+        per = collections.defaultdict(lambda: [0, 0])
+        for r in rows:
+            a = per[r[4]]
+            a[0] += r[1]
+            if cheap.get(r[3], 0.0) >= 0.90:
+                a[1] += r[1]
+        taken = {t for _, _, t, _ in chosen}
+        rest = sorted(((v[1], v[0], t) for t, v in per.items()
+                       if t not in taken and v[1]),
+                      reverse=True)[:6]
+        if rest:
+            print("not picked, but their words are already written in landed "
+                  "C (dngtwin --sweep):")
+            for nw, w, t in rest:
+                print("  %-5s %5d of %5d stub words at >= 0.90 (%.0f%%)"
+                      % (t, nw, w, 100.0 * nw / w))
+    else:
+        print("no docs/dng-twinsweep.json -- run `dngtwin.py --sweep' to see "
+              "which of these units is already written in landed C")
     if dropped:
         print("skipped, a family they hold is already claimed in this batch: "
               "%s" % ", ".join(dropped[:8]))

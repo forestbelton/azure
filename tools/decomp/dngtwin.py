@@ -68,12 +68,42 @@ Usage:
     python3 tools/decomp/dngtwin.py func_b09_80171728 [func...]
     python3 tools/decomp/dngtwin.py --unit ovl_dng_b09      # every stub
     python3 tools/decomp/dngtwin.py FUNC --top 8 --ratio 0.60 --stubs
+    python3 tools/decomp/dngtwin.py --sweep       # score every stub, cache it
+
+## THE SWEEP REPRICES THE REMAINING WORK, AND `dngpick` RANKS WITHOUT IT
+
+`--sweep` scores all 1,205 remaining stubs of 18 words or more. First run:
+
+    0.98+         55 stubs    10,343 words
+    0.90-0.97    118 stubs    25,595 words
+    0.80-0.89     95 stubs    15,847 words
+    0.70-0.79     72 stubs     9,227 words
+    none         865 stubs   153,550 words
+
+So 173 stubs and 35,938 words are within a few instructions of a body already
+written in C. `dngpick` ranks units by `copies x words`, which is the right
+proxy for replication and says nothing about this second multiplier -- and
+the units where it is largest are exactly the ones that ranking buries,
+because they are low-replication:
+
+    b43   68% of its stub words have a >= 0.90 landed sibling
+    b06   53%        b14  53%        b41  48%        b36  46%
+    b15   42%        b31  37%        b38  35%        b21  34%
+
+`dngpick` now READS this cache and reports it per unit. It does not re-rank
+on it: words-per-agent-run is still the objective and a cheap unit with no
+replication can still be worth less than an expensive one with eleven copies.
+The two numbers belong side by side in front of whoever picks the batch.
+
+Re-run `--sweep` after a batch lands; the cache is a snapshot and every
+landing adds to the pool it scores against.
 """
 import argparse
 import collections
 import difflib
 import glob
 import hashlib
+import json
 import os
 import re
 import sys
@@ -131,6 +161,51 @@ def rank(target, pool, want_stubs, ratio, top):
     return rows[:top]
 
 
+CACHE = os.path.join(PROJ, "docs", "dng-twinsweep.json")
+
+
+def sweep(pool, floor):
+    """{func: {tag, words, best:[(ratio, name, tag, same_family)]}} for EVERY stub.
+
+    The multiset overlap of two mnemonic sequences over the longer length is
+    an UPPER BOUND on difflib's ratio, so rejecting on it is sound: a
+    candidate it drops cannot have passed the real threshold. Without that
+    prefilter this is 1,205 stubs x 830 landed bodies of `SequenceMatcher`
+    and takes about an hour; with it, under three minutes.
+    """
+    import bisect
+    landed = [(n, t, sg, fk) for n, (t, sg, fk, st) in pool.items() if not st]
+    lms = [(n, t, collections.Counter(sg), sg, fk) for n, t, sg, fk in landed]
+    order = sorted(range(len(lms)), key=lambda i: len(lms[i][3]))
+    lens = [len(lms[i][3]) for i in order]
+    out = {}
+    for n, (t, sg, fk, st) in sorted(pool.items()):
+        if not st:
+            continue
+        L, ms = len(sg), collections.Counter(sg)
+        lo = bisect.bisect_left(lens, int(0.75 * L))
+        hi = bisect.bisect_right(lens, int(1.34 * L) + 1)
+        best = []
+        for i in order[lo:hi]:
+            ln, lt, lc, ls, lfk = lms[i]
+            if sum((ms & lc).values()) / max(L, len(ls)) < floor:
+                continue
+            r = difflib.SequenceMatcher(None, sg, ls, autojunk=False).ratio()
+            if r >= floor:
+                best.append((round(r, 3), ln, lt, lfk == fk))
+        best.sort(reverse=True)
+        out[n] = {"tag": t, "words": L, "best": best[:3]}
+    return out
+
+
+def load_cache():
+    """The sweep's cached result, or None. Callers must tolerate None."""
+    try:
+        return json.load(open(CACHE))
+    except (OSError, ValueError):
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("funcs", nargs="*")
@@ -141,9 +216,32 @@ def main():
     ap.add_argument("--stubs", action="store_true",
                     help="also report STILL-STUB siblings -- not an answer, "
                          "but it tells you two stubs are one job")
+    ap.add_argument("--sweep", action="store_true",
+                    help="score EVERY remaining stub and write %s; "
+                         "dngpick reads it to report how cheap a unit's "
+                         "words are" % os.path.relpath(CACHE, PROJ))
     a = ap.parse_args()
 
     pool = carved(a.min_words)
+    if a.sweep:
+        res = sweep(pool, a.ratio)
+        json.dump(res, open(CACHE, "w"), indent=0, sort_keys=True)
+        tiers = [(0.98, "0.98+"), (0.90, "0.90-0.97"),
+                 (0.80, "0.80-0.89"), (a.ratio, "%.2f-0.79" % a.ratio)]
+        n = collections.Counter()
+        w = collections.Counter()
+        for v in res.values():
+            lab = "none"
+            if v["best"]:
+                lab = next(l for t, l in tiers if v["best"][0][0] >= t)
+            n[lab] += 1
+            w[lab] += v["words"]
+        print("%d stubs >= %d words, %d words"
+              % (sum(n.values()), a.min_words, sum(w.values())))
+        for _, lab in tiers + [(0, "none")]:
+            print("  %-10s %4d stubs  %7d words" % (lab, n[lab], w[lab]))
+        print("wrote %s" % os.path.relpath(CACHE, PROJ))
+        return
     want = list(a.funcs)
     if a.unit:
         tag = a.unit[len("ovl_dng_"):] if a.unit.startswith("ovl_dng_") else a.unit
