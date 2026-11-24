@@ -101,12 +101,26 @@ the twin had 10, `global.c`'s `allocno_compare` ranks it below its neighbour,
 and the two swap registers -- 19 aligned differences, every row that one
 exchange.
 
-**So a high ratio with a NEGATIVE delta means the relink DELETED code, and
-deleted code takes its references with it.** The first thing to try is not a
-spelling: it is to find a block the twin reaches by `goto` or by falling into
-a shared label and WRITE IT OUT TWICE. jump2 cross-jumps the copies back into
-the single block the target has, so the duplication costs no words and pays
-the references back. One duplicate, one compile.
+**BUT READ THE TWIN FOR MISSING STATEMENTS BEFORE REACHING FOR THE REFERENCE
+LEVER.** Batch 14 measured five more shorter-than-twin bodies and in four the
+deletion was a WHOLE BLOCK whose values died with it, so nothing was lost and
+no allocation work was needed: a dropped dress arm (-6 words, first compile),
+a dropped record lookup and its two locals (-14, two compiles), a dropped
+countdown (-17, first compile), a dropped gate arm (-6, first compile). Only
+`func_b42_80173730` lost references the SURVIVING code still used, and only
+that one needed the duplicate.
+
+So the flag is a prompt, not a diagnosis. Ask first which statements the twin
+has that your listing does not; the reference lever applies only when the
+removed block held references to a value the rest of the body still uses.
+`func_b43_801729D4`'s agent went to `allocno_compare` on the strength of this
+warning and found the real answer was two absent statements -- reading for
+those first is what made it a two-compile landing.
+
+When the reference lever IS the answer: find a block the twin reaches by a
+`goto` or by falling into a shared label and WRITE IT OUT TWICE. jump2
+cross-jumps the copies back into the single block the target has, so the
+duplication costs no words and pays the references back.
 
 **AND AIM FOR THE NEXT POWER OF TWO, NOT FOR "MORE".** `allocno_compare`'s
 priority is `floor_log2(n_refs) * n_refs / live_length`, so references buy
@@ -347,8 +361,9 @@ def main():
             # that costs rows; see the section above.
             d = nw - len(me[1])
             if d > 0:
-                mark = (" [YOURS IS %d WORDS SHORTER -- references were "
-                        "REMOVED, see WHEN YOUR BODY IS SHORTER]" % d) + mark
+                mark = (" [YOURS IS %d WORDS SHORTER -- find the MISSING "
+                        "STATEMENTS first, see WHEN YOUR BODY IS SHORTER]"
+                        % d) + mark
             print("    %.3f  %-24s %4d words (%+d vs yours)  "
                   "csrc/ovl_dng_%s.c%s" % (r, name, nw, d, otag, mark))
 

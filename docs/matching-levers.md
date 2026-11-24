@@ -1181,7 +1181,7 @@ then read only the section you need.
 - A DEVICE'S SCOPE IS USUALLY NOT EVIDENCE ABOUT WHERE THE MACRO WAS  `:37209`
 - `ovlverify` CANNOT SEE WHICH DATA SYMBOL A RELOCATED LOAD NAMES  `:37230`
 - ALLOCATION FACTS FOLLOW THE FRAME; SHAPE FACTS FOLLOW THE SHAPE  `:37251`
-- EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE  `:37295`
+- EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE  `:37311`
 
 <!-- END INDEX -->
 
@@ -37291,6 +37291,22 @@ first compile against two imperfect twins.
 It also explains the earlier entries: `func_b31f_8016BF74` had to KEEP its
 twin's `do { } while (0)` (frames agreed) where other bodies found device
 facts free or inverted (frames did not).
+
+**CONFIRMED INDEPENDENTLY, AND IT NAMED THE CHEAPEST FACT IN A PARK FILE.**
+`func_b43_80171F24` (parked at 11 aligned differences) inherits from a twin
+chain of two landed relinks, and of its eight priced facts three INVERTED --
+the most expensive being the `g = (u8 *)&D_80083460` pointer local that both
+twins use for three gate reads. Through `g` this body is 121 words and **33**
+aligned differences; the direct `D_80083462` symbol is 118 and **11**. The
+reason is the frame: both twins spend a SEVENTH callee-saved register on `g`
+and this body has only six saves. Same rule, found by a different agent on a
+different unit, and it is the one fact a straight transcription of either twin
+gets wrong.
+
+The two facts that HELD there are source-shape facts (an unreferenced
+aggregate local that sets the frame size, and a unary minus that stops a
+reassociation); the three that inverted are all allocation or frame facts.
+That is the split holding at eight-for-eight across two units.
 
 ## EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE
 
