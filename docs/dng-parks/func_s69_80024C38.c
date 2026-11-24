@@ -184,6 +184,33 @@
    and T-17 so that `q' lands below T-18. I did not spend an asm device on
    a 2-word scheduling residue.
 
+   REPRODUCED ON THE OTHER FAMILY MEMBER, agent-h101, 2026-11-24.
+   func_s55_8002589C in ovl_dng_s55 built from the body below measures
+   138 target / 138 candidate / 2 differing and 4 ALIGNED DIFFERENCES --
+   the SAME transposed pair, at the same place (built words 50/51 against
+   target 49/50). So the residue is a property of the family, not of s69's
+   relink. The rename is read off the two listings by
+   tools/decomp/dngclone.py's symbol_map and is total:
+       func_s69_80024B00 -> func_s55_80025764  (ALREADY LANDED in s55)
+       D_80027484        -> D_8002822C
+       func_8003FD64, func_8004491C, func_800C95C0, D_80045340, rand: shared.
+   NOTE FOR A FUTURE CLONE RUN: func_s69_80024B00 is a SOURCE-UNIT symbol
+   and s55's copy of it is already landed two listings above, so the
+   replica needs no declaration for it -- only `extern u8 D_8002822C[];'
+   and `s32 func_800C95C0(u8 *, UnkVec *, UnkSlot *);'.
+
+   ONE MORE SPELLING MEASURED AND REJECTED, and it is the one this park's
+   own mechanism asks for: make `q' a ONE-SET pseudo WITHOUT a second
+   local, by having loop 2 REUSE `r' as its +0x20 pointer (`r' is dead in
+   loop 2, so this invents no variable and cannot cost a register the way
+   two `q' locals did). 139 words / 36 aligned differences. It does NOT fix
+   the transposition -- the pair is still there -- and it adds a uniform
+   $s0/$s1 exchange across both loops plus a word, because the ref counts
+   move with the names (q 10 refs -> 3, r 6 -> 13) and allocno_compare
+   reranks. So the gate is not reachable by renaming: `birthing_insn_p'
+   wants the SET COUNT down and every way of getting it there either adds
+   a live range or moves the ranking. The park's conclusion stands.
+
    DECLARATIONS
    s32 func_8004491C(UnkNode *, u32);
    UnkNode *func_8003FD64(s32, void *);

@@ -79,9 +79,33 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dngfam  # noqa: E402
 
 
-def stub_rows():
+def parked():
+    """Functions with a file under docs/dng-parks/ -- EXCLUDED from picking.
+
+    A park is a body that has been written and does NOT land, with the reason
+    recorded.  Picking one spends an agent slot on work already proved blocked:
+    in batch 25 `func_b38_8017087C' was handed to an agent whose unit could
+    therefore only yield 3 of its 4 functions.  That park is 124 words at
+    0 differing against a correctly-split listing and is blocked on the unit's
+    `.rodata' needing to grow 4 bytes -- a layout decision, not a C problem, so
+    no amount of agent time moves it.
+
+    Re-picking a park is only right once its blocker is cleared, and that is a
+    deliberate act; use --with-parks to include them.
+    """
+    d = os.path.join(PROJ, "docs", "dng-parks")
+    try:
+        return {f[:-2] for f in os.listdir(d)
+                if f.startswith("func_") and f.endswith(".c")}
+    except OSError:
+        return set()
+
+
+def stub_rows(skip_parks=True):
     """[(copies, words, yield, func, unit tag, family key)] per remaining stub."""
     stubs = dngfam.stubs()
+    if skip_parks:
+        stubs = stubs - parked()
     out = []
     for key, g in dngfam.families(landed=False).items():
         mem = [(c, n, w) for c, n, w in g if n in stubs]

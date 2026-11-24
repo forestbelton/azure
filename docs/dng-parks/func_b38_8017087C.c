@@ -184,7 +184,16 @@
    extern u8 D_80045340[];
    extern u8 D_80174AD4[];
    extern u8 D_80174AFC[];
-   void func_b38_80170A70(u8 *, UnkVec *, u8 *, u8 *);
+   void func_b38_80170A70(u8 *, UnkVec *, u8 *);
+        -- THREE parameters, corrected in batch 25.  This line used to say
+        four, which would have been a `conflicting types' error the moment
+        this park was spliced back into the unit: func_b38_80170A70 landed
+        in batch 25 as (u8 *p, UnkVec *b, u8 *c), its listing's prologue
+        consumes only $a0/$a1/$a2, and all twenty landed members of the
+        func_800D8728 family are three-parameter.  Nothing in this park's
+        C depends on the arity -- it only takes the address, at the
+        `n->unk_10 = (u32)func_b38_80170A70' store below -- so the fix is
+        the declaration alone and the parked body is unaffected.
    void func_b38_80171138();
    END DECLARATIONS    THE BOUNDARY MOVE WAS TRIED AND IT DOES NOT WORK, 2026-11-24. This settles
    the question the park has been waiting on, and the answer is that the yaml

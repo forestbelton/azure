@@ -38,7 +38,7 @@ s32 func_800BCB04(s32, s32, s16);
 extern s16 D_80027452;
 extern s16 D_8006CCD8[];
 extern s16 D_8006CCE8[];
-void func_s69_80024E60(u8 *, UnkVec *, UnkSlot *);
+void func_s69_80024E60(u8 *p, UnkVec *b, UnkSlot *s);
 void func_800B835C(u8 *, s32 *, s32, s32);
 extern u8 D_80027454[];
 extern u8 D_80027490[];
@@ -215,7 +215,55 @@ void func_s69_80024B00(u8 *p, UnkVec *v)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s69", func_s69_80024C38);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s69", func_s69_80024E60);
+/* The 0x212 flash node's +0x10 step, the companion to func_s55_80025B5C
+   above: bump this bank's D_80027452, then either retire -- if the node
+   stashed at the payload's +0x8 has raised its own 0x8000 -- or copy that
+   node's slot colour word into this slot's +0xC and mirror its mover into
+   this one's. 38 words, 0 differing, FIRST COMPILE.
+
+   No twin: dngtwin's only hit is func_s69_80024E60 at 1.000, this
+   function's CLONE, still an INCLUDE_ASM. Written from the listing on this
+   unit's own idioms (func_s55_80025B5C two listings up installs this
+   function as the step and parks the owner node at the payload's +0x8).
+
+   THREE FACTS, all measured here, and two of them are this family's
+   recurring pair:
+     `D_80027452 += 1' must come AFTER the `*(UnkNode **)(p + 0x8)' load.
+     Before it -- which is the listing's own emission order, since the
+     counter's `lhu' is scheduled first either way -- it is 41 words /
+     15 aligned differences. What the order decides is whether the
+     `sh %lo(D_80027452)' can sink into the gate's delay slot. There is no
+     intervening call. The same fact holds the same way round in
+     docs/dng-parks/func_s55_80025C80.c.
+     The mover must be reached by RE-READING `*(UnkNode **)(p + 0x8)', not
+     through `o'. Through `o' it is 36 words / 3 -- two words short, because
+     the store to the slot's +0xC is what forces the reload.
+     The 0x8000 gate must be the COMPONENT_REF `o->unk_1E'. As the plain cast
+     `*(u16 *)((u8 *)o + 0x1E)' it is 39 words / 17: MEM_IN_STRUCT_P, the
+     same mechanism csrc/ovl_dng_s25.c records for its four retire sites.
+     Note the retire STORE beside it, `*(u16 *)(p - 0x2) |= 0x8000', is the
+     other polarity and stays a plain cast, as it does there. */
+void func_s69_80024E60(u8 *p, UnkVec *b, UnkSlot *s)
+{
+    UnkNode *o;
+    UnkVec *m;
+
+    o = *(UnkNode **)(p + 0x8);
+    D_80027452 += 1;
+    if ((o->unk_1E & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        *(s32 *)((u8 *)s + 0xC) = *(s32 *)((u8 *)o->unk_0C + 0xC);
+        m = (*(UnkNode **)(p + 0x8))->unk_08;
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)m + 0x2);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)m + 0x6);
+        *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)m + 0xA);
+    }
+}
 
 /* Spawn the 0x212 flash node on the caller's node: func_s69_80024E60 as its
    +0x10 step, D_80045340 through func_8004491C, the caller's mover position

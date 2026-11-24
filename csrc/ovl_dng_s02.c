@@ -50,6 +50,9 @@ void func_s02_80024604();
 
 UnkNode *func_8003FD64(s32, void *);
 
+extern s16 D_80025914;
+void func_800478B8(u8 *);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_8002404C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_800240C0);
@@ -142,7 +145,87 @@ s32 func_s02_800241EC(u8 *p, UnkVec *v)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_8002443C);
+/* The simple actor step: spend one of the payload's +0x2 frames, integrate
+   the three +0x58..+0x60 velocities by their +0x64..+0x6C accelerations and
+   add them into the mover, raise the bank tick, then dispatch on the +0x18
+   mode -- 0 refreshes once, 1 refreshes +0x1A times, 2 refreshes every +0x1A
+   frames off the +0x1C counter -- and raise the redraw bit when the frame
+   count runs out or when the view's +0x14 carries 0x8000.  114 words,
+   0 differing, FIRST COMPILE.  2 members, 228 words (dngfam.py).
+
+   NO TWIN by either tool: dngtwin's only row is func_s02_8002443C at 1.000,
+   which is this function's exact clone and STILL AN INCLUDE_ASM, so there was
+   nothing to read.  It is written from the listing, and it compiled first
+   time because func_s01_80024024 and func_s01_80024448 were already in this
+   file: the bank tick symbol, the D_800814A0 kill pair and their spellings
+   all came from them, and the only new declaration is func_800478B8.
+
+   FOUR SPELLINGS MEASURED HERE, since a first compile prices nothing:
+
+   LOAD-BEARING:
+   * THE TWO TAIL GATES ARE SEPARATE `if's WITH THE BLOCK WRITTEN OUT TWICE.
+     As one `if (frames <= 0 || (view & 0x8000))' it is 106 words / 13
+     aligned differences -- the eight missing words are the second copy.
+     Note this is the OPPOSITE of func_s01_80024448 forty words above, which
+     wants exactly that gate shared; the discriminator is the target, not a
+     house style.
+   * THE TICK STORE IS THE EIGHTH STATEMENT, after the three mover adds.
+     First in the function it is 115 words / 11; before the three mover adds
+     it is 115 / 13.  (And again the opposite of func_s01_80024024, where
+     first is the only position that measures 0.)
+   * THE SWITCH ARMS ARE WRITTEN ASCENDING 0, 1, 2.  Descending is 111 words
+     / 24: this is a COMPARE-CHAIN switch, not a table, so the arms emit in
+     source order and the order is priced.
+   * THE `case 1' LOOP RE-READS ITS BOUND.  `n = *(s16 *)(p + 0x1A);' in
+     front of the loop is 115 words / 44 differences -- loop.c hoists the
+     load, the `lh' leaves the body and the whole loop is rebuilt.
+
+   MEASURED AND FREE, so NOT why this lands: the `case 2' counter bump folded
+   into its own gate, `if ((s16)(*(u16 *)(p + 0x1C) += 1) >= ...)', is also
+   114 words / 0 differing.  Two statements is kept because it reads better. */
+void func_s02_8002443C(u8 *p, UnkVec *v, u8 *c)
+{
+    s32 i;
+
+    *(u16 *)(p + 0x2) -= 1;
+    *(s32 *)(p + 0x58) += *(s32 *)(p + 0x64);
+    *(s32 *)(p + 0x5C) += *(s32 *)(p + 0x68);
+    *(s32 *)(p + 0x60) += *(s32 *)(p + 0x6C);
+    v->unk_00 += *(s32 *)(p + 0x58);
+    v->unk_04 += *(s32 *)(p + 0x5C);
+    v->unk_08 += *(s32 *)(p + 0x60);
+    D_80025914 = 1;
+    switch (*(s16 *)(p + 0x18))
+    {
+    case 0:
+        func_800478B8(c);
+        break;
+    case 1:
+        for (i = 0; i < *(s16 *)(p + 0x1A); i++)
+        {
+            func_800478B8(c);
+        }
+        break;
+    case 2:
+        *(u16 *)(p + 0x1C) += 1;
+        if (*(s16 *)(p + 0x1C) >= *(s16 *)(p + 0x1A))
+        {
+            func_800478B8(c);
+            *(s16 *)(p + 0x1C) = 0;
+        }
+        break;
+    }
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_80024604);
 

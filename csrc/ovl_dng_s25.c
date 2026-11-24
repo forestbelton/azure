@@ -243,7 +243,12 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s25", func_s25_800246D0);
    csrc/ovl_dungeon_8009F644.c -- and the walk block here is written off
    their measured spellings: `((x << 6) + 0x20) & 0xFFE0', `(s16)(z - 0x20)',
    and `D_8006CCD8[dir] & 0xFFFF' for the unsigned step against the plain
-   signed read inside the func_800BCB04 argument. The gate idiom in state 1's
+   signed read inside the func_800BCB04 argument.  CAVEAT, added in batch 25:
+   that `& 0xFFFF' spelling is THIS body's and does not transfer.  On
+   func_s55_80025C80 (449 words) it is 16 aligned differences and
+   `(u16)D_8006CCD8[dir]' is 2 -- the mask form flips which of $v0/$v1 holds
+   the table base and swaps the scratch pair through 70 words of two later
+   blocks.  Both spellings are the same value; price them per body. The gate idiom in state 1's
    head is csrc/ovl_dungeon.c:5684's verbatim. So: the shape came from the
    LISTING, and the route that supplied the spellings was the callee-set
    grep, not shape matching.
