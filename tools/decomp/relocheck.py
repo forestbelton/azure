@@ -91,7 +91,25 @@ PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 #                `ovlverify' pins a table's CONTENT through the words and the
 #                dispatcher checks its PLACEMENT at the build gate, so this
 #                tool is not the thing that should chase them.
-SYM = re.compile(r"\b(D_(?:[a-z0-9]+_)?8[0-9A-Fa-f]{7})\b")
+# ONLY `%lo' OCCURRENCES COUNT, and the reason is arithmetic rather than
+# convention.  A `%hi' is PAGE-GRANULAR: D_8006CCD8 and D_8006CCE8 are 0x10
+# apart and both have %hi = 0x8007, so `lui $v0, %hi(D_8006CCD8)' and
+# `lui $v0, %hi(D_8006CCE8)' assemble to the SAME word.  A `%hi' therefore
+# carries no symbol identity within a 64K page, which is exactly the range in
+# which a wrong-bank-table defect lives.
+#
+# Worse, the two sides SPELL an unpaired `%hi' differently.  When splat has no
+# `%lo' to pair one with, it emits a bare immediate -- in batch 24,
+# `lui $v0, (0x80070000 >> 16)' where the compiler writes
+# `lui $2, %hi(D_8006CCE8)'.  Counting every occurrence made that a mismatch
+# (build 4 `%hi' + 3 `%lo' against the listing's 3 + 3) on a body that is
+# 656/656 words, 0 differing, in a byte-identical container.
+#
+# `%lo' is where a symbol's low 16 bits actually land, so it is the only half
+# that distinguishes two symbols in one page -- and it still catches the defect
+# this tool was built for: D_80175554 and D_8017555C differ in their `%lo'
+# (0x5554 against 0x555C) even though their `%hi' is identical.
+SYM = re.compile(r"%lo\((D_(?:[a-z0-9]+_)?8[0-9A-Fa-f]{7})\)")
 # Call targets: `jal <name>' on either side. Bank-local (func_b38_8017...) and
 # plain address forms (func_80069ef8) both match; so do real names.
 CALL = re.compile(r"\bjal\s+([A-Za-z_][A-Za-z0-9_]*)")

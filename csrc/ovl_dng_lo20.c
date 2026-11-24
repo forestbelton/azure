@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 func_lo20_800258B0(u8 *p, void *b, void *c, u8 *d);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_8001E814);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025040);
@@ -30,7 +32,23 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025850);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025888);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800258B0);
+/* A stub that always reports "no": two words, `jr $ra' with
+   `addu $v0, $zero, $zero' in the delay slot.  Replicated by dngclone from
+   func_b55_80172328 (csrc/ovl_dng_b55.c), which is the same two words.
+   2 words, 0 differing.
+
+   Its caller here is func_lo20_80025A0C, still an INCLUDE_ASM, which is why
+   the four parameters are the ones the pre-existing forward declaration in
+   this unit names even though the body reads none of them.
+
+   (The b55 original's comment cited ITS caller, func_b55_80171BE0, and
+   dngclone carried that sentence over while renaming only the symbols in its
+   own map -- so the replicated comment named another unit's caller as if it
+   were local.  Rewritten here; see docs/matching-levers.md.) */
+s32 func_lo20_800258B0(u8 *p, void *b, void *c, u8 *d)
+{
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800258B8);
 
@@ -56,7 +74,8 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025D9C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025E3C);
 
-void func_lo20_80025FF4(void) {
+void func_lo20_80025FF4(void)
+{
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025FFC);
@@ -197,7 +216,8 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800280F4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800280FC);
 
-void func_lo20_80028208(void) {
+void func_lo20_80028208(void)
+{
 }
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80028210);

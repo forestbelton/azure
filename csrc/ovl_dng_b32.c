@@ -131,6 +131,43 @@ void func_800AD4D0(u8 *);
 void func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
 extern u8 D_80174F10[];
 
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+s32 func_800A7A7C(s16, s16, s16, s32, u8 *);
+typedef struct UnkDngB36Tri
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+} UnkDngB36Tri;
+typedef struct UnkDngB36TriSet
+{
+    UnkDngB36Tri unk_00[3];
+} UnkDngB36TriSet;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80170908);
 
 u8 *func_b32_80170AF4(s16 a, u16 b, u16 c, s16 d)
@@ -2241,7 +2278,83 @@ const u8 D_b32_801708BC[] = {
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80174428);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80174978);
+/* The 0x12 marker node's +0x10 step: the banked relink of the resident
+   func_800B80D8 (csrc/ovl_dungeon_800B6AC4.c:821, 84 words, xsibs 0.781) --
+   the same three-state switch with case 0 falling through into case 1, the
+   same `--counter == 0' test, the same `*(u16 *)(p - 0x2) |= 0x8000' and
+   D_800814A0 publish. The state byte is p[0x9B] where the resident uses an
+   s16 at +0xA2 and the counter is +0x96; case 1 gains the two half-step eases
+   toward p+0xA8/p+0xAA, and case 2's func_800A7A7C call gains
+   *(s32 *)(c + 0x8) and p + 0x48 as its last two arguments. The fourth
+   parameter `d' is unused -- $a3 is overwritten with $a1 in the prologue.
+   103 words, 0 differing. This is a 2-member clone family with
+   func_b32_80174978; relcand is clean on both.
+
+   THE ONE FACT THAT HAD TO BE FOUGHT FOR IS CASE 1's STATEMENT ORDER: both
+   eases BEFORE the +0x14/+0x8 integration, not around it. The wrong orders
+   are not a shape fault -- the body is 103 words either way and every row is
+   the `lui 0x30000' and the `lh 0xAA($s0)' scheduled late, because with the
+   integration between the eases the second ease reuses $v0/$v1 and its loads
+   cannot be hoisted above easeX's store. X = ease at b+0x2, Y = ease at
+   b+0x6, V = the +0x14/+0x8 integration:
+
+   | case-1 statement order                              | words | aligned |
+   | X Y V, as written below                             |  103  |    0    |
+   | X V Y                                               |  103  |   17    |
+   | V X Y                                               |  103  |   22    |
+   | V Y X                                               |  103  |   31    |
+   | Y V X                                               |  103  |   31    |
+   | Y X V                                               |  103  |   39    |
+
+   | other spellings                                     | words | aligned |
+   | no `x'/`y' embedded assignment in the two eases      |  103  |   16    |
+   | the resident's two separate `+= 0x50' on c+0x1C/1E  |  102  |    7    |
+   | `-= 1' then a re-read in place of `--... == 0'      |  103  |    0    |
+
+   The embedded `(x = ... - 0x20)' is func_b43_80172E8C's fact and it HOLDS
+   here too. The resident's `--*(s16 *)(p + 0xA4) == 0' fact is FREE on this
+   body -- the split decrement also measures 0, so it is NOT the reason this
+   lands; it is kept because it is the more natural C. And the resident's
+   c+0x1C/+0x1E pair INVERTS: this relink stores the +0x1E value into BOTH
+   halves, one `lhu' and not two. */
+void func_b32_80174978(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 x;
+    s32 y;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 2;
+            return;
+        }
+        *(s16 *)(p + 0x96) = 0xC;
+        p[0x9B]++;
+        /* fallthrough */
+    case 1:
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) + (((*(s16 *)(p + 0xA8) << 6) - (x = *(s16 *)((u8 *)b + 0x2) - 0x20)) >> 1);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) + (((*(s16 *)(p + 0xAA) << 6) - (y = *(s16 *)((u8 *)b + 0x6) - 0x20)) >> 1);
+        b->unk_14 += 0x30000;
+        b->unk_08 += b->unk_14;
+        if (*(u16 *)(c + 0x1C) < 0x1000)
+        {
+            *(u16 *)(c + 0x1C) = *(u16 *)(c + 0x1E) += 0x50;
+        }
+        if (--*(s16 *)(p + 0x96) == 0)
+        {
+            b->unk_14 = 0;
+            p[0x9B]++;
+        }
+        break;
+    case 2:
+        func_800A7A7C(*(s16 *)(p + 0xA8), *(s16 *)(p + 0xAA), *(u16 *)((u8 *)b + 0xA) - 0x20, *(s32 *)(c + 0x8), p + 0x48);
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b32", func_b32_80174B14);
 
