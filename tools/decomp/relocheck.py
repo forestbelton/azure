@@ -57,6 +57,20 @@ PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 #   D_1F8000xx   the scratchpad. C writes it as an absolute constant
 #                (`*(s32 *)0x1F80013C'), so the build has no symbol at all
 #                where the listing names one. 69 of the 71.
+#   below the resident code start, 0x8003c9f8. Same mechanism as the
+#                scratchpad and the same reason: an address this low is not in
+#                any loaded image, splat INFERS the name from the `lui'/`lhu'
+#                pair, and the C that matches is often the bare constant. The
+#                first real report this tool produced was exactly that --
+#                func_b31f_8016D6F0 names `D_80013714' twice in its listing and
+#                nothing in the build, because `(*(u16 *)0x80013714 & 8)' is
+#                the ONLY spelling that lands (the declared symbol puts a
+#                separate `%hi' where reorg lifts it into a delay slot the
+#                target leaves empty: 234 words / 1 aligned difference).
+#                The body is correct at 0 differing and the container is
+#                byte-identical. A bank-local table -- which is what this tool
+#                exists to check -- is always in the overlay slot or the
+#                resident data above that boundary, so nothing is lost.
 #   jtbl_*       a LANDED jump table is cc1psx's own `$L95'-style local label,
 #                not the listing's `jtbl_' name, so a landed table owner
 #                always looks like it dropped its table. The remaining 2.
@@ -64,6 +78,15 @@ PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 #                dispatcher checks its PLACEMENT at the build gate, so this
 #                tool is not the thing that should chase them.
 SYM = re.compile(r"\b(D_(?:[a-z0-9]+_)?8[0-9A-Fa-f]{7})\b")
+# Resident code starts at 0x8003c9f8; nothing below that can be a bank table.
+LOW = 0x8003C9F8
+
+
+def interesting(name):
+    try:
+        return int(name[-8:], 16) >= LOW
+    except ValueError:
+        return True
 
 
 def listing_syms(unit, func):
@@ -75,7 +98,8 @@ def listing_syms(unit, func):
     # A jump table BELONGS to the function, it is not a reference to one, and
     # the listing defines it in a `.section .rodata' block at the head.
     t = re.sub(r"\.section \.rodata.*?\.section \.text", "", t, flags=re.S)
-    return collections.Counter(m.group(1) for m in SYM.finditer(t))
+    return collections.Counter(m.group(1) for m in SYM.finditer(t)
+                               if interesting(m.group(1)))
 
 
 def built_syms(unit):
@@ -92,7 +116,9 @@ def built_syms(unit):
             cur, buf = m.group(1), []
             continue
         if re.match(r"^\s*\.end\b", ln) and cur:
-            out[cur] = collections.Counter(x.group(1) for x in SYM.finditer("\n".join(buf)))
+            out[cur] = collections.Counter(
+                x.group(1) for x in SYM.finditer("\n".join(buf))
+                if interesting(x.group(1)))
             cur = None
             continue
         if cur is not None:

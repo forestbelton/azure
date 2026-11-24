@@ -1017,7 +1017,156 @@ void func_b45_801722DC(u8 *p, void *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b45", func_b45_80172374);
+/* The banked room script's three-state "knocked back and falling" handler:
+   state 0 arms the fall, state 1 integrates it into b->unk_0C/unk_10 while
+   the +0x96 countdown runs, state 2 publishes the landing, and the shared
+   tail after the switch zeroes the velocity and re-installs the walk
+   handler.  187 words, 0 differing, FIRST COMPILE.
+
+   The relinked twin of the landed func_b43_80172404 (csrc/ovl_dng_b43.c),
+   which is itself the resident overlay's func_800D991C.  Its prologue is
+   IDENTICAL to this one -- `addiu $sp, -0x38' with s0, s1, s3, s2, ra saved
+   in that order and a0->s0, a1->s1, a2->s3, a3->s2 -- so by the frame rule
+   every one of its facts was expected to carry, and every one did.
+
+   FOUR DELTAS FROM b43, all read off this listing:
+     - THIS COPY OWNS NO TABLE.  b43 stores a bank-local BYTE table at
+       c+0x2C and pushes it through func_80047784 in BOTH state 0 and state 2
+       (and the resident pushes a POINTER table through func_8003DB94 in
+       state 2); this body has neither store and neither call, which is all
+       30 words of the difference from b43's 217.  There is no `.section
+       .rodata' block either, so this function owns no jump table: the
+       three-way dispatch is a compare chain.
+     - state 0's leading gate is `*(s16 *)(p + 0x96) != 8' where b43's is
+       `(*(u16 *)(c + 0x14) & 0x6000) == 0'; both `break' out of the switch
+       to the countdown.
+     - the accumulator is +0xA4 (the resident's), with b43's 0xFFEE0000 fall
+       seed and a 0x40000 per-frame step.
+     - `func_800AD594(d, 5)' and `*(s16 *)(p + 0x96) < 3' where the resident
+       and b43 have 4 and 2.  Each is 1 differing spelled their way.
+
+   b43's TWO NAMED FACTS, BOTH HELD AND BOTH RE-MEASURED HERE:
+     the FIRST numerator must be three statements -- `u = c[0x24] << 6;
+     w = b2 - 0x20; u -= w;'.  As one expression it is 1 differing; as two
+     statements (the temp only for `w') it is 4.
+     the SECOND numerator must stay TWO statements.  Written as three, the
+     way the first one is, it is 188 words and 138 differing -- b43 priced
+     the same change at 1 word and 145 on the resident.
+
+   ALSO MEASURED AND LOAD-BEARING, neither of them named by b43:
+     the `g = (u8 *)&D_80083460' pointer local for the +0x8 decrement.  The
+     symbol written out twice instead is 186 words and 54 differing.  Note
+     that this frame is -0x38 with FOUR saves, not the seven the other
+     D_80083460 bodies in this block carry, and the pointer local is still
+     the right answer.
+     the three velocity stores in 0x14, 0x10, 0x0C order.  Reversed they are
+     2 differing.
+     the tail's `if / else if / if'.  Folded to
+     `else if ((v & 0x410) == 0 && (v & 0x20000) != 0)' it is 9 differing --
+     fold_truthop merges the two bit tests on `v' exactly as b43's note
+     predicts.
+
+   MEASURED AND FREE at 187 words / 0 differing, so NOT the reason this
+   lands:
+     the `else if' written as `else { if ... }' with its own braces
+     the d+0x46 halfword read inline at both uses instead of through `y'
+
+   All three %hi/%lo pairs name resident symbols or this unit's own
+   func_b45_80170E54 -- D_80082E80, D_80083460, func_b45_80170E54 -- so no
+   bank-local table identity is at stake; `--raw' is 16 differing and every
+   one is a relocation. */
+void func_b45_80172374(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    s32 u;
+    s32 w;
+    s32 v;
+    u16 x;
+    u16 y;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if (*(s16 *)(p + 0x96) != 8)
+        {
+            break;
+        }
+        *(u16 *)(p + 0x98) |= 8;
+        b->unk_14 = 0xFFEE0000;
+        *(s32 *)(d + 0x1C) &= ~0x8000000;
+        *(s32 *)(p + 0xA4) = 0;
+        p[0x9B] += 1;
+    case 1:
+        *(s32 *)(p + 0x90) -= *(s32 *)(p + 0xA4);
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            u = c[0x24] << 6;
+            w = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            u -= w;
+            b->unk_0C = (u << 16) / *(s16 *)(p + 0x96);
+            w = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - w) << 16) / *(s16 *)(p + 0x96);
+            *(s32 *)(p + 0xA4) += b->unk_14;
+            b->unk_14 += 0x40000;
+        }
+        *(s32 *)(p + 0x90) += *(s32 *)(p + 0xA4);
+        if (*(s16 *)(p + 0x96) < 3)
+        {
+            *(s32 *)(p + 0x90) = 0;
+            *(u16 *)(p + 0x98) &= ~8;
+            *(s32 *)(d + 0x1C) |= 0x8000000;
+            p[0x9B] += 1;
+        }
+    case 2:
+        if ((*(s32 *)(d + 0x1C) & 0x8000000) != 0)
+        {
+            *(u16 *)(p + 0x98) &= ~8;
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            p[0x9B] += 1;
+        }
+        break;
+    }
+
+    if ((*(s16 *)(p + 0x96) -= 1) > 0)
+    {
+        return;
+    }
+    b->unk_14 = 0;
+    b->unk_10 = 0;
+    b->unk_0C = 0;
+    func_800A2B04(b, c[0x24], c[0x25]);
+    func_800AD594(d, 5);
+    func_800A4ACC(d);
+    g = (u8 *)&D_80083460;
+    if (*(s16 *)(g + 0x8) != 0)
+    {
+        *(u16 *)(g + 0x8) -= 1;
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) != 0)
+    {
+        y = *(u16 *)(d + 0x46);
+        if ((y & 0x8000) != 0)
+        {
+            *(u16 *)(d + 0x46) = y & 0x7FFF;
+        }
+    }
+    else if ((v & 0x410) == 0)
+    {
+        if ((v & 0x20000) != 0)
+        {
+            *(s16 *)(d + 0x2A) = func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+        }
+    }
+    if ((s16)func_800AD9B4(c, d) > 0)
+    {
+        *(u32 *)(p + 0x8C) = (u32)func_b45_80170E54;
+        func_800A9A04(d);
+    }
+}
 
 /* A two-gate handler installer: the outer gate is called with no arguments at
    all -- no instruction sets up $a0..$a3 before it -- so the four incoming
