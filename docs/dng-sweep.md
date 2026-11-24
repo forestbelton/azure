@@ -734,6 +734,63 @@ safe, because a table whose function is still `INCLUDE_ASM` comes from asm
 with no `.align` at all. It will need the same carve when that function lands,
 and `dngrodata.py` reports both by name on every run.
 
+#### Re-measured in batch 12: one of the two is landable and the other never is
+
+The paragraph above has the mechanism right and the remedy wrong. A `c` split
+cannot fix it, because the obstacle is SECTION alignment, not subsegment
+boundaries: a `.rodata` whose first item is a jump table has alignment 8, and
+no linker can place an 8-aligned section at a 4-mod-8 address. Splitting the
+segment into two objects moves the problem, it does not solve it.
+
+**Where the `.align 3` comes from, and that there is no flag for it.**
+`final.c:1517`, before every `ADDR_VEC`:
+
+    readonly_data_section ();
+    ASM_OUTPUT_ALIGN (file, exact_log2 (BIGGEST_ALIGNMENT / BITS_PER_UNIT));
+
+`mips.h:1080` has `BIGGEST_ALIGNMENT 64`, `BITS_PER_UNIT` is 8, so the
+argument is `exact_log2(8)` = 3, unconditionally, for every jump table this
+compiler emits. Confirmed in the output: across every built `.s` in this
+project, 96 `.rdata`/`.align 3` pairs and 58 `.align 2` pairs, and not one of
+the `.align 2` cases is followed by a `$L` jump-table label -- they are all
+`D_` constants. **No jump table this toolchain emits is 4-aligned.** So
+`0x80016034` is unreachable from C, and the original lo16 object was built by
+something that 4-aligned its tables -- a provenance difference like the twin
+block's, not a configuration we can reach.
+
+**But splat never emits a wrong `.align`, and that is the opening.** Measured
+over all 223 stub jump tables in the carve:
+
+    addr mod 8 = 0    `.align 3`   222 tables
+    addr mod 8 = 4    no directive   1 table   (jtbl_b31f_8016A8B4)
+
+It emits the directive only when the address is 8-aligned and omits it
+otherwise, so a 4-mod-8 table coming FROM ASM lands correctly -- which is why
+b31f is byte-identical today. The two cases therefore differ:
+
+* `func_lo16_8001D4AC` owns `jtbl_lo16_80016000`, at OFFSET 0 of the rodata
+  region, where `.align 3` is a no-op. **It is landable.** Its table lives in
+  `asm/data/2A3000.data.s` only because `0x2a3000` is an unattributed `data`
+  subsegment; attributing it as `.rodata, ovl_dng_lo16` makes gcc's table the
+  first `.rodata` contribution and the still-stubbed second table follow it
+  at 0x34 with no directive of its own. The source order is already right:
+  `8001D4AC` precedes `8001E824` in the file. 75 words.
+* `func_lo16_8001E824` owns `jtbl_lo16_80016034`. **It can never land as C**
+  while that table has to sit at 4 mod 8. 82 words, permanently
+  `INCLUDE_ASM`, by `final.c:1517`.
+
+Verified read-only: the whole `0x2a3000..0x2a307c` block is exactly the two
+tables and nothing else -- 31 words, all of them addresses inside the two
+owning functions (13 entries into `func_lo16_8001D4AC`, 18 into
+`func_lo16_8001E824`) -- and `ovl_dng_lo16.o` has no `.rodata` section at
+all today, so no landed lo16 function contributes anything that would shift
+the offsets.
+
+The one-line change and the landing are deliberately NOT done in this commit:
+`make` re-runs splat and deletes the listings the batch-12 agents are
+measuring against. `dngpick` keeps excluding both functions until the change
+is made and the build gate confirms it.
+
 `func_b03_80170E54`'s whole six-member family is landed.
 
 # Batch 6: 15 of 15, and the jump tables pay off twice

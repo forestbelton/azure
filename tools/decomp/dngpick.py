@@ -26,9 +26,26 @@ Excluded by default:
   * EVERY FUNCTION THAT OWNS A JUMP TABLE IN A UNIT WITH NO `.rodata'
     SUBSEGMENT -- computed, not named. Such a function verifies at 0
     differing and then moves the container, because ovlverify measures a
-    function's own words and not where its table lands. Today that is two
-    functions in ovl_dng_lo16, whose second table is 4 mod 8 relative to the
-    rodata start and needs a matching `c' split first (docs/dng-sweep.md).
+    function's own words and not where its table lands. Today that is the two
+    jump-table owners in ovl_dng_lo16, and they are blocked for DIFFERENT
+    reasons (re-measured in batch 12, docs/dng-sweep.md):
+
+      func_lo16_8001D4AC  owns jtbl_lo16_80016000, at OFFSET 0 of the region,
+        where cc1psx's `.align 3' is a no-op. LANDABLE as soon as 0x2a3000 is
+        attributed `.rodata, ovl_dng_lo16' instead of being a bare `data'
+        subsegment. 75 words waiting on a one-line yaml change and a build.
+      func_lo16_8001E824  owns jtbl_lo16_80016034, 4 mod 8. NEVER landable.
+        final.c:1517 emits `ASM_OUTPUT_ALIGN (exact_log2 (BIGGEST_ALIGNMENT /
+        BITS_PER_UNIT))' before every ADDR_VEC, and mips.h:1080 sets
+        BIGGEST_ALIGNMENT 64, so every jump table this compiler emits is
+        8-aligned -- there is no flag. A `c' split does not help: an
+        8-aligned section cannot be placed at a 4-mod-8 address either.
+        82 words, permanently INCLUDE_ASM.
+
+    A 4-mod-8 table is fine while its owner is a STUB: measured over all 223
+    stub jump tables, splat emits `.align 3' for the 222 that are 8-aligned
+    and NO directive for the one that is not (jtbl_b31f_8016A8B4), which is
+    why b31f is byte-identical today.
   * anything named with --busy, for a unit an agent still holds.
 
 `ovl_dng_lo16' WAS EXCLUDED WHOLESALE AND THAT WAS WRONG. The blocker is
