@@ -65,3 +65,28 @@ comment in `csrc/`, anything that transfers to another function belongs in
 agent to read -- and git has the file itself at its full content if anyone
 ever wants the whole rejected table back. A third copy in a directory nobody
 opens is not an archive.
+
+
+## KNOWN GAP: `parkresidue.py` CANNOT MEASURE TWO OF THESE SIX
+
+`parkresidue.py` reaches the carved block's parks as of batch 12 and
+reproduces four of their headers exactly (func_s69_80024C38 at 4,
+func_s21_80024050 at 61, func_s14_80024AE4 at 65, func_b12_80173FDC at 97,
+func_s27_80024E64 at 152). Two SKIP, and both for the same kind of reason --
+splicing a park's `DECLARATIONS` block into a unit that has since grown its
+own declarations breaks a DIFFERENT, already-landed function in that unit:
+
+    func_s20_80026010    CompileError in func_s20_80024EF4
+    func_s21_80025BA0    CompileError in func_s21_80024A68
+
+So those two headers' figures are currently UNVERIFIED by tooling. Treat them
+as the landing agent's measurement rather than a reproduced one, and if you
+pick one up, re-measure before you believe its number.
+
+The fix belongs in `parkresidue.adopt()`, which already exists to reconcile a
+park's declarations against the unit's: it needs to drop a park declaration
+the unit now defines or declares incompatibly, rather than adding a second
+one. A hand-rolled splice is NOT a substitute -- one written during batch 12
+omitted that reconciliation entirely and duplicated a `typedef struct` the
+unit already had, which fails with `redefinition of struct' and looks like a
+broken park.
