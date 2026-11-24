@@ -779,6 +779,21 @@ b31f is byte-identical today. The two cases therefore differ:
   while that table has to sit at 4 mod 8. 82 words, permanently
   `INCLUDE_ASM`, by `final.c:1517`.
 
+**AND THE ROM ITSELF CARRIES THE PADDING, which makes lo16 anomalous rather
+than merely awkward.** `jtbl_b44_80170868` (landed in batch 13) sits at rodata
+offset 0x60 and has SEVEN live entries, 0x1C bytes, ending at 0x7C -- which is
+4 mod 8 -- and the ROM has **one word of zero padding** there before the next
+item. That is exactly what `.align 3` on the following item produces, so the
+original toolchain 8-aligned its rodata items the same way this one does, and
+the ROM shows it doing so. A landed C body reproduces that padding for free
+because cc1psx emits the same directive.
+
+So lo16's `jtbl_lo16_80016034` is not a case of the original compiler being
+laxer in general: everywhere else in this block it aligned exactly as we do.
+Whatever produced lo16's two adjacent 4-aligned tables was a different
+toolchain or a different source form, which is the same shape of answer as
+the twin block's FSF-gcc provenance and not a flag we are missing.
+
 Verified read-only: the whole `0x2a3000..0x2a307c` block is exactly the two
 tables and nothing else -- 31 words, all of them addresses inside the two
 owning functions (13 entries into `func_lo16_8001D4AC`, 18 into
