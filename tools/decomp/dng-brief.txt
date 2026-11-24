@@ -472,6 +472,23 @@ IF A CALLEE HAS A REAL NAME, USE IT.** Before declaring
   that made it land and what the wrong spellings cost. Measured numbers only;
   never write a mechanism you did not verify. If function three landed because
   function one was already there, say that in function three's comment.
+* **A MISSING register-to-register COPY IS USUALLY A PARAMETER THAT DIES AT
+  ITS COPY, AND THE FIX IS FREE.** Read this before reaching for any device.
+  If `h = p` is the last use of the parameter `p`, regmove folds `p = $a0`
+  into it, your alias chain is one pseudo short and every callee-saved name
+  after it sits one position early. Keeping `p` live past the copy -- most
+  naturally by REUSING THE PARAMETER AS THE LOOP CURSOR instead of
+  introducing a separate one -- makes the copy survive.
+  `func_b09_801745BC` went from a 19-difference PARK to 145/145 at 0
+  differing on that one change, with every other spelling in its park table
+  already correct; `func_b09_80174800` in the same unit is 73 words / 15
+  differences with a separate cursor and 74 words / 0 written this way.
+  It costs no words, invents no statement, and is the more natural C.
+  Tell the two failures apart off the residue before choosing a fix:
+  an extra or missing `move` with every later register displaced is a WRONG
+  PSEUDO COUNT, and a reference bump is the wrong tool for it; the same
+  pseudos with two callee-saved names exchanged is a WRONG PRIORITY, which is
+  what a bump is for.
 * A decomp device is allowed and `docs/landing-a-function.md` says how to
   annotate one. Prefer a plain-C device (a `do { x; } while (0)` reference
   bump, a duplicated arm) to an `__asm__` one, and record the plain scores you
