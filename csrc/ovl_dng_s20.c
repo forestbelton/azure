@@ -584,7 +584,97 @@ void func_s20_80025A58(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_80025E4C);
+/* BEGIN func_s20_80025E4C
+   THIS COPY'S OWN CONSTANT: 0x34 -> 0x30, 0x3c -> 0x38, 0x44 -> 0x40, 0x4c -> 0x48, 0x38 -> 0x34, 0x40 -> 0x3c, 0x48 -> 0x44, 0x50 -> 0x4c, 0x54 -> 0x50, 0x58 -> 0x54.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+/* The renderer for func_s21_800255E8's 0x202 node: one semi-transparent
+   POLY_G4 and one DR_MODE per node of the tag chain, with the quad's four
+   corners read straight out of the node payload's +0x34..+0x53 record and its
+   two colour words out of +0x54/+0x58.  113 words, 0 differing.
+
+   Written against two already-landed neighbours in this same unit, so only
+   one thing had to be found: func_s21_80024A68 supplies the
+   D_80083160/+0x8D0 cursor prologue, the `sp->unk_18' before `sp->unk_20'
+   order, the RotTransPers4 argument list, the CHAINED colour pairs
+   (`q->r0 = q->r1 = ...' emits +0x0C before +0x04) and the
+   GetTPage/func_80067F20/AddPrim tail; func_s21_80024ED0 supplies the
+   `while (1) { ... n = *(UnkNode **)(p - 0x8); if (n == NULL) break;
+   p = (u8 *)n + 0x20; }' walk.
+
+   THE ONE SPELLING FACT: THE FOURTH CORNER'S WORD IS HOISTED INTO A LOCAL AND
+   STORED SEVENTH.  Written in place as the fourth of eight stores, its `lw'
+   and `sw' sit next to each other, the `lhu 0x38' cannot cover the `lw
+   0x44' load delay, and the body is 114 words with a third `nop'.  Read into
+   `w' after the third word and stored after the `lhu 0x48', the 0x4C value
+   lives in $v1 across nine insns and the block costs two `nop's instead of
+   three.  Measured, all at 113 or 114 words:
+
+     w0 w1 w2 w=0x4C v0 v1 v2 w3=w v3   (this body)   113 words,  0
+     w0 w1 w2 w=0x4C v0 v1 w3=w v2 v3   113 words,  2 aligned differences
+     w0 w1 w2 w=0x4C v0 v1 v2 v3 w3=w   113 words,  4
+     w0 w1 w2 w3 v0 v1 v2 v3            114 words,  6
+     w3 w0 w1 w2 v0 v1 v2 v3            114 words,  6
+     w0 w1 w2 v0 v1 w3 v2 v3            114 words,  9
+     w0 w1 w2 v0 v1 v2 v3 w3            114 words, 12
+     w0 w1 v0 v1 w2 v2 w3 v3            114 words, 15
+     w0 v0 w1 v1 w2 v2 w3 v3            114 words, 20
+     v0 v1 v2 v3 w0 w1 w2 w3            114 words, 29
+
+   raw 9 == the 9 relocations: a HI16/LO16 pair on D_80083160 plus a second
+   LO16 for the `lw', and R_MIPS_26 on RotTransPers4, SetPolyG4, AddPrim,
+   GetTPage, func_80067F20 and AddPrim again. */
+s32 func_s20_80025E4C(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    UnkDng24EF4SP *sp = (UnkDng24EF4SP *)0x1F800000;
+    Unk80083160 *g = &D_80083160;
+    UnkNode *n;
+    POLY_G4 *q;
+    DR_MODE *dm;
+    u32 w;
+
+    sp->unk_18 = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_20 = D_80083160.unk_00 + 0xB0;
+    while (1)
+    {
+        q = (POLY_G4 *)sp->unk_18;
+        sp->unk_18 = (u8 *)(q + 1);
+        *(u32 *)&sp->unk_70[0] = *(u32 *)(p + 0x30);
+        *(u32 *)&sp->unk_70[1] = *(u32 *)(p + 0x38);
+        *(u32 *)&sp->unk_70[2] = *(u32 *)(p + 0x40);
+        w = *(u32 *)(p + 0x48);
+        sp->unk_70[0].vz = *(u16 *)(p + 0x34);
+        sp->unk_70[1].vz = *(u16 *)(p + 0x3c);
+        sp->unk_70[2].vz = *(u16 *)(p + 0x44);
+        *(u32 *)&sp->unk_70[3] = w;
+        sp->unk_70[3].vz = *(u16 *)(p + 0x4c);
+        sp->unk_C0 = RotTransPers4(&sp->unk_70[0], &sp->unk_70[1], &sp->unk_70[2], &sp->unk_70[3],
+                                   (s32 *)&q->x0, (s32 *)&q->x1, (s32 *)&q->x2, (s32 *)&q->x3,
+                                   &sp->unk_90, &sp->unk_94) -
+                     0x8;
+        if ((u32)sp->unk_C0 < 0x1E0)
+        {
+            *(u32 *)&q->r0 = *(u32 *)&q->r1 = *(u32 *)(p + 0x50);
+            *(u32 *)&q->r2 = *(u32 *)&q->r3 = *(u32 *)(p + 0x54);
+            SetPolyG4(q);
+            setSemiTrans(q, 1);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, q);
+            dm = (DR_MODE *)sp->unk_18;
+            sp->unk_18 = (u8 *)(dm + 1);
+            func_80067F20((u32 *)dm, 0, 0, GetTPage(0, 1, 0, 0), 0);
+            AddPrim(sp->unk_20 + sp->unk_C0 * 4, dm);
+        }
+        n = *(UnkNode **)(p - 0x8);
+        if (n == NULL)
+        {
+            break;
+        }
+        p = (u8 *)n + 0x20;
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)sp->unk_18;
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_80026010);
 

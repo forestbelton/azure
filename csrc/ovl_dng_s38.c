@@ -90,6 +90,64 @@ typedef struct UnkDng264D4SP
     UnkDng264D4Vec unk_98[4];
 } UnkDng264D4SP;
 
+typedef struct UnkDng24094SP
+{
+    u8 pad_00[0x8];
+    Unk3DBD0W unk_08;
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    u8 pad_18[0x8];
+    u8 *unk_20;
+    u16 unk_24;
+    u8 pad_26[0xA];
+    Unk3DBD0W unk_30;
+    Unk3DBD0W unk_34;
+    Unk3DBD0W unk_38;
+    u8 pad_3C[0x34];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    s16 unk_78;
+    s16 unk_7A;
+    s16 unk_7C;
+    u8 pad_7E[0x2];
+    s16 unk_80;
+    s16 unk_82;
+    s16 unk_84;
+    u8 pad_86[0x2];
+    s16 unk_88;
+    s16 unk_8A;
+    s16 unk_8C;
+    u8 pad_8E[0x2];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x20];
+    u16 unk_B8;
+    u16 unk_BA;
+    u8 pad_BC[0x4];
+    s32 unk_C0;
+    u8 pad_C4[0x20];
+    s32 unk_E4;
+    s32 unk_E8;
+    s32 unk_EC;
+    u16 unk_F0;
+    u16 unk_F2;
+    u16 unk_F4;
+    u16 unk_F6;
+    u16 unk_F8;
+    u16 unk_FA;
+    u16 unk_FC;
+    u16 unk_FE;
+    u16 unk_100;
+    u16 unk_102;
+    u16 unk_104;
+    u16 unk_106;
+    u16 unk_108;
+    u16 unk_10A;
+} UnkDng24094SP;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s38", func_s38_8002404C);
 
 /* The engine's node walk, func_80046398 of csrc/unk_19434.c, relinked here
@@ -172,7 +230,25 @@ s32 func_s38_800248EC(u8 *p, UnkVec *v)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s38", func_s38_80024B3C);
+/* A random sign: rand() & 1, with the zero case turned into -1. 12 words,
+   0 differing. ONE LOCAL CARRIES BOTH VALUES, not two `return's: the target
+   reuses the `andi' result on the taken path and only materialises
+   `addiu $v0, $zero, -0x1' on the fall-through. As
+   `if ((rand() & 1) == 0) return -1; return 1;' it is 12 words and 4
+   differing -- the taken path gets its own `li 1'. 0x80069EF8 is `rand' in
+   splat/common_syms.txt, so the call needs no declaration.
+   raw 1 == relocdump's 1, the R_MIPS_26 on rand. */
+s32 func_s38_80024B3C(void)
+{
+    s32 r;
+
+    r = rand() & 1;
+    if (r == 0)
+    {
+        r = -1;
+    }
+    return r;
+}
 
 /* Spend 8 of the payload's +0x32 life counter, raise the engine's D_800259AC
    tick, and when the counter runs out set the 0x8000 kill bit in the node's

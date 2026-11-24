@@ -46,7 +46,7 @@ typedef struct UnkDng74334SP
     u8 pad_D8[0x28];
     s32 unk_100;
 } UnkDng74334SP;
-void func_s41_80024FB4();
+void func_s41_80024FB4(u8 *p, UnkVec *v);
 
 void func_s41_80025294(u8 *p);
 typedef struct UnkDngS58Blk32
@@ -70,11 +70,156 @@ extern s16 D_800267B8;
 
 UnkNode *func_8003FD64(s32, void *);
 
+s32 func_800BCB04(s32, s32, s16);
+typedef struct UnkDng24094SP
+{
+    u8 pad_00[0x8];
+    Unk3DBD0W unk_08;
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    u8 pad_18[0x8];
+    u8 *unk_20;
+    u16 unk_24;
+    u8 pad_26[0xA];
+    Unk3DBD0W unk_30;
+    Unk3DBD0W unk_34;
+    Unk3DBD0W unk_38;
+    u8 pad_3C[0x34];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    s16 unk_78;
+    s16 unk_7A;
+    s16 unk_7C;
+    u8 pad_7E[0x2];
+    s16 unk_80;
+    s16 unk_82;
+    s16 unk_84;
+    u8 pad_86[0x2];
+    s16 unk_88;
+    s16 unk_8A;
+    s16 unk_8C;
+    u8 pad_8E[0x2];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x20];
+    u16 unk_B8;
+    u16 unk_BA;
+    u8 pad_BC[0x4];
+    s32 unk_C0;
+    u8 pad_C4[0x20];
+    s32 unk_E4;
+    s32 unk_E8;
+    s32 unk_EC;
+    u16 unk_F0;
+    u16 unk_F2;
+    u16 unk_F4;
+    u16 unk_F6;
+    u16 unk_F8;
+    u16 unk_FA;
+    u16 unk_FC;
+    u16 unk_FE;
+    u16 unk_100;
+    u16 unk_102;
+    u16 unk_104;
+    u16 unk_106;
+    u16 unk_108;
+    u16 unk_10A;
+} UnkDng24094SP;
+
+void func_s41_80024190(u8 *a, u8 *pp, u8 *ot, s16 d);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_8002405C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_80024190);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_80024B6C);
+/* The bank's own copy of csrc/ovl_dungeon_800B6AC4.c's func_800B8FC8 (95
+   words): the draw-area / 0x60000000 tint bracket around one call of this
+   object's renderer, line for line, with func_800B9144 replaced by
+   func_s41_80024190 and the resident's `AddPrim' call replaced by libgpu's
+   inline `addPrim' macro. 126 words, 0 differing, 0 aligned differences.
+
+   TWO OF THE TWIN'S DEVICES HAVE TO BE REMOVED HERE, and that is most of the
+   delta. Spelled the twin's way:
+   * `do { ... } while (0)' around the func_s41_80024190 call is 126 words and
+     18 aligned differences. flow.c:2122's `reg_n_refs[regno] += loop_depth'
+     gives the fifth parameter's pseudo 3 references instead of 2 inside the
+     wrapper, lifting its allocno_compare priority from 1*2/24 to 1*3/24 --
+     above the hoisted `%hi(D_80083160)' and the 0xFF000000 constant -- so it
+     takes $s5 instead of the $s7 the target gives it. The twin needs the
+     wrapper for `r'/`g'; this body does not.
+   * `g++; g--;' inside that wrapper is 130 words: four over.
+
+   AND THE FIFTH PARAMETER IS `s16', NOT THE TWIN'S `s32'. As `s32' with
+   `(s16)e' at the call it is 125 words -- a word SHORT -- and 49 aligned
+   differences: assign_parms hangs a REG_EQUIV on a stack parameter's
+   prologue load only when nominal_mode == passed_mode, update_equiv_regs
+   then DOUBLES that pseudo's live length, its allocno loses the last
+   callee-saved register and the same pass deletes the prologue load
+   outright, so the value is read from 0x58($sp) at its use. Declaring the
+   parameter `s16' sets did_conversion, the note is never attached, the
+   pseudo keeps $s7 and the FIRST parameter spills to its own 0x48($sp) home
+   instead -- which is the target's `sw $a0, 0x48($sp)' / `lw $a1, 0x48($sp)'
+   pair.
+
+   BOTH of the twin's own facts hold here and were re-measured. The 0x8D0
+   store has to be the ARRAY REF `((u32 *)X)[0x234]': as
+   `*(u32 *)(X + 0x8D0)' it is 13 aligned differences. And `u16 cw = (u16)c;'
+   has to be hoisted out of the `if' -- the 0x18($sp) slot behind the
+   target's `sh $a3' / `lhu' pair is that HImode pseudo SPILLED, not an array
+   element: `u16 w[6]' with `w[4] = c;' in its place reproduces the slot and
+   the 0xB8-byte frame exactly and is still 14 aligned differences.
+   raw 10 == relocdump's 10: 5 on D_80083160, 2 on D_801C9E40, 3 R_MIPS_26. */
+void func_s41_80024B6C(u8 *p, s32 *b, s32 *b2, s32 c, s16 e)
+{
+    Unk80083160 *g;
+    u8 *q;
+    u8 *r;
+    u8 *u;
+    s16 w[2];
+    s16 lean;
+    s32 t;
+    u16 cw;
+
+    cw = (u16)c;
+    g = &D_80083160;
+    lean = D_80083160.unk_00 != D_801C9E40;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    r = D_80083160.unk_00 + 0x8B0;
+    ((u32 *)D_80083160.unk_00)[0x234] = (u32)(q + 0xC);
+    SetDrawArea(q, D_80083160.unk_00);
+    addPrim(r, q);
+    w[0] = *(u16 *)b2;
+    t = *((s16 *)b2 + 1);
+    if (lean)
+    {
+        t -= 0xE0;
+    }
+    w[1] = t;
+    func_s41_80024190((u8 *)w, p, r, e);
+    if (cw != 0)
+    {
+        u = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(u + 0x10);
+        *(u32 *)(u + 0x4) = 0x60000000;
+        u[0x3] = 3;
+        *(u16 *)(u + 0x8) = *(u16 *)b;
+        t = *((s16 *)b + 1);
+        if (lean)
+        {
+            t -= 0xE0;
+        }
+        *(s16 *)(u + 0xA) = t;
+        *(u32 *)(u + 0xC) = b[1];
+        addPrim(r, u);
+    }
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
+    SetDrawArea(q, b);
+    addPrim(r, q);
+}
 
 /* One semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
    projected through the 0x1F800000 scratchpad, with the tile's colour word
@@ -164,7 +309,47 @@ s32 func_s41_80024D64(u8 *p, UnkVec *v)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_80024FB4);
+/* One frame of the 0x211 spark func_s37_80024FA0 spawns: pin D_800267B8 to 1,
+   and while the mover's +0xA is still below the ground height func_800BCB04
+   reports two units above it, climb +0x8 by 0x20000 plus a fresh
+   rand() & 0xFFF; the payload's +0x32 countdown falls by 8 a frame and raises
+   the node's redraw bit and D_800814A0's at zero. 51 words, 0 differing.
+
+   THE THREE ARGUMENT LOADS ARE THREE LOCALS, ASSIGNED BEFORE THE D_800267B8
+   STORE, IN THE ORDER +0xA, +0x2, +0x6. Written with the loads inside the
+   call it is 51 words and 6 differing, every row the `li 1' / `sh' pair and
+   the three `lhu's trading places: gcc 2.7.2 cannot disambiguate the
+   `mem:HI (lo_sum D_800267B8)' store from `mem:HI ($s0 + 10)', so each
+   argument load carries the store in its dependency list, and calls.c emits
+   a call's argument register loads at the very END of its expansion -- the
+   only way to get them above the store is to evaluate them in an earlier
+   statement. The shape is csrc/ovl_dng_s18.c's func_s18_80024FF0, which
+   documents it for the 48-word relative of this family; the bearing test
+   itself is csrc/ovl_dungeon_800CABA8.c's func_800CAED0 (67 words) with a
+   one-axis rand() climb in place of its three-axis glide and 8 for its 4.
+   raw 7 == relocdump's 7: 2 on D_800267B8, 3 on D_800814A0, 2 R_MIPS_26. */
+void func_s41_80024FB4(u8 *p, UnkVec *v)
+{
+    s32 x;
+    s32 y;
+    s32 z;
+    s16 r;
+
+    z = *(u16 *)((u8 *)v + 0xA);
+    x = *(u16 *)((u8 *)v + 0x2);
+    y = *(u16 *)((u8 *)v + 0x6);
+    D_800267B8 = 1;
+    r = func_800BCB04(x, y, z + 2);
+    if (*(s16 *)((u8 *)v + 0xA) < r)
+    {
+        v->unk_08 += 0x20000 + (rand() & 0xFFF);
+    }
+    if ((*(s16 *)(p + 0x32) -= 8) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
    each axis by a fresh rand() & 0x1F and the caller's own offset

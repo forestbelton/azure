@@ -90,7 +90,7 @@ typedef struct UnkDng74334SP
     u8 pad_D8[0x28];
     s32 unk_100;
 } UnkDng74334SP;
-void func_s32_8002428C();
+void func_s32_8002428C(u8 *p, UnkVec *v);
 
 void func_s32_80024578(u8 *p);
 typedef struct UnkDngS58Blk32
@@ -113,6 +113,65 @@ typedef struct UnkDngS58Name12
 extern s16 D_80025924;
 
 UnkNode *func_8003FD64(s32, void *);
+
+s32 func_800BCB04(s32, s32, s16);
+typedef struct UnkDng24094SP
+{
+    u8 pad_00[0x8];
+    Unk3DBD0W unk_08;
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    u8 pad_18[0x8];
+    u8 *unk_20;
+    u16 unk_24;
+    u8 pad_26[0xA];
+    Unk3DBD0W unk_30;
+    Unk3DBD0W unk_34;
+    Unk3DBD0W unk_38;
+    u8 pad_3C[0x34];
+    s16 unk_70;
+    s16 unk_72;
+    s16 unk_74;
+    u8 pad_76[0x2];
+    s16 unk_78;
+    s16 unk_7A;
+    s16 unk_7C;
+    u8 pad_7E[0x2];
+    s16 unk_80;
+    s16 unk_82;
+    s16 unk_84;
+    u8 pad_86[0x2];
+    s16 unk_88;
+    s16 unk_8A;
+    s16 unk_8C;
+    u8 pad_8E[0x2];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x20];
+    u16 unk_B8;
+    u16 unk_BA;
+    u8 pad_BC[0x4];
+    s32 unk_C0;
+    u8 pad_C4[0x20];
+    s32 unk_E4;
+    s32 unk_E8;
+    s32 unk_EC;
+    u16 unk_F0;
+    u16 unk_F2;
+    u16 unk_F4;
+    u16 unk_F6;
+    u16 unk_F8;
+    u16 unk_FA;
+    u16 unk_FC;
+    u16 unk_FE;
+    u16 unk_100;
+    u16 unk_102;
+    u16 unk_104;
+    u16 unk_106;
+    u16 unk_108;
+    u16 unk_10A;
+} UnkDng24094SP;
 
 s32 func_s32_8002403C(u8 *p, UnkVec *v)
 {
@@ -158,7 +217,47 @@ s32 func_s32_8002403C(u8 *p, UnkVec *v)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s32", func_s32_8002428C);
+/* One frame of the 0x211 spark func_s37_80024FA0 spawns: pin D_80025924 to 1,
+   and while the mover's +0xA is still below the ground height func_800BCB04
+   reports two units above it, climb +0x8 by 0x20000 plus a fresh
+   rand() & 0xFFF; the payload's +0x32 countdown falls by 8 a frame and raises
+   the node's redraw bit and D_800814A0's at zero. 51 words, 0 differing.
+
+   THE THREE ARGUMENT LOADS ARE THREE LOCALS, ASSIGNED BEFORE THE D_80025924
+   STORE, IN THE ORDER +0xA, +0x2, +0x6. Written with the loads inside the
+   call it is 51 words and 6 differing, every row the `li 1' / `sh' pair and
+   the three `lhu's trading places: gcc 2.7.2 cannot disambiguate the
+   `mem:HI (lo_sum D_80025924)' store from `mem:HI ($s0 + 10)', so each
+   argument load carries the store in its dependency list, and calls.c emits
+   a call's argument register loads at the very END of its expansion -- the
+   only way to get them above the store is to evaluate them in an earlier
+   statement. The shape is csrc/ovl_dng_s18.c's func_s18_80024FF0, which
+   documents it for the 48-word relative of this family; the bearing test
+   itself is csrc/ovl_dungeon_800CABA8.c's func_800CAED0 (67 words) with a
+   one-axis rand() climb in place of its three-axis glide and 8 for its 4.
+   raw 7 == relocdump's 7: 2 on D_80025924, 3 on D_800814A0, 2 R_MIPS_26. */
+void func_s32_8002428C(u8 *p, UnkVec *v)
+{
+    s32 x;
+    s32 y;
+    s32 z;
+    s16 r;
+
+    z = *(u16 *)((u8 *)v + 0xA);
+    x = *(u16 *)((u8 *)v + 0x2);
+    y = *(u16 *)((u8 *)v + 0x6);
+    D_80025924 = 1;
+    r = func_800BCB04(x, y, z + 2);
+    if (*(s16 *)((u8 *)v + 0xA) < r)
+    {
+        v->unk_08 += 0x20000 + (rand() & 0xFFF);
+    }
+    if ((*(s16 *)(p + 0x32) -= 8) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
    each axis by a fresh rand() & 0x1F and the caller's own offset
