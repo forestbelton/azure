@@ -1,6 +1,6 @@
 /* PARK: func_b12_80173FDC, csrc/ovl_dng_b12.c, agent-h21, 2026-11-23.
 
-   TARGET 364 words. BEST BUILT 359 words, 97 ALIGNED DIFFERENCES
+   TARGET 364 words. BEST BUILT 358 words, 77 ALIGNED DIFFERENCES
    (tools/decomp/aligndiff.py); ovlverify reports 344 differing unaligned,
    which is the transposition inflation the brief warns about.
    1 member, 364 words, 364 words total (tools/decomp/dngfam.py:
@@ -164,6 +164,46 @@
    coherent unit of work around the dv row pointer is the whole
    two-endpoint publish, so a wrapper there rather than around the depth
    gate is where the macro boundary would be.
+
+   PERMUTER RUN AND THE REFERENCE BUMP THIS PARK PREDICTED, 2026-11-23.
+   50 minutes, 176,404 iterations, 6 jobs, 745 candidates. 97 -> 77 ALIGNED
+   DIFFERENCES at 358 words, and the body below is updated.
+
+   THE FIX IS ONE STATEMENT AND IT IS THE ONE THIS PARK ASKED FOR. Section
+   (2) above ends by saying pseudo 93 "needs one more reference or one fewer
+   insn of live range" and that none of ten spellings moved it. This moves
+   it -- route the point count through the loop variable instead of writing
+   the constant directly:
+
+       i = 0x40;
+       *(s16 *)(rec + 0x18) = i;          358 words, 77 aligned
+       i = 0x40;
+    *(s16 *)(rec + 0x18) = i;       359 words, 97 aligned  (was here)
+
+   It is specific to `i'. The same spelling through `j' or through `z' is 96,
+   i.e. worth nothing: this is a reference bump on the ONE pseudo losing its
+   allocno race, not a scheduling accident. `i' is the outer counter the
+   target keeps in $s6, the register section (2) identified.
+
+   TWO WARNINGS ABOUT THE RUN THAT PRODUCED IT, both now in
+   tools/decomp/permrank.py.
+
+   (a) THE PERMUTER'S SCORE IS NOT ALIGNED DIFFERENCES. Its own best score
+   (2285, down from 3230) measures 90 in one variant and 106 in another --
+   same score, 16 apart. The best aligned candidate of the 745 sat at score
+   3010, near the WORST end of the range, and the correlation over a sample
+   was about +0.3. Acting on permrun.py's `IMPROVED: 3230 -> 2285' line alone
+   picks a body barely better than this park started with.
+
+   (b) THE PERMUTER DOES NOT PRESERVE SEMANTICS. Its best-by-aligned
+   candidate (70) replaced `zr -= 8; xr -= 8;' with `xr = (zr -= 8);',
+   aiming the s32 vertex cursor at the s16 depth array at 0x1F800100. 7 of
+   its 27 claimed differences came from that. Rank the candidates, then READ
+   them and extract only what is sound.
+
+   WHAT IS STILL WRONG AT 358 / 77: the same groups as before minus what
+   pseudo 93 was costing. The 8 addPrim-mask rows and the loop-B allocation
+   are unchanged; re-read section (2) before spending more here.
 
    NO DEVICES ARE USED BELOW. Nothing in the body is an asm device or a
    phantom-zero; it is all plain C.
