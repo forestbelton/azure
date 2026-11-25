@@ -174,6 +174,60 @@ listings are regenerated. The percentage therefore went 79.0% to 79.3% **with
 no work done at all.** Ask `progress.py` and say what changed; never compare a
 remembered percentage across a splat.
 
+## ATTEMPT 2 FAILED TOO, and it was about the SPURIOUS SYMBOLS, not the blob
+
+Separate from the blob: the eight joined fragment pairs. These are **measured
+and correct** -- `tools/decomp/pairverify.py` puts all eight at 0 differing,
+325 words in total:
+
+    80026EC0+80026ED0   17w      80028050+800280F4   43w
+    80027328+80027368   23w      80026A64+80026A84   56w
+    800250B4+80025170   57w      80027008+80027070   66w
+    80026C20+80026C88   43w      80026F04+80026F1C   20w
+
+**And nothing references any of the eight tail symbols** -- each appears
+exactly once in `csrc/` (its own `INCLUDE_ASM`) and once in `asm/` (its own
+listing's `glabel`), and nowhere else in the tree. So the obvious move is to
+splice each joined body over the head's stub, delete the tail's stub, and let
+the one definition cover both symbols' words **without touching splat at
+all.**
+
+**That compiles and links, and the container FAILS by 8.40%:**
+
+    FAIL  0x23a95e of 0x1a867f0 bytes differ (8.40%); first at 0x18302e0
+
+`0x18302e0` is lo20 + 0x6AE0, i.e. vram ~`0x800252E0` -- *after* the earliest
+joined pair -- and the difference runs to the end of the image. **So the
+layout shifted**: removing a tail `INCLUDE_ASM` removes its words from the
+`.text` stream at that file position, and emitting head+tail together at the
+HEAD's position does not put them back where the image wants them.
+
+**The cause is not yet established and should be before attempt 3.** The
+candidate explanations, in the order worth testing:
+
+* a stub that sits BETWEEN a head and its tail in file order would be
+  displaced -- check the file order of all 52 `INCLUDE_ASM` lines against
+  address order, because splat emits in address order but a previous
+  integration may not have;
+* `gcc` emits a function as one unit at its position in the source, so the
+  two halves become contiguous at the head's slot while the tail's slot
+  collapses -- which is only layout-neutral if the two were already adjacent
+  with nothing between them;
+* the removed stub's `.include` may contribute alignment or padding that the
+  C definition does not.
+
+**Reverted; the build is green at five byte-identical containers.** The eight
+bodies are not lost -- they are in
+`/home/case/scratch/azure-dng/agent-h171/parks/ovl_dng_lo20.c` and in the park
+files, measured, and `pairverify` is in the tree to re-check them.
+
+**What both attempts together establish: the spurious-symbol problem cannot be
+fixed from the C side.** Attempt 1 showed `symbol_addrs` does not reclassify a
+range; attempt 2 shows deleting a stub does not preserve layout. The repair
+has to change the YAML so splat stops emitting the spurious symbols in the
+first place, and the open question from attempt 1 stands -- whether splat
+accepts two `c` subsegments of the same name in one segment.
+
 ## The order to do it in
 
 1. Wait until no agent holds `ovl_dng_lo20` or `ovl_dng_b31f`.
