@@ -94,7 +94,8 @@ def main():
         if show_orphans and orphan:
             print("%s: %d listing(s) with no INCLUDE_ASM (landed, normal)"
                   % (unit, len(orphan)))
-    print("\n%d unit(s) checked, %d with a missing listing (%d listing(s) total)"
+    print("\n%d unit(s) checked, %d with a missing listing "
+          "(%d MISSING listing(s) in total)"
           % (nunits, nbad, nmissing))
     return 1 if nbad else 0
 

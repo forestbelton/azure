@@ -423,12 +423,43 @@ def main():
         # family at 1.000 too; drop only itself.
         sub = {k: v for k, v in pool.items() if k != f}
         print("\n%s  %d words  (ovl_dng_%s)" % (f, len(me[1]), me[0]))
-        rows = rank(me, sub, a.stubs, a.ratio, a.top)
+        # Rank DEEP, then collapse and re-select. Two defects made this
+        # necessary, both found 2026-11-24 when an agent reported a better
+        # lead than the tool had offered it:
+        #
+        #  (a) THE DUNGEON IS REPLICATED CODE, so the top of a lead list is
+        #      many OTHER BANKS' COPIES OF ONE BODY at an identical ratio --
+        #      interchangeable as shape twins and worth one line, not seven.
+        #      For func_b24_80174788, SEVEN bodies tied at 0.856 and the 34
+        #      rows above rank 35 held only SEVEN distinct ratios.
+        #  (b) A LANDED BODY IN THE TARGET'S OWN UNIT is worth more than its
+        #      ratio says, because it already carries THIS BANK's relink
+        #      symbols and needs no new declarations. func_b24_801743DC
+        #      scored 0.745 and ranked #35 of 42 -- never shown at any --top
+        #      an agent would use -- yet it was the lead that actually landed
+        #      the body, since it is b55's SHAPE with b24's SYMBOLS.
+        #
+        # So: collapse identical (ratio, word-count) groups to one row naming
+        # the other banks, and ALWAYS surface the best same-unit landed body.
+        deep = rank(me, sub, a.stubs, a.ratio, max(a.top, 200))
+        groups, seen = [], {}
+        for row in deep:
+            key = (round(row[0], 4), row[3])
+            if key in seen:
+                groups[seen[key]][1].append(row[1])
+                continue
+            seen[key] = len(groups)
+            groups.append([row, []])
+        rows = [(g[0], g[1]) for g in groups[:a.top]]
+        shown = {g[0][2] for g in rows}
+        inunit = next((r for r in deep
+                       if r[1] == me[0] and not r[5] and r[2] not in shown),
+                      None)
         if not rows:
             print("    no carved sibling at ratio >= %.2f -- try xsibs for "
                   "a RESIDENT twin, then the callee-set grep (see WHAT THIS "
                   "TOOL CANNOT SEE)" % a.ratio)
-        for r, otag, name, nw, same_fam, is_stub in rows:
+        for (r, otag, name, nw, same_fam, is_stub), alsobanks in rows:
             mark = " [CLONE -- run dngclone, do not read it]" if same_fam else ""
             mark += " [STILL A STUB -- assembly, not an answer]" if is_stub else ""
             # The delta is the TWIN's words minus yours, so a POSITIVE
@@ -454,8 +485,21 @@ def main():
                 mark = (" [YOURS IS %d WORDS SHORTER -- find the MISSING "
                         "STATEMENTS first, see WHEN YOUR BODY IS SHORTER]"
                         % d) + mark
+            if alsobanks:
+                mark += (" [+%d other bank(s) IDENTICAL at this ratio and "
+                         "width: %s -- one shape, pick the one whose unit you "
+                         "already read]"
+                         % (len(alsobanks), ", ".join(sorted(alsobanks))))
             print("    %.3f  %-24s %4d words (%+d vs yours)  "
                   "csrc/ovl_dng_%s.c%s" % (r, name, nw, d, otag, mark))
+        if inunit is not None:
+            r, otag, name, nw, _sf, _st = inunit
+            print("    SAME UNIT, ranked below the cut but usually worth more "
+                  "than its ratio:")
+            print("    %.3f  %-24s %4d words (%+d vs yours)  "
+                  "csrc/ovl_dng_%s.c  <- ALREADY LANDED IN YOUR OWN FILE: "
+                  "carries this bank's relink symbols, so expect ZERO new "
+                  "declarations" % (r, name, nw, nw - len(me[1]), otag))
 
 
 if __name__ == "__main__":
