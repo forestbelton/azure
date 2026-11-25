@@ -131,9 +131,391 @@ typedef struct UnkDng24094SP
 
 void func_s41_80024190(u8 *a, u8 *pp, u8 *ot, s16 d);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_8002405C);
+void func_80067EF4(void *, s32, s32);
+extern Unk6CD30 D_8006CD10;
+s32 func_800644B8(s32);
+s32 func_8009D218(u8 *, s32, u8 *);
+u16 func_800A6D30(void);
+void *func_800990FC(void);
+u8 *func_8009929C(s32, u8 *);
+void *func_80099194(u8 *, u8 *);
+void *func_80099734(u8 *, u8 *);
+u8 *func_80099290(u8 *);
+s32 func_800A5720(void *);
+void func_80099844(u8 *, u8 *);
+UnkNode *func_800B4C7C(u16, u8 *, s16, s16);
+extern u8 D_800E20D6[];
+extern u8 D_800E20FC[];
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_80024190);
+/* The slot's "use the item on me" responder, reached from
+   func_s41_800257D0's state 5: refuse if func_8009D218 does, then on a
+   1-in-p[0x3] roll (or with the caller's strength at 0xFF) spend half the
+   remaining 0x27 charges and print the three-part D_800E20D6 message,
+   otherwise print D_800E20FC, and tell func_800B4C7C 0x53 either way.
+   77 words, 0 differing, 0 aligned differences.
+
+   func_8009D218 TAKES THE THIRD PARAMETER STRAIGHT THROUGH. Nothing in
+   this body sets $a2 and nothing reads it either; the caller at
+   0x8002661C passes `g' there and the call inherits it, so the arity is
+   three and `q' is otherwise unused. A two-argument alias is 1 word short.
+
+   THE DIVIDEND IS AN `s32' LOCAL AND THE TRUNCATION IS WRITTEN AT THE
+   DIVISION: `x = (u16)r % p[0x3]'. With `u16 r' and a plain `r % p[0x3]'
+   it is 76 words and 5 aligned differences -- the divisor's extra `addu'
+   never appears, because the HImode pseudo dies at the zero-extend and the
+   remainder reuses its register. The compound form
+   `x = func_800A6D30(); x %= p[0x3];' is the right 77 words and 3 rows:
+   expand_divmod drops a target mentioned in op0, so the remainder lands in
+   the dividend's own register where the target gives it a third. The
+   divisor guard is a real source-level `if (p[0x3] != 0)', not the
+   assembler's div-by-zero expansion: the zero arm sets the remainder to 0
+   and jumps, where a `break 7' would trap. Reading p[0x3] once into a
+   local measures the same 0; the two reads are not what buys the copy.
+
+   The message-assembly chain is csrc/ovl_dng_s18.c's func_s18_800240B8's,
+   with func_8009929C(8, h) in place of its first func_80099194 -- two
+   locals, `h' chained and `m' kept for func_800A5720. */
+void func_s41_8002405C(u8 *p, u8 b, u8 *q)
+{
+    void *m;
+    void *h;
+    s32 r;
+    s32 x;
+    s16 n;
+
+    if (func_8009D218(p, 2, q) != 0)
+    {
+        return;
+    }
+    r = func_800A6D30();
+    if (p[0x3] != 0)
+    {
+        x = (u16)r % p[0x3];
+    }
+    else
+    {
+        x = 0;
+    }
+    if (x < (b << 5) || b == 0xFF)
+    {
+        if (p[0x27] >= 2)
+        {
+            n = (p[0x27] + 1) >> 1;
+            p[0x27] -= n;
+            h = func_800990FC();
+            m = h;
+            h = func_8009929C(8, h);
+            h = func_80099734(p, h);
+            h = func_80099194(D_800E20D6, h);
+            func_80099290(h);
+            func_800A5720(m);
+            func_800B4C7C(0x53, p, n, 1);
+            return;
+        }
+    }
+    func_80099844(p, D_800E20FC);
+    func_800B4C7C(0x53, p, -1, 1);
+}
+
+/* This object's room renderer: one POLY_FT4 per cell of the slot's +0x8
+   cell list, projected through the 0x1F800000 scratchpad with
+   RotTransPers4 and biased by the view's +0xB8/+0xBA screen offset, then
+   re-emitted as EIGHT ROWS of TWO COLUMNS -- the left column copied from
+   the base primitive with its four y corners taken from the wave table the
+   payload keeps at +0x62 and its four v bytes bumped by i * 16 (and by
+   (i - 4) * 16 past the fourth row), the right column copied from the
+   primitive just emitted with its four x corners moved on by 0x40. A cell
+   with 0x20 in its first byte is a handler instead. 631 words, 0
+   differing, 0 aligned differences.
+
+   TWIN: csrc/ovl_dng_s37.c's func_s37_80024094 (626 words, dngtwin 0.807).
+   Its head is carried VERBATIM -- the two corner arms off e[0] ^ unk_24,
+   RotTransPers4, the eight +0xB8/+0xBA stores, the two +0x100 carry
+   corrections, the +0xE clut and +0x16 tpage arms, the two
+   `q[0x14] = q[0x24]--' pairs, the +0xF shade byte and the 0x8D0
+   writeback -- and so is its tail. All four of its measured spellings that
+   still apply carried, including `t20'/`t22' and the two named halves of
+   the +0x102 sum. WHAT DOES NOT CARRY IS ITS TWO POLY_FT4 STACK LOCALS:
+   this frame is -0x60 where the twin's is -0xB8, so the row copies are
+   memory to memory off two pointer locals and the ripple loop -- the whole
+   func_800644B8 jitter -- is absent from this object. Its `-da' prologue
+   test said as much before the first compile: ten saves in both, 0x58
+   fewer bytes of locals here.
+
+   TWO SPELLING FACTS OF ITS OWN, both measured by ablation off the landed
+   body:
+
+   * THE BASE PRIMITIVE'S y2/y3 SUM IS ONE NAMED LOCAL. Written twice --
+     `q + 0x22' and `q + 0x1A' each from
+     `*(u16 *)(q + 0xA) + *(u16 *)(pp + 0x64)' -- it is 633 words and 4
+     aligned differences: the first store invalidates the `q + 0xA' load
+     for cse, so the pair is re-loaded and re-added.
+   * THE RIGHT COLUMN'S COPY SOURCE IS ITS OWN POINTER LOCAL, assigned
+     from `q' BEFORE the addPrim that advances it. Spelled
+     `*(POLY_FT4 *)q = *(POLY_FT4 *)(q - 0x28)' it is 3 words short and 56
+     aligned differences, and the knock-on is that $s6 and $s7 exchange --
+     pp against the 0xFF000000 mask -- across the whole body.
+
+   raw 28 == relocdump's 28: 4 HI16 + 4 LO16 on D_80083160, 1 + 1 on
+   D_8006CD10, 10 R_MIPS_26 on the library calls and 8 on .text. */
+void func_s41_80024190(u8 *a, u8 *pp, u8 *ot, s16 d)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkDng24094SP *sp = (UnkDng24094SP *)0x1F800000;
+    UnkSlot *s;
+    UnkVec *v;
+    u8 *e;
+    u8 *q;
+    u8 *b0;
+    u8 *pv;
+    s32 y0;
+    s32 i;
+    s32 t;
+    s32 t2;
+    s32 u1;
+    s32 u2;
+    s32 c;
+    s32 t20;
+    s32 t22;
+    s32 x18;
+    s32 x38;
+    u8 *(*h)(u8 *, UnkVec *, UnkSlot *, u8 *, u8 *);
+    s16 a1;
+    s16 a2;
+    s16 b1;
+    s16 b2;
+
+    s = (UnkSlot *)*(u32 *)(pp - 0x14);
+    v = *(UnkVec **)(pp - 0x18);
+    e = (u8 *)*(u32 *)((u8 *)s + 0x8);
+    sp->unk_EC = 0;
+    sp->unk_8C = 0;
+    sp->unk_84 = 0;
+    sp->unk_7C = 0;
+    sp->unk_74 = 0;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_20 = ot;
+    sp->unk_C0 = 0;
+    sp->unk_B8 = *(u16 *)a - 0xA0;
+    sp->unk_BA = *(u16 *)(a + 0x2) - 0x78;
+    if (d != 0)
+    {
+        func_80067EF4(q, 0, 0);
+        addPrim(sp->unk_20, q);
+        q += 0xC;
+    }
+    D_8006CD10.unk_1C = *(s32 *)((u8 *)g + 0xA0);
+    PushMatrix();
+    sp->unk_30.w = g->unk_C4;
+    sp->unk_34.w = g->unk_C6;
+    sp->unk_38.w = g->unk_C8;
+    sp->unk_100 = s->unk_16;
+    x38 = (sp->unk_38.h + 0x100) & 0x1FF;
+    sp->unk_104 = s->unk_1A - sp->unk_34.h;
+    x18 = s->unk_18 - 0x100;
+    sp->unk_102 = x38 + x18;
+    t20 = s->unk_20;
+    sp->unk_E4 = t20;
+    sp->unk_108 = t20;
+    t22 = s->unk_22;
+    sp->unk_E8 = t22;
+    sp->unk_10A = t22;
+    RotMatrix((SVECTOR *)0x1F800100, (MATRIX *)0x1F8000D0);
+    sp->unk_30.w = s->unk_1C;
+    sp->unk_34.w = s->unk_1E;
+    sp->unk_38.w = 0x1000;
+    ScaleMatrix((MATRIX *)0x1F8000D0, (VECTOR *)0x1F800030);
+    CompMatrix((MATRIX *)&D_8006CD10, (MATRIX *)0x1F8000D0, (MATRIX *)0x1F800050);
+    SetTransMatrix((MATRIX *)0x1F800050);
+    SetRotMatrix((MATRIX *)0x1F800050);
+    sp->unk_24 = s->unk_14;
+    do
+    {
+        if ((e[0x0] & 0x20) == 0)
+        {
+            sp->unk_08.w = *(u8 *)(e + 0x8);
+            sp->unk_0C.w = *(u8 *)(e + 0x9);
+            sp->unk_10.w = *(u8 *)(e + 0xA);
+            sp->unk_14.w = *(u8 *)(e + 0xB);
+            if ((e[0x0] ^ sp->unk_24) & 1)
+            {
+                a1 = -(s8)e[0x2] - sp->unk_108;
+                sp->unk_80 = a1;
+                sp->unk_70 = a1;
+                a1 = a1 - sp->unk_10.h;
+                sp->unk_88 = a1;
+                sp->unk_78 = a1;
+            }
+            else
+            {
+                a2 = (s8)e[0x2] - sp->unk_108;
+                sp->unk_80 = a2;
+                sp->unk_70 = a2;
+                a2 = a2 + sp->unk_10.h;
+                sp->unk_88 = a2;
+                sp->unk_78 = a2;
+            }
+            if ((e[0x0] ^ sp->unk_24) & 2)
+            {
+                b1 = -(s8)e[0x3] - sp->unk_10A;
+                sp->unk_7A = b1;
+                sp->unk_72 = b1;
+                b1 = b1 - sp->unk_14.h;
+                sp->unk_8A = b1;
+                sp->unk_82 = b1;
+            }
+            else
+            {
+                b2 = (s8)e[0x3] - sp->unk_10A;
+                sp->unk_7A = b2;
+                sp->unk_72 = b2;
+                b2 = b2 + sp->unk_14.h;
+                sp->unk_8A = b2;
+                sp->unk_82 = b2;
+            }
+            RotTransPers4((SVECTOR *)&sp->unk_70, (SVECTOR *)&sp->unk_78, (SVECTOR *)&sp->unk_80,
+                          (SVECTOR *)&sp->unk_88, (s32 *)&sp->unk_F0, (s32 *)&sp->unk_F4,
+                          (s32 *)&sp->unk_F8, (s32 *)&sp->unk_FC, &sp->unk_90, &sp->unk_94);
+            *(s16 *)(q + 0x8) = sp->unk_F0 + sp->unk_B8;
+            *(s16 *)(q + 0xA) = sp->unk_F2 + sp->unk_BA;
+            *(s16 *)(q + 0x10) = sp->unk_F4 + sp->unk_B8;
+            *(s16 *)(q + 0x12) = sp->unk_F6 + sp->unk_BA;
+            *(s16 *)(q + 0x18) = sp->unk_F8 + sp->unk_B8;
+            *(s16 *)(q + 0x1A) = sp->unk_FA + sp->unk_BA;
+            *(s16 *)(q + 0x20) = sp->unk_FC + sp->unk_B8;
+            *(s16 *)(q + 0x22) = sp->unk_FE + sp->unk_BA;
+            q[0x3] = 9;
+            u1 = sp->unk_10.w - 1;
+            t = u1 + sp->unk_08.w;
+            sp->unk_10.w = t;
+            if ((t & 0x100) != 0)
+            {
+                sp->unk_10.w = t - 1;
+            }
+            u2 = sp->unk_14.w - 1;
+            t2 = u2 + sp->unk_0C.w;
+            sp->unk_14.w = t2;
+            if ((t2 & 0x100) != 0)
+            {
+                sp->unk_14.w = t2 - 1;
+            }
+            sp->unk_14.w = sp->unk_14.w << 8;
+            sp->unk_0C.w = sp->unk_0C.w << 8;
+            if (s->unk_12 != 0)
+            {
+                if ((sp->unk_24 & 0x100) != 0)
+                {
+                    *(s16 *)(q + 0xE) = s->unk_12;
+                }
+                else
+                {
+                    *(s16 *)(q + 0xE) = s->unk_12 + *(u16 *)(e + 0x6);
+                }
+            }
+            else
+            {
+                *(s16 *)(q + 0xE) = *(u16 *)(e + 0x6);
+            }
+            *(s16 *)(q + 0xC) = sp->unk_0C.h + sp->unk_08.h;
+            *(s16 *)(q + 0x14) = sp->unk_0C.h + sp->unk_10.h;
+            if (s->unk_10 != 0)
+            {
+                *(s16 *)(q + 0x16) = s->unk_10 + (*(u16 *)(e + 0x4) & 0xFF9F);
+            }
+            else
+            {
+                *(s16 *)(q + 0x16) = *(u16 *)(e + 0x4);
+            }
+            *(s16 *)(q + 0x1C) = sp->unk_14.h | sp->unk_08.h;
+            *(s16 *)(q + 0x24) = sp->unk_14.h | sp->unk_10.h;
+            if (*(s16 *)(q + 0x8) > *(s16 *)(q + 0x20))
+            {
+                q[0x14] = q[0x24]--;
+            }
+            if (*(s16 *)(q + 0xA) > *(s16 *)(q + 0x22))
+            {
+                q[0x1D] = q[0x25]--;
+            }
+            c = *(u8 *)(e + 0x1);
+            *((u8 *)s + 0xF) = c;
+            if ((sp->unk_24 & 8) != 0)
+            {
+                *((u8 *)s + 0xF) = (sp->unk_24 & 4) ? (c | 2) : (c & 0xFD);
+            }
+            *(u32 *)(q + 0x4) = *(u32 *)((u8 *)s + 0xC);
+            b0 = q;
+            *(s16 *)(pp + 0x62) = *(u16 *)(q + 0xA);
+            y0 = *(u16 *)(q + 0xA) + *(u16 *)(pp + 0x64);
+            *(s16 *)(q + 0x22) = y0;
+            *(s16 *)(q + 0x1A) = y0;
+            addPrim(sp->unk_20, q);
+            q += 0x28;
+            q[0x3] = 9;
+            *(POLY_FT4 *)q = *(POLY_FT4 *)b0;
+            *(s16 *)(q + 0x8) = *(u16 *)(q + 0x8) + 0x40;
+            *(s16 *)(q + 0x10) = *(u16 *)(q + 0x10) + 0x40;
+            *(s16 *)(q + 0x18) = *(u16 *)(q + 0x18) + 0x40;
+            *(s16 *)(q + 0x20) = *(u16 *)(q + 0x20) + 0x40;
+            addPrim(sp->unk_20, q);
+            q += 0x28;
+            for (i = 1; i < 8; i++)
+            {
+                q[0x3] = 9;
+                *(POLY_FT4 *)q = *(POLY_FT4 *)b0;
+                *(s16 *)(q + 0xA) = *(u16 *)(pp + 0x62) + *(u16 *)(pp + i * 2 + 0x62);
+                *(s16 *)(q + 0x12) = *(u16 *)(pp + 0x62) + *(u16 *)(pp + i * 2 + 0x62);
+                *(s16 *)(q + 0x1A) = *(u16 *)(pp + 0x62) + *(u16 *)(pp + i * 2 + 0x64);
+                *(s16 *)(q + 0x22) = *(u16 *)(pp + 0x62) + *(u16 *)(pp + i * 2 + 0x64);
+                if (i < 4)
+                {
+                    q[0xD] += i * 16;
+                    q[0x15] += i * 16;
+                    q[0x1D] += i * 16;
+                    q[0x25] += i * 16;
+                }
+                else
+                {
+                    q[0xD] += (i - 4) * 16;
+                    q[0x15] += (i - 4) * 16;
+                    q[0x1D] += (i - 4) * 16;
+                    q[0x25] += (i - 4) * 16;
+                }
+                pv = q;
+                addPrim(sp->unk_20, q);
+                q += 0x28;
+                q[0x3] = 9;
+                *(POLY_FT4 *)q = *(POLY_FT4 *)pv;
+                *(s16 *)(q + 0x8) = *(u16 *)(q + 0x8) + 0x40;
+                *(s16 *)(q + 0x10) = *(u16 *)(q + 0x10) + 0x40;
+                *(s16 *)(q + 0x18) = *(u16 *)(q + 0x18) + 0x40;
+                *(s16 *)(q + 0x20) = *(u16 *)(q + 0x20) + 0x40;
+                addPrim(sp->unk_20, q);
+                q += 0x28;
+            }
+        }
+        else
+        {
+            h = *(u8 * (**)(u8 *, UnkVec *, UnkSlot *, u8 *, u8 *))(e + 0x8);
+            if (h != NULL)
+            {
+                q = h(pp, v, s, e, q);
+            }
+        }
+        if (*(s8 *)e < 0)
+        {
+            break;
+        }
+        e += 0xC;
+    } while (1);
+    if (d != 0)
+    {
+        func_80067EF4(q, 0, 1);
+        addPrim(sp->unk_20, q);
+        q += 0xC;
+    }
+    PopMatrix();
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 /* The bank's own copy of csrc/ovl_dungeon_800B6AC4.c's func_800B8FC8 (95
    words): the draw-area / 0x60000000 tint bracket around one call of this
@@ -398,7 +780,61 @@ void func_s41_80025080(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_800251A0);
+/* One frame of the shutter's wave: spend the payload's +0x2 counter, raise
+   D_800267B8, seed the eight +0x62 wave slots with i * 16, then for each of
+   the eight run its +0x50 angle through func_800644B8 and add the sine
+   (>> 9) into the slot, advance the angle by 0x50 and wrap it at 0x1000,
+   and when the counter runs out raise the node's 0x8000 kill bit and
+   D_800814A0's. 61 words, 0 differing, 0 aligned differences.
+   func_s41_800257D0 parks this as the step of the third node it spawns.
+
+   THE +0x62 STORE COMES BEFORE THE +0x50 READ-MODIFY-WRITE, not after it.
+   Written last in the loop body -- which is where the listing shows it,
+   in the `bnez' delay slot -- it is 61 words and 11 aligned differences:
+   the scheduler then emits the whole load/add pair for +0x50 ahead of the
+   one for +0x62, and the three quantities rotate registers behind it
+   ($a1/$v1/$a0 for the target's $v1/$a0/$v0). reorg sinks the store into
+   the delay slot by itself.
+
+   Both loops are written over `i' with the byte offsets inside the
+   subscript -- `*(s16 *)(p + i * 2 + 0x62)' -- so loop.c shares one
+   induction variable at p + i * 2 between the +0x50 and +0x62 arrays and
+   keeps both displacements in the instructions. The counter read before
+   the D_800267B8 store is func_s41_80025294's documented idiom, re-measured
+   here: it is also what lets the constant 1 serve both the store and `i'.
+   raw 6 of 7 relocations: 1 HI16 + 1 LO16 on D_800267B8, 1 + 2 on
+   D_800814A0, 1 R_MIPS_26 on func_800644B8. */
+void func_s41_800251A0(u8 *p)
+{
+    s32 i;
+    s16 t;
+    s16 w;
+    s16 v;
+
+    t = *(u16 *)(p + 0x2) - 1;
+    D_800267B8 = 1;
+    *(s16 *)(p + 0x2) = t;
+    for (i = 1; i < 9; i++)
+    {
+        *(s16 *)(p + i * 2 + 0x62) = i * 16;
+    }
+    for (i = 1; i < 9; i++)
+    {
+        w = *(u16 *)(p + i * 2 + 0x62) + (func_800644B8(*(s16 *)(p + i * 2 + 0x50)) >> 9);
+        *(s16 *)(p + i * 2 + 0x62) = w;
+        v = *(u16 *)(p + i * 2 + 0x50) + 0x50;
+        *(s16 *)(p + i * 2 + 0x50) = v;
+        if (v > 0x1000)
+        {
+            *(s16 *)(p + i * 2 + 0x50) = v - 0x1000;
+        }
+    }
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spend 8 of the payload's +0x32 life counter, raise the engine's D_800267B8
    tick, and when the counter runs out set the 0x8000 kill bit in the node's
@@ -437,7 +873,83 @@ void func_s41_80025294(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_800252E4);
+/* The shutter's second node, stepped once a frame: raise D_800267B8, and
+   if the +0x3C object's +0x13 byte has reached 0x33..0x36 give up at once
+   with both 0x8000 kill bits; otherwise spend the +0x2 counter, hand the
+   renderable's 0x80 flag to the object at -0x14 of the +0x3C object's
+   -0x14, and drive the renderable's three colour bytes off the counter --
+   up from 0x20 over the first 0x14 frames and down again from 0x28 -- then
+   raise both kill bits at zero and take the 0x80 flag back. 73 words,
+   0 differing, 0 aligned differences. Its first gate is the same test
+   func_s41_80025408's tail makes, and it is a RANGE TEST in the source:
+   `n[0x13] >= 0x33 && n[0x13] <= 0x36' is what fold's make_range turns
+   into the listing's `addiu -0x33' / `sltiu 4'.
+
+   TWO FACTS, both priced:
+
+   * THE TWO +0x14 FLAG WORDS ON THE SIBLING POINTER ARE ARRAY REFS,
+     `((u16 *)m)[0xA]'. As `*(u16 *)(m + 0x14)' they are 6 words longer and
+     16 aligned differences against this body's 6: expr.c sets
+     MEM_IN_STRUCT_P only when the top node of the address is a PLUS_EXPR,
+     and true_dependence's in-struct exception (sched.c) is what lets the
+     D_800814A0 read-modify-write interleave with the flag clear in the
+     tail. Through the cast the two chains are dependent and emit strictly
+     one after the other, with a `nop' in each load delay.
+   * THE TWO POINTER LOADS STRADDLE THE DECREMENT. `n2 = *(u8 **)(p + 0x3C)'
+     goes BEFORE it and `m = *(u8 **)(n2 - 0x14)' AFTER it, with the
+     renderable's flag clear last. The three other arrangements of those
+     four statements are 4, 6 and 14 aligned differences -- the decrement's
+     store blocks any hoist of a p-based load past it, so the first load
+     has to be written above it and the second below.
+
+   The fade is `0x20 + x * 0x60 / 0x14' at both ends, which is where the
+   0x66666667 magic and its `sra 3' come from -- divisor 0x14, not the 0xA
+   the same magic means with `sra 2'. Written as one arm with a shared
+   value it loses the cross-jump; both arms spell out the three stores and
+   jump2 merges their last two. */
+void func_s41_800252E4(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *n;
+    u8 *n2;
+    u8 *m;
+    s16 t;
+    s32 v;
+
+    n = *(u8 **)(p + 0x3C);
+    D_800267B8 = 1;
+    if (n[0x13] >= 0x33 && n[0x13] <= 0x36)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    n2 = *(u8 **)(p + 0x3C);
+    *(s16 *)(p + 0x2) = *(u16 *)(p + 0x2) - 1;
+    m = *(u8 **)(n2 - 0x14);
+    *(u16 *)(c + 0x14) &= 0xFF7F;
+    ((u16 *)m)[0xA] |= 0x80;
+    t = *(s16 *)(p + 0x2);
+    if (t < 0x14)
+    {
+        v = (0x14 - t) * 0x60 / 0x14 + 0x20;
+        c[0xC] = v;
+        c[0xD] = v;
+        c[0xE] = v;
+    }
+    else if (t < 0x28)
+    {
+        v = (t - 0x14) * 0x60 / 0x14 + 0x20;
+        c[0xC] = v;
+        c[0xD] = v;
+        c[0xE] = v;
+    }
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        ((u16 *)m)[0xA] &= 0xFF7F;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_80025408);
 
