@@ -1,8 +1,69 @@
 /* func_lo16_800161D8 -- ovl_dng_lo16, 33 target words.
    PARKED by agent h163, batch 35, 2026-11-25.
 
-   BEST: 32 candidate words, 18 ALIGNED differences (aligndiff), which is
-   ONE MISSING WORD and everything after it shifted by one.
+   ADVANCED by agent h181, batch 35, 2026-11-25, from 32 words / 18 ALIGNED
+   differences to 33 WORDS -- EXACT -- and 9 ALIGNED differences.
+
+   THE PARK'S CENTRAL QUESTION IS ANSWERED: the two `addiu $v0, $zero, 0x6'
+   insns are TWO MODES, not two blocks.  h163 had narrowed it correctly to
+   "either two blocks or two modes, neither reachable from any spelling
+   tried"; the reachable spelling is an `s32' TEMP for the second 6 and a bare
+   constant for the first:
+
+       g->unk_14 = 6;      HImode  (set (reg:HI) (const_int 6))
+       t1 = 6;             SImode  (set (reg:SI) (const_int 6))
+       g->unk_16 = t1;
+
+   cse merges identical constants only within one mode, so the SImode set
+   survives and the second `li' is emitted.  This is 33 words and it is the
+   first spelling to reach the target's length.  Measured around it:
+       `s32 t1' for the second 6, bare first  33w /  9  (kept)
+       bare first, `s16 t1' then `s32 t2'     33w / 10
+       `s32 t1' for the FIRST 6, bare second  32w / 11
+       TWO `s32' temps, one per store         32w / 18  (cse merges them --
+                                              same mode again)
+       a `volatile s32' temp                  34w / 21
+   h163's own `s32 t = 6; g->unk_14 = t; g->unk_16 = 6' entry at 32w / 28 was
+   the right idea with the temp on the WRONG STORE: the temp must carry the
+   SECOND 6, because the first store's constant is the one cse keeps.
+
+   THE REMAINING NINE ROWS ARE THE FIFTH LIVE VALUE h163 identified, and the
+   diagnosis stands: the target materialises 0x3F at word 7, keeps it in $a1
+   across nine insns and stores it at 17/18, which pushes 0x2C808080 from $a1
+   to $a2.  The candidate materialises it at word 11 immediately before its
+   two stores, so only four values are ever live and every constant funnels
+   through $v0.  At sched1 both `li's are ready at cycle 0 and the 0x3F one
+   has the same priority (2) as the `li 6'; the target hoists both into the
+   prologue group and the candidate hoists only one.  NOT reachable by source
+   order or by extra locals -- measured, all at 33 words:
+       field order 14,16,18,1A,1C,1E then A8 then 1DC      9   (kept, and it
+                                                               is ascending)
+       14,16,1C,1E then 1DC then 18,1A then A8            9
+       14,16,1C,1E,18,1A then A8 then 1DC                10
+       18,1A first, then the rest, A8 then 1DC           10
+       18,1A first, then the rest, 1DC then A8           13
+       1DC before 18/1A, A8 last                          9
+       A8+1DC before 18/1A                               12
+       1DC immediately after the two 6s                  12
+       1DC first                                         14
+       1DC and A8 both first                             18
+       an `s32' local for 0x3F, assigned early           10
+       the same local assigned after the two 6s          10
+       an `s32' local for 0x180 as well                  10
+       an `s32' local for 0x2C808080                     10
+       an `s32' local for the D_800EA000 address         10
+   So extra pseudos do NOT buy the fifth register: gcc coalesces a short-lived
+   constant pseudo back onto the shared scratch whatever the source says.
+   A8 BEFORE 1DC is load-bearing in the kept order, because the target puts
+   the 0x1DC store in the `jal's DELAY SLOT and the 0xA8 store at word 19; the
+   reverse order swaps them (that pair is 2 of the 10 in the variants above).
+
+   NEXT AGENT: the body is word-exact and the residue is ONE constant's
+   register and the schedule position that follows from it.  By the batch rule
+   that is a register-lifetime residue, not a statement position, so it is NOT
+   a permuter job and the store-order sweep above is closed.  A `-da`
+   `.sched`/`.lreg` pair on both sides is the only thing left that would say
+   why sched1 hoists the second `li` in the original and not here.
 
    THE RESIDUE IS EXACTLY ONE INSTRUCTION, and it is a SECOND
    `addiu $v0, $zero, 0x6'.
@@ -112,15 +173,17 @@ void func_lo16_800161D8(void)
 {
     u8 *b;
     UnkDngLo16Grid *g;
+    s32 t1;
 
     b = (u8 *)&D_80083160;
     g = (UnkDngLo16Grid *)(b + 0x1DC);
     g->unk_14 = 6;
-    g->unk_16 = 6;
-    g->unk_1C = 0x180;
-    g->unk_1E = 0x180;
+    t1 = 6;
+    g->unk_16 = t1;
     g->unk_18 = 0x3F;
     g->unk_1A = 0x3F;
+    g->unk_1C = 0x180;
+    g->unk_1E = 0x180;
     D_80083160.unk_A8 = 0x2C808080;
     D_80083160.unk_1DC = (u32)D_800EA000_s;
     func_lo16_80018A70();
