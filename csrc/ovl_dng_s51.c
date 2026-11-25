@@ -1,5 +1,7 @@
 #include "common.h"
 
+void func_800478B8(u8 *);
+
 typedef struct UnkDngRoom2970
 {
     u8 pad_00[0xC];

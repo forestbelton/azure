@@ -1,4 +1,4 @@
-# Undeclared callees: 19 symbols across 13 units
+# Undeclared callees: 14 symbols across 9 units (was 19 across 13)
 
 Found 2026-11-25, after `declcheck.py` was fixed to pass `-Wimplicit`. Every
 one of these is in **landed, byte-identical code**: the containers match, so
@@ -24,6 +24,30 @@ to check the call against.
 | `csrc/ovl_dng_s41.c` | `func_800B8FC8` |
 | `csrc/ovl_dng_s51.c` | `func_800478B8` |
 | `csrc/ovl_dng_s72.c` | `func_8003FD64` |
+
+## FIVE CLOSED, 2026-11-25, gated at five byte-identical containers
+
+The in-unit cases were unambiguous -- the callee is **defined in the same
+file**, so its own definition is the prototype -- and one was a copy of a
+declaration another unit already had:
+
+    csrc/ovl_dng_b02.c  void func_b02_80174910(u8 *, u8 *);
+    csrc/ovl_dng_b02.c  void func_b02_80174DA0(u8 *, void *, u8 *);
+    csrc/ovl_dng_b06.c  s32  func_b06_80172550(u8 *, void *, void *, s32);
+    csrc/ovl_dng_b14.c  s32  func_b14_80173A08(u8 *, void *, void *, s32);
+    csrc/ovl_dng_s51.c  void func_800478B8(u8 *);
+
+All five were codegen no-ops, as expected: an `s32` return is `int`, a `void`
+return at a call whose result is unused is the same, and pointer arguments do
+not promote. **That was the prediction, and `make containers` was the check --
+a prototype whose argument width differs from the implicit one CAN change the
+emitted code, which is the whole reason these are worth closing one unit at a
+time.**
+
+Not touched, and why: `ovl_dng_b25`, `ovl_dng_b31f` and `ovl_dng_lo16` are held
+by live agents, and the five `func_800Axxxx` callees in `ovl_dng_b21` plus
+`func_800B8FC8` and `func_8003FD64` need a prototype read off their own
+listings rather than copied.
 
 `bzero` and `VSync` are library functions with real PSY-Q declarations;
 `func_8003DB94` and `func_800478B8` are declared in several other units and

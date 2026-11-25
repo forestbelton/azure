@@ -1,5 +1,8 @@
 #include "common.h"
 
+void func_b02_80174910(u8 *, u8 *);
+void func_b02_80174DA0(u8 *, void *, u8 *);
+
 s32 func_800A19E4(s32 a, u8 *b, s16 c, s16 d, u8 *out);
 u8 *func_800A02AC(u8 *p, u16 x, u16 y);
 s32 func_800A0818(s16 a, s16 b, s16 c, s16 d, u16 *f);
