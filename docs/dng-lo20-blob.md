@@ -228,6 +228,45 @@ has to change the YAML so splat stops emitting the spurious symbols in the
 first place, and the open question from attempt 1 stands -- whether splat
 accepts two `c` subsegments of the same name in one segment.
 
+## THE GATING QUESTION IS ANSWERED FROM SPLAT'S SOURCE: TWO `c` SUBSEGMENTS OF ONE NAME SHOULD WORK
+
+Both failed attempts ended on the same unknown -- whether splat accepts two
+`c` subsegments with the same name in one segment, since both would target one
+`.c` file. **Answered by reading the installed splat rather than by burning a
+`make splat` cycle.** This is code reading, NOT a test, and should be treated
+as such:
+
+* `segtypes/common/c.py:129` -- `out_path` is
+  `src_path / dir / f"{name}.{file_extension}"`, so two same-named `c`
+  subsegments do both resolve to `csrc/ovl_dng_lo20.c`;
+* `segtypes/common/c.py:225` -- `if not c_path.exists() and
+  options.opts.create_c_files:`. **Splat only CREATES a `.c` file; it never
+  overwrites one that exists.** That is why every hand edit to `csrc/` has
+  survived every `make splat` in this project, and it means the second
+  subsegment cannot clobber the first's output -- neither writes anything;
+* `segtypes/common/c.py:348` -- a per-function listing is skipped when it
+  already exists, which is moot because `make splat` begins `rm -rf asm`;
+* the only "already paired" error (`scripts/split.py:151`) is about pairing a
+  text segment with its **rodata** sibling. lo20 declares no `.rodata`
+  subsegment, only `data`, so it cannot trigger.
+
+**So attempt 3 is the four-subsegment layout, and the shape to try is:**
+
+    - [0x1829800, data]
+    - [0x1829814, c, ovl_dng_lo20]     the ~32 functions in the blob
+    - [0x182F7B4, data]                the 547-word trailing data run
+    - [0x1830040, c, ovl_dng_lo20]     the existing functions
+    - [0x18337ec, data]
+
+**What to verify the moment it runs, before anything else:** that
+`asm/nonmatchings/ovl_dng_lo20/` gains listings in the `0x8001E814`..`0x80025040`
+range. Attempt 1 produced *no* listing for that range at all, which is the
+symptom to watch for. And restore both recovered listings from
+`docs/recovered-listings/` afterwards -- that path is tested and works.
+
+**Do it only with no agents running**, because `make splat` begins
+`rm -rf asm build/asm` and every agent measures against those listings.
+
 ## The order to do it in
 
 1. Wait until no agent holds `ovl_dng_lo20` or `ovl_dng_b31f`.
