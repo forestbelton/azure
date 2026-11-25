@@ -1,4 +1,23 @@
 /* func_s56_8002401C -- ovl_dng_s56, 219 words.  THE UNIT'S JUMP-TABLE OWNER.
+
+   ==== THE PERMUTER HAS BEEN SPENT ON THIS PARK, 2026-11-25. NEGATIVE.
+   32 minutes, 205,805 iterations, 8 jobs, seeded from this body:
+   `base = 60 -> best = 60, found = none'. NOT ONE improving candidate in
+   200,000 tries.
+
+   That corroborates this park's own finding rather than contradicting it.
+   The header already records a position sweep of the offending statement
+   across all five slots with a FLAT minimum at 2, and the permuter -- which
+   permutes statements, splits and merges locals and varies types -- could not
+   better it either. So the two remaining rows are NOT reachable by any local
+   source permutation, and the next person should not spend another sweep on
+   the statement's position.
+
+   What that leaves is the one thing neither a sweep nor the permuter can
+   reach: the target holds $a0 from row 32 to the store at row 40, five slots
+   earlier than any spelling puts it. That is a register-lifetime question, so
+   the next move is `-da' on this body to see which allocno wins $a0 in the
+   target's ordering, not another spelling.
    PARKED at 219 words / 6 differing (ovlverify) / 2 ALIGNED (agent h179,
    batch 35).  dngfam: one-member family.
 
