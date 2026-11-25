@@ -23,6 +23,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import parksplice  # noqa: E402
+
 PROJ = os.environ.get("AZURE_ROOT", "/home/case/projects/azure")
 UNIT = os.path.join(PROJ, "csrc/ovl_dungeon.c")
 
@@ -455,6 +458,13 @@ def measure(func):
     d = tempfile.mkdtemp(prefix="parkres-")
     src = os.path.join(d, os.path.basename(upath))
     decls = decls_of(park) + preamble_of(park, func)
+    # DROP ANY DECLARATION THE UNIT ALREADY CARRIES -- shared with parksplice,
+    # which had this filter as a closure while this tool did not. A measured
+    # ranking of 40 parks SKIPPED FOUR of them for `redefinition of struct
+    # Unk...' while parksplice spliced the same parks cleanly and reproduced
+    # their stated figures: a sibling landing adds a typedef to the unit, the
+    # park still declares it, and the park looks stale when it is fine.
+    decls, _dropped = parksplice.drop_known(decls, unit, func, quiet=True)
     env = dict(os.environ, AZURE_SCRATCH=os.path.join(d, "sp"))
     os.makedirs(env["AZURE_SCRATCH"], exist_ok=True)
     err = None

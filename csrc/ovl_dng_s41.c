@@ -1,4 +1,7 @@
 #include "common.h"
+extern u8 D_s41_80024004[];
+extern u8 D_s41_8002400C[];
+extern u16 D_80026820[];
 
 typedef struct UnkDngRoom2970
 {
@@ -951,6 +954,104 @@ void func_s41_800252E4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_80025408);
+void func_s41_80025408(u8 *p, UnkVec *b, u8 *c)
+{
+    RECT r1;
+    RECT r2;
+    DVECTOR w;
+    u8 *n;
+    u16 *q;
+    s32 i;
+    s32 j;
+    s32 k;
+    s32 t;
+    int new_var;
+    s16 u;
+
+    r1 = *(RECT *)D_s41_80024004;
+    new_var = 0x60;
+    r2 = *(RECT *)D_s41_8002400C;
+    t = *(s16 *)p;
+    D_800267B8 = 1;
+    switch (t)
+    {
+    case 0:
+        for (i = 0; i < 4; i++)
+        {
+            for (j = 0; j < 4; j++)
+            {
+                r2.x = i * 0x18 + 0x340;
+                r2.y = j * 0x15 + 0x154;
+                r2.w = 0x18;
+                r2.h = 0x15;
+                StoreImage(&r2, (u_long *)D_80026820);
+                while (DrawSync(1) != 0)
+                {
+                    ;
+                }
+                q = D_80026820;
+                for (k = 0; k < 0x1F8; k++)
+                {
+                    if (*q == 0)
+                    {
+                        *q = 0xFFFF;
+                    }
+                    else
+                    {
+                        *q = 0;
+                    }
+                    q++;
+                }
+                LoadImage(&r2, (u_long *)D_80026820);
+            }
+        }
+        *(s16 *)p = *(u16 *)p + 1;
+        *(u16 *)(c + 0x14) &= 0xFF7F;
+    case 1:
+        r2.x = 0x340;
+        r2.y = 0x100;
+        r2.w = 0x60;
+        r2.h = 0x54;
+        w.vx = 0x370;
+        w.vy = 0x148;
+        func_800B8FC8(*(u8 **)(p + 0x44), (s32 *)&r2, (s32 *)&w, 0, 1);
+        r1.x = 0x340;
+        r1.y = 0x100;
+        k = new_var;
+        r1.w = k;
+        r1.h = 0x54;
+        w.vx = 0x370;
+        w.vy = 0x12A;
+        func_s41_80024B6C(*(u8 **)(p + 0x48), (s32 *)&r1, (s32 *)&w, 1, 1);
+        if (*(s16 *)(p + 0x2) < 0x15)
+        {
+            c[0xE] = *(s16 *)(p + 0x2) * 0x80 / 0x14;
+            c[0xD] = *(s16 *)(p + 0x2) * 0x80 / 0x14;
+            c[0xC] = *(s16 *)(p + 0x2) * 0x80 / 0x14;
+        }
+        if (*(s16 *)(p + 0x2) >= 0x51)
+        {
+            c[0xE] = (0x64 - *(s16 *)(p + 0x2)) * 0x80 / 0x14;
+            c[0xD] = (0x64 - *(s16 *)(p + 0x2)) * 0x80 / 0x14;
+            c[0xC] = (0x64 - *(s16 *)(p + 0x2)) * 0x80 / 0x14;
+        }
+        u = *(u16 *)(p + 0x2) + 1;
+        *(s16 *)(p + 0x2) = u;
+        if (u > 0x64)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)p = *(u16 *)p + 1;
+            *(s16 *)(*(u8 **)(p + 0x40) + 0x9C) = 1;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+    n = *(u8 **)(p + 0x3C);
+    if (n[0x13] >= 0x33 && n[0x13] <= 0x36)
+    {
+        *(u16 *)(c + 0x14) |= 0x80;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s41", func_s41_800257D0);

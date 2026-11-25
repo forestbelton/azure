@@ -30,6 +30,61 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import parkresidue as pr
 
 
+def _norm(t):
+    return re.sub(r"\s+", "", t)
+
+
+def decl_units(text):
+    """Whole declarations: a typedef spans lines and must not be split.
+
+    The first version of this filter worked per LINE, and a typedef's field
+    lines (`u16 unk_64;') occur verbatim in other structs -- so it deleted
+    them out of the park's own typedef and left `typedef struct X' followed
+    by `}', a syntax error at the splice point. Brace depth is what separates
+    one declaration from the next.
+    """
+    out, cur, depth = [], [], 0
+    for line in (text or "").split("\n"):
+        cur.append(line)
+        depth += line.count("{") - line.count("}")
+        if depth <= 0 and line.strip().endswith(";"):
+            out.append("\n".join(cur))
+            cur, depth = [], 0
+    if cur:
+        out.append("\n".join(cur))
+    return out
+
+
+def drop_known(decls, unit, func="", quiet=False):
+    """Drop any park declaration the UNIT already carries, and say which.
+
+    A declaration the unit already has is by definition not needed, so
+    dropping it is safe in every case and silent when there is nothing to
+    drop. Without this, a sibling landing that adds a typedef to the unit
+    makes the park stop compiling -- `redefinition of struct Unk...' -- and
+    the park looks stale when it is fine.
+
+    SHARED, because it was a closure here and `parkresidue.py' did not have
+    it: a measured ranking of 40 parks skipped FOUR of them for exactly that
+    redefinition, and `parksplice' spliced the same parks cleanly.
+    """
+    unit_norm = _norm(unit)
+    kept, dropped = [], []
+    for decl in decl_units(decls):
+        t = decl.strip()
+        if t and len(_norm(t)) > 8 and _norm(t) in unit_norm:
+            dropped.append(t.split("\n")[0])
+            continue
+        kept.append(decl)
+    if dropped and not quiet:
+        print("%s: dropped %d declaration(s) the unit already has "
+              "(park rot from a sibling landing): %s"
+              % (func, len(dropped),
+                 "; ".join(d[:48] for d in dropped[:4])
+                 + (" ..." if len(dropped) > 4 else "")))
+    return ("\n".join(kept) if dropped else decls), dropped
+
+
 def main():
     if len([a for a in sys.argv[1:] if not a.startswith("--")]) != 2:
         print(__doc__)
@@ -85,44 +140,7 @@ def main():
     # filter at all. A declaration the unit already carries is by definition
     # not needed, so dropping it is safe in every case and silent when there is
     # nothing to drop.
-    def _norm(t):
-        return re.sub(r"\s+", "", t)
-
-    def _units(text):
-        """Whole declarations: a typedef spans lines and must not be split.
-
-        The first version of this filter worked per LINE, and a typedef's field
-        lines (`u16 unk_64;') occur verbatim in other structs -- so it deleted
-        them out of the park's own typedef and left `typedef struct X' followed
-        by `}', a syntax error at the splice point. Brace depth is what
-        separates one declaration from the next.
-        """
-        out, cur, depth = [], [], 0
-        for line in (text or "").split("\n"):
-            cur.append(line)
-            depth += line.count("{") - line.count("}")
-            if depth <= 0 and line.strip().endswith(";"):
-                out.append("\n".join(cur))
-                cur, depth = [], 0
-        if cur:
-            out.append("\n".join(cur))
-        return out
-
-    unit_norm = _norm(unit)
-    kept, dropped_decls = [], []
-    for decl in _units(decls):
-        t = decl.strip()
-        if t and len(_norm(t)) > 8 and _norm(t) in unit_norm:
-            dropped_decls.append(t.split("\n")[0])
-            continue
-        kept.append(decl)
-    if dropped_decls:
-        decls = "\n".join(kept)
-        print("%s: dropped %d declaration(s) the unit already has "
-              "(park rot from a sibling landing): %s"
-              % (func, len(dropped_decls),
-                 "; ".join(d[:48] for d in dropped_decls[:4])
-                 + (" ..." if len(dropped_decls) > 4 else "")))
+    decls, _dropped = drop_known(decls, unit, func)
 
     # THE SYNTHESISED SELF-PROTOTYPE IS A MEASUREMENT AID THAT CAN BREAK A
     # LANDED FUNCTION, SO SAY SO BEFORE ANYONE MERGES THIS FILE.
