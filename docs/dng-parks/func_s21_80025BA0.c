@@ -492,6 +492,52 @@
        R  58  lh a1,2(s4)      / lh $v0, 0x2($s7)
 
 DECLARATIONS
+==== THE PERMUTER HAS NOW BEEN SPENT ON THIS PARK, 2026-11-25, dispatcher.
+
+Seeded from the 9-ROW body (the return value captured through `qq', with the
+index block EXACT) rather than from the 5-row body below, on the reasoning that
+a seed whose disputed block is already correct is the better base -- which is
+what the earlier scaffold-versus-park result on another park had shown.
+
+    45 minutes, 317,225 iterations, 8 jobs, base = 80 -> best = 60
+
+The winning candidate is SEMANTICALLY VALID and is exactly the shape the
+previous agent asked for -- a consumer that gives the discarded return value a
+death point:
+
+    qq = (UnkNode *)func_8004491C(n, (u32)func_s21_800259DC);
+    ia = i & -0x10;
+    qq = n;                          <- added
+    ...
+    q = (u8 *)qq + 0x20;             <- was (u8 *)n + 0x20
+
+Measured by hand: **170 words / 5 aligned differences, and they are THE SAME
+FIVE ROWS** -- words 32, 33, 34, 40, 41, every one `$v0` where the target has
+`$v1`. So the search did not beat this body; it found a different route back to
+it, trading the 9-row seed's four knock-on rows for the index block it had
+fixed.
+
+WHAT THAT SETTLES. The park's two stated options were "accept 5 or permute".
+Permuting is now done and returned the floor, from the best seed available,
+over three hundred thousand iterations. Together with the two facts already in
+this file -- that the five rows REPRODUCE AT THE SAME TARGET WORDS on the
+exact-clone sibling in another unit, so the fault is in the shape and not the
+bank, and that the one untried rival shape is closed at 170/35 -- the evidence
+for 5 being this shape's floor is as strong as this project gets.
+
+MY RECOMMENDATION IS NOW ACCEPT, not continue. Three agents have respelled it,
+a relink has proved the residue structural, and a permuter run from an informed
+seed has returned the same five rows. Anyone picking this up should read that
+as a closed question unless they have a NEW mechanism -- not a new spelling --
+and the two mechanisms nobody has produced are a way to give the return value a
+use the target already emits (walking forward from word 42, none of words
+42..47 can be it), and a way to make the index chain's quantity lose `$v0` in
+round 1 of find_free_reg.
+
+The stale `output-25-1' in nonmatchings/func_s21_80025BA0/ is from the FIRST
+run against this body and is not comparable; permimport now archives such
+directories, because `ls' sorted it ahead of this run's genuine best.
+
 (UnkDng26478 is now defined in ovl_dng_s21 itself, by a body landed after
 this park was written.  Declaring it here again is a redefinition and is why
 the park stopped splicing; take it from the unit.)
