@@ -1,4 +1,7 @@
 #include "common.h"
+extern u8 D_80077E00[];
+extern u8 D_80077DE8[];
+extern u32 D_8001F5B4[];
 
 extern u8 D_800DCF5A;
 extern s32 D_8008346C;
@@ -1249,4 +1252,60 @@ void func_lo16_8001F354(s16 x, s16 y, s16 f, u32 v)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001F450);
+void func_lo16_8001F450(void)
+{
+    u8 buf[8];
+    u8 *b;
+    s16 x;
+    s16 y;
+    s32 f;
+    int new_var;
+    u8 *t;
+    int new_var2;
+
+    new_var = 2;
+    t = NULL;
+    new_var2 = 0xAA;
+    if (D_80012090 != new_var)
+    {
+        if (D_8008146C == 0x28)
+        {
+            t = D_80077E00;
+        }
+        f = 0;
+    }
+    else
+    {
+        f = 1;
+    }
+    if (t != NULL)
+    {
+        func_lo16_8001F354(0xAA, 0x78, 0, (u32)t);
+        return;
+    }
+    func_lo16_8001F354(new_var2, 0x78, f, (u32)D_80077DE8);
+    b = buf;
+    func_8004E634(D_8008146C, b);
+    if (buf[1] == 0)
+    {
+        x = 0xDA;
+    }
+    else
+    {
+        x = 0xC8;
+    }
+    if (buf[0] == 0)
+    {
+        return;
+    }
+    y = 0x78;
+    while (*b != 0)
+    {
+        if (*b != 0x20)
+        {
+            func_lo16_8001F354(x, y, f, D_8001F5B4[*b]);
+        }
+        b++;
+        x += 0x12;
+    }
+}
