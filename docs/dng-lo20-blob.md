@@ -108,6 +108,72 @@ per-function listing and stops at the spurious symbol):
 Neither interior symbol is a branch target of anything, so deleting it is
 safe. Those bodies are in `docs/dng-parks/func_lo20_80026EC0.c`.
 
+## ATTEMPT 1 FAILED: a `symbol_addrs` file does NOT reclassify the range
+
+Tried 2026-11-25 in the one window with no agents running. **It did not work,
+and the build had to be reverted.** Recording it so the next attempt starts
+further along.
+
+**What I did.** `splat/dungeon.bin.yaml` already declares
+`symbol_addrs_path: splat/dungeon.bin_symbol_addrs.txt` and **that file did not
+exist**, so I wrote it with 32 `type:func` entries -- the function starts
+derived mechanically as the word after every `jr $ra` and its delay slot, which
+gives 33 boundaries of which 24 open with `addiu $sp, $sp, -N` and the last is
+the 547-word trailing data run.
+
+**What happened.** `make splat` ran clean and emitted **nothing** for
+`0x8001E814..0x80025040`. lo20's listings now begin at `0x800250B4`, the blob's
+own listing was deleted and not regenerated, and `csrc/ovl_dng_lo20.c` still
+carries `INCLUDE_ASM(..., func_lo20_8001E814)` -- so the build broke on a
+missing listing.
+
+**Why, as far as I can tell.** A `symbol_addrs` entry names a symbol and its
+type; it does not override spimdisasm's own decision that the range is DATA.
+That decision is what emits `dlabel func_lo20_8001E814` in the first place, and
+it is made before any symbol list is consulted.
+
+**So the next thing to try is the YAML, not the symbol list** -- which is what
+`extra_syms`' own note says ("the real fix is a rodata subsegment for each of
+the two objects"). For lo20 that note is only half right, because this blob is
+CODE, so the shape wanted is probably:
+
+    - [0x1829800, data]
+    - [0x1829814, c, ovl_dng_lo20]        <- the 32 functions
+    - [0x182F7B4, data]                   <- the 547-word tail
+    - [0x1830040, c, ovl_dng_lo20]        <- the existing functions
+    - [0x18337ec, data]
+
+**with the open question being whether splat accepts TWO `c` subsegments of the
+same name in one segment**, since that would have to produce one `.c` file.
+Check that before spending another splat cycle.
+
+## What the failure DID establish
+
+* **The restore procedure works.** Both recovered listings were copied back
+  from `docs/recovered-listings/` and `make check` plus `make containers`
+  returned five byte-identical containers with zero undefined references. That
+  path is now tested rather than assumed.
+* **The saved b31f listing is the authoritative one, not my regeneration.** I
+  had hand-built a 53-label copy; the saved copy has **52** and links clean.
+  My 53rd was a `dlabel D_b31f_80174674` at offset 0, which is unnecessary --
+  that symbol is satisfied by the absolute in `dungeon.bin_extra_syms.txt`.
+* **The blob is definitively CODE, and the README's "neither is a function" is
+  about the SYMBOL TYPE, not the contents.** `objdump -b binary -m mips:3000`
+  on the range gives a clean prologue, register saves and a table lookup. Both
+  statements are true once separated: the symbol `func_lo20_8001E814` is
+  data-typed, and the range it covers holds ~32 real functions.
+* **There are ZERO `jal` targets inside the range**, so every one of those 32
+  functions is entered from outside it. No internal call could ever have
+  established the boundaries, which is why the carve had nothing to work with.
+
+## A WARNING ABOUT THE PROGRESS FIGURE
+
+`make splat` moved the denominator from **545,689 back to 543,606 words** --
+the b31f island's 2,083 words stop being counted as a function once the
+listings are regenerated. The percentage therefore went 79.0% to 79.3% **with
+no work done at all.** Ask `progress.py` and say what changed; never compare a
+remembered percentage across a splat.
+
 ## The order to do it in
 
 1. Wait until no agent holds `ovl_dng_lo20` or `ovl_dng_b31f`.
