@@ -38,6 +38,13 @@ PRE = re.compile(r"^\s*/\* [0-9A-F]+ [0-9A-F]+ [0-9A-F]+ \*/\s{1,2}")
 HDR = re.compile(r"nonmatching (func_[0-9A-Za-z_]+), (0x[0-9A-Fa-f]+)")
 
 
+def _code(text):
+    """The text from the function's glabel on, so a leading .rodata table's
+    words are not counted as part of the body."""
+    i = text.find("glabel func_")
+    return text if i < 0 else text[i:]
+
+
 def body(text):
     """Normalised instruction text: no addresses, no per-copy label or symbol.
 
@@ -65,7 +72,12 @@ def tiny(max_words=0):
     rows = []
     for path in glob.glob(os.path.join(dngfam.PROJ, "asm/nonmatchings/*/*.s")):
         text = open(path, encoding="utf-8", errors="replace").read()
-        m = HDR.search(text[:400])
+        # search the WHOLE text, not a prefix: a unit whose listing carries a
+        # leading `.section .rodata' jump table has its `nonmatching func_...'
+        # header well past any fixed window, and a prefix search silently
+        # SKIPS those functions -- which is how this tool's first count of
+        # the pool came in short.
+        m = HDR.search(text)
         if not m:
             continue
         func = m.group(1)
@@ -81,7 +93,7 @@ def tiny(max_words=0):
         elif sweep.get(func, {}).get("words"):
             continue
         unit = os.path.basename(os.path.dirname(path))
-        rows.append((words, func, unit, body(text)))
+        rows.append((words, func, unit, body(_code(text))))
     return rows
 
 
