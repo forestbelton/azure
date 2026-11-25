@@ -141,12 +141,32 @@ def main():
         glob.glob(os.path.join(PROJ, "docs/dungeon-parks/func_*.c"))
         + glob.glob(os.path.join(PROJ, "docs/dng-parks/func_*.c")))
     bad = 0
+    # A PARK FOR A FUNCTION THAT IS NO LONGER A STUB IS STALE, and this check
+    # reported "0 bad" while exactly that existed: the permuter closed a
+    # 520-word park, I landed the body and staged the park file in the same
+    # commit without deleting it. Nothing in the structural check looks at
+    # whether the function is still parked, so the park count drifts upward
+    # and a later agent can be handed a park for a body that is already done.
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import dngfam
+        stubs = dngfam.stubs()
+    except Exception:
+        stubs = None
     for p in files:
         c = check(p)
+
         if c:
             print("%s: %s" % (os.path.relpath(p, PROJ), c))
             bad += 1
             continue
+        if stubs is not None:
+            fn = os.path.basename(p)[:-2]
+            if fn not in stubs:
+                print("%s: STALE -- %s is LANDED; delete this park"
+                      % (os.path.relpath(p, PROJ), fn))
+                bad += 1
+                continue
         if do_splice:
             why = splices(p)
             if why:
