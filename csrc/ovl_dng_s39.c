@@ -129,9 +129,108 @@ typedef struct UnkDng24094SP
     u16 unk_10A;
 } UnkDng24094SP;
 
+typedef struct UnkDngS39Blk8
+{
+    u8 b[0x8];
+} UnkDngS39Blk8;
+extern UnkDngS39Blk8 D_s39_80024004;
+extern UnkDngS39Blk8 D_s39_8002400C;
+void func_s39_8002405C(u8 *a, u8 *pp, u8 *pp2, u8 *ot, s16 d);
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_8002405C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_80024CD4);
+/* The bank's draw bracket for this object, called by func_s39_80025398 and
+   func_s39_80025648: SetDrawArea to the caller's RECT, one call of this
+   object's renderer func_s39_8002405C at the position in the second RECT,
+   and -- when the fifth argument's low half is set -- a 0x60000000 tint prim
+   dressed from the first RECT.  130 words, 0 differing.  The twins are
+   csrc/ovl_dng_s41.c's func_s41_80024B6C and csrc/ovl_dng_s37.c's
+   func_s37_80024A5C, the same 126-word body at 0.922; this bank's renderer
+   takes FIVE arguments where theirs take four, so there is an extra payload
+   pointer parameter here and the trailing count is passed on the stack.
+
+   THE `s32 ee = e;' COPY IS THE WHOLE OF THE +4 WORDS.  Passing `(s16)e'
+   straight off the parameter is 127 words and 22 aligned differences:
+   assign_parms hangs a REG_EQUIV on an SImode stack parameter whose
+   nominal_mode equals its passed_mode, update_equiv_regs deletes the
+   prologue load and the value is rematerialised with its own `lw' at the
+   call, so there is no long-lived pseudo to compete for $s7 at all.  The
+   user copy gives it one -- which is the target's `lw $s7, 0x64($sp)' at the
+   top with the `sll 16'/`sra 16' left at the use -- and that makes TEN
+   long-lived values for nine callee-saved registers, so `cw' is the one that
+   loses and spills, which is the target's `sh $t0, 0x20($sp)' /
+   `lhu $t0, 0x20($sp)' pair.
+
+   THAT IS BOTH TWINS' `s16'-PARAMETER FACT INVERTED, and the reason is
+   positional: their count is the LAST argument, mine is the SIXTH, and the
+   `lw' plus `sll 16'/`sra 16' at the use says `s32' outright where an `s16'
+   parameter would be a bare `lh'.
+
+   Both twins' own facts re-measured here and both HOLD.  `u16 cw = (u16)c;'
+   must be hoisted out of the `if': `if ((u16)c != 0)' with no local is 128
+   words and 35 aligned differences.  The 0x8D0 store must be the array ref
+   `((u32 *)X)[0x234]': as `*(u32 *)(X + 0x8D0)' it is 130 words and 29
+   differing.  And their `do { } while (0)' around the renderer call is
+   REMOVED here exactly as their comments say: added back it is 130 words and
+   16 aligned differences.
+
+   0x80067E2C is `SetDrawArea' in splat/common_syms.txt, so the two calls the
+   listing spells `func_80067E2C' need no declaration.  Those two calls warn
+   `incompatible pointer type' under declcheck, identically to the committed
+   s37 and s41 twins; explicit `(DR_AREA *)' / `(RECT *)' casts are FREE
+   (130 words, 0 differing) if a clean run is wanted.
+   raw 10 == relocdump's 10: 1 HI16 + 4 LO16 on D_80083160, 1 + 1 on
+   D_801C9E40, 2 R_MIPS_26 on SetDrawArea and 1 on func_s39_8002405C. */
+void func_s39_80024CD4(u8 *p, u8 *pp, s32 *b, s32 *b2, s32 c, s32 e)
+{
+    Unk80083160 *g;
+    u8 *q;
+    u8 *r;
+    u8 *u;
+    s16 w[2];
+    s16 lean;
+    s32 t;
+    u16 cw;
+    s32 ee;
+
+    ee = e;
+    cw = (u16)c;
+    g = &D_80083160;
+    lean = D_80083160.unk_00 != D_801C9E40;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    r = D_80083160.unk_00 + 0x8B0;
+    ((u32 *)D_80083160.unk_00)[0x234] = (u32)(q + 0xC);
+    SetDrawArea(q, D_80083160.unk_00);
+    addPrim(r, q);
+    w[0] = *(u16 *)b2;
+    t = *((s16 *)b2 + 1);
+    if (lean)
+    {
+        t -= 0xE0;
+    }
+    w[1] = t;
+    func_s39_8002405C((u8 *)w, p, pp, r, (s16)ee);
+    if (cw != 0)
+    {
+        u = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+        *(u32 *)(D_80083160.unk_00 + 0x8D0) = (u32)(u + 0x10);
+        *(u32 *)(u + 0x4) = 0x60000000;
+        u[0x3] = 3;
+        *(u16 *)(u + 0x8) = *(u16 *)b;
+        t = *((s16 *)b + 1);
+        if (lean)
+        {
+            t -= 0xE0;
+        }
+        *(s16 *)(u + 0xA) = t;
+        *(u32 *)(u + 0xC) = b[1];
+        addPrim(r, u);
+    }
+    q = *(u8 **)(g->unk_00 + 0x8D0);
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)(q + 0xC);
+    SetDrawArea(q, b);
+    addPrim(r, q);
+}
 
 /* One semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
    projected through the 0x1F800000 scratchpad, with the tile's colour word
@@ -367,10 +466,343 @@ void func_s39_80025348(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_80025398);
+/* The state 0/1 frame of the banked actor drawn by func_s39_80024CD4: copy
+   this bank's 8-byte draw RECT D_s39_80024004 to the stack, pin D_800266BC,
+   fade the slot's greys as `n * 128 / limit' and push its scale pair out by
+   0x50, wrap the +0x98 heading by 0x1000 after taking 0x28 off it, refill the
+   0x60-byte strip at +0x38 with 0x46 while the counter is still under 0x32,
+   and on state 0 or 1 draw through func_s39_80024CD4 at the RECT's own centre
+   and reap the node when +0x4 reaches +0x2.  125 words, 0 differing,
+   0 aligned differences.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_8002558C);
+   NO TWIN AT ANY RATIO; the donors are the two landed in-unit siblings
+   func_s39_8002515C and func_s39_8002558C, which dngcallee named off the
+   D_800266BC / D_800814A0 callee set, plus csrc/ovl_dng_b01.c's
+   func_b01_801708E8 for the grey chain.  func_s39_80024CD4 landing an hour
+   earlier in this same file is what fixed the six-argument call.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_80025648);
+   THE 0x60-BYTE FILL COUNTS UP.  `for (i = 0; i < 0x60; i++)' is the target;
+   written DESCENDING -- which is what the emitted loop looks like, a counter
+   from 0x5F and a pointer walked down -- it is 124 words and 4 aligned
+   differences.  loop.c reverses the ascending loop in `check_dbra_loop', and
+   a reversed biv is the one case where loop.c:3996 reduces an address giv
+   whose benefit is 0 anyway, which is where the target's separate
+   `addiu $v0, $v0, -0x1' pointer and its `addiu $v0, $s0, 0x5F' preheader
+   init come from.  Written descending the giv is never reduced and the
+   address is an `addu' recomputed inside the loop.  The init ORDER is the
+   tell: the 0x46 movable lands before the giv's init and after the source
+   counter's.
+
+   `w = *(u16 *)p;' IS HOISTED ABOVE THE SWITCH AND THE `+ 1' STAYS IN THE
+   ARM.  `w = *(u16 *)p + 1;' with `*(s16 *)p = w;' is 126 words and 3 aligned
+   differences and `(*(u16 *)p)++;' left inside case 0 is 126 and 7.  With the
+   add in the arm the pre-dispatch block is one insn shorter and sched1 puts
+   the `lh' that feeds the `beqz' first instead of last; both rejected forms
+   spend the saved word on a `nop' in the load-delay slot before the branch.
+
+   A `switch', NOT `if' / `else if': the chain is 124 words and 10 aligned
+   differences, because the switch lays case 0's block out AFTER the `j' to
+   the default arm and the `if' makes it the fall-through.
+
+   TWO LOCALS FOR THE TWO ARMS' QUOTIENTS.  One shared local is 116 words and
+   28 aligned differences: the arms become identical and jump2 cross-joins the
+   0x1C/0x1E bumps and the grey triple into one copy, where the target has
+   them twice.
+
+   The two loads before the `D_800266BC = 1' store: store first is 126 words
+   and 5 aligned differences, the same fact and the same price as
+   func_s39_8002558C's.
+
+   MEASURED AND FREE, so it is NOT the reason this lands: `a * 128 / b' in
+   place of `(a << 7) / b' (125 words, 0 differing -- the power-of-two
+   multiply is the same tree, reproducing b01's finding).
+
+   THE RECT COPY IS A BYTE-ALIGNED STRUCT.  `UnkDngS39Blk8 area =
+   D_s39_80024004;' is what gives the target's `lwl'/`lwr' + `swl'/`swr'
+   unaligned word moves out of a symbol that is in fact 4-aligned; the
+   declared alignment, not the address, is what picks them.
+   raw 10 == relocdump's 10: 2 on D_s39_80024004, 2 on D_800266BC, 3 on
+   D_800814A0, 1 R_MIPS_26 on func_s39_80024CD4 and 2 on .text for the two
+   `j's.  THE SYMBOL IS D_s39_80024004 AND NOT D_s39_8002400C -- the sibling
+   twelve listings down loads the other one, both are 8-byte RECTs four bytes
+   apart, and the relocation COUNT is identical, so neither ovlverify nor
+   --raw can tell them apart. */
+void func_s39_80025398(u8 *p, UnkVec *v, u8 *q)
+{
+    UnkDngS39Blk8 area;
+    s16 pos[2];
+    s32 a;
+    s32 b;
+    s32 c;
+    s32 t;
+    s32 u;
+    s32 h;
+    s32 st;
+    s32 w;
+    s32 i;
+
+    area = D_s39_80024004;
+    a = *(s16 *)(p + 0x4);
+    b = *(s16 *)(p + 0xA);
+    D_800266BC = 1;
+    if (a < b)
+    {
+        t = (a << 7) / b;
+        *(s16 *)(q + 0x1C) = *(u16 *)(q + 0x1C) + 0x50;
+        *(s16 *)(q + 0x1E) = *(u16 *)(q + 0x1E) + 0x50;
+        q[0xC] = q[0xD] = q[0xE] = t;
+    }
+    else
+    {
+        c = *(s16 *)(p + 0x2);
+        u = ((c - a) << 7) / (c - b);
+        *(s16 *)(q + 0x1C) = *(u16 *)(q + 0x1C) + 0x50;
+        *(s16 *)(q + 0x1E) = *(u16 *)(q + 0x1E) + 0x50;
+        q[0xC] = q[0xD] = q[0xE] = u;
+    }
+    h = *(u16 *)(p + 0x98);
+    *(s16 *)(p + 0x98) = h - 0x28;
+    if ((s16)(h - 0x28) < 0)
+    {
+        *(s16 *)(p + 0x98) = h - 0x28 + 0x1000;
+    }
+    if (*(s16 *)(p + 0x4) < 0x32)
+    {
+        for (i = 0; i < 0x60; i++)
+        {
+            p[i + 0x38] = 0x46;
+        }
+    }
+    st = *(s16 *)p;
+    *(s16 *)(p + 0x9A) = 0x64;
+    w = *(u16 *)p;
+    switch (st)
+    {
+    case 0:
+        *(s16 *)p = w + 1;
+        *(u16 *)(q + 0x14) &= 0xFF7F;
+        break;
+    case 1:
+        break;
+    default:
+        return;
+    }
+    pos[0] = *(u16 *)&area.b[0] + ((s16)(*(u16 *)&area.b[4]) >> 1);
+    pos[1] = *(u16 *)&area.b[2] + 0x3C;
+    func_s39_80024CD4(p, *(u8 **)(p + 0x34), (s32 *)&area, (s32 *)pos, 1, 1);
+    if ((s16)(++*(u16 *)(p + 0x4)) == *(s16 *)(p + 0x2))
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* One frame of the simple grey fade: pin D_800266BC, set the slot's three
+   greys from the +0x4 frame counter -- rising as `n * 96 / limit' while it is
+   under the +0xA threshold and falling as the complement against +0x2 after
+   it -- then bump the counter and raise the 0x8000 kill bit in the node's
+   -0x2 and in D_800814A0 when it reaches the +0x2 limit.  47 words,
+   0 differing, 0 aligned differences.
+
+   NO TWIN AT ANY RATIO.  Built from two donors, neither of them a shape
+   match: the in-unit landed sibling func_s39_8002515C for the spellings, and
+   csrc/ovl_dng_b01.c's func_b01_801708E8 for the grey chain.
+
+   `s32 a/b/c', NOT `s16': as `s16' it is 51 words and 22 aligned
+   differences, because an HImode local is loaded `lhu' and then sign-extended
+   `sll 16'/`sra 16' at every int use, where the target's `lh' loads straight
+   into an SImode pseudo.  func_s39_8002515C declares the same three loads
+   `s32' and that is where this came from.
+
+   THE TWO LOADS GO BEFORE THE `D_800266BC = 1' STORE, which is
+   func_s39_8002515C's documented fact and HOLDS here: the store first is 48
+   words and 5 aligned differences (6 on the sibling, same mechanism -- gcc
+   cannot disambiguate the `mem:HI (lo_sum D_800266BC)' store from
+   `mem:HI ($a3 + 4)').
+
+   THE CHAIN GOES INSIDE EACH ARM WITH THE QUOTIENT INLINE, not into one
+   local with the chain after the `if': one local `t' is 47 words and 6
+   aligned differences, every row $v1 where the target has $v0, because a
+   local set in both arms is not a single-set pseudo and loses
+   adjust_priority's `birthing_insn_p' boost.  Written per arm the two
+   quotients are two single-set pseudos, they land in the same register, and
+   jump2 cross-joins the three stores for free -- the target's one copy of
+   `sb 0xE' with reorg stealing it into the arm's delay slot.
+
+   `q[0xC] = q[0xD] = q[0xE] = ...' (inner lvalue first), which is b01's
+   measured fact: reversed to `q[0xE] = q[0xD] = q[0xC] = ...' it is 50 words
+   and 4 aligned differences.
+   raw 6 == relocdump's 6: 2 on D_800266BC, 3 on D_800814A0 and 1 on .text
+   for the first arm's own `j'. */
+void func_s39_8002558C(u8 *p, UnkVec *v, u8 *q)
+{
+    s32 a;
+    s32 b;
+    s32 c;
+
+    a = *(s16 *)(p + 0x4);
+    b = *(s16 *)(p + 0xA);
+    D_800266BC = 1;
+    if (a < b)
+    {
+        q[0xC] = q[0xD] = q[0xE] = a * 96 / b;
+    }
+    else
+    {
+        c = *(s16 *)(p + 0x2);
+        q[0xC] = q[0xD] = q[0xE] = (c - a) * 96 / (c - b);
+    }
+    if ((s16)(++*(u16 *)(p + 0x4)) >= *(s16 *)(p + 0x2))
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The state 0/1 frame of the other banked actor drawn by func_s39_80024CD4,
+   the same shape as func_s39_80025398 with its own RECT D_s39_8002400C: step
+   the +0x38 strip up by one a byte at a time while the counter is under 0x32
+   and down by one after that, ramp the greys as a two-sided `n * 6' fade on
+   +0x2, advance +0x98 by 0xC8 and +0x9A by 4, seed the caller's mover from
+   the owner parked at +0x2C, and on state 0 or 1 borrow the owner slot's
+   scale pair at 0x1000 across the draw and put it back.  185 words,
+   0 differing, 0 aligned differences.
+
+   NO TWIN AT ANY RATIO; donors as for func_s39_80025398, which is this
+   body's real source -- it landed first in this same file and every spelling
+   below except the `addu' carried over to the first compile.
+
+   `(p + i)[0x38]' AND NOT `p[i + 0x38]' IN BOTH STRIP LOOPS.  The plain index
+   form is 185 words and 4 aligned differences, all four rows the loops' own
+   `addu' with its two operands exchanged.  Neither loop is strength-reduced
+   here -- both count up, neither biv is reversed, and the address giv's
+   benefit is 0 -- so the address is recomputed in the loop from the giv
+   expression, and `(p + i)' is what makes `pointer_int_sum' put the POINTER
+   first.  `p[i + 0x38]' associates the constant into the index and the sum
+   comes out `addu $v0, $a0, $s3' where the target has `addu $v0, $s3, $a0'.
+   Note the contrast with func_s39_80025398, whose loop IS reduced and where
+   the same two spellings therefore measure the same.
+
+   THE q+0x1E STORE RE-READS THE SLOT.  `*(s16 *)(q + 0x1E) = sy;' with the
+   value already in a callee-saved register is 184 words and 8 aligned
+   differences.  The `sh $s0, 0x1C($a3)' store two lines above invalidates
+   cse's copy of `s + 0x1E' -- q and s are unrelated pointers -- so the
+   target reloads it, and the register form loses that word.  The 0x1C store
+   two lines up has no store before it and does reuse its register, which is
+   why the two look inconsistent in the listing.
+
+   THE q+0x14 MASK AND THE OR ARE TWO STATEMENTS: as one expression it is 182
+   words and 5 aligned differences.
+
+   `*(s16 *)(s + 0x1C) = *(s16 *)(s + 0x1E) = 0x1000;' -- inner lvalue first,
+   so 0x1E is stored before 0x1C.  Reversed it is 185 words and 2 aligned
+   differences.  MEASURED AND FREE: the same pair written as two separate
+   statements in that order, 185 words and 0 differing, so the chain is a
+   style choice and only the ORDER is a fact.
+
+   MEASURED AND FREE, and THE CONTRAST WITH func_s39_80025398 IS THE POINT:
+   `(*(u16 *)p)++;' left inside case 0 instead of the hoisted
+   `w = *(u16 *)p;' is 185 words and 0 differing HERE, where the same change
+   costs func_s39_80025398 a word and 7 aligned differences.  The hoist buys
+   nothing without the `sh 0x9A' store sitting in the pre-dispatch block and
+   competing with the `lh' for the schedule.  A twin's statement-order fact
+   priced on one body is worth re-pricing on the next even inside one unit.
+
+   THE `D_800266BC = 1' STORE COMES FIRST HERE, before the +0x98 read -- the
+   opposite of func_s39_8002558C's and func_s39_80025398's order, and it
+   matches, because the loads it would be hoisted above are not call
+   arguments and carry no dependency on it.
+   raw 11 == relocdump's 11: 2 on D_s39_8002400C, 2 on D_800266BC, 3 on
+   D_800814A0, 1 R_MIPS_26 on func_s39_80024CD4 and 3 on .text.
+   D_s39_8002400C, not D_s39_80024004 -- see func_s39_80025398's note. */
+void func_s39_80025648(u8 *p, u8 *b, u8 *q)
+{
+    UnkDngS39Blk8 area;
+    s16 pos[2];
+    u8 *m;
+    u8 *r;
+    u8 *s;
+    s32 a;
+    s32 i;
+    s32 st;
+    s32 w;
+    s32 sx;
+    s32 sy;
+
+    area = D_s39_8002400C;
+    D_800266BC = 1;
+    *(s16 *)(p + 0x98) = *(u16 *)(p + 0x98) + 0xC8;
+    if (*(s16 *)(p + 0x2) < 0x32)
+    {
+        for (i = 0; i < 0x60; i++)
+        {
+            (p + i)[0x38]++;
+        }
+    }
+    else
+    {
+        for (i = 0; i < 0x60; i++)
+        {
+            if ((p + i)[0x38] != 0)
+            {
+                (p + i)[0x38]--;
+            }
+        }
+    }
+    a = *(s16 *)(p + 0x2);
+    if (a < 0x15)
+    {
+        q[0xC] = q[0xD] = q[0xE] = a * 6 - 0x79;
+    }
+    else if (a >= 0x50)
+    {
+        q[0xC] = q[0xD] = q[0xE] = (0x64 - a) * 6 - 0x80;
+    }
+    *(s16 *)(p + 0x9A) = *(u16 *)(p + 0x9A) + 0x4;
+    m = *(u8 **)(p + 0x2C);
+    r = *(u8 **)(m - 0x18);
+    s = *(u8 **)(m - 0x14);
+    *(u32 *)b = *(u32 *)r;
+    *(u32 *)(b + 0x4) = *(u32 *)(r + 0x4);
+    *(u32 *)(b + 0x8) = *(u32 *)(r + 0x8);
+    st = *(s16 *)p;
+    w = *(u16 *)p;
+    switch (st)
+    {
+    case 0:
+        *(s16 *)p = w + 1;
+        *(u16 *)(q + 0x14) &= 0xFF7F;
+        *(u16 *)(q + 0x14) |= *(u16 *)(s + 0x14) & 0xC;
+        *(u16 *)(q + 0x10) = *(u16 *)(s + 0x10);
+        q[0xC] = s[0xC];
+        q[0xD] = s[0xD];
+        q[0xE] = s[0xE];
+        *(u16 *)(s + 0x14) |= 0x80;
+        break;
+    case 1:
+        break;
+    default:
+        return;
+    }
+    pos[0] = *(u16 *)&area.b[0] + ((s16)(*(u16 *)&area.b[4]) >> 1);
+    pos[1] = *(u16 *)&area.b[2] + 0x48;
+    sx = *(u16 *)(s + 0x1C);
+    sy = *(u16 *)(s + 0x1E);
+    *(s16 *)(q + 0x1C) = sx;
+    *(s16 *)(q + 0x1E) = *(u16 *)(s + 0x1E);
+    *(s16 *)(s + 0x1C) = *(s16 *)(s + 0x1E) = 0x1000;
+    func_s39_80024CD4(p, *(u8 **)(p + 0x2C), (s32 *)&area, (s32 *)pos, 1, 1);
+    *(s16 *)(s + 0x1C) = sx;
+    *(s16 *)(s + 0x1E) = sy;
+    if ((s16)(++*(u16 *)(p + 0x2)) >= 0x65)
+    {
+        *(s16 *)(p + 0x2) = 0;
+        (*(u16 *)p)++;
+        *(u16 *)(s + 0x14) &= 0xFF7F;
+        *(s16 *)(*(u8 **)(p + 0x30) + 0x9C) = 1;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_8002592C);
