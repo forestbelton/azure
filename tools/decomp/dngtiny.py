@@ -1,15 +1,30 @@
 #!/usr/bin/env python3
 """dngtiny -- the stubs dngpick CANNOT SEE, grouped by identical body.
 
-docs/dng-twinsweep.json has no entry for a function below its minimum size, so
-`dngpick' never offers one: 94 stubs and 937 words were invisible when this was
-written, which is 12% of the remaining FUNCTIONS for under 1% of the remaining
-words.  The project metric counts functions as well as words, so these are the
-cheapest rows on the board.
+docs/dng-twinsweep.json has no `words' field for a function below its minimum
+size, which is what this tool keys on: 94 stubs and 937 words, 12% of the
+remaining FUNCTIONS for under 1% of the remaining words.  The project metric
+counts functions as well as words, so these are the cheapest rows on the board.
+
+**THEY ARE NOT INVISIBLE TO `dngpick' AND I SAID THEY WERE.  They are
+OUTRANKED.**  `dngfam' computes sizes for itself, so `dngpick.stub_rows()'
+carries every one of them with the right word count -- and already knew the
+thirteen-member family below, at `copies=13 yield=104'.  What keeps them out of
+a batch is the RANKING: units are scored by total twin yield and packed against
+a word budget, so a yield of 2, 3 or 104 never wins against a unit offering
+800+.  The fix is therefore a ranking or a mode, NOT a new data source, and
+this tool is a surfacing tool rather than a discovery.
 
 They also replicate heavily.  Thirteen stubs in ovl_dng_b31f are the same
 eight-word thunk byte for byte -- one spelling lands all thirteen -- so this
 tool groups by normalised body text rather than listing them flat.
+
+`dngpick' DOES have a real blind spot, and it is a different and smaller one:
+21 stubs sit in no family at all and never reach `stub_rows()'.  Nineteen are
+parks, which it skips deliberately.  The other is
+**`func_lo20_8001E814', a 6,667-WORD STUB** -- the largest single function in
+the remaining work, 5% of everything left, in no family, never offered, and
+not parked.
 
     dngtiny.py                 every tiny stub, classes first
     dngtiny.py --unit b31f     one unit
