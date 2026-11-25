@@ -203,6 +203,27 @@ def park_report():
     print("%d park(s), %d words" % (len(rows), sum(r[2] for r in rows)))
     print("a twin only helps a park blocked on C-LEVEL RESIDUE; a LAYOUT "
           "blocker is immune to it\n")
+    # FAMILY MEMBERSHIP, because I wasted a whole agent-run for want of it.
+    # func_s69_80024C38 was dispatched as a 4-row park; its 2-member family's
+    # other member was on a DIFFERENT agent's list in the same batch, that
+    # agent landed it, dngclone replicated the body in and verified it at 0,
+    # and the park landed itself. dngpick already dedupes families within a
+    # batch -- but over STUB rows, and parks are excluded from the picker, so
+    # the two mechanisms never met. Printing it here is the cheap fix.
+    import dngfam as _df
+    # families() is {digest: [(unit, func, words)]} over STUB listings, which
+    # is exactly the right scope: a sibling that is still a stub is one an
+    # agent could be assigned, and a sibling already landed would have
+    # replicated into this park already.
+    fam = {}
+    try:
+        for grp in _df.families().values():
+            if len(grp) > 1:
+                names = [f for _u, f, _w in grp]
+                for n in names:
+                    fam[n] = names
+    except Exception as e:
+        print("  (family check unavailable: %s)" % e)
     for ratio, name, w, nm, vtag, resid, layout, prog in rows:
         twin = ("%.3f %s (%s)" % (ratio, nm, vtag)) if nm else "no twin at 0.60"
         why = ("LAYOUT -- a twin does NOT unblock this" if layout and resid is None
@@ -210,7 +231,13 @@ def park_report():
                else "blocker not parsed")
         if layout and resid is not None:
             why += " + mentions layout, read the file"
-        print("  %-22s %4dw  %-34s %s" % (name, w, twin, why))
+        mem = fam.get(name)
+        famnote = ""
+        if mem and len(mem) > 1:
+            famnote = ("  [FAMILY of %d: %s -- DO NOT assign if any sibling is "
+                       "picked; it lands by replication]"
+                       % (len(mem), ", ".join(m for m in mem if m != name)))
+        print("  %-22s %4dw  %-34s %s%s" % (name, w, twin, why, famnote))
 
 
 def stub_rows(skip_parks=True):
