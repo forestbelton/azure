@@ -28,15 +28,73 @@ def fragments(tag):
         if f in bad and i+1 < len(addrs): bad.add(addrs[i+1][1])
     return bad
 
-PICKS={"h181":("lo16",16),"h182":("s29",13),"h183":("s30",11),
-       "h184":("s43",10),"h185":("b02",10)}
+# TAKE THE BATCH FROM THE COMMAND LINE.
+#
+# This dict used to be the ONLY way to say what to provision, and the script
+# accepted no arguments at all -- so `provision_batch.py b31f s10 ... --batch
+# 42' re-provisioned the PREVIOUS batch's five units and printed five rows of
+# "0 fn 0w", which reads like a finished batch rather than ignored input.
+# Found 2026-11-25 by running exactly that.
+#
+# Usage:  provision_batch.py [--first-agent hNNN] TAG[:COUNT] ...
+#   provision_batch.py b31f s10 b25 s58 s19 --first-agent h186
+#   provision_batch.py b31f:17 s10:9          (explicit per-unit counts)
+# With no TAG arguments it falls back to LAST_BATCH below, so an accidental
+# bare run still does something inspectable rather than nothing.
+LAST_BATCH={"h181":("lo16",16),"h182":("s29",13),"h183":("s30",11),
+            "h184":("s43",10),"h185":("b02",10)}
+
+def _picks_from_argv(argv):
+    """-> {agent: (tag, count)}; count 0 means "every stub in the unit"."""
+    first = "h186"
+    tags = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--first-agent":
+            first = argv[i + 1]; i += 2; continue
+        if a == "--batch":          # accepted and ignored: agents are named
+            i += 2; continue        # by --first-agent, not by batch number
+        if a.startswith("-"):
+            i += 1; continue
+        tag, _, cnt = a.partition(":")
+        tags.append((tag, int(cnt) if cnt else 0))
+        i += 1
+    if not tags:
+        return dict(LAST_BATCH)
+    base = int(re.match(r"h(\d+)", first).group(1))
+    return {"h%d" % (base + k): (tag, cnt)
+            for k, (tag, cnt) in enumerate(tags)}
+
+PICKS=_picks_from_argv(sys.argv[1:])
+print("provisioning %d unit(s): %s" % (
+      len(PICKS), ", ".join("%s=%s" % (a, t) for a, (t, _) in sorted(PICKS.items()))))
 for ag,(tag,n) in PICKS.items():
     d="/home/case/scratch/azure-dng/agent-%s"%ag
     os.makedirs(d, exist_ok=True)
     bad=fragments(tag)
-    rows=[r for r in sorted(per[tag]) if r[1] not in bad][:n]
+    rows=[r for r in sorted(per[tag]) if r[1] not in bad]
+    rows=rows[:n] if n else rows   # n == 0 means every stub in the unit
     unit="ovl_dng_%s"%tag
-    subprocess.run(["cp",os.path.join(PROJ,"csrc","%s.c"%unit),os.path.join(d,"%s.c"%unit)],check=True)
+    # NEVER OVERWRITE AN EXISTING WORKING COPY. This `cp' was unconditional
+    # and it DESTROYED A LIVE AGENT'S WORK on 2026-11-25: the hardcoded PICKS
+    # above re-provisioned the previous batch's five units, and for the one
+    # agent still running it replaced its edited ovl_dng_lo16.c with the
+    # pristine csrc copy. That agent kept its own snapshots and lost nothing,
+    # which was its diligence and not this script's safety.
+    #
+    # A provisioner's job is to SET UP a directory, so an existing unit file is
+    # someone's work in progress and refusing is always right. --force is there
+    # for a genuine re-provision of a finished agent's directory.
+    dst = os.path.join(d, "%s.c" % unit)
+    if os.path.exists(dst) and "--force" not in sys.argv:
+        print("  REFUSING to overwrite %s (%d bytes, mtime %s) -- an agent may "
+              "be working in it. Pass --force to replace it."
+              % (dst, os.path.getsize(dst),
+                 __import__("time").strftime("%H:%M",
+                     __import__("time").localtime(os.path.getmtime(dst)))))
+    else:
+        subprocess.run(["cp",os.path.join(PROJ,"csrc","%s.c"%unit),dst],check=True)
     with open(os.path.join(d,"FUNCS.txt"),"w") as fh:
         for w,f in rows: fh.write("%-30s %4dw\n"%(f,w))
     for name,cmd in (("JTCHECK",["python3","tools/decomp/jtcheck.py","--unit",unit]),
