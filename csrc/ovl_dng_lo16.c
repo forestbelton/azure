@@ -31,7 +31,9 @@ typedef struct UnkDungeonSpotA
     u8 unk_01;
     u8 pad_02[0x2];
     u16 unk_04;
-    u8 pad_06[0x6];
+    u8 pad_06[0x1];
+    u8 unk_07;
+    u32 unk_08;
 } UnkDungeonSpotA;
 extern UnkDungeonSpotA D_800E36C8[];
 typedef struct UnkDungeonCell
@@ -90,10 +92,10 @@ extern UnkDungeonMark D_800E3CD8[];
 s32 func_80033BC0();
 s16 func_800A6928(u8, u8);
 void func_8009A21C(s32, s32, s32);
-void func_lo16_80016BF0(s32, s32, s16, s16);
+void func_lo16_80016BF0(s16 x, s16 y, s16 w, s16 h);
 void func_lo16_80017480(s16 x, s16 y, s16 w, s16 h, u16 mask);
 s16 func_lo16_80017BEC(s16);
-void func_lo16_8001D4AC(s16 *, s16);
+void func_lo16_8001D4AC(s16 *p, s16 x);
 void func_lo16_8001D5D8(s16 *, s16);
 
 extern s16 D_8008146E;
@@ -117,20 +119,336 @@ void func_8003F6D4(s32, s32, s32 *, s32);
 extern u8 D_8014A000[];
 extern u8 D_800DDC9C[];
 extern u8 D_lo16_8001F584;
-void func_lo16_8001E660(u8 *, u8 *, s32, s32);
+s32 func_lo16_8001E660(u8 *a, u8 *b, s32 c, s32 d);
 u16 func_800A6D30();
+
+extern s32 D_8001F670;
+void func_lo16_8001CFB8(s16 *, s16);
+void func_lo16_8001D0F4(s16 *p, s16 b);
+extern u16 D_80083460h[] __asm__("D_80083460");
+extern s16 D_80081468h[] __asm__("D_80081468");
+extern s32 D_800E3D70_w[] __asm__("D_800E3D70");
+extern u16 D_800DCE68;
+extern u8 D_800E3E40;
+extern u32 D_800E296C;
+extern s16 D_800E3CCC;
+extern s16 D_800E3CCE;
+extern u8 D_800DCF4F;
+extern u8 *D_80080A90;
+extern u8 D_800DCF58;
+extern u8 D_800DCF5B;
+extern u8 D_80082E6B;
+extern u32 D_80012D60;
+extern s8 D_800DCF4E;
+extern u32 D_80080A80;
+extern Unk41284 D_80080AE0;
+extern Unk41284 D_80080AE8;
+extern Unk41284 D_80080E18;
+extern Unk41284 D_80080E20;
+extern Unk41284 D_80080EE8;
+extern Unk41284 D_80080E30;
+u32 func_80048D00(void);
+extern u8 D_8001F6F0;
+extern u8 *D_800E3D7C;
+s16 func_800A697C(u8, u8);
+s32 func_lo16_8001EAA4(u8 *, u8 *);
+extern s32 D_8001022C;
+extern s32 D_80082EB8;
+extern s16 D_8008347E;
+extern s32 D_800E3D1C;
+extern u8 D_800E3CD0;
+void func_8004A918(void);
+void func_800A9024(s32);
+void func_80040AA0(s32);
+void func_8009FAC4(void);
+void func_lo16_80016EC0(void);
+void func_lo16_80017018(void);
+void func_lo16_80017068(void);
+s16 func_800A4E2C(u8 *, u8 *);
+void func_lo16_8001E108(s32 x, s32 y, UnkDungeonCell *c, s32 base, s32 k);
+typedef struct UnkDungeonSpotB
+{
+    u8 pad_00[0x6];
+    u8 unk_06;
+    u8 unk_07;
+    s32 unk_08;
+    void *unk_0C;
+    s16 unk_10;
+    s16 unk_12;
+    u16 unk_14;
+    u8 pad_16[0x2];
+} UnkDungeonSpotB;
+extern UnkDungeonSpotB D_800E39C8[];
+extern UnkDungeonSlot D_800E3648_s[] __asm__("D_800E3648");
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001607C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_800161D8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001625C);
+/* 102 words, 0 differing.  FIRST COMPILE.  ONE MEASURED FACT and it is the
+   nine D_80083460 stores' ORDER: it is the order the LISTING stores in --
+   0x08, 0x0A, 0x14, 0x0C, 0x10, 0x00, 0x02, 0x1C, 0x04 -- and sched1 does
+   NOT transpose them.  Ascending (0x00 first) is 102 words / 10 aligned
+   differences and the listing order REVERSED is 102 / 16.  That is worth
+   recording because this unit's smaller clearers go the other way
+   (func_lo16_8001DD48: "the order the listing STORES in is the scheduler's"):
+   with NINE independent stores off one base the list scheduler leaves source
+   order alone, with three it transposes two of them.
+   D_80083460 is reached through ONE `u16 []' alias with casts for the two
+   word stores, not a second `extern' -- the func_lo16_8001A710 rule -- and
+   plain subscripts give the split-at-index-0 shape by themselves
+   (`sh $v1, %lo(D_80083460)($a0)' off the `lui' with every other offset off
+   the `addiu %lo' base), as in func_lo16_8001703C.  D_800E3D70 is the same
+   shape.  D_800DCF4E is `s8' (`lb' into a `bnez'); D_80012D60 is `u32', which
+   is what makes the clamp compare `sltu'.  func_80069EC8 is `bzero' out of
+   splat/common_syms.txt and func_80041284 takes structs.h's `Unk41284 *'. */
+void func_lo16_8001625C(void)
+{
+    bzero((u8 *)D_800E3548_s, 0x100);
+    bzero((u8 *)D_800E36C8, 0x300);
+    D_80083460h[4] = 0;
+    D_80083460h[5] = 0;
+    D_80083460h[10] = 0;
+    *(s32 *)&D_80083460h[6] = 0;
+    *(s32 *)&D_80083460h[8] = 0;
+    D_80083460h[0] = 0x100;
+    D_80083460h[1] = 0;
+    D_80083460h[14] = 0;
+    D_80083460h[2] = 0;
+    D_800DCE68 = 0;
+    D_800E3E40 = 0;
+    D_800E296C = 0;
+    D_800E3CCC = 0;
+    D_800E3CCE = 0;
+    D_800DCF4F = 0;
+    D_80080A90 = D_8014A000;
+    D_800E3D70_w[0] = 0;
+    D_800E3D70_w[1] = 0;
+    D_800E3D70_w[2] = 0;
+    D_800DCF58 = 1;
+    D_800DCF5B = 0;
+    if (D_80082E6B != 5)
+    {
+        if (D_80081468h[2] >= 0x64)
+        {
+            D_80081468h[2] = 0x63;
+        }
+        if (D_80012D60 < D_80081468h[2])
+        {
+            D_80012D60 = D_80081468h[2];
+        }
+    }
+    if (D_800DCF4E == 0)
+    {
+        func_80041284(&D_80080AE0);
+        func_80041284(&D_80080AE8);
+        func_80041284(&D_80080E18);
+        func_80041284(&D_80080E20);
+        func_80041284(&D_80080EE8);
+        func_80041284(&D_80080E30);
+        D_80080A80 = func_80048D00();
+        D_800DCF4E = 1;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_800163F4);
+/* 113 words, 0 differing.  THE STARTUP RESET.  FOUR MEASURED FACTS, all
+   about how the 0x8001xxxx out-of-image globals are addressed, and they are
+   NOT all the same:
+   - the three STORES and two LOADS in the second D_80013714 gate go through
+     ONE POINTER LOCAL `b = (u8 *)0x80010000', materialised just before that
+     gate.  cc1psx cannot store to a bare constant address off a shared base:
+     `*(s32 *)0x80013628 = ...' comes out as the gas macro
+     `lui $at, 0x8001' / `sw $v0, 0x3628($at)' per store and the body is 122
+     words / 22 differing.  A load CAN (`lui $reg' / `lX off($reg)'), which is
+     why the two reads in that block look the same either way.
+   - `b' must be assigned THERE and not at the top of the function: assigned
+     at function scope it is one callee-saved register for the whole body,
+     the early D_80013714 read goes through it too, and the body is 110 words
+     / 15 differing with three of the target's `lui's missing.
+   - `*(u16 *)0x80010234' is the CONSTANT ADDRESS and `D_80013714' /
+     `D_8008146C' / `D_800DCF4E' are the declared SYMBOLS.  The discriminator
+     is the one csrc/ovl_dungeon_800A4B88.c's func_800A9230 records and it is
+     exactly 2 aligned differences: a declared symbol gives
+     `lui $v0' / `lhu $v1, %lo($v0)' -- two registers -- where a constant
+     address gives `lui $v1' / `lhu $v1, 0x234($v1)', the same register
+     twice.  Read the two registers in the listing, not the symbol name.
+   - the last `|= 5' is `*(u16 *)(b + 0x3714)', through `b' and not through
+     the symbol; the symbol spelling costs the extra `lui' and takes the
+     body to 114 words.
+   `func_80040AA0(0x11)' is called in BOTH arms of the D_80082E60.unk_0B
+   test, which is why `addiu $a0, $zero, 0x11' sits in the gate's own delay
+   slot; one call before the `if' would be a single `jal'.  The 0x12 test is
+   UNSIGNED (`sltiu') because unk_0B is `u8', and unk_0B is read TWICE -- the
+   test and `n = unk_0B - 0x12'.  func_80069EC8/func_80069EF8 are
+   `bzero'/`rand' out of splat/common_syms.txt. */
+void func_lo16_800163F4(void)
+{
+    u8 *b;
+    s32 buf[2];
+    s32 n;
+
+    func_lo16_80016EC0();
+    func_lo16_80017018();
+    bzero((u8 *)D_800E3E48, 0xAF0);
+    D_80082EB8 = 0;
+    D_8008347E = 0;
+    D_80080A88 = 0;
+    if ((D_80013714 & 3) == 0)
+    {
+        D_8008146C = 1;
+        D_8001022C = D_8001022C + 1;
+        func_lo16_80017068();
+        func_8004A918();
+    }
+    else
+    {
+        D_8008146C = *(u16 *)0x80010234;
+    }
+    if (D_800DCF4E == 0)
+    {
+        D_80080A80 = func_80048D00();
+        D_800DCF4E = 1;
+    }
+    b = (u8 *)0x80010000;
+    if ((*(u16 *)(b + 0x3714) & 3) == 0)
+    {
+        *(s32 *)(b + 0x3628) = rand();
+        *(s16 *)(b + 0x3624) = rand() & 0xFF;
+        *(s16 *)(b + 0x209C) = rand() & 0xFF;
+        func_800A9024(*(s32 *)(b + 0x2090));
+    }
+    func_8004AB7C();
+    if (D_80082E60.unk_0B >= 0x12)
+    {
+        n = D_80082E60.unk_0B - 0x12;
+        func_80040AA0(0x11);
+        func_8003F6D4(0xC, 0x80010000, buf, n * 12 + 0x399D);
+        func_8003E4FC(6, (u8 *)buf, 0);
+        func_8003F320();
+        D_800E3D1C = 0x384;
+        *(u16 *)(b + 0x3714) |= 5;
+    }
+    else
+    {
+        func_80040AA0(0x11);
+        D_800E3D1C = 0;
+    }
+    func_8009FAC4();
+    func_800499BC();
+    D_800E3CD0 = 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_800165B8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_80016BF0);
+/* 159 words, 0 differing.  The map-reveal pass: for every cell in the
+   rectangle, look its tile id up in the byte table at g + 0x10 and OR the
+   reveal bits into the cell and (for the 0x2 tile class) its four
+   neighbours.  FOUR MEASURED FACTS:
+   - `s32 k' for the tile id, NOT `u16'.  As a `u16' the body is 159 words /
+     2 aligned differences and the two rows are `tbl' and `k' exchanged
+     between $t4 and $a2 in both `addu $v1, $t4, $a2' -- a clean two-register
+     exchange with nothing moved, and FOUR declaration permutations all give
+     the same 2, so the brief's rule holds: declaration order is not the
+     lever and the width is.
+   - `y + i' MUST BE WRITTEN INLINE at all three sites.  Hoisted into an
+     `ry' local before the inner loop the body is 159 / 9: the three
+     parameter sign extensions come out in the order y, w, x instead of the
+     target's w, y, x, the inner loop's guard moves a word and reorg
+     duplicates `j = 0' into the outer back branch where the target has a
+     `nop'.  Putting the same assignment INSIDE the inner loop also reaches
+     159 / 2, so what matters is that loop.c, not the source, decides where
+     the sum lives.
+   - THERE IS NO `if (h <= 0) return;'.  The `for (i = 0; i < h; i++)' guard
+     IS that test, and gcc tests it as `sll $v0, $a3, 16' / `blez $v0' with
+     no `sra' -- the shifted value's sign is enough.  Written as an explicit
+     early return the body is 161 words / 27 with the redundant `sra' and a
+     `nop'.
+   - THE NULL TEST READS THE MEMORY AND `tbl' IS ASSIGNED AFTERWARDS.  With
+     `tbl = *(u8 **)((u8 *)g + 0x10); if (tbl == NULL) return;' the body is
+     158 words -- ONE SHORT -- because the loaded pseudo serves both the test
+     and the loop and the target's `addu $t4, $v1, $zero' copy never exists.
+     Testing the MEM first and assigning `tbl' from the same expression after
+     makes cse turn the second read into exactly that copy.  This is the
+     brief's parameter-dies-at-its-copy rule, here on a global read.
+   `b' and `g' are the unit's two pointer locals (`b = (u8 *)&D_80083160;
+   g = b + 0x1DC'), and the CELL BASE is read as `*(UnkDungeonCell **)
+   (b + 0x1DC)' through `b' -- the same address as `g->unk_00', spelled the
+   other way, which is what gives the target TWO base registers for one
+   struct.  All four parameters are `s16'; the declaration this unit carried
+   said `(s32, s32, s16, s16)' and both callers pass 0 for the first two, so
+   widening it to four `s16' moves nothing -- func_lo16_80016E6C and
+   func_lo16_80017530 re-verified at 0 differing. */
+void func_lo16_80016BF0(s16 x, s16 y, s16 w, s16 h)
+{
+    u8 *b;
+    UnkDngLo16Grid *g;
+    u8 *tbl;
+    UnkDungeonCell *cb;
+    UnkDungeonCell *c;
+    s32 i;
+    s32 j;
+    s32 k;
+
+    b = (u8 *)&D_80083160;
+    g = (UnkDngLo16Grid *)(b + 0x1DC);
+    if (*(u8 **)((u8 *)g + 0x10) == NULL)
+    {
+        return;
+    }
+    tbl = *(u8 **)((u8 *)g + 0x10);
+    cb = *(UnkDungeonCell **)(b + 0x1DC);
+    for (i = 0; i < h; i++)
+    {
+        for (j = 0; j < w; j++)
+        {
+            c = &cb[((y + i) << g->unk_14) + x + j];
+            k = c->unk_00;
+            if ((tbl[k] & 1) != 0)
+            {
+                c->unk_04 |= 1;
+            }
+            if ((tbl[k] & 4) != 0)
+            {
+                c->unk_04 |= 4;
+            }
+            if ((tbl[k] & 8) != 0)
+            {
+                c->unk_04 |= 8;
+            }
+            if ((tbl[k] & 0x20) != 0)
+            {
+                c->unk_04 |= 0x400;
+            }
+            if ((tbl[k] & 2) != 0)
+            {
+                if (j + x > 0)
+                {
+                    c[-1].unk_04 |= 1;
+                }
+                if (j + x < (1 << g->unk_14) - 1)
+                {
+                    c[1].unk_04 |= 1;
+                }
+                if (y + i > 0)
+                {
+                    c[-(1 << g->unk_14)].unk_04 |= 1;
+                }
+                if (y + i < (1 << g->unk_16) - 1)
+                {
+                    c[1 << g->unk_14].unk_04 |= 1;
+                }
+            }
+            if ((tbl[k] & 0x80) != 0)
+            {
+                c->unk_04 |= 0x8000;
+            }
+            if ((tbl[k] & 0x40) != 0)
+            {
+                c->unk_04 |= 0x40;
+            }
+        }
+    }
+}
 
 /* 21 words, 0 differing.  TWO POINTER LOCALS, and this is the unit's central
    addressing fact: `&D_80083160' into `b' and then `g = b + 0x1DC' gives the
@@ -525,7 +843,101 @@ void func_lo16_800177D8(s16 r, u8 a, u8 b, s16 c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001784C);
+/* 148 words, 0 differing.  The four-spot placement: draw a random free cell,
+   reject it against both occupancy tables, stamp it into D_800E3CD8 and stop
+   on a 1-in-64 roll.  THREE MEASURED FACTS:
+   - D_800E3CD8 IS SUBSCRIPTED, NOT REACHED THROUGH A POINTER LOCAL.  With
+     `m = &D_800E3CD8[i]' and `m->unk_00' the body is 148 words / 12 aligned
+     differences: `m' and the second buf[1] copy exchange $a3 and $t0 and the
+     `sll $s0, 3' moves two words early.  Four other spellings (the `m'
+     assignment before the two reads, after them, declared first, declared
+     last) all measure the same 12, so this is a PSEUDO-COUNT fault and not
+     a priority one -- the same shape as func_lo16_8001D9CC's 52 rows in this
+     unit, and the same cure.
+   - buf[0] and buf[1] ARE READ INTO TWO SEPARATE PAIRS OF LOCALS: `bx'/`by'
+     for the D_800E3CD8 stores and the func_8009A21C arguments, and
+     `cx'/`cy' for the three cell-address computations.  One pair used for
+     everything is 147 words / 21; reading buf directly at the store and call
+     sites with one pair for the addresses is 152 / 31.  The target's four
+     `lbu's say it plainly: `buf' is a stack array whose address escaped into
+     func_800A4E2C, so every intervening store through a register invalidates
+     cse's record of it and only a LOCAL carries a value across one.
+   - the cell base is an `s32' (`(index * 6) + cb'), which is what puts the
+     index first in the final `addu' -- func_lo16_80019A84's rule -- and the
+     cell address is written out THREE times rather than through `c',
+     because the target recomputes it after each store.
+   The retry on a collision is a `goto' back to the top of the loop body;
+   both scans' hit arms share it and jump2 does not need any help.  The
+   stray `i++' between the two loops is real: the target's exit block
+   increments before the clear loop's guard, so the fall-out at i == 4 goes
+   to 5 and the clear loop is skipped, while a `break' lands on i + 1.
+   D_80012090 is the CONSTANT ADDRESS here (`lui $v1' / `lw $v1, %lo($v1)',
+   one register), as in func_lo16_8001E660 -- SO THIS BODY ADDRESSES A
+   CONSTANT BASE and the masked verifier cannot see that displacement. */
+void func_lo16_8001784C(void)
+{
+    UnkDngLo16Grid *g;
+    UnkDungeonCell *c;
+    u8 buf[2];
+    s32 bx;
+    s32 by;
+    s32 cx;
+    s32 cy;
+    s32 cb;
+    s32 i;
+    s32 j;
+
+    g = (UnkDngLo16Grid *)D_8008333C;
+    cb = (s32)D_8008333C[0];
+    if (*(s32 *)0x80012090 != 2 && D_8008146C == 0x28)
+    {
+        return;
+    }
+    for (i = 0; i < 4; i++)
+    {
+    retry:
+        while ((s16)func_800A4E2C(&buf[0], &buf[1]) < 0)
+        {
+        }
+        for (j = 0; j < 0x40; j++)
+        {
+            if (D_800E3548_s[j].unk_01 != 0 && D_800E36C8[j].unk_00 == buf[0] &&
+                D_800E36C8[j].unk_01 == buf[1])
+            {
+                goto retry;
+            }
+        }
+        for (j = 0; j < 0x20; j++)
+        {
+            if (D_800E3648_s[j].unk_01 != 0 && D_800E39C8[j].unk_06 == buf[0] &&
+                D_800E39C8[j].unk_07 == buf[1])
+            {
+                goto retry;
+            }
+        }
+        bx = buf[0];
+        by = buf[1];
+        D_800E3CD8[i].unk_00 = 2;
+        D_800E3CD8[i].unk_02 = bx;
+        D_800E3CD8[i].unk_04 = by;
+        cx = buf[0];
+        cy = buf[1];
+        c = (UnkDungeonCell *)((cx + (cy << g->unk_14)) * 6 + cb);
+        c->unk_02 -= 0x20;
+        D_800E3CD8[i].unk_06 = ((UnkDungeonCell *)((cx + (cy << g->unk_14)) * 6 + cb))->unk_02;
+        ((UnkDungeonCell *)((cx + (cy << g->unk_14)) * 6 + cb))->unk_00 = 1;
+        func_8009A21C(bx, by, 0x20);
+        if ((func_800A6D30() & 0x3F) != 0)
+        {
+            break;
+        }
+    }
+    i++;
+    for (; i < 4; i++)
+    {
+        D_800E3CD8[i].unk_00 = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_80017A9C);
 
@@ -587,7 +999,66 @@ s16 func_lo16_80017EBC(s16 r)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_80017F88);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001816C);
+/* 102 words, 0 differing.  func_lo16_80017EBC's room walk with a height
+   probe in the inner loop.  ONE MEASURED FACT and it is the brief's
+   fold_truthop precondition firing exactly as stated: the two cell-flag
+   tests must be NESTED `if's.  Written
+   `if ((v & 0x8400) == 0 && (v & 0x300) == 0x200)' fold_truthop merges them
+   into a single `andi $v0, $v0, 0x8700' against 0x200 -- two BIT TESTS ON
+   ONE LOCAL, which is the one case where it fires -- and the body comes out
+   99 words / 12 aligned differences, three words SHORT.
+   The room record is re-read off the BARE SYMBOL inside the outer loop
+   (`D_800E2970_s[r].unk_00' etc.), not through a `base' local as in
+   func_lo16_80017EBC: the `lui'/`addiu %lo(D_800E2970)' pair is inside the
+   loop in this listing.  The cell pointer is TWO pointer additions --
+   `g->unk_00 + (y << g->unk_14) + x', which is the target's two separate
+   *6 multiplies; one subscript `[(y << g->unk_14) + x]' would be one.
+   `u16 t' is what gives the `andi $a1, $s4, 0xFFFF' on the second argument
+   where the first is masked 0xFFE0 in the source.  `y' is `s16' off the u16
+   field, which is why its load is `lhu' and the three loop counters' are
+   `lh' -- the same split func_lo16_80017EBC has. */
+s32 func_lo16_8001816C(s16 r, s16 *ox, s16 *oy)
+{
+    UnkDngLo16Grid *g;
+    UnkDungeonCell *c;
+    s16 y;
+    s16 n;
+    s16 x;
+    s16 w;
+    s16 h;
+    u16 v;
+    u16 t;
+
+    g = (UnkDngLo16Grid *)D_8008333C;
+    y = D_800E2970_s[r].unk_02;
+    for (n = D_800E2970_s[r].unk_06; n > 0; n--)
+    {
+        x = D_800E2970_s[r].unk_00;
+        c = g->unk_00 + (y << g->unk_14) + x;
+        for (w = D_800E2970_s[r].unk_04; w > 0; w--)
+        {
+            v = c->unk_04;
+            if ((v & 0x8400) == 0)
+            {
+                if ((v & 0x300) == 0x200)
+                {
+                    t = y * 64 + 0x20;
+                    h = (s16)func_800BCB04((x * 64 + 0x20) & 0xFFE0, t, -0x400);
+                    if (h < 0x200)
+                    {
+                        *ox = x;
+                        *oy = y;
+                        return h;
+                    }
+                }
+            }
+            x++;
+            c++;
+        }
+        y++;
+    }
+    return 0x200;
+}
 
 /* 88 words, 0 differing.  THE WHOLE FIGHT WAS GATE SHAPE, and it is three
    facts about where a shared `return 0' comes from:
@@ -980,7 +1451,67 @@ void func_lo16_8001CEC0(s16 *p, s16 b)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001CFB8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001D0F4);
+/* 141 words, 0 differing.  FIRST COMPILE, off the landed func_lo16_8001D328
+   in this unit -- the same `k' clamp, the same two func_800A6DA4 draws and
+   the same func_8009A350 probe, with a kind/flag publish instead of the
+   func_lo16_8001E660 call.  Every spelling here is therefore a CHOICE and
+   not a measurement; what follows is what the listing dictated.
+   `p' is `s16 *' but the two record stores read it as BYTES
+   (`*(u8 *)p' and `*((u8 *)p + 2)', the target's `lbu 0x0' and `lbu 0x2'),
+   while the func_8009A350 arguments read the same two offsets as HALFWORDS
+   -- so the same address is read both ways and both are real.
+   D_800E39C8 and D_800E3648 are STRUCT ARRAYS subscripted on the loop
+   counter, which is what loop.c reduces into the target's -0x18 and -0x4
+   cursors; csrc/ovl_dungeon_decls.h records why a `u8 *' walk loses the
+   base.  The 0x3000 test's index is `func_800A6D30() % 19 + 1' held in an
+   `s16' -- the 0xAF286BCB magic with the extra add is the unsigned divide
+   by 19, and the `s16' is what gives the `sll 16'/`sra 16' before the *12
+   while the `unk_00' store uses the raw value. */
+void func_lo16_8001D0F4(s16 *p, s16 b)
+{
+    u16 buf[4];
+    s16 k;
+    s16 j;
+    s32 i;
+    s32 f;
+    s32 r;
+    s32 r2;
+
+    f = func_800A6D30() & 0xFF;
+    k = ((u16)p[3] * (u16)p[2] >> 3) + (func_800A6D30() & 7);
+    if (k >= 0x1D)
+    {
+        k = 0x1C;
+    }
+    for (i = k; i >= 0; i--)
+    {
+        r = func_800A6DA4(0, (u16)((u16)p[2] - 1)) & 0xFFFF;
+        r2 = func_800A6DA4(0, (u16)((u16)p[3] - 1)) & 0xFFFF;
+        func_8009A350((u16)p[0] + r - 1, (u16)p[1] + r2, 0, buf);
+        if ((buf[0] & 0x8820) == 0)
+        {
+            D_800E39C8[i].unk_06 = *(u8 *)p + r;
+            D_800E39C8[i].unk_07 = *((u8 *)p + 2) + r2;
+            if (f == 0)
+            {
+                D_800E3648_s[i].unk_00 = 7;
+            }
+            else
+            {
+                j = func_800A6D30() % 19 + 1;
+                if ((*(u16 *)((u8 *)D_80073414[0x15].unk_0C + j * 12) & 0x3000) == 0x3000)
+                {
+                    continue;
+                }
+                D_800E3648_s[i].unk_00 = j;
+            }
+            D_800E3648_s[i].unk_01 = 0x15;
+            D_800E3648_s[i].unk_03 = 0x80;
+            D_800E3648_s[i].unk_02 = 0;
+            func_8009A21C(D_800E39C8[i].unk_06, D_800E39C8[i].unk_07, 0x20);
+        }
+    }
+}
 
 /* 97 words, 0 differing.  TWO FACTS, and the second one is the general lesson
    of this batch:
@@ -1003,7 +1534,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001D0F4);
    of them into the target's three cursors (-4, -4, -0xC), including deriving
    `&D_800E3548_s[i]' from `&D_800E3548_s[i].unk_01' with `addiu $a0, $v0,
    -0x1' rather than a second `addiu %lo'. */
-void func_lo16_8001D328(s16 *p)
+void func_lo16_8001D328(s16 *p, s16 b)
 {
     u16 buf[4];
     s16 k;
@@ -1035,7 +1566,90 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001D4AC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001D5D8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001D9CC);
+/* 154 words, 0 differing.  The room-border stamp: four corner cells, then
+   the top/bottom edge run, then the left/right edge run.  THREE MEASURED
+   FACTS, and the first is the brief's "two locals that must be ONE":
+   - ONE cell pointer local is shared between the four corner stores AND the
+     top/left cursor of both loops.  With a second local for the loops it is
+     154 words / 52 ALIGNED DIFFERENCES -- every row a pure register rename,
+     no instruction moved -- because the target packs both into $t7.  That
+     residue shape is exactly what the brief says to look for: a clean
+     whole-body rotation with nothing moved is a pseudo-count fault, not an
+     allocno_compare one.
+   - BOTH loops are `while' loops with the counter INCREMENT AS THE FIRST
+     STATEMENT of the body, not `for (x = x0; x < x1; x++)'.  As a `for'
+     increment the body is 148 words / 97 differing: gcc puts the `addiu'
+     after the six stores and loses the target's `sll 16'/`sra 16' pair on
+     the loop test.  The counters are `s16', which is what that pair is.
+     Same rule as func_lo16_8001744C and func_lo16_8001DC34 in this unit.
+   - THE EDGE CURSORS ARE POINTER LOCALS, not subscripts on the counter.
+     Written as `D_800EA000_s[((y0 - 1) << g->unk_14) + x]' the address is
+     recomputed in full every iteration and the body is 203 words / 228.
+     loop.c only reduces the +0x6 and `6 << g->unk_14' strides out of an
+     explicit cursor here.
+   `&D_800EA000_s[...] - 1' folds the -6 into the symbol
+   (`addiu $t4, %lo(D_800E9FFA)') and D_800EA000 itself comes out as
+   `$t4 + 6' by cse -- the func_lo16_8001DC34 rule.  `g' is a STRUCT pointer
+   so the `g->unk_14' read stays inside the second loop, which is what the
+   `sllv $v1, $a2, $v1' stride recomputation is. */
+void func_lo16_8001D9CC(s16 x0, s16 y0, s16 x1, s16 y1, s32 v)
+{
+    UnkDngLo16Grid *g;
+    UnkDungeonCell *c;
+    UnkDungeonCell *cb;
+    s16 w;
+    s16 x;
+    s16 y;
+
+    g = (UnkDngLo16Grid *)D_8008333C;
+    w = v + 0x40;
+    c = &D_800EA000_s[((y0 - 1) << g->unk_14) + x0] - 1;
+    c->unk_00 = 0xE;
+    c->unk_02 = w;
+    c->unk_04 = 9;
+    c = &D_800EA000_s[((y0 - 1) << g->unk_14) + x1];
+    c->unk_00 = 0xB;
+    c->unk_02 = w;
+    c->unk_04 = 9;
+    c = &D_800EA000_s[(y1 << g->unk_14) + x0] - 1;
+    c->unk_00 = 0xD;
+    c->unk_02 = w;
+    c->unk_04 = 9;
+    c = &D_800EA000_s[(y1 << g->unk_14) + x1];
+    c->unk_00 = 0xC;
+    c->unk_02 = w;
+    c->unk_04 = 9;
+    c = &D_800EA000_s[((y0 - 1) << g->unk_14) + x0];
+    cb = &D_800EA000_s[(y1 << g->unk_14) + x0];
+    x = x0;
+    while (x < x1)
+    {
+        x++;
+        c->unk_00 = 0x12;
+        cb->unk_00 = 0x10;
+        cb->unk_02 = w;
+        c->unk_02 = w;
+        cb->unk_04 = 9;
+        c->unk_04 = 9;
+        c++;
+        cb++;
+    }
+    c = &D_800EA000_s[(y0 << g->unk_14) + x0] - 1;
+    cb = &D_800EA000_s[(y0 << g->unk_14) + x1];
+    y = y0;
+    while (y < y1)
+    {
+        y++;
+        c->unk_00 = 0x11;
+        cb->unk_00 = 0xF;
+        cb->unk_02 = w;
+        c->unk_02 = w;
+        cb->unk_04 = 9;
+        c->unk_04 = 9;
+        c += 1 << g->unk_14;
+        cb += 1 << g->unk_14;
+    }
+}
 
 /* 53 words, 0 differing.  FIRST COMPILE, off func_lo16_8001744C's loop shape
    plus this unit's documented grid-pointer rule, so the spellings below are
@@ -1139,9 +1753,115 @@ s16 func_lo16_8001DD84(s32 x, s32 y, s32 n, s16 dx, s16 dy)
     return best;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001DE2C);
+/* 183 words, 0 differing.  The post-generation tile pass: for every live
+   room, walk its rectangle and dispatch each cell's tile id through nine
+   range tests.  THREE MEASURED FACTS:
+   - `g = (UnkDngLo16Grid *)D_8008333C' AT FUNCTION SCOPE, even though the
+     target re-materialises the `lui'/`addiu %lo' pair INSIDE the inner loop
+     (the `lui' is in the back branch's delay slot).  That is reload
+     rematerialising a constant-valued pseudo under pressure, not a
+     per-iteration source expression: assigned inside the inner loop, or the
+     cast inlined at the use site, combine folds `%lo + 0x14' into the `lh's
+     displacement and the body is 182 words / 10 with the `addiu' gone.
+     Assigning it in the MIDDLE loop also measures 0, so the two are NOT
+     distinguishable -- call the function-scope form the one that reads as
+     source.  This is the brief's "a constant inside a hoisted address is
+     unreachable by any cast; only a VAR_DECL keeps the addiu", with the
+     extra condition that the VAR_DECL must outlive the loop.
+   - THE PARITY TEST IS A NESTED `if/else if', NOT `(y & 1) == (x & 1)'.
+     The equality form is `andi'/`andi'/`bne' -- three words -- against the
+     target's six, and the body is 177 / 18.  Written as
+     `if ((y & 1) != 0) { if ((x & 1) != 0) ... } else if ((x & 1) == 0) ...'
+     the `andi $v0, $s1, 0x1' is computed ONCE in the outer test's delay slot
+     and shared by both arms, and jump2 cross-joins the two `+= 0xA' blocks
+     with no goto in the source.
+   - the nine range tests are an `if / else if' CHAIN on
+     func_lo16_8001CE14 (this unit's landed `b <= a && c >= a'), and the
+     fifth argument to func_lo16_8001E108 is 0x20 for the first five arms
+     and 0x100 for the last four -- the target holds both constants in
+     $s4 and $s5 across the whole function.
+   PROTOTYPE CHANGE: func_lo16_8001E108 was landed in this unit as
+   `void func_lo16_8001E108(void)' and is called here with FIVE arguments.
+   Its definition is empty, so the five parameters cost nothing -- it
+   re-verifies at 2 words / 0 differing -- but the arity change is real and
+   has to ride along with this body. */
+void func_lo16_8001DE2C(void)
+{
+    UnkDngLo16Grid *g;
+    UnkDungeonCell *c;
+    s32 r;
+    s32 x;
+    s32 y;
+    s32 xe;
+    s32 ye;
 
-void func_lo16_8001E108(void) {
+    g = (UnkDngLo16Grid *)D_8008333C;
+    for (r = 0; r < 0x24; r++)
+    {
+        if (D_800E2970_s[r].unk_0A != 0)
+        {
+            y = D_800E2970_s[r].unk_02;
+            xe = D_800E2970_s[r].unk_00 + D_800E2970_s[r].unk_04;
+            ye = y + D_800E2970_s[r].unk_06;
+            for (; y < ye; y++)
+            {
+                for (x = D_800E2970_s[r].unk_00; x < xe; x++)
+                {
+                    c = &D_800EA000_s[(y << g->unk_14) + x];
+                    if (func_lo16_8001CE14(c->unk_00, 0x13, 0x1C) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x13, 0x20);
+                        if ((y & 1) != 0)
+                        {
+                            if ((x & 1) != 0)
+                            {
+                                c->unk_00 += 0xA;
+                            }
+                        }
+                        else if ((x & 1) == 0)
+                        {
+                            c->unk_00 += 0xA;
+                        }
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x27, 0x30) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x27, 0x20);
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x31, 0x3A) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x31, 0x20);
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x3B, 0x44) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x3B, 0x20);
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x45, 0x4E) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x45, 0x20);
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x6B, 0x6F) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x6B, 0x100);
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x70, 0x74) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x70, 0x100);
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x75, 0x79) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x75, 0x100);
+                    }
+                    else if (func_lo16_8001CE14(c->unk_00, 0x7A, 0x7E) != 0)
+                    {
+                        func_lo16_8001E108(x, y, c, 0x7A, 0x100);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void func_lo16_8001E108(s32 x, s32 y, UnkDungeonCell *c, s32 base, s32 k) {
 }
 
 /* 31 words, 0 differing.  First compile, off the landed func_800CDE40 in
@@ -1166,7 +1886,84 @@ s32 func_lo16_8001E110(s32 n, s16 x, s16 y)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001E18C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001E660);
+/* 113 words, 0 differing.  TWO MEASURED FACTS.
+   - D_80012090 IS THE CONSTANT ADDRESS `*(s32 *)0x80012090', not the
+     structs.h symbol.  As the symbol the body is 112 words / 3 aligned
+     differences: the `lui %hi' moves up into the `bnez $a3' delay slot that
+     the target leaves as a `nop'.  This is the same verdict
+     csrc/ovl_dungeon_800A4B88.c's func_800A9230 records ("D_80012090 IS THE
+     CONSTANT ADDRESS, as it is everywhere else in this unit"), reproduced
+     here on a relink.  THIS BODY THEREFORE ADDRESSES A CONSTANT BASE and
+     the masked verifier cannot see the displacement -- `--raw' is the check.
+   - `s32 k', NOT `s16'.  `s16 k = D_8008146C' makes gcc keep TWO pseudos
+     for it -- an `lh' for the four compares and an `lhu' for the `a[0] = k'
+     byte store -- and the body is 114 words / 16 differing.  The target
+     loads once with `lh' and stores that register.  The brief's "narrow
+     signed call result cuts both ways" rule, here on a global read: narrow
+     and wide uses together want the WIDE local.
+   The four-way test on D_8008146C is an if/else-if CHAIN, not a `switch':
+   the target's compares are strictly linear (0xC, 0xF, 0x1C, 0x14 in that
+   order, each `bne' falling to the next), where four case nodes would have
+   given expand_end_case's BALANCED tree.  `a[0] = k' in the 0xC arm reuses
+   the compared value, which is the target's `sb $v1, 0x0($s0)'.
+   `func_800A697C' needs no cast: csrc/ovl_dungeon_800A4B88.c declares it
+   `s16 func_800A697C(u8, u8)' and the `sll 16'/`bnez' is that return type.
+   The shared `b[0] = X; D_8001F6F0 = 1; return 1;' tail is cross-joined by
+   jump2 between the 0xC and 0x14 arms with no goto in the source. */
+s32 func_lo16_8001E660(u8 *a, u8 *b, s32 c, s32 d)
+{
+    s32 k;
+
+    if (D_8001F6F0 == 0 && d == 0 && *(s32 *)0x80012090 == 0)
+    {
+        k = D_8008146C;
+        if (k == 0xC)
+        {
+            if (D_800E3D7C[0xFB] == 0)
+            {
+                a[0] = k;
+                b[0] = 4;
+                D_8001F6F0 = 1;
+                return 1;
+            }
+        }
+        else if (k == 0xF)
+        {
+            if (func_80033BC0(0x145E) != 0 && func_80033BC0(0x1460) == 0 &&
+                func_800A697C(0xD, 1) == 0)
+            {
+                a[0] = 0xD;
+                b[0] = 1;
+                D_8001F6F0 = 1;
+                return 1;
+            }
+        }
+        else if (k == 0x1C)
+        {
+            if (func_80033BC0(0xFC3) != 0 && func_80033BC0(0xFAD) == 0 &&
+                func_800A697C(1, 8) == 0)
+            {
+                a[0] = 1;
+                b[0] = 8;
+                D_8001F6F0 = 1;
+                return 1;
+            }
+        }
+        else if (k == 0x14)
+        {
+            if (func_80033BC0(0xAC) != 0 && func_80033BC0(0x12C6) == 0 &&
+                func_800A697C(0xD, 6) == 0)
+            {
+                a[0] = 0xD;
+                b[0] = 6;
+                D_8001F6F0 = 1;
+                return 1;
+            }
+        }
+    }
+    func_lo16_8001EAA4(a, b);
+    return 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001E824);
 
