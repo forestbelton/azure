@@ -24,6 +24,21 @@ callee set does.
 An UNUSED typedef in a unit is the sharpest form: somebody declared it because
 the unit's data needs it, and the body that uses it is somewhere else.
 
+## FIRST PROSPECTIVE CREDIT, THE DAY IT WAS WRITTEN
+
+`func_b42_80175494` (147 words) landed with **two** donors taken straight off
+this tool's output -- `UnkDngB09A28` for a record table and `UnkDngB20Name12`
+for a 12-byte unaligned `lwl`/`lwr` block copy -- both already
+declared-but-unused in the agent's own unit, which is the case the `--unused`
+mode exists for.
+
+It also prevented work rather than only finding it: that agent had invented a
+new typedef for the record table earlier in the same run and dropped it on
+seeing `UnkDngB09A28` was the same layout and already declared. **A duplicate
+typedef is a real cost** -- it collides with concurrent agents, and it hides
+the family relationship the name would otherwise have shown. Run this before
+inventing one.
+
     python3 tools/decomp/dngtypes.py --unit s22      # this unit's typedefs
     python3 tools/decomp/dngtypes.py --unused        # every unused one, all units
     python3 tools/decomp/dngtypes.py UnkDngS14LineSP # who declares and uses it
