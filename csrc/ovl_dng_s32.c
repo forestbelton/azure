@@ -173,6 +173,13 @@ typedef struct UnkDng24094SP
     u16 unk_10A;
 } UnkDng24094SP;
 
+typedef struct UnkDngS31Dirs
+{
+    u8 unk_00[0x20];
+} UnkDngS31Dirs;
+void func_s32_80024478(u8 *p, UnkVec *v, UnkSlot *c);
+void func_800478B8(u8 *);
+
 s32 func_s32_8002403C(u8 *p, UnkVec *v)
 {
     UnkDng73E94SP *sp = (UnkDng73E94SP *)0x1F800000;
@@ -306,7 +313,62 @@ void func_s32_80024358(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s32", func_s32_80024478);
+/* The plain mover step for this bank's 0x212 motes: integrate the three
+   +0x58..+0x60 velocities into the mover, raise the bank tick, refresh the
+   renderable once, lift both of its scale halves by 0x80 a frame and spend one
+   of the payload's +0x2 frames; when they run out, or when the renderable's
+   +0x14 carries 0x8000, raise the redraw bit in the node's -0x2 and in
+   D_800814A0.  64 words, 0 differing, FIRST COMPILE.  2 members, 128 words
+   (dngfam.py).  OWNS NO JUMP TABLE (jtcheck: 0 tables).
+
+   NO TWIN WAS READ.  LEADS.txt offers func_s15_8002418C at 0.712 and
+   func_s46_80024C0C at 0.638 and I opened neither; dngcallee's row for this
+   function is the 2-of-3 noise tier the brief warns about (96 functions, mostly
+   town).  The body is written from the listing against csrc/ovl_dng_s01.c's
+   func_s01_80024280 -- the same shared library's step handler, which dngcallee
+   named for func_s31_80024270 below -- and that gave the mover-add idiom, the
+   D_800814A0 kill pair and the bank-tick spelling.
+
+   THREE SPELLINGS PRICED FROM THIS BODY AT 0, since a first compile prices
+   nothing:
+
+   LOAD-BEARING:
+   * THE TWO TAIL GATES ARE SEPARATE `if's WITH THE KILL PAIR WRITTEN OUT
+     TWICE.  As one `if (frames <= 0 || (c->unk_14 & 0x8000) != 0)' it is 56
+     words / 13 aligned differences, the eight missing words being the second
+     copy.  func_s01_80024280 prices its own version of this at 13 rows too, so
+     the figure reproduces across the relink.
+   * THE TICK STORE IS THE FOURTH STATEMENT, after the three mover adds.  First
+     in the function it is 64 words / 12 differences.
+
+   MEASURED AND FREE, so NOT why this lands: the countdown folded into its gate,
+   `if ((s16)(*(u16 *)(p + 0x2) -= 1) <= 0)', is also 64 words / 0 differing.
+   Two statements kept, as in func_s01_80024280. 
+   THIS COPY'S OWN CONSTANT: 0x58 -> 0x4c, 0x5c -> 0x50, 0x60 -> 0x54.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s32_80024478(u8 *p, UnkVec *v, UnkSlot *c)
+{
+    v->unk_00 += *(s32 *)(p + 0x4c);
+    v->unk_04 += *(s32 *)(p + 0x50);
+    v->unk_08 += *(s32 *)(p + 0x54);
+    D_80025924 = 1;
+    func_800478B8((u8 *)c);
+    c->unk_1C += 0x80;
+    c->unk_1E += 0x80;
+    *(u16 *)(p + 0x2) -= 1;
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    if ((c->unk_14 & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spend 8 of the payload's +0x32 life counter, raise the engine's D_80025924
    tick, and when the counter runs out set the 0x8000 kill bit in the node's
