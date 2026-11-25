@@ -267,6 +267,58 @@ symptom to watch for. And restore both recovered listings from
 **Do it only with no agents running**, because `make splat` begins
 `rm -rf asm build/asm` and every agent measures against those listings.
 
+## ATTEMPT 3 FAILED, AND IT FOUND THE REAL BLOCKER: THE LINKER SCRIPT
+
+Tried the four-subsegment layout with no agents running. **It does not work,
+and the reason is NOT the one my source reading predicted.**
+
+I had read `segtypes/common/c.py:225` and concluded two `c` subsegments of one
+name are safe because splat only CREATES a `.c` file and never overwrites one,
+so neither writes anything. **That part is true and it is not the problem.**
+`build/dungeon.bin.ld` comes out as:
+
+    build/asm/data/1829800.data.o(.data);
+    ovl_dng_lo20_TEXT_START = .;
+    build/csrc/ovl_dng_lo20.o(.text);
+    build/asm/data/182F7B4.data.o(.data);
+    build/csrc/ovl_dng_lo20.o(.text);      <- THE SAME OBJECT, TWICE
+
+**One object's `.text` named twice cannot be split around the data.** `.text`
+is a single section; the second reference places nothing. splat emitted
+listings for **zero** functions in `0x8001E814..0x80025040` -- the range stayed
+data -- and the layout could never have worked even if it had.
+
+**I also tested and ruled out the `extra_syms` absolute.** Commenting out
+`D_lo20_8001E814 = 0x8001E814;` (a DATA symbol at the blob's start, the
+obvious suspect) changed nothing: still zero listings in the range.
+
+Reverted: yaml and extra_syms restored from backups, `make splat` re-run, both
+recovered listings copied back, **five containers byte-identical.**
+
+## SO ATTEMPT 4 NEEDS TWO DIFFERENTLY-NAMED `c` SUBSEGMENTS
+
+    - [0x1829800, data]
+    - [0x1829814, c, ovl_dng_lo20a]     <- its own .c file
+    - [0x182f7b4, data]
+    - [0x1830040, c, ovl_dng_lo20]      <- the existing file, unchanged
+    - [0x18337ec, data]
+
+That gives two objects and two `.text` sections, which the link CAN place
+around the data. The cost is real and should be weighed before starting:
+
+* a new `csrc/ovl_dng_lo20a.c` with its own declaration block;
+* the Makefile and any per-unit tooling must learn the new unit name --
+  `dngfam`, `dngpick`, `ovlverify`'s unit lookup and `jtcheck` all key off
+  `ovl_dng_*`, so check each;
+* `symbol_name_format: lo20_$VRAM` must stay identical for both, or every
+  symbol in the blob is renamed;
+* the 547-word data run needs its own `data` subsegment name too.
+
+**What all three attempts establish together:** the blob cannot be reached by
+a symbol list (attempt 1), by deleting a stub (attempt 2), or by two
+same-named `c` subsegments (attempt 3). The only route left is a second UNIT,
+and that is a carve change rather than a decompilation one.
+
 ## The order to do it in
 
 1. Wait until no agent holds `ovl_dng_lo20` or `ovl_dng_b31f`.
