@@ -11,8 +11,8 @@ because `asm/` is gitignored and `make splat` begins with `rm -rf asm`.
 
 ## What they actually are
 
-**Neither is a function.** Both are DATA blobs sitting inside their unit's `c`
-subsegment -- symbol type `O`, not `F`, in the objects that reference them:
+**Neither SYMBOL is a function.** Both have symbol type `O`, not `F`, in the
+objects that reference them:
 
 ```
 00009d6c g     O .text	0000208c func_b31f_80174674
@@ -24,6 +24,31 @@ also declares the same address as `extern u8 D_b31f_80174674[]` and uses it as
 a facing table. `func_lo20_8001E814` occupies the first 0x682c bytes of lo20's
 code subsegment, ending exactly where its first real function
 (`func_lo20_80025040`) begins.
+
+**BUT THE TWO CASES DIFFER IN WHAT THEY CONTAIN, AND THIS FILE USED TO CALL
+BOTH OF THEM DATA. THAT IS WRONG FOR lo20.** b31f's island really is a table
+of pointers. **lo20's range is CODE**, measured three ways on 2026-11-25:
+
+    objdump -b binary -m mips:3000   a clean prologue, register saves and a
+                                     jump-table lookup at the first word
+    branch-target coherence          341 branch-shaped words, 340 of whose
+                                     targets land INSIDE the range
+    opcode plausibility              6,625 of 6,667 words (99.4%) carry a
+                                     defined opcode; only 14 (0.2%) look like
+                                     a RAM pointer
+
+**A pointer table does not have 340 self-consistent branch targets.** The
+range holds roughly **32 functions** -- 33 boundaries taken as the word after
+every `jr $ra` and its delay slot, 24 of them opening with
+`addiu $sp, $sp, -N` and the last being a 547-word trailing data run -- and
+**zero `jal` targets inside it**, so every one is entered from outside.
+
+**The symbol type is how splat DECLARED the range, not evidence about its
+contents.** Three places in this tree read the type as though it settled the
+question: this file, `docs/dng-parks/func_lo20_80026EC0.c`, and an agent's
+hand-back which told me my own "collapsed text" description was wrong. It was
+not wrong. See `docs/dng-lo20-blob.md` for the repair plan and for attempt
+1's failure.
 
 That is why splat emits no listing for either: it does not detect a function
 there, so `make splat` -- which starts `rm -rf asm build/asm` -- destroys the

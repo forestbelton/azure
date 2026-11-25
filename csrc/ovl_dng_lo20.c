@@ -6,11 +6,11 @@ u32 func_800491F4(s32, u8 *, s32);
 s32 func_80049DE8(s32, s32, s32);
 u8 *func_8004DC14(u8 *, s32);
 void func_8004E99C(s32);
-void func_lo20_80025D9C(u8 *, u8 *, u8 *, u8 *);
+void func_lo20_80025D9C(u8 *p, u8 *b, u8 *c, u8 *d);
 void func_lo20_80025E3C(u8 *, s32);
-void func_lo20_80025FFC(u8 *, s32, s32, s32);
-void func_lo20_800267D8(u8 *, u8 *, u8 *, u8 *);
-void func_lo20_80026878(u8 *, s32);
+void func_lo20_80025FFC(u8 *p, s32 b, s32 c, s32 d);
+void func_lo20_800267D8(u8 *p, u8 *b, u8 *c, u8 *d);
+void func_lo20_80026878(u8 *p, s32 b);
 void func_lo20_8002692C(u8 *p, s32 b, s32 c, s32 d);
 void func_lo20_80026B44(u8 *p);
 s32 func_lo20_80026C20(u8 *);
@@ -37,7 +37,7 @@ char *func_lo20_80025040_4(char *, s32, s32, s32) __asm__("func_lo20_80025040");
 s32 func_lo20_80027008(s32, s32, s32);
 s32 func_lo20_8002714C(s32, s32, s32, s32);
 void func_lo20_80027328(u8 *, s32);
-void func_lo20_80028534(u8 *);
+void func_lo20_80028534(u8 *p);
 u8 *func_lo20_80028774(u8 *p);
 extern u8 D_800294C4[];
 extern u32 D_800294E4;
@@ -45,6 +45,16 @@ extern u32 D_800294FC;
 extern u8 D_80029550[];
 extern u8 D_lo20_80025034[];
 extern u8 D_lo20_800266B0[];
+
+extern s32 D_80029508[];
+void func_8004A7D8(s32, s32);
+extern u8 D_lo20_80027D7C[];
+void func_lo20_80028648(u8 *);
+u8 *func_80049004(u8 **, s32, s32);
+s32 func_80048FBC(u8 *, s32);
+extern u8 D_lo20_80025BF4[];
+u8 *func_80048EE4(u8 **, s32);
+void func_800491CC(u32 **, u32, s32);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_8001E814);
 
@@ -143,7 +153,64 @@ s32 func_lo20_800258B0(u8 *p, void *b, void *c, u8 *d)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800258B8);
+/* 43 words, 0 differing, after eleven spellings.  The +0x14 record's inner
+   block gets the caller's slot index published into the resident
+   D_80073414 descriptor's +0x0C table (`Unk80073414' is 0x14 bytes, which is
+   the listing's `sll 2'/`addu'/`sll 2'); kind 0x13 and an empty slot both
+   fall out to the name copy instead.  func_80069E78 is `strcpy'
+   (splat/common_syms.txt).
+
+   THE FACT, worth 13 aligned differences, and it is a MACRO-RESIDUE
+   `do { } while (0)' around the else arm.  The residue without it is a clean
+   whole-body $s0/$s1 exchange with every instruction in place: `p' wants
+   $s0 and gets $s1.  `-da' gives the margin outright, and it is 6%:
+
+       p   6 refs across 28 insns   floor_log2(6)*6/28 = 4285
+       q   5 refs across 22 insns   floor_log2(5)*5/22 = 4545
+
+   so `allocno_order' comes out `81 80' (q first, q takes $s0).  The cure is
+   one more reference on `p', and flow.c:2122 counts a reference once per
+   ENCLOSING LOOP, so the `do'-wrapper round the two-p-reference strcpy call
+   takes p to 8 refs and 24/28 = 8571.  THE SCOPE IS FORCED -- this is not a
+   case where several scopes measure 0:
+
+       do { } round the else arm (the strcpy) only      43w /  0
+       do { } round the work arm instead                43w / 23
+       do { } round the whole if/else                   44w / 38
+       do { } round the `q = ...' assignment            44w / 42
+
+   The last two are worse than no device at all because they also bump `q',
+   which is the wrong side.  Everything plain was tried first and all of it
+   leaves the identical 13 rows, which is the signature of one remaining
+   fault: the gate as `||' with the arms swapped (44w/37), as `||' with an
+   early return (44w/37), as two `goto's (13), the final add spelled
+   int-first (13), a separate `r = *(u8 **)(p + 0x14)' local (13), and a
+   local for the strcpy destination (13).  The duplicated else arm -- the
+   non-device way to buy references -- is 44 words / 30 here, because jump2
+   does NOT cross-join two copies that sit in different arms of an
+   `else if' chain.
+   Called a macro and not a device because `strcpy(*(char **)(p + 0x88),
+   p + 0x78)' is a whole coherent unit of work (publish the name) and that is
+   exactly the boundary a macro would have. */
+void func_lo20_800258B8(u8 *p)
+{
+    u8 *q;
+
+    q = *(u8 **)(p + 0x14) + 0x20;
+    if (*(s32 *)(p + 0xC) != 0x13 && *(s32 *)(q + 0x8) != 0)
+    {
+        func_8004A7D8(*(s32 *)(p + 0xC), *(s32 *)(q + 0x1C));
+        *(s32 *)(D_80073414[*(s32 *)(p + 0xC)].unk_0C + *(s32 *)(q + 0x1C) * 0x14 + 0xC) =
+            *(s32 *)(q + 0x8);
+    }
+    else
+    {
+        do
+        {
+            strcpy(*(char **)(p + 0x88), (char *)(p + 0x78));
+        } while (0);
+    }
+}
 
 /* 26 words, 0 differing.  First compile.
    LOAD-BEARING and worth 1 word / 14 aligned differences: the gate is
@@ -295,7 +362,55 @@ u32 func_lo20_80025D74(s32 a)
     return func_800491F4(a, D_800294E8, 0xD);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025D9C);
+/* 40 words, 0 differing.  The resident twin is csrc/ovl_town.c's
+   func_800AEBC4 / func_800B1960 group -- the "template-copy constructor":
+   copy the two resident GPU templates D_8002E5D8 (4 words) and D_8002E5E8
+   (3 words) into the caller's two buffers, aim the pair's two prim pointers
+   at them, then write the prim's own fields back THROUGH b + 0x4.
+   The first parameter is untouched: $a0 is never read and the town group's
+   first parameter is a separate object this member does not use.
+
+   TWO facts, each worth 2 words / 32 aligned differences, and BOTH are
+   needed -- either one alone leaves the same 42/32 residue:
+
+   1. The destinations must be ARRAY REFS, `((u32 *)c)[1]', not plain casts
+      `*(u32 *)(c + 0x4)'.  The array ref sets MEM_IN_STRUCT_P, so
+      true_dependence stops the stores to c from blocking the SECOND
+      template's address chain, and sched1 lifts `lui %hi(D_8002E5E8)' and
+      its `lw %lo' / `addiu %lo' into the load-delay slots after
+      `lw 0x8($v1)' and `lw 0xC($v1)'.  Through plain casts those three words
+      sit after the whole first group and the two delays stay `nop' -- which
+      is the 2 extra words.
+   2. Element 0 must be read through the POINTER LOCAL, `s1[0]', not through
+      the symbol `D_8002E5D8[0]'.  Both fold to `lw %lo(D_8002E5D8)($v1)',
+      but through the symbol the local's own materialisation is a separate
+      expansion and the same two delays go unfilled.
+   Measured and FREE at 40/0: `u32 *s1 = D_8002E5D8;' as an initialiser
+   against a separate `s1 = D_8002E5D8;' statement, and that statement's
+   position across all five slots of the first group (flat sweep, so NOT
+   MEASURABLE rather than free).
+   `ovlverify --raw' is 0 differing. */
+void func_lo20_80025D9C(u8 *p, u8 *b, u8 *c, u8 *d)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
+
+    ((u32 *)c)[0] = s1[0];
+    ((u32 *)c)[1] = s1[1];
+    ((u32 *)c)[2] = s1[2];
+    ((u32 *)c)[3] = s1[3];
+    ((u32 *)d)[0] = s2[0];
+    ((u32 *)d)[1] = s2[1];
+    ((u32 *)d)[2] = s2[2];
+    *(u8 **)(b + 0x4) = c;
+    *(u8 **)(b + 0x8) = d;
+    *(s32 *)b = 0;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0x8) = 0x2C;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0xA) = -0x8;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0xC) = 0x200;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0x6) = 0;
+    (*(u8 **)(b + 0x4))[0xF] = 4;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025E3C);
 
@@ -303,7 +418,42 @@ void func_lo20_80025FF4(void)
 {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80025FFC);
+/* 34 words, 0 differing.  func_lo20_8002692C's constructor shape: build the
+   two sub-records at p + 0x74, publish the caller's four values and install
+   the handler at p - 0x10.  func_80069E78 is `strcpy'
+   (splat/common_syms.txt), so the fourth parameter is a string pointer even
+   though this unit's pre-existing declaration calls it `s32'.
+
+   THE FACT, worth 7 aligned differences, and it is a STATEMENT ORDER fault
+   that presents as a clean $s2/$s3 exchange with nothing moved: the
+   `p + 0xC' store (c) must be written BEFORE the `p + 0x14' store (b),
+   although the listing emits 0x14 first -- sched1 transposes the two
+   adjacent independent stores.  All 24 permutations of the four stores were
+   measured; only this one reaches 0:
+     0xC, 0x14, 0x18, 0x88   0   <- as written
+     0x14, 0xC, 0x18, 0x88   7      (the listing's own order)
+     0xC, 0x14, 0x88, 0x18   2
+     0xC, 0x88, 0x14, 0x18   2
+     0xC, 0x18, 0x14, 0x88   5
+     the twelve orders starting 0x18 or 0x88   7-12
+   So `-da' and a reference bump were both the wrong tool here; the whole
+   residue is one adjacent pair's source order.
+   Measured and FREE at 34/0: strcpy's second argument as a re-read
+   `*(char **)(p + 0x88)' instead of `d' (cse forwards the store either way,
+   so d keeps its reference count and the register assignment does not move).
+   D_lo20_80025BF4 is an alabel inside func_lo20_80025A0C's listing, the same
+   device as D_lo20_800266B0. */
+void func_lo20_80025FFC(u8 *p, s32 b, s32 c, s32 d)
+{
+    func_lo20_80025CD8(*(u8 **)(p + 0x74));
+    func_lo20_80025D28(*(u8 **)(p + 0x74) + 0xC);
+    *(s32 *)(p + 0xC) = c;
+    *(s32 *)(p + 0x14) = b;
+    *(s32 *)(p + 0x18) = b + 0x20;
+    *(s32 *)(p + 0x88) = d;
+    strcpy((char *)(p + 0x78), (char *)d);
+    *(u8 **)(p - 0x10) = D_lo20_80025BF4;
+}
 
 /* 18 words, 0 differing.  First compile.
    LOAD-BEARING and worth 4 aligned differences / 3 words: all four parameters
@@ -321,7 +471,51 @@ void func_lo20_80026084(u8 *p, s32 b, s32 c, s32 d)
     func_lo20_80025E3C(p, *(s32 *)(p + 0x54));
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800260CC);
+/* 39 words, 0 differing.  First compile.  Allocates the p + 0x58 handle
+   table and its 6-entry index, copies the 3-word D_8002E5E8 template to
+   p + 0x38 and publishes it; returns whether both allocations succeeded.
+   `u8 *func_80049004(u8 **, s32, s32)' and `s32 func_80048FBC(u8 *, s32)'
+   are both landed in csrc/unk_1C540.c.
+
+   THE FACT, worth 1 word / 32 aligned differences: func_80049004 takes
+   THREE arguments and the middle one is THIS function's own second
+   parameter, forwarded.  $a1 is never written before the `jal', which reads
+   as no argument at all -- but an explicit constant there is 40 words and
+   32 rows, because the pass-through costs no instruction.  That is what
+   settles the arity: a one-parameter reading cannot produce this listing.
+   Also LOAD-BEARING, 3 aligned differences: `r = 1' must come AFTER the
+   func_800491CC call, the same fact func_lo20_800269E8 prices at 2.
+   Measured and FREE at 39/0, so NEITHER is why this lands:
+     - a `u8 *q' local for p + 0x58 against writing it inline at both call
+       sites (cse unifies it, so the `addu $a0, $s1, $zero' repeated for the
+       second call is not evidence of a source local);
+     - the two gates as one `&&' with the assignment inside it instead of
+       nested `if's.  They test different addresses, so fold_truthop never
+       applies. */
+s32 func_lo20_800260CC(u8 *p, s32 n)
+{
+    s32 r;
+    u8 *q;
+
+    r = 0;
+    q = p + 0x58;
+    *(u8 **)(p + 0x54) = func_80049004((u8 **)q, n, 6);
+    if (*(u8 **)(p + 0x54) != NULL)
+    {
+        *(s32 *)(p + 0x74) = func_80048FBC(q, 6);
+        if (*(s32 *)(p + 0x74) != 0)
+        {
+            u32 *s2 = D_8002E5E8;
+
+            *(u32 *)(p + 0x38) = s2[0];
+            *(u32 *)(p + 0x3C) = s2[1];
+            *(u32 *)(p + 0x40) = s2[2];
+            func_800491CC(*(u32 ***)(p + 0x54), (u32)(p + 0x38), 0xD);
+            r = 1;
+        }
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80026168);
 
@@ -531,9 +725,60 @@ u32 func_lo20_800267B0(s32 a)
     return func_800491F4(a, D_80029500, 4);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800267D8);
+/* 40 words, 0 differing.  func_lo20_80025D9C's body with -0x60/-0x70 in
+   place of 0x2C/-0x8; both of its facts (array-ref destinations, element 0
+   through the pointer local) were priced there at 2 words / 32 rows each and
+   both are needed here too -- the plain-cast form is 42/32 on this body as
+   well.  `ovlverify --raw' is 0 differing. */
+void func_lo20_800267D8(u8 *p, u8 *b, u8 *c, u8 *d)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80026878);
+    ((u32 *)c)[0] = s1[0];
+    ((u32 *)c)[1] = s1[1];
+    ((u32 *)c)[2] = s1[2];
+    ((u32 *)c)[3] = s1[3];
+    ((u32 *)d)[0] = s2[0];
+    ((u32 *)d)[1] = s2[1];
+    ((u32 *)d)[2] = s2[2];
+    *(u8 **)(b + 0x4) = c;
+    *(u8 **)(b + 0x8) = d;
+    *(s32 *)b = 0;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0x8) = -0x60;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0xA) = -0x70;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0xC) = 0x200;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0x6) = 0;
+    (*(u8 **)(b + 0x4))[0xF] = 4;
+}
+
+/* 45 words, 0 differing.  Aims the four slot pointers of the +0x10 record
+   at their payloads: slot 0 gets D_80029508[p->unk_10], slots 1 and 2 get
+   p + 0x2C and p + 0x20, slot 3 a handle built by func_8004DC14, and then
+   the handle's prim gets its two coordinates.
+
+   THE SHAPE FACT: each slot is TWO dereferences deep but the prim fields are
+   only ONE deep off the slot -- `*(u8 **)(*(u8 **)(b + 0xC) + 0x4)', not
+   `**(u8 ***)(b + 0xC) + 0x4'.  Written with the extra indirection the body
+   is 49 words / 18 differing, two words per site.
+   Also LOAD-BEARING, 4 aligned differences each way: the b + 0x4 store must
+   PRECEDE the func_lo20_80026370 call (reorg sinks it into the `jal' delay
+   slot) and the b + 0x8 store must FOLLOW it.  Written the other way round
+   each is 45 words / 4 rows, so the two stores' positions relative to the
+   call are both real and not a schedule to read off the listing.
+   The second parameter stays `s32' because that is what this unit's
+   pre-existing declaration says and what the landed caller
+   func_lo20_800269A0 passes. */
+void func_lo20_80026878(u8 *p, s32 b)
+{
+    **(s32 **)b = D_80029508[*(s32 *)(p + 0x10)];
+    **(u8 ***)(b + 0x4) = p + 0x2C;
+    func_lo20_80026370((u8 *)b, 0);
+    **(u8 ***)(b + 0x8) = p + 0x20;
+    **(u8 ***)(b + 0xC) = func_8004DC14(*(u8 **)(p + 0x14), 0);
+    *(s16 *)(*(u8 **)(*(u8 **)(b + 0xC) + 0x4) + 0x8) = 0x68;
+    *(s16 *)(*(u8 **)(*(u8 **)(b + 0xC) + 0x4) + 0xA) = 0x88;
+}
 
 /* 29 words, 0 differing.  First compile.  func_lo20_80028210's shape: the
    record's own fields, two sub-records built by func_lo20_80026708 and
@@ -567,7 +812,42 @@ void func_lo20_800269A0(u8 *p, s32 b, s32 c, s32 d)
     func_lo20_80026878(p, *(s32 *)(p + 0x70));
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800269E8);
+/* 31 words, 0 differing.  Allocates the p + 0x74 handle table, and on
+   success copies the 3-word D_8002E5E8 template to p + 0x54 and publishes it
+   through func_800491CC.  Returns whether the allocation succeeded.
+
+   TWO facts:
+   1. There must be NO pointer local for the call's result -- the test and
+      the p + 0x70 store both read `*(u8 **)(p + 0x70)' and cse forwards the
+      stored value.  With a `u8 *q' holding it, the `addu $a0, $v0, $zero'
+      moves ahead of the `beqz' and the branch tests $a0: 10 aligned
+      differences.  func_800491CC's first argument is that same forwarded
+      read, which is where the target's `addu $a0, $v0, $zero' comes from.
+   2. `r = 1' must be the LAST statement of the arm, after the
+      func_800491CC call -- 2 aligned differences at every one of the other
+      four slots (a flat sweep: 2, 2, 2, 2, 0), which is the signature of a
+      position that only the last slot satisfies rather than a curve.
+   Here the plain cast `*(u32 *)(p + 0x54)' is what lands and the array-ref
+   form func_lo20_80025D9C needs is not required: there is only one template
+   symbol, so nothing has to be lifted past the stores. */
+s32 func_lo20_800269E8(u8 *p)
+{
+    s32 r;
+
+    r = 0;
+    *(u8 **)(p + 0x70) = func_80048EE4((u8 **)(p + 0x74), 4);
+    if (*(u8 **)(p + 0x70) != NULL)
+    {
+        u32 *s2 = D_8002E5E8;
+
+        *(u32 *)(p + 0x54) = s2[0];
+        *(u32 *)(p + 0x58) = s2[1];
+        *(u32 *)(p + 0x5C) = s2[2];
+        func_800491CC(*(u32 ***)(p + 0x70), (u32)(p + 0x54), 4);
+        r = 1;
+    }
+    return r;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80026A64);
 
@@ -1120,15 +1400,134 @@ void func_lo20_8002823C(u8 *p, u8 *q, s32 c)
     func_lo20_800280FC(p, *(s32 *)(p + 0x88));
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80028284);
+/* 39 words, 0 differing.  First compile off func_lo20_800260CC, which lands
+   just above: the identical body with p + 0x8C/0x88/0x4C/0x6C in place of
+   p + 0x58/0x54/0x74/0x38 and 8/8/0xF for 6/6/0xD.  Its three-argument
+   func_80049004 fact (1 word / 32 rows) and its `r = 1'-last fact (3 rows)
+   were priced there. */
+s32 func_lo20_80028284(u8 *p, s32 n)
+{
+    s32 r;
+    u8 *q;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80028320);
+    r = 0;
+    q = p + 0x8C;
+    *(u8 **)(p + 0x88) = func_80049004((u8 **)q, n, 8);
+    if (*(u8 **)(p + 0x88) != NULL)
+    {
+        *(s32 *)(p + 0x4C) = func_80048FBC(q, 8);
+        if (*(s32 *)(p + 0x4C) != 0)
+        {
+            u32 *s2 = D_8002E5E8;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800283B4);
+            *(u32 *)(p + 0x6C) = s2[0];
+            *(u32 *)(p + 0x70) = s2[1];
+            *(u32 *)(p + 0x74) = s2[2];
+            func_800491CC(*(u32 ***)(p + 0x88), (u32)(p + 0x6C), 0xF);
+            r = 1;
+        }
+    }
+    return r;
+}
+
+/* 37 words, 0 differing.  First compile.  The 0x8002845C object's "enter
+   state 0" entry: reset the +0x20 record's counters, clear the +0x80 prim's
+   +0x02 halfword, publish the caller's value at +0x38 and run the four
+   rebuild calls, then install the handler at p + 0x10.
+   D_lo20_80027D7C is an alabel inside func_lo20_80027BBC's listing, the same
+   device as D_lo20_80027F34 (func_lo20_80028210's comment).
+
+   LOAD-BEARING: `*(s32 *)(q + 0x8) = 0' is written BEFORE the
+   func_lo20_80027454 call -- reorg sinks it into the `jal' delay slot, and
+   after the call it cannot reach the slot at all.  Fourth body in this unit
+   on that one (func_lo20_800262EC prices it at 9 rows).
+   NOT MEASURABLE (not free -- the tools cannot see the difference): whether
+   func_lo20_80027454's first argument is spelled `p + 0x58' or `q + 0x38',
+   and whether func_lo20_80028648's is `p' or `q - 0x20'.  Both are the same
+   tree after fold and both read 37/0; `p'-relative is kept because the
+   listing computes them off $s1, which holds the parameter.
+   The `*(s32 *)(q + 0x14)' read passed to both callees is a real reload
+   each time: the `sh' through the +0x80 prim and then the calls invalidate
+   cse's entry, which is why the body reads it three times and the listing
+   loads it three times. */
+void func_lo20_80028320(u8 *p, s32 b)
+{
+    u8 *q;
+
+    q = p + 0x20;
+    *(s32 *)(q + 0x14) = 0;
+    *(s16 *)(*(u8 **)(q + 0x80) + 0x2) = 0;
+    *(s32 *)(q + 0x38) = b;
+    *(s32 *)(q + 0x8) = 0;
+    func_lo20_80027454(p + 0x58, *(s32 *)(q + 0x14), 0, *(s32 *)(q + 0x28));
+    func_lo20_80027FF4(*(u8 **)(q + 0x4C), *(s32 *)(q + 0x14));
+    *(s32 *)(q + 0x84) = func_lo20_80027FA4(*(s32 *)(q + 0x88));
+    func_lo20_80028534(*(u8 **)(q + 0x88));
+    func_lo20_80028648(p);
+    *(u8 **)(q - 0x10) = D_lo20_80027D7C;
+}
+
+/* 42 words, 0 differing.  First compile.  func_lo20_80028320's "enter state
+   1" twin: one parameter instead of two, `= 1' at +0x14 rather than 0, and
+   two extra stores feeding func_lo20_80027454's fourth argument.  Its
+   store-before-the-call fact was priced there.
+
+   TWO facts of its own:
+   1. func_lo20_80027454's fourth argument must be READ BACK from q + 0x28,
+      not re-derived from `*(u8 **)(q + 0x48) + 0x1C' -- 43 words / 29
+      aligned differences re-derived.  cse forwards the store it has just
+      made, which is the target's `addu $a3, $v1, $zero' sharing the
+      register with the `sw $v1, 0x28($s0)' beside it.
+   2. The q + 0x28 store must come BEFORE the q + 0x38 store: swapped, the
+      body is 41 words / 31 rows, because the forwarded value no longer
+      reaches the argument copy. */
+void func_lo20_800283B4(u8 *p)
+{
+    u8 *q;
+
+    q = p + 0x20;
+    *(s32 *)(q + 0x14) = 1;
+    *(s16 *)(*(u8 **)(q + 0x80) + 0x2) = 0;
+    *(s32 *)(q + 0x8) = 0;
+    *(s32 *)(q + 0x28) = *(s32 *)(*(u8 **)(q + 0x48) + 0x1C);
+    *(s32 *)(q + 0x38) = *(s32 *)(q + 0x18);
+    func_lo20_80027454(p + 0x58, *(s32 *)(q + 0x14), 0, *(s32 *)(q + 0x28));
+    func_lo20_80027FF4(*(u8 **)(q + 0x4C), *(s32 *)(q + 0x14));
+    *(s32 *)(q + 0x84) = func_lo20_80027FA4(*(s32 *)(q + 0x88));
+    func_lo20_80028534(*(u8 **)(q + 0x88));
+    func_lo20_80028648(p);
+    *(u8 **)(q - 0x10) = D_lo20_80027D7C;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_8002845C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80028534);
+/* 31 words, 0 differing.  func_lo20_80026250's release-and-clear over the
+   eight pointer slots at p + 0x18..p + 0x34, then slot 0xE (p + 0x38) once
+   more WITHOUT the zero store.  The re-read of the slot after the call is
+   not a source repetition to avoid -- the call invalidates cse's entry (see
+   func_lo20_80026250).
+
+   THE FACT, worth 4 aligned differences: the counter and the cursor must be
+   initialised in ONE `for' initialiser with a comma, counter FIRST --
+   `for (i = 6, q = p + 0x18; ...)'.  Written as a separate `q = p + 0x18;'
+   statement before the loop, the two prologue saves and their two
+   initialising `addiu's come out in the opposite order ($s0 before $s1).
+   A cursor is right here and NOT the inline `p + i * 4' that
+   func_lo20_80027B6C needs: this listing has both a `addiu $s0, $s0, 4' and
+   a separate `addiu $s1, $s1, 1', i.e. two inductions. */
+void func_lo20_80028534(u8 *p)
+{
+    s32 i;
+    u8 *q;
+
+    for (i = 6, q = p + 0x18; i < 0xE; i++)
+    {
+        func_8004E99C(**(s32 **)q);
+        **(s32 **)q = 0;
+        q += 4;
+    }
+    func_8004E99C(**(s32 **)(p + 0x38));
+}
 
 /* 28 words, 0 differing.  func_lo20_80026B94's teardown with three callees;
    the array-ref fact on p + 0x1E reproduces at 1 word / 15 aligned
