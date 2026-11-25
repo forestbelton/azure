@@ -1,0 +1,49 @@
+/* func_lo16_8001E824 -- ovl_dng_lo16, 82 target words.
+   PARKED UNATTEMPTED by agent h172, batch 35, 2026-11-25.
+
+   THIS FUNCTION OWNS A JUMP TABLE AND ovl_dng_lo16's RODATA IS THE ONE
+   UNSUPPORTED CASE.  Per the batch brief, a table owner in this unit is to be
+   parked rather than fought.  No body was written, so there is no residue.
+
+   THE TABLE IS jtbl_lo16_80016034, which sits BELOW this object's text start
+   (0x8001607C), i.e. in a rodata subsegment ahead of the code.  Its sibling
+   problem is func_lo16_8001D4AC's jtbl_lo16_80016000.
+
+   THE DISPATCH, read off the listing:
+
+       lbu   $v0, 0x1($s3)
+       addiu $v1, $v0, -0x1
+       sltiu $v0, $v1, 0x12         <<< 18 cases, minval 1
+       beqz  $v0, .Llo16_8001E944
+       lui   $v0, %hi(jtbl_lo16_80016034)
+
+   so it is `switch (p[1] - 1)' (equivalently `switch (p[1])' with the arms
+   shifted by one) over EIGHTEEN cases.  An even `.word' count is the signal
+   FOR a pad word, so run `python3 tools/decomp/jtcheck.py --func
+   func_lo16_8001E824' and read the dispatch bound (18) against the label
+   count before writing anything.
+
+   WHAT THE BODY DOES, for the next agent: it computes two bytes, stored at
+   the end through `sb $s2, 0x2($s3)' and `sb $s0, 0x3($s3)', with $s0
+   initialised to 0 and $s2 to 0 before the dispatch.  Three distinct arms are
+   visible:
+
+     - one arm: if (p[0] != 0x11) { s2 = (rand() & 7) | 4; } else s2 = 1;
+       then s0 = -0x80.
+     - one arm: if (p[0] == 9) s0 |= 0x40; then
+       if ((rand() & 3) == 0) { t = (rand() & 3) - 1; if (t < 0) s0 |= 0x40;
+       s2 = t; }  s1 = s0 | -0x80; s0 = s1;
+       if ((rand() & 7) == 0) { s2 = -1; s0 = s1 | 0x40; }
+     - one arm: s2 = (rand() & 0xFFFF) % 0x28 + 0x3C, emitted as the
+       0xCCCCCCCD magic multiply (`multu' / `mfhi' / `srl 5' / x40 / `subu'),
+       which per the brief means the source divided by a LITERAL and the
+       giveaway is the `lui 0xCCCC' rather than a `div'.
+
+   Every `rand()' is func_800A6D30, which this unit's landed bodies declare as
+   `u16 func_800A6D30();'.
+
+   DECLARATIONS
+   u16 func_800A6D30();
+   END DECLARATIONS
+*/
+INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001E824);

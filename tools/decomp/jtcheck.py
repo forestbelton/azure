@@ -106,9 +106,46 @@ def main():
         units = args or ["*"]
         for u in units:
             paths += glob.glob(os.path.join(PROJ, "asm", "nonmatchings", u, "*.s"))
+    # A TABLE CAN LIVE IN A DATA SUBSEGMENT RATHER THAN IN THE FUNCTION'S OWN
+    # LISTING, AND THIS TOOL USED TO REPORT "0 table(s)" FOR IT.
+    #
+    # ovl_dng_lo16's jtbl_lo16_80016000 and jtbl_lo16_80016034 sit at
+    # 0x80016000/0x80016034, BELOW that object's text start (0x8001607C) -- a
+    # rodata subsegment AHEAD of the code. They are emitted into
+    # asm/data/2A3000.data.s, so scanning only asm/nonmatchings/*/ finds
+    # nothing, and an agent was told "0 tables in the whole unit" while two of
+    # its twenty functions owned one. It parked both rather than write a
+    # switch it had been told did not exist.
+    #
+    # So: also attribute a table to the function whose LISTING REFERENCES it,
+    # wherever the table itself is defined.
+    bydata = {}
+    for dp in glob.glob(os.path.join(PROJ, "asm", "data", "*.s")):
+        for t in tables(dp):
+            bydata[t[0]] = t
+    REF = re.compile(r"%(?:hi|lo)\((jtbl_\w+)\)")
+
     ntab = ndis = 0
     for p in sorted(paths):
-        for name, nw, ncase, pads, bound, distinct in tables(p):
+        found = list(tables(p))
+        if bydata:
+            seen = {t[0] for t in found}
+            text = open(p, errors="replace").read()
+            for nm in dict.fromkeys(REF.findall(text)):
+                if nm not in seen and nm in bydata:
+                    # The table is in a data file but the `sltiu' bound is in
+                    # THIS listing, so re-read it here: bound-against-count is
+                    # the whole discriminator and `?' is useless to an agent.
+                    nm_, nw_, nc_, pd_, _b, ds_ = bydata[nm]
+                    bound = None
+                    hi = text.find("%%hi(%s)" % nm)
+                    if hi != -1:
+                        b = SLTIU.findall(text[max(0, hi - 4000):hi])
+                        if b:
+                            bound = (int(b[-1], 16) if b[-1].startswith("0x")
+                                     else int(b[-1]))
+                    found.append((nm_, nw_, nc_, pd_, bound, ds_))
+        for name, nw, ncase, pads, bound, distinct in found:
             ntab += 1
             owner = os.path.basename(p)[:-2]
             flag = ""

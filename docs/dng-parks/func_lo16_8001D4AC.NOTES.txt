@@ -1,0 +1,57 @@
+/* func_lo16_8001D4AC -- ovl_dng_lo16, 75 target words.
+   PARKED UNATTEMPTED by agent h172, batch 35, 2026-11-25.
+
+   THIS FUNCTION OWNS A JUMP TABLE AND ovl_dng_lo16's RODATA IS THE ONE
+   UNSUPPORTED CASE.  Per the batch brief: "The one object still unsupported
+   is ovl_dng_lo16.  If that is your unit and a function of yours owns a
+   table, park it and say so rather than fighting it."  No body was written,
+   so there is no residue to report.
+
+   THE TABLE IS jtbl_lo16_80016000, and it does NOT sit after the function:
+   0x80016000 is BELOW this object's text start (0x8001607C), so the table
+   lives in a rodata subsegment AHEAD of the code, which is why cc1psx cannot
+   place it.  func_lo16_8001E824 in the same unit owns the second one,
+   jtbl_lo16_80016034, with the same problem.
+
+   WHAT THE DISPATCH LOOKS LIKE, read off asm/nonmatchings/ovl_dng_lo16/
+   func_lo16_8001D4AC.s so the next agent does not have to:
+
+       jal   func_800A6D30
+       sh    $v0, 0xA($s1)          p[5] = rand()
+       andi  $v1, $v0, 0xFF
+       sltiu $v0, $v1, 0xD          <<< 13 cases, set starts at 0
+       beqz  $v0, .Llo16_8001D5C0   default: fall straight to the epilogue
+       lui   $v0, %hi(jtbl_lo16_80016000)
+
+   so the switch is on `p[5] & 0xFF' with THIRTEEN cases, 0..0xC, and no
+   minval subtraction -- every value below the lowest real arm is an empty
+   case that must be written out, or expand_end_case falls under gcc 2.7.2's
+   case_values_threshold and emits a comparison tree instead of the table.
+   Run `python3 tools/decomp/jtcheck.py --func func_lo16_8001D4AC' for the
+   entry list before writing the arms; the brief's pad-word rule applies
+   (.word count = cases + pad, and a pad appears only when the CASE count is
+   odd AND another 8-aligned rodata object follows).
+
+   The real arms visible in the listing are:
+
+       p[5] = 2 and return                       (one arm)
+       D_8001F670 == 0 ? { p[5] = 3;
+            D_8001F670 = 1; func_lo16_8001CFB8(p, (s16)x); }
+       D_8001F670 == 0 ? { D_8001F670 = 1; p[5] = 2;
+            func_lo16_8001D328(p, (s16)x); }
+       D_8001F670 == 0 ? { D_8001F670 = 1; p[5] = 4;
+            func_lo16_8001D0F4(p, (s16)x); }
+       func_lo16_8001CEC0(p, (s16)x)             (the fall-out arm)
+
+   func_lo16_8001CEC0 and func_lo16_8001D328 are both LANDED in this unit
+   (62/62 and 97/97, 0 differing) with the signatures
+   `void func_lo16_8001CEC0(s16 *p, s16 b)' and
+   `void func_lo16_8001D328(s16 *p)', so the arms' argument lists are already
+   settled.  The existing unit declaration `void func_lo16_8001D4AC(s16 *,
+   s16);' matches the prologue ($a0 = p, $a1 sign-extended to s16).
+
+   DECLARATIONS
+   extern s32 D_8001F670;
+   END DECLARATIONS
+*/
+INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_8001D4AC);
