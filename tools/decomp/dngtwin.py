@@ -303,6 +303,24 @@ def carved(minw):
     return out
 
 
+# ONE LENGTH BAND, USED BY BOTH rank() AND sweep().
+#
+# They used to differ: rank() tested `0.75 * n <= len <= 1.33 * n' in floating
+# point while sweep() bisected on `int(0.75 * L)' and `int(1.34 * L) + 1'. For
+# a 54-word target that is 40.5 against 40, so a LANDED 40-word sibling at
+# 0.702 was in the sweep (which the BRIEF is rendered from) and absent from
+# `--unit' (which LEADS.txt is generated from). An agent in batch 29 read the
+# two side by side, found the brief claiming a twin the tool denied, and had to
+# reconcile it by hand -- it reported having "three no-twin bodies, not two".
+#
+# Two paths answering one question with different arithmetic is a defect
+# whichever answer is better, so they now share this. The WIDER (sweep) form is
+# kept, because a band that is too narrow silently hides a real lead.
+def band(n):
+    """inclusive (lo, hi) word-count bounds for a twin of an n-word body."""
+    return int(0.75 * n), int(1.34 * n) + 1
+
+
 def rank(target, pool, want_stubs, ratio, top):
     tag, sig, fk, _ = target
     n = len(sig)
@@ -310,7 +328,8 @@ def rank(target, pool, want_stubs, ratio, top):
     for name, (otag, osig, ofk, is_stub) in pool.items():
         if is_stub and not want_stubs:
             continue
-        if not (0.75 * n <= len(osig) <= 1.33 * n):
+        lo, hi = band(n)
+        if not (lo <= len(osig) <= hi):
             continue
         sm = difflib.SequenceMatcher(None, sig, osig, autojunk=False)
         if sm.quick_ratio() < ratio:
@@ -345,8 +364,9 @@ def sweep(pool, floor):
         if not st:
             continue
         L, ms = len(sg), collections.Counter(sg)
-        lo = bisect.bisect_left(lens, int(0.75 * L))
-        hi = bisect.bisect_right(lens, int(1.34 * L) + 1)
+        blo, bhi = band(L)
+        lo = bisect.bisect_left(lens, blo)
+        hi = bisect.bisect_right(lens, bhi)
         best = []
         for i in order[lo:hi]:
             ln, lt, lc, ls, lfk = lms[i]
