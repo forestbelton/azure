@@ -145,9 +145,16 @@ def main():
                 print("  NOTE: target is %s words; this body is %s."
                       % (m.group(2), m.group(1)))
             return 0
-        err = [l for l in (r.stderr or r.stdout).strip().split("\n")
-               if "error" in l.lower() or "undeclared" in l.lower()]
-        last = err[-1][:200] if err else "did not compile"
+        # KEEP THE WHOLE TAIL, NOT THE LINES CONTAINING "error".
+        # cc1psx's own diagnostics frequently contain neither "error" nor
+        # "undeclared" -- "unterminated character constant", "parse error
+        # before ...", "conflicting types for ..." -- so this filter threw
+        # the message away and printed "Last error:" with nothing after it.
+        # Two parks were unmeasurable for a day with no diagnosis available,
+        # and the filter was why.
+        raw = (r.stderr or "") + (r.stdout or "")
+        tail = [l for l in raw.strip().split("\n") if l.strip()]
+        last = "\n  ".join(tail[-6:])[:900] if tail else "did not compile"
     print("%s: NO placement compiles. Last error:\n  %s" % (func, last))
     print("The park needs its DECLARATIONS block repaired before it can be "
           "measured; see docs/dungeon-parks/README.md.")

@@ -342,13 +342,9 @@
    only D_80026648 is new to that unit as of this run.
 
 DECLARATIONS
-typedef struct UnkDng26478
-{
-    s16 unk_00;
-    s16 unk_02;
-    s16 unk_04;
-    u8 pad_06[0x2];
-} UnkDng26478;
+(UnkDng26478 is now defined in ovl_dng_s21 itself, by a body landed after
+this park was written.  Declaring it here again is a redefinition and is why
+the park stopped splicing; take it from the unit.)
 extern UnkDng26478 D_800265C8[];
 extern UnkDng26478 D_80026648[];
 extern s16 D_80026476;

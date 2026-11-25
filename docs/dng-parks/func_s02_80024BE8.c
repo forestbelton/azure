@@ -195,10 +195,8 @@
    extern u8 D_800258FC[];
    extern u8 D_s02_80024004[];
    extern s32 D_8008346C;
-   typedef struct UnkDngS58Blk32
-   {
-       u8 b[0x20];
-   } UnkDngS58Blk32;
+   (UnkDngS58Blk32 comes from the unit's own block now -- it was declared
+    here when this park was written and is a REDEFINITION today.)
    UnkNode *func_8003FC64(s32);
    void func_8003DB94(void *, void *, s32);
    u8 *func_8003DF74(u8 *, UnkSlot *, s16 *, s16);
