@@ -116,9 +116,18 @@
      OTHER TYPES, measured:
      * the two loop counters must be `u32': the loop tests are `sltiu', and
        `s32' gives `slti' (3 rows) -- and that is the only thing it changes.
-     * `x' is `u16' and NOT `s16': it is spilled to 0x10($sp) by reload and
-       read back `lbu' for the byte publish and `lhu' for `x - 3'; `s16' makes
-       the second one an `lh'.
+     * `x' AND `y' ARE `s16', AND THIS ENTRY USED TO SAY `u16' AND NOT `s16'.
+       That was wrong as stated. Re-measured 2026-11-25 against the current
+       unit: `u16' and `s16' both give 109/109 and the SAME residue, so the
+       parameter signedness is NOT MEASURABLE from this body -- the `lhu'/`lh'
+       difference this entry described does not reach the aligned count.
+       What decides it is the CALLER. func_s56_8002401C, the only one, sign
+       extends both arguments at every call site (`sll 16'/`sra 16'); a `u16'
+       parameter would be an `andi 0xFFFF' there. The callee's own `lhu'
+       reload is explicable with `s16' (only the low half of `x - 3' matters)
+       and the caller's sign extension is not explicable with `u16'.
+       Both functions were parked when this was found, so no landed body is
+       affected -- but land them together.
      * `z' is `s16' (incremented by `addiu', sign-extended into $s3 once per
        outer iteration by loop.c's invariant motion).
 
@@ -135,7 +144,7 @@
    extern u32 D_8008333C[];
    END DECLARATIONS
 */
-void func_s56_80025AD8(u16 x, u16 y)
+void func_s56_80025AD8(s16 x, s16 y)
 {
     u8 *m = (u8 *)D_8008333C;
     u8 *tbl = (u8 *)D_800274DC;
