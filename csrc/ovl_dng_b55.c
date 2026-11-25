@@ -118,6 +118,43 @@ s32 func_b55_80172330(u8 *a, void *b, void *c, s32 d);
 void func_b55_80173D6C(u8 *p, void *b, void *c);
 extern u8 D_b55_80173E8C[];
 
+typedef struct UnkDng708A4SP
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x12];
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u8 pad_28[0xA8];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng708A4SP;
+typedef struct UnkDngB09A28
+{
+    s16 unk_00;
+    s16 unk_02;
+} UnkDngB09A28;
+typedef struct UnkDngB09A28Tbl
+{
+    UnkDngB09A28 unk_00[8];
+} UnkDngB09A28Tbl;
+typedef struct UnkDngB31fName12
+{
+    u8 bb[0xC];
+} UnkDngB31fName12;
+
+extern s32 D_80173F84[];
+
+extern u8 *D_80174710;
+extern s16 D_80174718;
+extern u8 *D_80174714;
+extern u8 *D_80173FBC[];
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80170898);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80170B50);
@@ -1784,7 +1821,24 @@ void func_b55_801738F0(void)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_801738F8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80173934);
+/* Test bit 4 of 0x80013714. 6 words, 0 differing.
+   THE MASKED VALUE GOES THROUGH A LOCAL, and that is load-bearing:
+   `return (*(u16 *)0x80013714 & 0x10) != 0;' written directly is 6 words /
+   2 aligned differences, because `do_store_flag' recognises a comparison of a
+   single-bit mask against zero and emits `srl $v0, $v0, 0x4' / `andi $v0, 1'
+   where the target has `andi $v0, 0x10' / `sltu $v0, $zero, $v0'. Assigning
+   the AND to a local first makes the compared operand a VAR_DECL, which that
+   optimisation does not fire on.
+   The address is the CONSTANT, following this unit's measured convention for
+   0x80013714 (see func_b31f_8016D204's comment); unindexed, the constant and
+   the declared symbol are byte-identical, so this is not measurable here. */
+s32 func_b55_80173934(void)
+{
+    s32 v;
+
+    v = *(u16 *)0x80013714 & 0x10;
+    return v != 0;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_8017394C);
 
@@ -1794,13 +1848,37 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80173AE4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80173B74);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80173BC0);
+/* 10 words, 0 differing, first compile. */
+void func_b55_80173BC0(void)
+{
+    func_800A56E0(0xB4);
+    D_800DCF4D = -1;
+}
 
 void func_b55_80173BE8(void)
 {
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80173BF0);
+/* 16 words, 0 differing. THE +0x20 POINTER MUST BE COMPUTED BEFORE THE TABLE
+   ROW IS PUBLISHED: with `q = D_80174710 + 0x20;' after the
+   `D_80174714 = D_80173FBC[i];' statement it is 16 words / 10
+   aligned differences, every row a $v1/$a1 exchange -- the table value and
+   the record pointer hold each other's register, because whichever is born
+   first takes the lower one. Nothing moves; only the names. 
+   THIS COPY'S OWN CONSTANT: 0xb2 -> 0xba, 0xac -> 0xb8.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_b55_80173BF0(s32 i)
+{
+    u8 *q;
+
+    D_80174718 = 0;
+    q = D_80174710 + 0x20;
+    D_80174714 = D_80173FBC[i];
+    q[0xba] = 1;
+    *(s16 *)(q + 0xb8) = i;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b55", func_b55_80173C30);
 
