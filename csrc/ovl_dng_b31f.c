@@ -1523,9 +1523,24 @@ void func_b31f_8016DC84(void)
       docs/matching-levers.md's "A SYMBOL ARRAY REFERENCE EMITS ITS lui FIRST
       AS A MEM, ITS sll FIRST AS A POINTER VALUE".
 
-   STATEMENT ORDER IS NOT MEASURABLE HERE: the read-modify-write before or
-   after the three zero stores is 15 words / 0 either way, and the three zero
-   stores come out 0x371A, 0x3718, 0x3716 whichever order they are written in.
+   STATEMENT ORDER IS NOT MEASURABLE HERE for the read-modify-write: before or
+   after the three zero stores it is 15 words / 0 either way.
+
+   BUT THE THREE ZERO STORES' ORDER IS LOAD-BEARING, and this comment used to
+   claim the opposite -- that they "come out 0x371A, 0x3718, 0x3716 whichever
+   order they are written in". That claim was produced by a blind instrument
+   and it is false. `ovlverify' MASKED cannot see a displacement off a
+   CONSTANT BASE: the mask exists to ignore %hi/%lo relocation words, and a
+   `sh $zero, 0x371A($v1)' off `g = (u8 *)0x80010000' carries its displacement
+   in that same field, so the mask ignores it. All six permutations read 15
+   words / 0 differing, and the ascending spelling put the WRONG BYTES IN THE
+   IMAGE -- `make containers' failed by 2 bytes at 0x8016DC98, built
+   A4603716 against target A460371A.
+
+   The stores must be written DESCENDING, 0x371A then 0x3718 then 0x3716, as
+   below. A sibling body in ovl_dng_b55 is byte-exact with the same descending
+   order. For any body addressing a constant base a masked `0 differing' is
+   NOT sufficient -- only `make containers' sees the displacement.
    No jump table and no rodata of its own -- the listing opens at `glabel'. */
 void func_b31f_8016DC8C(s32 i)
 {
