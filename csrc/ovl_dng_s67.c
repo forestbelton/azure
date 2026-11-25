@@ -314,7 +314,34 @@ void func_s67_800246F0(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s67", func_s67_800247C0);
+/* The same tick as func_s67_80024B3C with its two extra statements dropped:
+   one frame off the +0x3A counter with D_800261B0 raised, the slot's
+   +0xC..+0xE faded as `counter * 0x80 / limit', and the node killed when the
+   counter runs out.  29 words, 0 differing, FIRST COMPILE.
+
+   This is func_s67_80024B3C in this unit minus its `p[0x8C] -= 1' and its
+   `s->unk_1A += *(u16 *)(p + 0x40)' -- the eight words of difference
+   dngtwin reported -- so BOTH of 80024B3C's facts were taken as given and
+   are NOT re-measured here: the decrement is split around the D_800261B0
+   store, the quotient goes through a local `c' so the whole
+   `sll 16 / sra 9 / div / mflo' chain lands ahead of that store, and the
+   three colour bytes are ONE CHAINED `[0] = [1] = [2]' assignment. */
+void func_s67_800247C0(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    u16 t;
+    s32 c;
+
+    t = *(u16 *)(p + 0x3A) - 1;
+    c = ((s16)t << 7) / *(s16 *)(p + 0x3C);
+    D_800261B0 = 1;
+    *(u16 *)(p + 0x3A) = t;
+    s->unk_0C[0] = s->unk_0C[1] = s->unk_0C[2] = c;
+    if (*(s16 *)(p + 0x3A) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spend one frame of the payload's +0x3A life counter, raise the bank's
    D_800261B0 busy flag, fade all four of the record's 3-byte colours at
@@ -450,7 +477,48 @@ void func_s67_80024B3C(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s67", func_s67_80024BD0);
+/* The same tick again, for a record whose slot spin is a CONSTANT: one frame
+   off the +0x3A counter with D_800261B0 raised, the slot's +0x1A advanced by
+   0x190, its +0xC..+0xE faded as `counter * 0x80 / limit', and the node
+   killed when the counter runs out.  32 words, 0 differing.
+
+   AN INVERSION OF func_s67_80024B3C'S FIRST FACT, measured here and worth
+   the brief's warning about which of a twin's facts invert.  80024B3C's
+   comment records that the decrement must be SPLIT AROUND the D_800261B0
+   store (`t = load - 1; D_800261B0 = 1; store t'), and 80024B3C itself is
+   56 words / 57 differing spelled otherwise.  On THIS body the store of the
+   counter must come BEFORE the flag store:
+
+     *(u16 *)(p + 0x3A) = t; D_800261B0 = 1;     32 words,  0 differing
+     D_800261B0 = 1; *(u16 *)(p + 0x3A) = t;     33 words, 31 differing
+
+   -- one word LONG, and the extra word is an unfilled load delay: with the
+   flag store already issued there is nothing left to fill the `lhu 0x1A'
+   delay slot, which is exactly what the target fills it with.  The two
+   bodies are in the same unit, have the same shape and the same frame, and
+   the fact still flips, so this is a REFERENCE/STATEMENT-ORDER fact in the
+   brief's third class, not a selection or budget one.
+
+   MEASURED AND FREE, so it is NOT the reason this lands: `s->unk_1A += 0x190'
+   placed before the flag store instead of after it is also 32 / 0.  Moving
+   it ahead of the +0x3A store is 32 / 16. */
+void func_s67_80024BD0(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    u16 t;
+    s32 c;
+
+    t = *(u16 *)(p + 0x3A) - 1;
+    c = ((s16)t << 7) / *(s16 *)(p + 0x3C);
+    *(u16 *)(p + 0x3A) = t;
+    D_800261B0 = 1;
+    s->unk_1A += 0x190;
+    s->unk_0C[0] = s->unk_0C[1] = s->unk_0C[2] = c;
+    if (*(s16 *)(p + 0x3A) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spawn one of this bank's 0x212 particle nodes at the caller's +0x84..+0x88
    position offset by (dx, dy, dz), with func_s67_800246F0 as its +0x10 step,
