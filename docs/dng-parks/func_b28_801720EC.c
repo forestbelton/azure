@@ -122,6 +122,125 @@
    |   not follow the source here, and the target's         |       |      |
    |   `addu $a1, $s3, $a1' is still 2 of the 24 rows       |       |      |
 
+   ===================================================================
+   UPDATE, agent-h147, 2026-11-25, batch 34.  STILL PARKED at 160 words /
+   24 ALIGNED DIFFERENCES -- the body below is unchanged and is still the
+   best on rows.  But the park's STATED MECHANISM IS WRONG, and the ninth
+   pseudo is now BUILDABLE, which it was not before.  Read both before
+   spending anything here.
+
+   (1) THE reload_cse THEORY IS REFUTED.  reload1.c's `reload_cse_regs'
+   (called once, reload1.c:2140) walks the insns with a flat
+   `reg_values[FIRST_PSEUDO_REGISTER]' table and, at EVERY CODE_LABEL,
+
+       -- its own comment there reads "Forget all the register values at a
+       -- code label.  We don't try to do anything clever around jumps." --
+       for (i = 0; i < FIRST_PSEUDO_REGISTER; i++) reg_values[i] = 0;
+
+   so it cannot carry `$s7 == 0' past the first label.  The dead set sits in
+   the FIRST basic block (word 23, in the first gate's branch delay slot)
+   and anything far enough away to need a callee-saved register is past at
+   least the `&&' gate's drop-through label.  So reload_cse CANNOT have
+   rewritten this pseudo's uses to $zero.  Whatever removed them ran
+   earlier.  Also measured, same file: reload_cse DELETES no-op sets
+   (`reload_cse_noop_set_p'), so it never leaves a dead word behind either.
+
+   (2) A ZERO PSEUDO CAN BE MADE TO SURVIVE cse.  All eight of the park's
+   shapes fold because they spell the zero as a LITERAL, and cse propagates
+   a literal into every use -- verified in the RTL dumps: with
+   `s32 rz = 0;' and the five returns written `return rz', the .jump dump
+   has `(insn 17 (set (reg/v:SI 93) (const_int 0)))' with five
+   `(set (reg/i:SI 2 v0) (reg/v:SI 93))' uses, and by the .cse dump the set
+   is gone and all five are `(const_int 0)'.  A second definition of rz does
+   not stop it either.  The shape that DOES survive is a zero cse cannot
+   prove and combine can:
+
+       rz = c[0x24] >> 8;
+
+   cse's `simplify_binary_operation' will not fold a shift whose operand is
+   not constant, so the insn survives cse, loop, cse2 AND FLOW -- which is
+   the point, because flow is what counts `reg_n_refs' and
+   `reg_live_length'.  combine then folds it with `nonzero_bits' (the
+   zero_extend of a QImode load has only 8 significant bits) to
+   `(set rz (const_int 0))' and deletes the load, so it costs exactly ONE
+   word.  Equivalent and also measured: `*(u16 *)(d + 0x2A) >> 16' and
+   `d[0x71] >> 8'.  This is the first shape in nine that produces a ninth
+   long-lived pseudo at all, and it does land the dead
+   `addu $sX, $zero, $zero' AT WORD 23, where the ROM has it.
+
+   MEASURED WITH THAT ZERO.  Every row is aligndiff against the 160-word
+   target.  `zz' is the park's 16-byte local and `5-arg' is the park's
+   func_800C7930 device.
+
+   | shape                                               | words | rows |
+   | 5-arg + zz[4] + rz at the five returns              |  163  |  55  |
+   |   -- too much pressure: `c' spills as well          |       |      |
+   | 5-arg + zz[0..3] + rz at the five returns           |  163  | 91+  |
+   | 4-ARG + zz[4] + rz at the five returns              |  160  |  30  |
+   | 4-arg + zz[3] + rz at the five returns              |  160  |  30  |
+   | 4-arg + zz[0]/zz[2]/zz[5]/zz[6], five returns       |  160  | 55+  |
+   | 4-arg + zz[4] + rz used ONCE, at `*(p+0x8C) = rz'   |  159  |  31  |
+   | 4-arg + zz[4] + rz used TWICE, at p+0x9B and p+0x8C |  160  |  39  |
+   | 5-arg + zz[4] + rz used twice                       |  162  |  70  |
+
+   THE 160 / 30 ROW IS THE ONE TO READ.  It reproduces, with NO
+   func_800C7930 device: the dead zero at word 23; `t' in $t0 spilled and
+   reloaded; and the exact word count.  Its whole residue is
+       the dead set is `move s3,zero' where the ROM has `$s7'
+       `sw t0,0x20(sp)' where the ROM has `sw t0,0x10(sp)'
+       five `move v0,s3' where the ROM has `addu $v0,$zero,$zero'
+       x/y/x2/y2 rotated one register up, and the word 15 load-delay nop
+   so the park's three named consequences are all PRESENT; what is wrong is
+   only WHICH register the zero takes and that its reads survive.
+
+   THE TWO CONSTRAINTS THIS PINS DOWN, and they are in tension.
+   * REFERENCE COUNT.  global.c ranks on floor_log2(n_refs)*n_refs /
+     live_length.  With 6 references (set + five returns) rz outranks `x'
+     and takes $s3.  With 2 or 3 it is outranked by everything and SPILLS
+     (`sw zero,0x24(sp)', and the uses reload from the stack).  For the ROM's
+     $s7 -- allocated LAST of the five -- rz needs about 3 references, which
+     is exactly where it spills in this body.  So the ROM's ninth value has
+     FEW references and still gets a register, which this body cannot yet
+     reproduce.
+   * A 2-REFERENCE ZERO CAN NEVER LEAVE A DEAD WORD.  local-alloc.c:1080's
+     `update_equiv_regs' replaces the single use of a register referenced
+     exactly twice that has a constant REG_EQUIV, and then does
+     `PUT_CODE (equiv_insn, NOTE)' -- it DELETES the initialising insn.
+     That is the 159-word row above, one word short, and it rules the
+     2-reference shape out by construction.
+
+   AND THE READS ARE THE REAL WALL.  The ROM reads $s7 nowhere, so every
+   read must be gone by the assembler, yet flow must have seen one to give
+   the pseudo a long live range.  Nothing between flow and the assembler can
+   delete a CROSS-BLOCK read and keep the set: combine's LOG_LINKS are
+   intra-block, so it cannot reach a use in another block; update_equiv_regs
+   deletes the set when it replaces the use; reload_cse forgets everything
+   at each label (above).  So EITHER the ninth value's read is in the SAME
+   basic block as its set -- in which case it is not long-lived and cannot
+   be the thing that spills `t' -- OR the ninth value is not a zero local at
+   all.  I now think the second is more likely than the park does.
+
+   WHAT I WOULD TRY NEXT, in this order.
+   1. KEEP `rz = c[0x24] >> 8' AND THE 4-ARGUMENT CALL -- drop the 5-arg
+      device, which this update shows is not needed once the zero exists --
+      and attack only the reference count: find a use of rz that global.c
+      prices at about 3 references but that reload does not spill.  The
+      frame local is the obvious carrier (`zz[0] = rz') and I did not
+      measure it.
+   2. RE-READ THE NINTH VALUE.  `sw $t0, 0x10($sp)' is reloaded at
+      `lw $a0, 0x10($sp)' before func_800C77D0, so 0x10($sp) is a SPILL
+      SLOT and not an outgoing argument, which means args_size is 0x10, the
+      call really is 4-argument, and var_size is 0x18 with the spill at the
+      FIRST local offset.  Declared locals are assigned before reload's
+      spill slots, so a declared local cannot sit below 0x10 -- which says
+      there are NO declared locals in this function and 0x14 more bytes of
+      SPILL.  That is a second spilled pseudo, not a 16-byte array.  Chase
+      that: the ninth value may be a pseudo that spills, and the dead
+      `addu $s7, $zero, $zero' may belong to a different value entirely.
+   3. A permuter run, which is now cheaper than it was: the 4-arg + zz[4] +
+      five-returns body is 160 words with the frame, the spill and the dead
+      word all in place, so the search is over the zero's USES only.
+
    DECLARATIONS
    s32 func_800A44E0(u16, u16, s16, u32);
    u8 *func_8009B4B0(u8 *, u16, u16);

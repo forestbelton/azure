@@ -123,6 +123,74 @@
    than carried in a local, which is what keeps it in $s0 across the first
    call.
 
+   ===================================================================
+   UPDATE, agent-h147, 2026-11-25, batch 34.  STILL PARKED at 84 words /
+   7 ALIGNED DIFFERENCES -- the body below is unchanged and the figure is
+   confirmed by parksplice (84 words, 7 aligned differences), so the park's
+   headline is right and the 10 in my dispatch note was wrong.  Nothing
+   above is retracted.  What is new is that the REFERENCE-BUMP AVENUE IS NOW
+   CLOSED WITH NUMBERS, and the park's "nine references" estimate is
+   replaced by a measured one.
+
+   THE REAL FIGURES, from tools/cdkgcc -da on the unit (.lreg):
+
+       Register 86  used 8 times across  5 insns in block 2 ... pointer   -- q
+       Register 88  used 4 times across 10 insns in block 2; 2 bytes      -- cc
+
+   Those counts are LOOP-WEIGHTED: flow.c adds `loop_depth' per reference
+   and this body is inside the for loop, so depth is 2 and the park's 4 and
+   2 source references are 8 and 4 to the allocator.  local-alloc.c:1579
+   `qty_compare' is `(double) floor_log2 (n_refs) * n_refs * size /
+   (death - birth) * 10000', so
+
+       q   = floor_log2(8) * 8 / 5  = 4.80   -> 48000
+       cc  = floor_log2(4) * 4 / 10 = 0.80   ->  8000
+
+   q sorts first and takes $v1.  For cc to sort first it needs
+   floor_log2(R) * R >= 48, i.e. R >= 16 -- 15 gives 45 and loses -- so
+   EIGHT source references, not nine, and 7 source references (R = 14,
+   42/10 = 4.2) is still not enough.  A TIE is sufficient, not a strict win:
+   `qty_compare_1' breaks a tie on qty number and cc is born one insn
+   earlier than q in the scheduled stream, in the ROM and in this build
+   alike, so cc has the lower qty number.
+
+   THREE WAYS TO RAISE R, ALL CLOSED.
+   * THE SPLIT STORE ADDS ONE WEIGHTED REFERENCE, NOT THREE.  Writing
+     `cc = cc + 1; D_s19_800257CC = cc;' inside a `do { } while (0)' takes
+     reg 88 from "used 4 times" to "used 5 times" and no further, because
+     cse collapses the pair back into one `D = cc + 1' before flow ever
+     counts it.  84 words / 7 rows, i.e. identical to the body below.
+   * do-while NESTING DESTROYS THE SCHEDULE BEFORE IT BUYS ENOUGH.  One
+     level is free and worthless; two levels and three levels are faults:
+
+         one `do { cc = cc + 1; D = cc; } while (0)'        84 words,  7
+         two nested, same statements                        84 words, 14
+         three nested round BOTH the read and the store     85 words, 43
+
+     so the depth multiplier that would be needed (8, to reach R = 16 from
+     2 source references) is unreachable: the body stops matching at 2.
+   * THE RANGES CANNOT BE MADE TO CONFLICT, so no hard-register trick can
+     substitute for priority.  In the built schedule cc is born at the
+     `lhu' (row 56) and dies at the `sh' (row 65) and q is born at row 57
+     and dies at row 63, so CC's LIVE RANGE STRICTLY CONTAINS Q'S.  Any
+     hard register that conflicts with q's range conflicts with cc's too,
+     which rules out ever making $v1 unavailable to q while leaving it free
+     for cc.  And both lengths are fixed: local-alloc runs after sched1 and
+     the schedule here is already exact, so death - birth is not a free
+     variable.
+   * q CANNOT LOSE A REFERENCE.  Its 4 are the `addiu' and the three
+     payload stores, and the ROM writes all three through $a0, so dropping
+     one (the park's 83-word row) writes that store off $s2 at a different
+     offset and cannot match.
+
+   SO THE PARK'S CONCLUSION STANDS AND IS NOW PRICED: this is one
+   local-alloc priority, the shape and the schedule are right, and no source
+   spelling reaches it.  For the dispatcher, the statement to search is the
+   counter pair -- `cc = D_s19_800257CC;' before the +0x16 store and
+   `D_s19_800257CC = cc + 1;' as the last statement in the if-body -- and
+   the thing a search can find that reading cannot is a spelling that gets
+   SIX MORE WEIGHTED REFERENCES onto cc without moving an insn.
+
    DECLARATIONS
    extern u8 D_80025854[];
    extern s16 D_s19_800257CC;

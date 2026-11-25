@@ -238,6 +238,124 @@
    where the func_800A2CB8 arm's branch points.
 
    ===================================================================
+   UPDATE, agent-h147, 2026-11-25, batch 34.  NEW BEST: 121 WORDS /
+   10 ALIGNED DIFFERENCES, and THE TWO WORDS ARE SOLVED.  The body below
+   is the new one; nothing above is retracted.  One statement was added to
+   the heading-window's return arm.
+
+   THE MECHANISM, from jump.c, and it explains BOTH of the park's measured
+   negatives on this question.  Call the three `return 0' sites S1 (t ==
+   NULL), S2 (func_800A2CB8) and S3 (the heading window).  All three compile
+   to a one-insn block `set v0 0' + `j epilogue'.  jump2 (toplev.c:3690,
+   the only call with cross_jump = 1) cross-jumps them in `find_cross_jump'
+   with minimum = 2, and a one-insn block can only reach minimum <= 0 by
+   collecting ONE of the two bonuses in that function:
+
+       jump.c:2409   if (GET_CODE (i1) == CODE_LABEL) { --minimum; break; }
+       jump.c:2513   if (GET_CODE (i1) == JUMP_INSN && JUMP_LABEL (i1)
+                         && prev_real_insn (JUMP_LABEL (i1)) == e1) --minimum;
+
+   where i1 walks back from the jump being PROCESSED.  The second bonus is
+   the jump-around-jump rule: it fires when the block sits immediately
+   before the label its own guard branches to.  S1 never qualifies, because
+   S2's block lies between S1's block and the if/else's join label, so
+   prev_real_insn of that label is S2's jump and not S1's -- which is why
+   S1's pair survives in every build and in the ROM.  S2 and S3 both
+   qualify.  The chain `jump_chain[epilogue]' is pushed head-first during a
+   forward scan (jump.c:217), so it is walked LATEST-FIRST: processing S2
+   finds S3 and merges S2 into S3, which is the ROM's arrangement and puts a
+   CODE_LABEL on S3's block.  Processing S3 then finds S1, collects the
+   CODE_LABEL bonus from the label the first merge just created, and merges
+   S3 into S1 as well.  That second merge is the whole fault.  It also
+   explains the park's `nope:' measurement exactly: an explicit label in
+   front of that block HANDS jump2 the bonus, so writing the goto by hand
+   is 11 for the same reason doing nothing is.
+
+   WHY LOSING S3's BLOCK COSTS TWO WORDS AND NOT ONE.  Once S3's block has
+   no label, reorg's relax_delay_slots inverts the window's guard around it
+   -- the transformation is gated on `no_labels_between_p (insn, next)' --
+   and takes over the `j's delay slot, so `bnez' + `nop' + `j' + `addu'
+   becomes `beqz' + `addu'.  In the ROM the label from the S2 merge blocks
+   that inversion, which is also why the ROM carries a NOP at word 60 that
+   no build of mine had.
+
+   THE FIX IS TO DENY S3 BOTH BONUSES, and the only reachable way is to put
+   ONE REAL NON-JUMP INSN between the window's guard and its `set v0 0':
+   then i1 is an INSN where i2 is S1's JUMP_INSN, the codes differ, the loop
+   breaks with no bonus, minimum stays 1 and the merge fails.  A frame store
+   into the park's own unreferenced 8-byte local does it:
+
+       if ((u16)(0x40 + -func_800A0134(t, d)) > 0x80)
+       {
+           unused[1] = 0;
+           return 0;
+       }
+
+   Measured, all against the 123-word target:
+
+       the park's 118-word body + `unused[1] = 0'   121 words, 10  KEPT
+       the 121-word carrier scaffold + the same     124 words, 12
+       the carrier scaffold alone (h126's)          121 words, 13
+       the 118-word body alone (h49's)              118 words, 11
+
+   In the 121/10 build the pair is EMITTED AT THE RIGHT ADDRESSES and the
+   ROM's `nop' at word 60 is reproduced; rows 17, 37, 42, 50, 59 and 66 are
+   branch offsets only.  The ENTIRE residue is now two things:
+
+       61            the device's own `sw zero, 0x1C(sp)' -- one SURPLUS word
+       86, 87, 88    the dead `lhu' / `nop' / `andi 0x8000', still missing
+
+   and 121 - 1 + 3 = 123.  So the park's two open questions are now ONE
+   question each, both worth one word.
+
+   THINGS THAT DO NOT WORK, measured here:
+       `unused[1] = 0' with a then-arm or `nope:' label as well     no change
+       the `nope:' label on the scaffold                121 words, 13  (as h49)
+       the same plus `return (s32)t' in the t == NULL arm 121 words, 13
+       a nested `if (t != NULL) return 0; return 0;' in the window arm
+                                                        121 words, 13
+         -- the inner block is cross-jumped away, so it is NOT a real insn
+       `*(u8 *)unused = 0' instead of `unused[1] = 0'   124 words, 12
+       the carrier moved INTO the window arm,
+         `unused[0] = *(u16 *)(p + 0x98) & 0x8000', tail plain
+                                                        123 words, 20
+         -- WORD-EXACT, and instructive: reorg sinks that store into the
+            `j's own delay slot, so the carrier costs NOTHING there.  The
+            dead `lhu'/`nop'/`andi' then land at words 61/62/63 instead of
+            86/87/88, which is why it is 20 rows and not a landing.  It does
+            prove the tail carrier can be free if its store can reach a
+            delay slot.
+       the same with `unused[1] = 0' in the window arm and a plain tail
+                                                        121 words, 16
+
+   THE NEW NEXT STEP, and it is now narrow enough to name a statement.
+   Two one-word questions remain and either one alone leaves 123 words:
+
+   (1) THE WINDOW ARM'S DEVICE MUST COST NO WORD.  It has to be a real
+       non-jump insn at jump2 time -- a dead one is removed by flow's
+       dead-store pass before jump2 and the block reverts (that is h126's
+       `t = NULL' row, re-confirmed here) -- yet must not survive to the
+       assembler.  reorg will not move it: it sits on the guard's
+       FALL-THROUGH, and fill_slots_from_thread only steals from the TAKEN
+       thread, so the `nop' at word 60 stays a `nop' and our insn stays at
+       word 61.  I could not find such a statement.  The alternative is to
+       pay the word somewhere the ROM also pays it.
+   (2) THE TAIL CARRIER MUST REACH A DELAY SLOT, as it does in the window
+       arm.  The ROM's tail between `sb zero, 0x85' and `lui %hi(D_80173FB8)'
+       has no jump to hide a store in; the nearest is the
+       `jal func_80047784' whose slot the ROM fills with its own
+       `addu $a2, $zero, $zero' third argument.  Passing the ANDed value as
+       that third argument instead is the one shape I did not get to measure
+       and is the first thing I would try.
+
+   For the dispatcher: a permuter run over the HEADING-WINDOW ARM and the
+   `d[0x85]' tail of the 121/10 body below is now a two-word search with
+   both faults named and localised, where h126 could only offer a five-word
+   one.  The statement to search is the arm
+   `if ((u16)(0x40 + -func_800A0134(t, d)) > 0x80) { <stmt>; return 0; }'
+   together with the two `d[0x85]' / p+0x98 statements in the tail.
+
+   ===================================================================
    DECLARATIONS
    u8 *func_800A04F0_r(u8 *p, s32 x, s32 y, s16 dir) __asm__("func_800A04F0");
    s16 func_800A0134(u8 *a, u8 *b);
@@ -283,6 +401,7 @@ s32 func_b43_80171F24(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
     if ((u16)(0x40 + -func_800A0134(t, d)) > 0x80)
     {
+        unused[1] = 0;
         return 0;
     }
     if ((s16)func_800A2B5C(d) != 0)
