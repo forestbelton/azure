@@ -73,7 +73,46 @@ extern u8 D_s65_80024004[];
 void func_800B8FC8(u8 *, s32 *, s32 *, s32, s32);
 void func_s65_8002405C(u8 *p, UnkVec *v, UnkSlot *s);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s65", func_s65_8002405C);
+/* func_s65_800243E4's spawn stepped one frame (the s58 twin
+   func_s58_8002407C's shape with this object's own offsets): spend one of the
+   payload's +0x2A frames, raise the D_80025384 tick, fade the renderable's
+   colour bytes to the remaining life over the original at +0x2C (times 128),
+   bleed +0xD down and +0x6 down, and when the counter runs out release the
+   owner's busy-table slot at +0x46 and raise the two 0x8000 kill bits.
+   42 words, 0 differing, first compile.  The twin is func_s58_8002407C
+   (csrc/ovl_dng_s58.c, 0.976) and every one of its shapes held: the signed
+   `c * 128 / divisor` as the fused `sll 16`/`sra 9`, the UNSIGNED `lhu`/`lbu`
+   on each narrow read-modify-write against the signed `lh` for the separate
+   `>= -0x6` test, and the busy-table release as the integer sum
+   `index * 2 + base + offset`.  Only the offsets and one sign differ from
+   that twin: this object's counter is +0x2A (its +0x2C), the original life
+   +0x2C (its +0x2E), the slot index +0x32 (its +0x50), the owner +0x60 (its
+   +0x7C), the busy table +0x46 (its +0x64) -- and the arithmetic colour byte
+   is +0xD counting DOWN by 4 where the twin's is +0xE counting UP, with the
+   two bytes assigned `k` being +0xE and +0xC here against its +0xD/+0xC. */
+void func_s65_8002405C(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    s16 c;
+    s32 k;
+
+    c = *(u16 *)(p + 0x2A) - 1;
+    k = c * 128 / *(s16 *)(p + 0x2C);
+    D_80025384 = 1;
+    *(s16 *)(p + 0x2A) = c;
+    *((u8 *)s + 0xD) -= 4;
+    *((u8 *)s + 0xE) = k;
+    *((u8 *)s + 0xC) = k;
+    if (*(s16 *)((u8 *)s + 0x6) >= -0x6)
+    {
+        *(s16 *)((u8 *)s + 0x6) -= 2;
+    }
+    if (*(s16 *)(p + 0x2A) <= 0)
+    {
+        *(s16 *)(*(s16 *)(p + 0x32) * 2 + *(s32 *)(p + 0x60) + 0x46) = 0;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* The 0x212 spawner behind func_s58_8002553C's step, and the owner of this
    object's eight-slot busy table at +0x64.  Copy the 0x40-byte
@@ -230,6 +269,53 @@ void func_s65_800243E4(u8 *a)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s65", func_s65_800244F0);
+/* func_s65_80024104's spawn stepped one frame, the sibling of
+   func_s65_8002405C two listings up and the same skeleton with no division:
+   spend one of the payload's +0x2A frames, raise the D_80025384 tick, clamp
+   the renderable's three colour bytes down to 0x40 once they exceed it, then
+   fade all three by 5 a frame until they reach 0, and raise the two 0x8000
+   kill bits when the counter runs out (this one releases no busy-table slot).
+   39 words, 0 differing.  No twin at any ratio; the shape came off the
+   listing with func_s65_8002405C, landed an hour earlier in this file,
+   supplying the idiom and the symbols.
+
+   BOTH LOCALS ARE LOAD-BEARING AND NEITHER IS IN THE 8002405C TWIN'S
+   COMMENT.  `c` must be its own `s16` local: written in place as
+   `*(s16 *)(p + 0x2A) = *(u16 *)(p + 0x2A) - 1;` the body is still 39 words
+   but 9 differing, because the tick's `%hi` then takes $a0, `p` keeps it
+   instead of being copied to $a1, and the whole head reorders -- the
+   target's opening `addu $a1, $a0, $zero` is the copy that costs.  And the
+   fade's new value must go through the `u8` local `t`: spelled as the
+   read-modify-write plus two same-base reloads
+   (`*((u8 *)s + 0xE) -= 5; *((u8 *)s + 0xD) = *((u8 *)s + 0xE); ...`) cse
+   forwards the stored value but regmove leaves a `move $v1, $v0` behind, for
+   40 words / 18 differing. */
+void func_s65_800244F0(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    s16 c;
+    u8 t;
+
+    c = *(u16 *)(p + 0x2A) - 1;
+    D_80025384 = 1;
+    *(s16 *)(p + 0x2A) = c;
+    if (*((u8 *)s + 0xC) > 0x40)
+    {
+        *((u8 *)s + 0xE) = 0x40;
+        *((u8 *)s + 0xD) = 0x40;
+        *((u8 *)s + 0xC) = 0x40;
+    }
+    if (*((u8 *)s + 0xC) != 0)
+    {
+        t = *((u8 *)s + 0xE) - 5;
+        *((u8 *)s + 0xE) = t;
+        *((u8 *)s + 0xD) = t;
+        *((u8 *)s + 0xC) = t;
+    }
+    if (*(s16 *)(p + 0x2A) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s65", func_s65_8002458C);

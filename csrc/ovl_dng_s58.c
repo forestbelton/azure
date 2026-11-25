@@ -262,7 +262,58 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s58", func_s58_800244E4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s58", func_s58_80024874);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s58", func_s58_80024A5C);
+/* func_s65_80024104's spawn stepped one frame, the sibling of
+   func_s65_8002405C two listings up and the same skeleton with no division:
+   spend one of the payload's +0x2A frames, raise the D_800269B4 tick, clamp
+   the renderable's three colour bytes down to 0x40 once they exceed it, then
+   fade all three by 5 a frame until they reach 0, and raise the two 0x8000
+   kill bits when the counter runs out (this one releases no busy-table slot).
+   39 words, 0 differing.  No twin at any ratio; the shape came off the
+   listing with func_s65_8002405C, landed an hour earlier in this file,
+   supplying the idiom and the symbols.
+
+   BOTH LOCALS ARE LOAD-BEARING AND NEITHER IS IN THE 8002405C TWIN'S
+   COMMENT.  `c` must be its own `s16` local: written in place as
+   `*(s16 *)(p + 0x2A) = *(u16 *)(p + 0x2A) - 1;` the body is still 39 words
+   but 9 differing, because the tick's `%hi` then takes $a0, `p` keeps it
+   instead of being copied to $a1, and the whole head reorders -- the
+   target's opening `addu $a1, $a0, $zero` is the copy that costs.  And the
+   fade's new value must go through the `u8` local `t`: spelled as the
+   read-modify-write plus two same-base reloads
+   (`*((u8 *)s + 0xE) -= 5; *((u8 *)s + 0xD) = *((u8 *)s + 0xE); ...`) cse
+   forwards the stored value but regmove leaves a `move $v1, $v0` behind, for
+   40 words / 18 differing. 
+   THIS COPY'S OWN CONSTANT: 0x2a -> 0x2c at all 3 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s58_80024A5C(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    s16 c;
+    u8 t;
+
+    c = *(u16 *)(p + 0x2c) - 1;
+    D_800269B4 = 1;
+    *(s16 *)(p + 0x2c) = c;
+    if (*((u8 *)s + 0xC) > 0x40)
+    {
+        *((u8 *)s + 0xE) = 0x40;
+        *((u8 *)s + 0xD) = 0x40;
+        *((u8 *)s + 0xC) = 0x40;
+    }
+    if (*((u8 *)s + 0xC) != 0)
+    {
+        t = *((u8 *)s + 0xE) - 5;
+        *((u8 *)s + 0xE) = t;
+        *((u8 *)s + 0xD) = t;
+        *((u8 *)s + 0xC) = t;
+    }
+    if (*(s16 *)(p + 0x2c) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s58", func_s58_80024AF8);
 
