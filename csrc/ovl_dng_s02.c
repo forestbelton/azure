@@ -108,6 +108,17 @@ UnkNode *func_8003FC64(s32);
 void func_8003DB94(void *, void *, s32);
 extern u8 D_80025908[];
 
+extern u8 D_800DE9D0[];
+extern u8 D_800258FC[];
+extern u8 D_s02_80024004[];
+extern s32 D_8008346C;
+u8 *func_8003DF74(u8 *, UnkSlot *, s16 *, s16);
+s32 func_800A4778(u16, u16, s16, s32);
+s32 func_800A56E0(s32);
+void func_800419EC(u16, u32);
+void func_8009CE1C(u8 *, s16, s16, s16, s16, u32, s16);
+s32 func_80045C34(u8 *, UnkVec *, UnkSlot *);
+
 void func_s02_8002404C(u8 *p, u8 *b, u8 *c)
 {
     s16 t;
@@ -671,4 +682,362 @@ void func_s02_80024B14(u8 *p, UnkVec *v, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_80024BE8);
+/* The summon-beam driver, state 0..8 on *(s16 *)(p + 0xA).  834 words,
+   0 differing.  Was a park at 834 words / 5 aligned rows for two agents.
+
+   THE ONE FACT THAT LANDED IT: case 1's `r - 0x14' payload pointer and
+   cases 2/3/5's `(r + 0x60) - 0x14' payload pointer ARE ONE LOCAL (`e').
+   Written as two separate locals -- the natural C, and what the park had --
+   the case 1 local gets $a0 and the target has $a2, which is 5 aligned rows
+   (the lw plus its four lbu's) with every other word already matching.
+   Measured: one local 0, two locals 5.  The cause is global.c's ascending
+   find_reg scan (MIPS gcc 2.7.2 defines no REG_ALLOC_ORDER), so a fresh
+   caller-saved pseudo takes $a0 unless something excludes it; merging the
+   two gives the pointer case 2's conflict set, where sched1 has hoisted
+   func_800419EC's `$a0 = 4'/`$a1 = 8' argument sets above the e[0xC..0xE]
+   stores, so $a0 and $a1 are both excluded and the ascending scan reaches
+   $a2.  NOT the mechanism, measured: the surviving local's NAME and
+   DECLARATION SLOT are free (merged body is 0 whether the kept local sits at
+   the old `u' slot or the old `e' slot), and moving the two UNMERGED locals
+   adjacent in the declaration list is still 5.  So this is a conflict-set
+   fact, not a declaration-order one.
+
+   OWNS A JUMP TABLE: jtbl_s02_80024028, 9 .word entries, no pad, bound 9.
+   ENTRY 7 IS gcc's DEFAULT LABEL, not an arm: .Ls02_80025880 is also the
+   target of the range-check `beqz' at 80024CC4 and of every arm's closing
+   `j'.  Hence cases 0,1,2,3,4,5,6,8 and no `case 7'.  CASE 0 FALLS THROUGH
+   into case 1.
+
+   The donor was the landed func_s01_80024CFC (399 words), which dngtwin
+   cannot see at this size difference; dngcallee named its sibling
+   func_s01_800246DC instead and reading that unit put it in front of us.
+   s02/s01 are 1.000 clone pairs at 8002443C/80024280 and 80024758/800245BC.
+
+   OTHER MEASURED FACTS, all from the park's table and all still KEPT here:
+     func_800419EC TAKES TWO ARGUMENTS.  `func_800419EC(4, 8, e)' -- which is
+       what the listing looks like, since `e' sits in $a2 at the call -- was
+       19 rows against 0 for `func_800419EC(4, 8)' with `e' merely the local
+       feeding the three preceding byte stores.  A call argument in $a2 is
+       not evidence of a third argument.  (Not re-priced from the clean body:
+       the corpus prototype is `void func_800419EC(u16, u32);' and a third
+       argument is now a hard error, not a warning.)
+     case 4's index MUST REUSE the loop local `i' (0); its own local is 198,
+       because the target shares $s2 between `i', the 0x80 constant and that
+       index.  case 0's facing MUST have its own local `j' (0); sharing it
+       with case 4's index is 823 of 839 words.  `n' is ONE local across
+       cases 2 and 4 (0); split per case it is 209.
+     case 4 slot block order 1C, 1E, 0C[2], 0C[1], 0C[0] (0); three other
+       orders measured 14, 28 and 16.
+     `d = dd.b' inside case 1 just before its two uses (0); in the prologue
+       as the donor has it 11, at the top of case 1's 0x80 gate 14,
+       immediately before case 1's `r + 0x60' gate 14.
+     `*(s32 *)(h + 0x8) = v->unk_08' before the k reload (0); after it 41.
+     ternary condition `*(s8 *)(r + 0x72) == e[0x24]' (0); operands swapped
+       17.  p[0xA2] before p[0xA3] (0); the other order 16.  The abs inline
+       in the p[0x7B] store (0); hoisted into `j' first 17.  Tail gate
+       `(s16)(*(u16 *)(p + 0x84))++ >= 5' (0); split into a bump and `>= 6'
+       is 6.  case 1 else arm writes +0x78 before p[0x7B] = 8 (0); the other
+       order 4.  case 4's dz as `-(*(s16 *)(p + 0x86) * 2) + 0x10' (0);
+       `0x10 - ...' is 1.  case 4's two jitters wear the `(s16)' on the
+       SUBTRACTION (0); plain is 4, because convert.c narrows the sum to
+       unsigned short off the u16 load and `- 0x8' becomes `li 0xfff8' plus
+       `addu' where the target has `addiu $v1, $v1, -0x8'.
+     func_80045C34 is passed BY ADDRESS to func_8004491C in case 2, not
+       called.  func_80069EF8 is `rand' from splat/common_syms.txt. */
+void func_s02_80024BE8(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    s16 sp10[3];
+    UnkDngS58Blk32 dd;
+    u8 *d;
+    u8 *r;
+    UnkNode *g;
+    UnkVec *m;
+    UnkNode *n;
+    u8 *q;
+    u8 *h;
+    u8 *e;
+    UnkSlot *k;
+    s32 i;
+    s32 j;
+
+    r = *(u8 **)(p + 0x0);
+    dd = *(UnkDngS58Blk32 *)D_s02_80024004;
+    g = (UnkNode *)(r - 0x20);
+    m = g->unk_08;
+    *(u16 *)(p + 0x82) += 1;
+    switch (*(s16 *)(p + 0xA))
+    {
+    case 0:
+        *(u32 *)s->unk_0C = 0x808080;
+        s->unk_1E = 0x400;
+        s->unk_1C = 0x400;
+        s->unk_12 = 0x7DCF;
+        s->unk_14 |= 0x100;
+        *(s16 *)(p + 0x84) = 0;
+        func_8003DB94(s, D_800DE870, 2);
+        j = (*(u16 *)(r + 0x2A) >> 9) & 7;
+        D_80025914 = 1;
+        *(s16 *)(p + 0x7E) = j;
+        *(u16 *)(p + 0xA) += 1;
+    case 1:
+        if (func_8003DF74((u8 *)((UnkSlot *)g->unk_0C)->unk_08, (UnkSlot *)g->unk_0C, sp10, 0) != 0 ||
+            (((UnkSlot *)g->unk_0C)->unk_14 & 0x8000) != 0)
+        {
+            *(s16 *)((u8 *)v + 0x2) = *(u16 *)((u8 *)m + 0x2);
+            *(s16 *)((u8 *)v + 0x6) = *(u16 *)((u8 *)m + 0x6);
+            *(s16 *)((u8 *)v + 0xA) = *(u16 *)((u8 *)m + 0xA);
+            if ((((UnkSlot *)g->unk_0C)->unk_14 & 0x8000) == 0)
+            {
+                *(s16 *)((u8 *)v + 0x2) += sp10[0];
+                *(s16 *)((u8 *)v + 0x6) += sp10[1];
+                *(s16 *)((u8 *)v + 0xA) += sp10[2];
+            }
+            else
+            {
+                *(s16 *)((u8 *)v + 0xA) = *(u16 *)((u8 *)v + 0xA) - 0x40;
+            }
+            if ((**(u16 **)(p + 0x4) & 0x80) != 0)
+            {
+                if ((p[0x7A] & 0x4) == 0)
+                {
+                    func_8004491C((UnkNode *)(p - 0x20), (u32)D_80045340);
+                    s->unk_10 = 0x60;
+                    s->unk_14 |= 0xC;
+                    p[0x7A] |= 0x4;
+                }
+                if (*(s32 *)(r + 0x60) != 0)
+                {
+                    *(s16 *)(p + 0x78) = *(u16 *)(*(s32 *)(r + 0x60) + 0x88);
+                    e = *(u8 **)(r - 0x14);
+                    p[0xA2] = e[0x24] + *(u8 *)&D_8006CCD8[*(s16 *)(p + 0x7E)];
+                    p[0xA3] = e[0x25] + *(u8 *)&D_8006CCE8[*(s16 *)(p + 0x7E)];
+                    p[0x7B] = __builtin_abs(*(s8 *)(r + 0x72) == e[0x24]
+                                                ? *(s8 *)(r + 0x73) - e[0x25]
+                                                : *(s8 *)(r + 0x72) - e[0x24]) *
+                                  2 -
+                              1;
+                }
+                else
+                {
+                    *(s16 *)(p + 0x78) = *(u16 *)(r + 0x88) - 0x50;
+                    p[0x7B] = 8;
+                }
+                d = dd.b;
+                *(s32 *)((u8 *)v + 0xC) = *(s16 *)(d + (*(s16 *)(p + 0x7E) << 2)) << 16;
+                *(s32 *)((u8 *)v + 0x10) = *(u16 *)(d + (*(s16 *)(p + 0x7E) << 2) + 0x2) << 16;
+                *(s32 *)((u8 *)v + 0x14) =
+                    ((*(s16 *)(p + 0x78) << 16) - v->unk_08) / *(s8 *)(p + 0x7B);
+                *(s16 *)(p + 0x82) = 0;
+                *(u16 *)(p + 0xA) += 1;
+            }
+        }
+        break;
+    case 2:
+        if ((s16)func_800A4778(*(u16 *)((u8 *)v + 0x2), *(u16 *)((u8 *)v + 0x6),
+                               *(s16 *)((u8 *)v + 0xA), *(s32 *)(r + 0x60)) != 0)
+        {
+            *(s16 *)(p + 0xA) = 8;
+            *(s16 *)(p + 0x82) = 0;
+            s->unk_14 |= 0x80;
+            break;
+        }
+        for (i = 0; i < 4; i++)
+        {
+            func_s02_80024758((UnkNode *)(p - 0x20), *(s16 *)(p + 0x7E), 0xF04040,
+                              (rand() & 0xFF) | 0x80, 0, 0, 0);
+        }
+        if ((s8)(p[0x7B] -= 1) <= 0)
+        {
+            func_80044A50((UnkNode *)(p - 0x20));
+            if (*(s32 *)(r + 0x60) != 0)
+            {
+                *(s16 *)(p + 0x86) = 0;
+                *(u16 *)(p + 0xA) += 1;
+                q = *(u8 **)(*(s32 *)(r + 0x60) - 0x18);
+                *(s16 *)((u8 *)v + 0x2) = *(u16 *)(q + 0x2);
+                *(s16 *)((u8 *)v + 0x6) = *(u16 *)(q + 0x6);
+                *(s16 *)((u8 *)v + 0xA) = *(u16 *)(p + 0x78);
+                *(s32 *)(*(s32 *)(r + 0x60) + 0x1C) |= 0x10000000;
+                e = *(u8 **)(*(s32 *)(r + 0x60) - 0x14);
+                e[0xC] = 0x80;
+                e[0xD] = 0x80;
+                e[0xE] = 0x80;
+                func_800419EC(4, 8);
+                func_800A56E0(0x300);
+                n = func_8003FC64(0x212);
+                if (n != NULL)
+                {
+                    n->unk_10 = (u32)func_s02_80024B14;
+                    func_8004491C(n, (u32)func_80045C34);
+                    k = (UnkSlot *)n->unk_0C;
+                    k->unk_10 = 0;
+                    k->unk_14 |= 0xC;
+                    h = (u8 *)n->unk_08;
+                    *(s16 *)(h + 0x2) = *(u16 *)((u8 *)v + 0x2);
+                    *(s16 *)(h + 0x6) = *(u16 *)((u8 *)v + 0x6);
+                    *(s32 *)(h + 0x8) = v->unk_08;
+                    k = (UnkSlot *)n->unk_0C;
+                    k->unk_08 = (u32)D_800258FC;
+                    k->unk_0C[2] = 0x80;
+                    k->unk_0C[1] = 0x80;
+                    k->unk_0C[0] = 0x80;
+                    k->unk_1E = 1;
+                    k->unk_1C = 1;
+                    k->unk_14 ^= 0xC;
+                    *(s16 *)(h + 0xA) = *(u16 *)(*(s32 *)(r + 0x60) + 0x88);
+                }
+                *(s16 *)((u8 *)v + 0xA) = *(u16 *)(*(s32 *)(r + 0x60) + 0x88);
+            }
+            else
+            {
+                *(s16 *)(p + 0xA) = 8;
+                *(s16 *)(p + 0x82) = 0;
+                s->unk_0C[2] = 0;
+                s->unk_0C[1] = 0;
+                s->unk_0C[0] = 0;
+            }
+        }
+        else
+        {
+            v->unk_00 += *(s32 *)((u8 *)v + 0xC);
+            v->unk_04 += *(s32 *)((u8 *)v + 0x10);
+            v->unk_08 += *(s32 *)((u8 *)v + 0x14);
+            func_s02_800240C0(p, v, (u8 *)s, (rand() & 0xF) - 8, (rand() & 0xF) - 8,
+                              (rand() & 0xF) - 8);
+            func_s02_800240C0(p, v, (u8 *)s, (rand() & 0xF) - 8, (rand() & 0xF) - 8,
+                              (rand() & 0xF) - 8);
+            func_s02_800240C0(p, v, (u8 *)s, (rand() & 0xF) - 8, (rand() & 0xF) - 8,
+                              (rand() & 0xF) - 8);
+            func_s02_800240C0(p, v, (u8 *)s, (rand() & 0xF) - 8, (rand() & 0xF) - 8,
+                              (rand() & 0xF) - 8);
+            func_s02_800240C0(p, v, (u8 *)s, (rand() & 0xF) - 8, (rand() & 0xF) - 8,
+                              (rand() & 0xF) - 8);
+            func_s02_800240C0(p, v, (u8 *)s, (rand() & 0xF) - 8, (rand() & 0xF) - 8,
+                              (rand() & 0xF) - 8);
+        }
+        break;
+    case 3:
+        *(u16 *)(p + 0x86) += 2;
+        e = *(u8 **)(*(s32 *)(r + 0x60) - 0x14);
+        e[0xE] = *(s16 *)(p + 0x86) * 3 - 0x70;
+        e[0xD] = 0x70 - *(s16 *)(p + 0x86) * 3;
+        e[0xC] = 0x70 - *(s16 *)(p + 0x86) * 3;
+        if (*(s16 *)(p + 0x86) >= 0x24)
+        {
+            *(s16 *)(p + 0x86) = 0;
+            *(s16 *)(p + 0x82) = 0;
+            *(u16 *)(p + 0xA) += 1;
+        }
+        break;
+    case 4:
+        for (i = 0; i < 2; i++)
+        {
+            func_s02_800249A0((UnkNode *)(p - 0x20), (rand() & 0x3F) - 0x20,
+                              (rand() & 0x3F) - 0x20, -(*(s16 *)(p + 0x86) * 2) + 0x10, 0x1E);
+        }
+        i = *(u16 *)(p + 0x86) & 0x3;
+        n = func_8003FC64(0x212);
+        if (n != NULL)
+        {
+            *(s16 *)((u8 *)n + 0x22) = 0x1E;
+            n->unk_10 = (u32)func_s02_8002443C;
+            func_8004491C(n, (u32)D_80045340);
+            k = (UnkSlot *)n->unk_0C;
+            k->unk_10 = 0;
+            k->unk_14 |= 0xC;
+            h = (u8 *)n->unk_08;
+            *(s16 *)(h + 0x2) = (s16)(*(u16 *)((u8 *)v + 0x2) - 0x8) + (rand() & 0xF);
+            *(s16 *)(h + 0x6) = (s16)(*(u16 *)((u8 *)v + 0x6) - 0x8) + (rand() & 0xF);
+            if ((rand() & 0x1) != 0)
+            {
+                k->unk_14 |= 0x1;
+            }
+            switch (i)
+            {
+            case 0:
+                *(s16 *)(h + 0x6) = *(u16 *)((u8 *)v + 0x6) + 0x8;
+                k->unk_06 = 0x7;
+                break;
+            case 1:
+                *(s16 *)(h + 0x2) = *(u16 *)((u8 *)v + 0x2) - 0x8;
+                k->unk_06 = 0x7;
+                break;
+            case 2:
+                *(s16 *)(h + 0x2) = *(u16 *)((u8 *)v + 0x2) + 0x8;
+                k->unk_06 = 0x7;
+                break;
+            case 3:
+                *(s16 *)(h + 0x6) = *(u16 *)((u8 *)v + 0x6) - 0x8;
+                k->unk_06 = -0x7;
+                break;
+            }
+            *(s32 *)(h + 0x8) = v->unk_08;
+            k = (UnkSlot *)n->unk_0C;
+            k->unk_1C = *(s16 *)(p + 0x86) * 170;
+            k->unk_1E = *(s16 *)(p + 0x86) * 204;
+            k->unk_0C[2] = 0x80;
+            k->unk_0C[1] = 0x80;
+            k->unk_0C[0] = 0x80;
+            func_8003DB94(k, D_800DE9D0, 0);
+        }
+        *(u16 *)(p + 0x86) += 2;
+        if (*(s16 *)(p + 0x86) >= 0x3D)
+        {
+            *(s16 *)(p + 0x86) = 0x28;
+            *(u16 *)(p + 0xA) += 1;
+        }
+        break;
+    case 5:
+        for (i = 0; i < 2; i++)
+        {
+            func_s02_800249A0((UnkNode *)(p - 0x20), (rand() & 0x3F) - 0x20,
+                              (rand() & 0x3F) - 0x20, -0x20 - (rand() & 0x3F), 0x1E);
+        }
+        *(u16 *)(p + 0x86) -= 2;
+        if (*(s16 *)(p + 0x86) <= 0)
+        {
+            *(s16 *)(p + 0x86) = 0;
+            *(s16 *)(p + 0x82) = 0;
+            *(u16 *)(p + 0xA) += 1;
+            *(s32 *)(*(s32 *)(r + 0x60) + 0x1C) ^= 0x10000000;
+            e = *(u8 **)(*(s32 *)(r + 0x60) - 0x14);
+            e[0xC] = 0x80;
+            e[0xD] = 0x80;
+            e[0xE] = 0x80;
+            func_8009CE1C(*(u8 **)(r + 0x60), 0x10, p[0x9], 2,
+                          (s16)(*(u16 *)(p + 0x7E) << 9), (u32)r, 2);
+        }
+        break;
+    case 6:
+        *(u16 *)(p + 0x82) += 1;
+        if (*(s16 *)(p + 0x82) >= 0x3D)
+        {
+            *(s16 *)(p + 0xA) = 8;
+            *(s16 *)(p + 0x82) = 0x1E;
+        }
+        break;
+    case 8:
+        ((u16 *)p)[0x41] += 1;
+        if (*(s16 *)(p + 0x82) >= 0x1F)
+        {
+            ((u16 *)p)[0x41] -= 1;
+            if (D_80025914 == 0)
+            {
+                D_8008346C = 0;
+                *(u16 *)(p - 0x2) |= 0x8000;
+                D_800814A0 |= 0x8000;
+            }
+            else
+            {
+                D_80025914 = 0;
+            }
+        }
+        break;
+    }
+    func_800478B8((u8 *)s);
+    if ((s16)(*(u16 *)(p + 0x84))++ >= 5)
+    {
+        func_8003DB94(s, D_800DE870, 2);
+        *(s16 *)(p + 0x84) = 0;
+    }
+}
