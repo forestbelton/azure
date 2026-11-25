@@ -43,13 +43,28 @@ def unsplice(func, keep_dir=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("funcs", nargs="+")
+    ap.add_argument("funcs", nargs="+",
+                    help="FUNCTION names, not unit names")
     ap.add_argument("--keep", help="directory to save each removed body in")
     a = ap.parse_args()
+    # REFUSE A UNIT NAME. dngclone.unit_of() takes the second `_'-separated
+    # field of a FUNCTION name, so handed `ovl_dng_s10' it returns
+    # `ovl_dng_dng' and the tool dies on `csrc/ovl_dng_dng.c: No such file'.
+    # An agent hit exactly that and restored its stub by hand with `cp'. The
+    # message named a file nobody had ever written, which is the worst kind --
+    # it reads as a missing-file problem rather than a wrong-argument one.
+    bad = [f for f in a.funcs if not re.match(r"^func_", f)]
+    if bad:
+        print("dngunsplice: these are not function names: %s\n"
+              "  it takes FUNCTIONS (func_s10_80024930), not units "
+              "(ovl_dng_s10) -- a unit name resolves to csrc/ovl_dng_dng.c "
+              "and the error is unrecognisable." % ", ".join(bad))
+        return 2
     for f in a.funcs:
         r = unsplice(f, a.keep)
         print(f"{f}: {'removed from ' + r[0] if r else 'not defined -- skipped'}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

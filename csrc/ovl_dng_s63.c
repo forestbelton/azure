@@ -10,7 +10,7 @@ s32 func_800A56E0(s32);
 u8 *func_800A3F28(u16, u16, u8 *, u8 *);
 void func_8009CE1C(u8 *, s16, s16, s16, s16, u32, s16);
 s32 func_s63_8002441C(u8 *p);
-void func_s63_80024648(u8 *);
+void func_s63_80024648(u8 *p);
 void func_s63_80024B20(u8 *p);
 s32 func_s63_80024D58(u8 *);
 extern u8 D_80083498[];
@@ -58,6 +58,10 @@ extern u16 D_80082E94;
    trail clear likewise. Both spellings emit the same stores in the same
    order, so 0-versus-0 here says the tools cannot see the difference, not
    that the target leaves it free. */
+extern u8 D_800DEC00[];
+extern u8 D_80045340[];
+void func_s63_80024AA4(u8 *p, UnkVec *b, u8 *c, u8 *d);
+
 void func_s63_8002401C(u8 *p, UnkVec *b)
 {
     u8 *s;
@@ -290,7 +294,185 @@ s32 func_s63_8002441C(u8 *p)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s63", func_s63_80024648);
+/* The 0x302 node's per-frame step, installed as the +0x10 step by state 1 of
+   func_s63_8002401C above, so the signature is fixed by that call site.
+   Bumps the +0x48 frame counter, sets bit 0x8000 in the +0x52 halfword of the
+   record at the actor's +0x0, then runs a FOUR-CASE COMPARE CHAIN on
+   *(s16 *)(p + 0x4C) -- no .rodata, no jump table, this function owns none.
+   State 0 seeds the GetTPage/GetClut pair into +0x50/+0x52 and the 0x1F pair
+   into +0x44/+0x46 and FALLS THROUGH into state 1, which drifts the
+   +0x1C/+0x20/+0x24 position triple a 0x4000th of the way toward the party
+   record D_80083780 offset by func_8003DE58's projection of D_80082E80's
+   slot. State 2 is the same drift at 0x8000, state 3 tears the actor down.
+   The tail publishes the counter's low two bits and its signed quarter into
+   +0x40/+0x42 and spawns `c + 1' particle nodes. 279 words, 0 differing.
+
+   NO TWIN AT ANY RATIO -- dngtwin reports nothing at 0.60 for any stub in
+   this unit. Written from csrc/ovl_dng_s69.c func_s69_800245A0 (271 words)
+   via the callee-set grep on func_8003DE58 + D_80083780 + D_80082E80; the
+   spawn loop's skeleton is csrc/ovl_dng_s10.c func_s10_80024224's family.
+   Parked at 279 words / 12 rows by agent h142 in batch 33; this is that body
+   with two changes, both measured here.
+
+   THE DEVICE: `volatile' ON THE +0x4C PAYLOAD STORE, and it is worth the
+   last word. The target ends each spawn iteration with the payload base
+   materialised into a register and a 0x4C displacement off it --
+   `sw $v0, 0x20($s1)' / `addiu $v0, $s1, 0x20' / `sh $zero, 0x4C($v0)'.
+   Non-volatile, combine substitutes `e's (plus (reg n) 0x20)' into the
+   store's address, folds 0x20 + 0x4C into 0x6C and deletes the `addiu':
+   278 words / 6 rows, every row that one word. The fold is combine's and not
+   cse's -- `const_int 108' first appears in the `.combine' dump and is absent
+   from `.cse' and `.loop'. `volatile' stops it because combine calls
+   `init_recog_no_volatile' (combine.c:502), so `volatile_ok == 0' and
+   `recog_for_combine' will not re-recognise a store whose MEM is volatile.
+   Measured, this body:
+
+     | the +0x4C store spelled                            | words | rows |
+     | `*(volatile s16 *)(e + 0x4C) = 0' (kept)           |  279  |   0  |
+     | the same without `volatile'                        |  278  |   6  |
+     | `*(volatile s16 *)((u8 *)n + 0x6C) = 0', no local  |  277  |   6  |
+     | `volatile' on the +0x20 store as well              |  279  |   0  |
+
+   So the pointer local and the `volatile' are both load-bearing, and the
+   target does NOT constrain whether the +0x20 store is volatile too -- say
+   device, not macro residue, since the minimal form is one qualifier.
+   REFERENCE COUNT IS NOT THE LEVER, which is what the park guessed: cse
+   rewrites a bare `(mem (reg e))' back to `0x20($s1)' and leaves
+   `(plus (reg e) 0x4C)' alone, so routing the +0x20 store through `e' buys
+   no second use -- 277 words / 6 rows, and 278/6 with the two statements
+   swapped. docs/matching-levers.md:24034's remedy, a call between the
+   assignment and the use, is unavailable: the `addiu' is the last-but-one
+   instruction of the loop body. csrc/ovl_dng_s15.c func_s15_80024684 is the
+   no-device witness -- eight non-zero-displacement uses and the `addiu'
+   survives unqualified.
+
+   THE OTHER CHANGE IS THE DRESS BLOCK'S ORDER, and it is sched1, not
+   allocation: `*(s32 *)(q + 0x8)' must be written BEFORE the q+0x4, q+0x5
+   and q+0xC stores so its load is issued five slots early and the
+   `ori $a1, $a1, 0x8080' half of the 0x808080 constant falls into the load's
+   delay slot. Written after them -- the park's order -- it is 280 words /
+   12 rows with the `volatile' in place and 279/12 without it. The two faults
+   are coupled through that one slot, exactly as the park said.
+
+   THE TWO PAYLOAD STORES ARE ORDER-VISIBLE: +0x20 first, then +0x4C, is 0;
+   the park's order (+0x4C through `e' first) is 279 words / 4 rows.
+
+   NOT RE-PRICED, kept from the park's table because the body reaches 0 with
+   them as written: the SEPARATE pointer locals per switch arm for both
+   D_80082E80 and D_80083780 (one shared local is 23 rows there), the
+   (counter << 11) / 10 division written inline, state 2's count gate as
+   `>= 0xB -> 4 else 9', and the two `sb $zero' as two ascending statements.
+   The frame is -0x38 with s0..s5 and ra, `out' has FOUR elements, and every
+   read of it in the listing is `lh', so it is `s16' and takes no cast at the
+   func_8003DE58 call. GetTPage, GetClut and rand are the listing's
+   func_80066460, func_8006649C and func_80069EF8. */
+void func_s63_80024648(u8 *p)
+{
+    u8 *q;
+    u8 *e;
+    u8 *r;
+    u8 *t;
+    u8 *r2;
+    u8 *t2;
+    UnkNode *n;
+    s32 c;
+    s32 i;
+    s16 out[4];
+
+    *(s16 *)(p + 0x48) = *(u16 *)(p + 0x48) + 1;
+    *(u16 *)(*(u8 **)p + 0x52) |= 0x8000;
+    c = -1;
+    switch (*(s16 *)(p + 0x4C))
+    {
+    case 0:
+        *(s16 *)(p + 0x50) = GetTPage(0, 1, 0x2C0, 0x100);
+        *(s16 *)(p + 0x52) = GetClut(0x80, 0x1F7);
+        *(s16 *)(p + 0x44) = *(s16 *)(p + 0x46) = 0x1F;
+        *(s16 *)(p + 0x48) = 0;
+        *(s16 *)(p + 0x4E) = 0x30;
+        *(s16 *)(p + 0x4C) = *(u16 *)(p + 0x4C) + 1;
+        /* fall through */
+    case 1:
+        c = 0xE;
+        r = D_80082E80;
+        if (func_8003DE58(*(u8 **)(r + 0x8), (UnkSlot *)r, out, 0) != 0)
+        {
+            t = D_80083780;
+            *(s32 *)(p + 0x1C) += (out[0] + *(s16 *)(t + 0x2) - *(s16 *)(p + 0x1E)) << 14;
+            *(s32 *)(p + 0x20) += (out[1] + *(s16 *)(t + 0x6) - *(s16 *)(p + 0x22)) << 14;
+            *(s32 *)(p + 0x24) += (out[2] + *(s16 *)(t + 0xA) - *(s16 *)(p + 0x26)) << 14;
+            *(s32 *)(p + 0x24) -= func_800644B8((*(s16 *)(p + 0x48) << 11) / 10) << 9;
+        }
+        if (*(s16 *)(p + 0x48) >= 0xA)
+        {
+            *(s16 *)(p + 0x4A) = 0x10;
+            *(s16 *)(p + 0x4C) = *(u16 *)(p + 0x4C) + 1;
+        }
+        break;
+    case 2:
+        if (*(s16 *)(p + 0x48) >= 0xB)
+        {
+            c = 4;
+        }
+        else
+        {
+            c = 9;
+        }
+        *(s16 *)(p + 0x4E) = *(u16 *)(p + 0x4E) + 2;
+        r2 = D_80082E80;
+        if (func_8003DE58(*(u8 **)(r2 + 0x8), (UnkSlot *)r2, out, 0) != 0)
+        {
+            t2 = D_80083780;
+            *(s32 *)(p + 0x1C) += (out[0] + *(s16 *)(t2 + 0x2) - *(s16 *)(p + 0x1E)) << 15;
+            *(s32 *)(p + 0x20) += (out[1] + *(s16 *)(t2 + 0x6) - *(s16 *)(p + 0x22)) << 15;
+            *(s32 *)(p + 0x24) += (out[2] + *(s16 *)(t2 + 0xA) - *(s16 *)(p + 0x26)) << 15;
+        }
+        if (*(s16 *)(p + 0x48) >= 0xD)
+        {
+            *(s16 *)(p + 0x48) = 8;
+        }
+        *(s16 *)(p + 0x4A) = *(u16 *)(p + 0x4A) - 1;
+        if (*(s16 *)(p + 0x4A) <= 0 && *(s16 *)(p + 0x48) == 0xC)
+        {
+            *(s16 *)(p + 0x4C) = *(u16 *)(p + 0x4C) + 1;
+        }
+        break;
+    case 3:
+        c = 5;
+        if (*(s16 *)(p + 0x48) == 0xF)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+    *(s16 *)(p + 0x40) = (*(u16 *)(p + 0x48) & 3) << 5;
+    *(s16 *)(p + 0x42) = (((s16) * (u16 *)(p + 0x48) >> 2) << 5) + 0x80;
+    for (i = c; i >= 0; i--)
+    {
+        n = func_8003FD64(0x312, D_80083498);
+        if (n != NULL)
+        {
+            n->unk_10 = (u32)func_s63_80024AA4;
+            func_8004491C(n, (u32)D_80045340);
+            q = (u8 *)n->unk_0C;
+            *(s32 *)((u8 *)n->unk_08 + 0x0) = *(s32 *)(p + 0x1C) + (((rand() & 0x3FF) - 0x1FF) << 12);
+            *(s32 *)((u8 *)n->unk_08 + 0x4) = *(s32 *)(p + 0x20) + (((rand() & 0x3FF) - 0x1FF) << 12);
+            *(s32 *)((u8 *)n->unk_08 + 0x8) = *(s32 *)(p + 0x24) + (((rand() & 0x3FF) - 0x1FF) << 11);
+            *(s16 *)(q + 0x1C) = *(s16 *)(q + 0x1E) = 0x1000;
+            *(s16 *)(q + 0x10) = 0x60;
+            *(u8 **)(q + 0x0) = D_800DEC00;
+            *(u16 *)(q + 0x14) |= 0xC;
+            *(s32 *)(q + 0x8) = *(s32 *)(D_800DEC00 + 0x4);
+            *(u8 *)(q + 0x4) = 0;
+            *(u8 *)(q + 0x5) = 0;
+            *(s32 *)(q + 0xC) = 0x808080;
+            *(u8 **)((u8 *)n + 0x20) = *(u8 **)p;
+            e = (u8 *)n + 0x20;
+            *(volatile s16 *)(e + 0x4C) = 0;
+        }
+    }
+}
 
 /* The sprite's per-frame step: set bit 0x8000 in the +0x52 halfword of the
    node at the actor's +0x0, hand the renderable to func_800478B8, and when

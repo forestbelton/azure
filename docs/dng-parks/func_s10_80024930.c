@@ -167,6 +167,124 @@
    s32 func_800644B8(s32);
    s32 func_80064584(s32);
    END DECLARATIONS */
+/* ==== SECOND PASS, agent h148, batch 34. The author's section above is
+   intact; this appends to it and CORRECTS ITS DIAGNOSIS AND TWO OF ITS
+   TABLE ROWS. The body is unchanged -- nothing measured better than 14.
+
+   THE FIGURE REPRODUCES EXACTLY. parksplice + aligndiff on the unit as it
+   stands today: 243 words built, 243 target, 14 aligned differences, and the
+   14 rows are the two blocks the author lists, instruction for instruction.
+   The park splices and compiles; no rot.
+
+   THE DIAGNOSIS IS NOT `allocno_compare'. It is `expand_divmod's' TARGET
+   THREADING, decided at RTL expansion, long before any allocator runs.
+   expmed.c:2815 reads
+
+       if (target && GET_MODE (target) == compute_mode)
+         tquotient = target;
+       else
+         tquotient = gen_reg_rtx (compute_mode);
+
+   and `tquotient' is what the `sra' of the signed-%-by-power-of-2 expansion
+   writes (expmed.c:3029). In THIS body `target' is the destination variable's
+   own pseudo, so the quotient lands in it -- the `.lreg' dump has
+
+       (insn 246 ... (set (reg/v:SI 97) (ashiftrt:SI (reg:SI 138) (const_int 12))))
+
+   with reg 97 = `t', reg 137 = the sum and reg 138 = the +0xFFF correction.
+   The target's listing puts that `sra' in a register that is NOT `t's'
+   ($v0 against t's $s3), so in the real source `tquotient != target'.
+   expmed.c:2758-2768 kills `target' when `rem_flag' and
+   `reg_mentioned_p (target, op0)' -- i.e. when the DIVIDEND READS THE
+   DESTINATION -- and the mode test above kills it when the destination is
+   narrower than the computation.
+
+   PROOF, and it is the most useful measurement in this pass: `s16 t' alone
+   (nothing else changed) makes `GET_MODE (target) != compute_mode' and
+   BLOCK 1 GOES WORD-EXACT. 245 words / 11 rows, and the surviving rows are
+   only the two sign-extension words the narrow declaration costs, the
+   `subu' destination, and block 2 (untouched):
+
+       R 98   subu v0,a0,v0            subu $s3, $a0, $v0
+       + 99   sll  v0,v0,0x10
+       + 100  sra  s3,v0,0x10
+       (rows 84-97 -- addu $a0, addu $a1, bgez $a0, addiu $a1, sra $v0,
+        sll $v0 -- all leave the residue)
+
+   So the residue is reachable, and it is reachable at the DECLARATION, not
+   at the statement split. `s16 t' is not the answer because the two SImode
+   call arguments cost the extension and `func_800644B8' / `func_80064584'
+   are prototyped `s32' in include/structs.h, which is not this unit's to
+   change.
+
+   TWO OF THE AUTHOR'S ROWS ARE TRANSPOSED. Re-measured on today's unit:
+
+     | t spelling    | t2 spelling   | park says | measures |
+     | two statements| two statements|    98     |    54    |
+     | two statements| one expression|    54     |    98    |
+     | one expression| one expression|    58     |    58    |
+     | one expression| two statements|    14     |    14    |
+
+   And the 54-row row is the interesting one, because its rows are a
+   DIFFERENT fault from the kept body's. With `t' split, block 1's quotient
+   moves to $v0 as the target has it -- `sra $v0, $a0, 0xc' -- and what is
+   left is that `t's' pseudo now also holds the SUM (op0 == reg(t), which is
+   what makes `reg_mentioned_p' fire), so `t' and `sp' exchange $s2/$s3 for
+   the whole body. In the 98-row variant (t split, t2 one expression) BOTH
+   blocks' quotient placement matches the target and the residue is a
+   four-way callee-saved ROTATION: q $s0 where the target has $s1, the
+   counter $s1 for $s0, sp $s3 for $s2, t $s2 for $s3.
+
+   SO THE 14 IS A LOCAL MINIMUM with the wrong fault in it, and the two
+   layers are now separable:
+     layer 1, which pseudo the `%' expansion's intermediates get -- a
+       declaration/dividend question, settled by expmed.c's two guards;
+     layer 2, a callee-saved rotation among q, the counter, sp and t -- which
+       is the allocation question the author diagnosed, but it only becomes
+       the WHOLE residue once layer 1 is spelled the target's way.
+
+   MEASURED AND REJECTED IN THIS PASS, all 243 words:
+
+     | spelling                                                   | rows |
+     | `t = ((i << 8) + d + ((t + t) - t - t)) % 0x1000' -- the
+       PHANTOM ZERO of matching-levers:12070, to make the dividend
+       mention `t' without a statement split                      |  14  |
+     | the same with `+ (t - t)'                                  |  14  |
+     | `t2 = (t2 + ((t2 + t2) - t2 - t2)) % 0x1000'               |  14  |
+     | `s16 t2'                                             | 249 words, 89 |
+     | `s16 t' and `s16 t2'                                 | 251 words, 86 |
+
+   The phantom zero is a DEAD END HERE and the reason is structural, so do
+   not retry it: `reg_mentioned_p (target, op0)' tests the rtx `op0', which
+   after expansion is a bare `(reg N)' holding the sum. Extra references to
+   `t' inside the dividend do not put `t's' REGISTER into that rtx, so the
+   guard cannot fire. Only reading `t' as the dividend itself does -- and
+   that makes `t' hold the sum, which the target does not.
+
+   NEW NEXT STEP, in order.
+
+   1. FIND THE SPELLING THAT GIVES `target == 0' WITHOUT PUTTING THE SUM IN
+      `t's' REGISTER AND WITHOUT A NARROW DECLARATION. That is the whole
+      remaining question for layer 1 and it is a question about expmed.c's
+      two guards, not about allocation. The three ways `target' dies are
+      `REG_FUNCTION_VALUE_P (target)', `reg_mentioned_p (target, op0)' and
+      the mode test; the first is the one nobody has tried to arrange, and
+      note that this function's `return 0' makes its value register free.
+   2. IF THAT FAILS, TAKE THE 98-ROW VARIANT (t two statements, t2 one
+      expression) AS THE BODY AND FIGHT LAYER 2. Its residue is one
+      four-allocno rotation with the `%' expansions already correct, which is
+      a far better-understood class than what the 14-row body has -- and the
+      phantom zero, useless for layer 1, is exactly the tool for it, because
+      it adds references to one value and to nothing else.
+   3. THE PERMUTER IS STILL REASONABLE on the kept 14-row body, but name the
+      statement for it: `t = ((i << 8) + d) % 0x1000;' and
+      `t2 = t2 % 0x1000;' are the only two that matter, and the search space
+      it needs to cover is the DECLARATION of `t' and `t2' and the dividend's
+      shape, not the modulo's.
+
+   NOT RE-PRICED: the author's byte-dressing order table and the eleven rows
+   that measure 14 unchanged. The body below is the author's, byte for byte.
+*/
 s32 func_s10_80024930(u8 *a, UnkVec *b, u8 *c, s16 d, s32 e, s16 f, u8 g, u8 h)
 {
     UnkDngS10QuadSP *sp = (UnkDngS10QuadSP *)0x1F800000;
