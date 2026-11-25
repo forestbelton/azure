@@ -125,7 +125,20 @@ extern u8 *D_800E3D7C;
 END DECLARATIONS
 
    `func_8004491C', `D_80083460', `D_800814A0', `rand' and `UnkNode' all come
-   from include/structs.h and common.h and need nothing. */
+   from include/structs.h and common.h and need nothing. 
+   RE-MEASURED after a 32-minute permuter run: 202/202 and **7 aligned
+   differences**, one better than the 8 recorded below, by moving the
+   `+0x1C = 0x1000' store AFTER the do-while(0) call block. Nine finds, and
+   that was the best of them.
+
+   THE RESIDUE IS UNCHANGED IN KIND and the permuter cannot reach it: it is
+   the position of `addiu $a0, $zero, 0x3', the ARGUMENT SETUP for
+   func_s72_8002458C. No reordering of source statements moves an insn the
+   compiler emits as part of a call's argument setup, because the scheduler
+   fixes it relative to its own call. A source-level search is the wrong tool
+   for this body; the next agent should read sched.c's treatment of
+   CALL_INSN operand setup instead of permuting statements.
+*/
 void func_s72_800247C0(u8 *p, UnkVec *v, u8 *c)
 {
     UnkNode *n;
@@ -189,12 +202,14 @@ void func_s72_800247C0(u8 *p, UnkVec *v, u8 *c)
                 *(s32 *)(q + 0x90) = -((s16)dz * 0x200);
                 s = (u8 *)n->unk_0C;
                 *(s16 *)(s + 0x1E) = 0x1000;
-                *(s16 *)(s + 0x1C) = 0x1000;
                 /* DEVICE, and it does not reach 0: see the header. */
                 do
                 {
                     k = func_s72_8002458C(3);
                 } while (0);
+                /* The +0x1C store sits AFTER the call block: the permuter
+                   found it and it is worth 1 aligned row (8 -> 7). */
+                *(s16 *)(s + 0x1C) = 0x1000;
                 *(s8 *)(s + 0xE) = 0;
                 *(s8 *)(s + 0xD) = 0;
                 *(s8 *)(s + 0xC) = 0;
