@@ -34,6 +34,8 @@ void func_s30_80024024(u8 *p, u8 k);
    The rest of this comment is the family representative's and its other
    numbers are its own.
 */
+void func_800478B8(u8 *);
+
 void func_s30_80024024(u8 *p, u8 k)
 {
     s16 t;
@@ -60,7 +62,60 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s30", func_s30_800241D4);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s30", func_s30_80024640);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s30", func_s30_80024710);
+/* A per-frame step function: bump the +0x14 counter on the node at the
+   actor's +0x0 and the actor's own +0x4 counter, drag the mover's +0x8 down
+   by 0xA0000, hand the renderable to func_800478B8, and when its +0x14
+   reports 0x6000 mark the owning actor retired and set the same bit in
+   D_800814A0.
+   39 words, 0 differing, first compile.
+
+   TWIN: the landed func_s13_8002418C in csrc/ovl_dng_s13.c (dngtwin 0.933,
+   36 words). Its head statement, its gate and its whole retire block carry
+   verbatim; the three extra words are this copy's own middle, where the
+   twin's `+0x1E' scale pair is replaced by the actor's +0x4 counter bump and
+   the `b->unk_08 -= 0xA0000'. The twin's note on D_800814A0 being the PLAIN
+   `u32' scalar (structs.h, no declaration needed) holds here too and gives
+   the `lui %hi'/`lw %lo' pair, with the `lui' hoisted into the gate's delay
+   slot. The twin's own priced fact -- the scale pair as a read-back, not a
+   second sum -- does not apply: this copy has no scale pair.
+
+   ONLY THE STATEMENT ORDER IS LOAD-BEARING. Priced on this body, all at
+   39 words:
+
+     the +0x4 counter bump BEFORE the +0x8 drag               0   kept
+       ... the two swapped, the drag first                    8
+     `b->unk_08 -= 0xA0000;'                                  0   kept
+       ... `+= -0xA0000;'                                     0   free
+       ... `*(s32 *)((u8 *)b + 0x8) -= 0xA0000;'              0   free
+       ... second parameter `u8 *b', `*(s32 *)(b + 0x8)'      0   free
+     the +0x4 bump read through `u16'                         0   kept
+       ... read through `s16'                                 0   free
+     the head reached through `*(u8 **)p' twice               0   kept
+       ... hoisted into a `u8 *n' local                       0   free
+     the gate read through `u16', the retire store `u16'      0   kept
+       ... either one through `s16'                           0   free
+
+   So the UnkVec second parameter is the twin's spelling rather than a
+   measured one, and the only thing this listing actually constrains is that
+   the +0x8 drag is emitted last of the three. The drag is a `lui 0xFFF6' plus
+   `addu' because 0xFFF60000 is outside `addiu' range; the `-=' and `+= -'
+   forms are the same tree. 
+   THIS COPY'S OWN CONSTANT: 0x14 -> 0xc at 2 of 3 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s30_80024710(u8 *p, UnkVec *b, u8 *c)
+{
+    *(s16 *)(*(u8 **)p + 0xc) = *(u16 *)(*(u8 **)p + 0xc) + 1;
+    *(s16 *)(p + 0x4) = *(u16 *)(p + 0x4) + 1;
+    b->unk_08 -= 0xA0000;
+    func_800478B8(c);
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s30", func_s30_800247AC);
 

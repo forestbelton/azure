@@ -1,6 +1,20 @@
 #!/usr/bin/env python3
 """dngnear.py -- leads from the CALL GRAPH, which the ratio provably cannot reach.
 
+## IT READS `csrc/`, SO IT IS EMPTY FOR A UNIT AN AGENT IS STILL HOLDING
+
+This matters because the natural assumption is the opposite one. The recipe
+needs landed in-unit neighbours to invert, so a mostly-stub unit returns
+nothing -- and an agent that then lands three bodies IN ITS PRIVATE COPY will
+re-run this and still get nothing, because the landings are not in `csrc/`
+until the dispatcher integrates them.
+
+So: an empty result for a held unit is CORRECT and will not change during that
+agent's run. Do not tell an agent to re-run it after its first landings; that
+advice was given once and was wrong. Its substitute inside a run is the agent's
+own file -- which is the better donor anyway, and is what "land the small
+siblings first, then read them" means.
+
 ## THE GAP THIS CLOSES
 
 `dngtwin` ranks on mnemonic similarity inside a 0.75-1.33 WORD-COUNT BAND, so a

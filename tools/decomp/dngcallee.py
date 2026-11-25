@@ -33,8 +33,16 @@ Intersecting FILES is useless: on that body the eight symbols appeared in
 fifty-odd files. What works is to split each unit into FUNCTIONS and count how
 many of the symbols each function BODY contains. That put all fourteen relinks
 at 8/8 and nothing else above 4 -- a clean separation, not a ranking.
+
+EACH CANDIDATE'S FRAME AND SAVE LIST ARE PRINTED BESIDE IT. On a body over
+roughly 200 words that comparison outranks the overlap score itself: a donor
+whose `addiu $sp, -N' and callee-saved list match the target's is the right
+shape even at a middling overlap, and one whose frame differs is the wrong
+shape at any overlap. The target's own figures come from its listing; a landed
+donor's are read out of the container ELF, because `make' deletes a landed
+function's listing.
 """
-import collections, os, re, sys
+import collections, os, re, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dngclone
 
@@ -118,6 +126,57 @@ def bodies():
     return out
 
 
+
+# ---------------------------------------------------------------- prologues
+#
+# A 449-word body in batch 32 had THREE ratio leads and all three were wrong:
+# every one was a -0x48 frame where the target is -0x60 with s0..s7/fp/ra. The
+# donor that landed it was a callee-set row at 8 of 8 -- 656 words against 449,
+# so outside any length band a ratio sweep can reach -- and the agent found it
+# by reading five prologues by hand. That is the cheapest first move on a large
+# body and there is no reason an agent should do it manually, so the frame and
+# save list are printed beside every candidate here.
+#
+# A landed donor has NO nonmatchings listing (make deletes it), so this reads
+# the container ELF rather than asmlib.target_words.
+_PRO_CACHE = {}
+_ELFS = ("dungeon.bin", "main.bin", "town.bin", "slus_006.14")
+_SAVE = re.compile(r"\bsw\s+(s[0-7]|s8|fp|ra),")
+
+
+def prologue(fn):
+    """'-0x60 s0-s7,fp,ra' for a landed FN, or '' if it cannot be read."""
+    if fn in _PRO_CACHE:
+        return _PRO_CACHE[fn]
+    out = ""
+    for elf in _ELFS:
+        path = os.path.join(dngclone.PROJ, "build", elf + ".elf")
+        if not os.path.exists(path):
+            continue
+        try:
+            r = subprocess.run(["mips-linux-gnu-objdump", "-d",
+                                "--disassemble=" + fn, path],
+                               capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            break
+        m = re.search(r"<%s>:\n(.*?)(?:\n\n|\Z)" % re.escape(fn), r.stdout, re.S)
+        if not m:
+            continue
+        body = m.group(1)
+        fm = re.search(r"addiu\s+sp,sp,(-\d+)", body)
+        regs = []
+        for ln in body.split("\n")[:24]:
+            g = _SAVE.search(ln)
+            if g and g.group(1) not in regs:
+                regs.append(g.group(1))
+        if fm:
+            out = "-0x%X" % -int(fm.group(1))
+            if regs:
+                out += " " + ",".join(regs)
+        break
+    _PRO_CACHE[fn] = out
+    return out
+
 def main():
     # --top's VALUE must not fall through into the function list. It did, and
     # the tool printed a row for "6". Same bug I had just fixed in dngnear.py,
@@ -166,7 +225,9 @@ def main():
         print("    %d of %d symbols is the best overlap, reached by %d "
               "function(s):" % (best, len(w), len(at_best)))
         for k, unit, fn in at_best[:top]:
-            print("        %-24s csrc/%s.c" % (fn, unit))
+            pro = prologue(fn)
+            print("        %-24s csrc/%-22s %s"
+                  % (fn, unit + ".c", pro or "(frame not read)"))
         nxt = [r for r in rows if r[0] < best]
         if nxt:
             print("    next tier is %d/%d (%d function(s)) -- a CLEAN GAP means "
