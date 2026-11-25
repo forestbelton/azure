@@ -35,6 +35,8 @@ many of the symbols each function BODY contains. That put all fourteen relinks
 at 8/8 and nothing else above 4 -- a clean separation, not a ranking.
 """
 import collections, os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dngclone
 
 PROJ = "/home/case/projects/azure"
 SYM = re.compile(r"\b(?:func|D)_[A-Za-z0-9]*_?[0-9A-Fa-f]{6,8}\b")
@@ -84,8 +86,23 @@ def bodies():
     # the ORIGINAL the banks were relinked from.
     for path in sorted(glob.glob(os.path.join(PROJ, "csrc", "*.c"))):
         unit = os.path.basename(path)[:-2]
-        txt = open(path, errors="replace").read()
-        stubs = set(STUB.findall(txt))
+        raw = open(path, errors="replace").read()
+        stubs = set(STUB.findall(raw))
+        # STRIP COMMENTS BEFORE ATTRIBUTING ANY SYMBOL.
+        #
+        # A landed body's comment sits BETWEEN the previous function's closing
+        # brace and its own definition line, so a line-by-line walk credits
+        # every comment to the PRECEDING function -- and these comments are
+        # dense with symbol names (twins, tables, data). Measured: the 9-line
+        # forwarder func_b03_801725BC, which references THREE symbols, was
+        # credited with EIGHTEEN, and an agent noticed because the tool offered
+        # it as a 4-of-5 donor when the function that really matches is the one
+        # below it. Every row this tool has ever printed was inflated this way.
+        #
+        # dngclone documents the same trap for the same reason ("the search
+        # runs on the body's CODE, not its comment" -- 32 wrong declarations
+        # across 28 units), and its `code_mask' is the one parser for it.
+        txt = "".join(c for c, keep in zip(raw, dngclone.code_mask(raw)) if keep)
         cur, acc = None, set()
         for ln in txt.split("\n"):
             m = DEFN.match(ln)

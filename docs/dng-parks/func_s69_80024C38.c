@@ -40,6 +40,16 @@
    costing a register. Until then this park is a reference, not a queue item.
 
 
+   UPDATE, agent-h134, batch 31, 2026-11-24. TWO RESULTS: the park's stated
+   MECHANISM IS REFUTED, and a one-statement move ELIMINATES THE TRANSPOSITION
+   ENTIRELY while leaving a different single row. The body below is unchanged
+   and is still the lowest ovlverify figure (138 / 2 / 4 aligned); read the
+   NEW SECTIONS at the bottom of this header before anything else. The other
+   three stubs of ovl_dng_s69 landed this batch (271, 169 and 134 words), so
+   this is the unit's only remaining stub, and the lever that paid on BOTH of
+   the other two bodies was true_dependence -- which is also what the new
+   result below points at.
+
    TARGET 138 words. BEST BUILT 138 words, 2 differing (ovlverify) and
    4 ALIGNED DIFFERENCES (tools/decomp/aligndiff.py -- the 4 is one
    transposed PAIR counted as two deletions plus two insertions).
@@ -210,6 +220,134 @@
    reranks. So the gate is not reachable by renaming: `birthing_insn_p'
    wants the SET COUNT down and every way of getting it there either adds
    a live range or moves the ranking. The park's conclusion stands.
+
+   ======================================================================
+   AGENT-h134 ADDITIONS, 2026-11-24. Figures are ovlverify `differing' and
+   aligndiff `aligned differences', in that order, at 138 built words unless
+   the words column says otherwise.
+   ======================================================================
+
+   1. THE `birthing_insn_p' / `reg_n_sets' MECHANISM ABOVE IS REFUTED.
+   The park's chain of reasoning is that insn 113, the `andi $v0,$v0,0x3F',
+   is promoted to LAUNCH_PRIORITY in sched1 only because its destination is a
+   ONE-SET compiler temp, and that reaching 0 therefore needs `q' to become a
+   one-set pseudo. Three measurements say the promotion is not what decides
+   this:
+
+     one `s32 t' local carrying `rand() & 0x3F' at ALL THREE jitters of
+     loop 1 -- so the andi's destination has reg_n_sets 3 and cannot be
+     promoted at all                                            2 /  4
+     the same local across all SIX jitters, reg_n_sets 6         2 /  4
+     a 1-set `s32 t' at jitter 3 of loop 1 only                 2 /  4
+     the same with `s16 t'                                      2 /  4
+
+   Nothing moves in any direction. Whatever decides the slot, it is not
+   113's promotion, so the park's "the gate cannot be reached from the
+   source" conclusion rests on an argument that does not hold. Do not spend
+   a permuter run or an asm marker on the LUID story.
+
+   2. THE BREAKTHROUGH: MOVING THE `+0x36' STORE AHEAD OF THE FIVE SLOT
+   STORES REMOVES THE TRANSPOSITION. Writing loop 1 as
+
+       r = (u8 *)n->unk_0C;
+       q = (u8 *)n + 0x20;
+       *(s16 *)(q + 0x36) = b;            <-- moved up from the bottom
+       *(s16 *)(r + 0x1E) = 0x1000;
+       ... the other four slot stores ...
+       *(s16 *)(q + 0x30) = (rand() & 0xFF) | 0x80;
+
+   measures 138 words, 7 differing, 3 ALIGNED DIFFERENCES -- and the jitter
+   pair is GONE: built words 48..55 are byte-identical to the target,
+   `lw 0x8($s3)' / `andi 0x3F' / `lhu 0xA($v1)' / nop / `addu', in the
+   target's order. The ONLY remaining fault is the moved store itself: it is
+   emitted at built word 58, between the `li $v0,0x1000' and the `sh 0x1E',
+   where the target has it at word 65 in the second rand call's delay slot,
+   and every slot store after it shifts one position so `sh $v0, 0x6($v1)'
+   takes the delay slot instead.
+
+   The park records this spelling as "the `+0x36' store moved ahead of the
+   `r' block 7" and stopped at the ovlverify figure. The ALIGNED figure, and
+   the residue's SHAPE, are what matter: 7 differing is 3 aligned rows and
+   they are all one misplaced instruction, not the transposition.
+
+   SO THE RESIDUE IS TWO COUPLED FAULTS, AND THE MECHANISM IS A PRIORITY
+   EFFECT, NOT A LUID TIE. With the `+0x36' store above the five slot
+   stores, it has a DIFFERENT BASE REGISTER from them ($s1 against the
+   loaded `r'), so `memrefs_conflict_p' cannot separate them and the store
+   acquires a dependence on all five. That gives the `addiu $s1,$s0,0x20'
+   insn a long path to the end of the block, its sched2 priority rises above
+   the andi's, and it wins the contested slot OUTRIGHT -- no tie, no LUID.
+   The same conflict is why that position cannot land: a store that
+   conflicts with all five slot stores is PINNED above them and can never
+   reach the delay slot below them.
+
+   WHAT TO TRY NEXT, and it follows from that: anything that lengthens the
+   dependency chain below the `q' assignment WITHOUT moving a statement past
+   the slot stores. A read of `q' whose value feeds the slot block would do
+   it; the natural one, reading `r' through `q' as `*(u8 **)(q - 0x14)', is
+   ruled out by the listing, which loads `r' with `lw $v1, 0xC($s0)' off `n'.
+   The question to answer is which source shape gives
+   `addiu $s1,$s0,0x20' a dependent inside the slot block while leaving the
+   `+0x36' store at the bottom.
+
+   3. THE `+0x36' STORE'S POSITION, SWEPT ACROSS EVERY SLOT. The park tested
+   only "ahead of the r block"; the curve is NOT convex, so this is not a
+   single positional fault:
+
+     slot 0, above all five slot stores                      7 /  3
+     slot 1, after the 0x1E store                 140 words / 133 / 31
+     slot 2, after the 0x1C store                            6 /  7
+     slot 3, after the 0x8 store                             5 / 10
+     slot 4, after the 0xC store                             4 /  8
+     slot 5, after the 0x6 store (the body below)            2 /  4
+
+   4. NEW SPELLINGS MEASURED AND REJECTED. All 2 / 4, i.e. bit-identical to
+   the body below, unless stated:
+
+     `q =' placed between the 0x1C and 0x8 stores, between the 0x8 and 0xC
+     stores, or between the 0xC and 0x6 stores -- the three in-slot-block
+     positions the park's six did not cover
+     loop 2's first payload store written off `n' as
+     `*(s16 *)((u8 *)n + 0x20) = 0x20' -- NOT MEASURABLE, the bytes are
+     identical, and it is probably the true source since the target's base
+     register there is $s0 with offset 0x20 and not $s1 with offset 0
+     loop 2's `q =' moved below its three jitters
+     jitter 3's load alone as `((u16 *)a->unk_08)[5]'
+     jitter 3's store alone as `((s16 *)n->unk_08)[5]'
+     `n->unk_08' read through the plain cast `*(u8 **)((u8 *)n + 0x8)', at
+     jitter 3 alone and at all three jitters of loop 1
+     loop 1's step store as the plain cast `*(u32 *)((u8 *)n + 0x10)'
+     `r' read through the plain cast `*(u8 **)((u8 *)n + 0xC)'
+     the table store as `*(u32 *)(r + 0x8) = (u32)D_80027484'
+     the two 0x1000 stores as `((s16 *)r)[0xF]' and `[0xE]'
+     `q' declared before `r'
+     the allocation folded into the gate,
+     `if ((n = func_8003FD64(0x212, a)) != NULL)'
+
+   And priced worse:
+
+     the 0x1C store before the 0x1E store                    4 /  6
+     the 0xC store before the 0x8 store                      4 /  6
+     `*(s16 *)(r + 0x6) = 8' moved above the 0x8/0xC stores   5 /  6
+     jitter 3 reparenthesised as
+     `field + ((rand() & 0x3F) - 0x20)'           137 words /  88 /  7
+     `r =' moved above jitter 3                   141 words / 136 / 71
+     slot 0 with the 0x36 store as `((s16 *)q)[0x1B]'        7 /  3
+     slot 0 with the 0x1C store before the 0x1E store        6 /  4
+     the 0x36 store written at BOTH slot 0 and slot 5,
+     which gcc does not merge                     139 words /  82 /  3
+     `do { } while (0)' round `q =' and the 0x36 store only 10 /  7
+     the tail rand hoisted, `t = rand();' then the 0x36
+     store then `(t & 0xFF) | 0x80'                           7 /  7
+     a self-store `*(s16 *)(q + 0x36) = *(u16 *)(q + 0x36);'
+     at slot 0                                    139 words /  86 /  7
+
+   5. ONE CORRECTION TO THE PARK'S READING OF maspsx. The two nops are
+   load-delay fill and maspsx only INSERTS them, it does not reorder: the
+   target leaves a nop after `lhu 0xA($v1)' where the independent
+   `lw $v0, 0x8($s0)' two words later would have filled it. So the emitted
+   order really is the compiler's and the park is right that this is a gcc
+   scheduling question -- worth stating because it rules out the alternative.
 
    DECLARATIONS
    s32 func_8004491C(UnkNode *, u32);
