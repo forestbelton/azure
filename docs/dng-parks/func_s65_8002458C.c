@@ -1,4 +1,12 @@
-/* func_s65_8002458C -- PARK, 875 built words against 873 target words,
+/* func_s65_8002458C -- PARK, WORD-EXACT: 873 built words against 873 target
+   words, 50 aligned differences (tools/decomp/aligndiff.py), re-measured by the
+   second agent in batch 34 -- see the SECOND AGENT section below for the five
+   changes that took it there from the author's 875 / 85 and for the two
+   allocation groups that remain.  The ORIGINAL HEADER FOLLOWS UNCHANGED; its
+   85-row breakdown and its eleven-spelling table are still the record of what
+   was measured first, and its row 1 diagnosis is overturned, not its rows.
+
+   func_s65_8002458C -- PARK, 875 built words against 873 target words,
    85 aligned differences (tools/decomp/aligndiff.py).  1 member in its family
    (python3 tools/decomp/dngfam.py func_s65_8002458C), so it lands once.
    No carved sibling at ratio 0.30 or better anywhere -- dngtwin finds nothing
@@ -164,6 +172,142 @@
    records at sp+0x20 and sp+0x28, whose four and two halfword stores are all
    the listing witnesses.
 
+   ================  SECOND AGENT, batch 34 (h150).  WORD-EXACT NOW.  ================
+
+   NEW FIGURE: 873 built words against 873 target, 50 aligned differences
+   (ovlverify: 51 differing masked).  The park arrived at 875 / 85.  The two
+   extra words are closed and 35 rows are gone.  The body below is the new one;
+   the author's body is superseded, not the author's diagnosis of WHERE the
+   residue is -- that was right about the blocks and wrong about the mechanism.
+
+   THE AUTHOR'S NAMED NEXT STEP WAS RUN AND IT ANSWERED THE QUESTION.
+   tools/decomp/dump.sh on a reduced probe of one colour block, reading .cse
+   and .combine, overturns the park's "gcc hoists the lhu out of the arm":
+
+     * NOTHING IS HOISTED.  cse DELETES the arm's condition load.  In .cse the
+       and-with-1 reads reg:HI 81 -- the pseudo the ENTRY block's s16 gate load
+       set -- so after cse there is exactly ONE load of p+0x20 in the whole
+       region and it lives in the entry block.  cse_insn's lookup finds the
+       identical mem:HI already in the table because the then-arm is the
+       fall-through of the inner gate and therefore the SAME cse basic block
+       (cse.c:8086, the block ends only at a CODE_LABEL).
+     * COMBINE THEN RE-CREATES A LOAD, for the comparisons, not for the
+       condition: .combine insn 12 is set reg:SI 82 (sign_extend (mem:HI ...)),
+       a second reference to the same mem substituted into the sign extension.
+       So the built pair is lhu-in-entry (the cse survivor, feeding the andi)
+       plus lh-in-entry (combine's), and the arm has neither.
+     * THE TARGET'S ARM LOAD IS A zero_extendhisi2, not a movhi.  That is what
+       a u16 read promoted to int expands to when no equivalent value is
+       available, and it is the shape the fix has to produce.
+
+   THE FIX, three independent changes, each measured from the park's own body.
+
+   12. volatile ON THE CONDITION READ is what denies cse the lookup.  cse.c:6506
+       does the table lookup only when ! src_volatile, and cse.c:7226 keeps a
+       volatile source out of the table, so the arm's read is forced to be its
+       own zero_extendhisi2.  This is the whole of the author's row 1 of the
+       85-row breakdown and it is the ONE change the eleven measured spellings
+       in the park's table never made to the CONDITION as opposed to the store.
+       Probe check before porting: with it, the arm's order becomes
+       lhu 0x98 / lhu 0x20 / lw -0x14 / andi / beqz, which is the target's
+       words 138..142 instruction for instruction.
+           volatile condition read, park's store-in-both-arms   879 / 86
+           park's body unchanged                                875 / 85
+       On its own it is NOT an improvement.  It only pays with 13 below, which
+       is why a one-change-at-a-time sweep could not find it.
+   13. THE COLOUR STORE IS A VALUE TERNARY, not an expression-statement one,
+       and the park's row 3 has it backwards.  The park's cond ? (MEM=A)
+       : (MEM=B) evaluates the -0x14 prim-pointer load once PER ARM; the target
+       has it once per OUTER arm, before the inner beqz, shared by both ternary
+       arms -- target word 140 against the built's two.
+           volatile cond + MEM = cond ? A : B                   877 / 76
+           volatile cond + cond ? (MEM=A) : (MEM=B)             879 / 86
+   14. STATE 1 IS A STATEMENT-ORDER FAULT, NOT AN ALLOCATION ONE, and this is
+       the row that closes the word count.  The author's row "12 rows, state 1's
+       three argument copies ... its %hi(D_800814A8) pseudo takes $a1" reads the
+       symptom correctly and the cause backwards: local-alloc runs AFTER sched1
+       (toplev.c:3548 against :3585), so the register cannot have caused the
+       schedule.  sched1 failed to put the three argument copies in the beqz
+       delay slot and the two load-delay slots, which is the +2 words, and that
+       left $a1 free for the %hi.  The three statements before the call are
+           A   p+0xA   increment
+           B   p+0x2A  zero
+           C   p+0x26 = D_800814A8's +0x2A
+       and the park has them A B C.  All six orders measured, on the body that
+       already had 12 and 13:
+           C A B    875 / 63     <-- state 1 goes to ZERO rows
+           B C A    875 / 65
+           A C B    877 / 75
+           C B A    876 / 75
+           A B C    877 / 76     (the park's order)
+           B A C    877 / 76
+       C A B is the order the target's block reads bottom-up and it fills all
+       three slots: addu $a0,$s2 in the beqz delay, addu $a1,$s0 after
+       lhu 0xA6, addu $a2,$s1 after lbu 0x8.
+   15. THE PRIM POINTER AND THE COLOUR VALUE ARE TWO LOCALS AND THE STORE IS
+       ONE STATEMENT AFTER THE INNER if/else.  This is the last two words.  The
+       target's single sw 0xC($a2) is reached from both outer arms with the
+       same two registers, which two per-arm stores can only reach through
+       jump2 cross-jumping, and cross-jumping runs after greg and so needs the
+       registers to agree -- they do not.  One pseudo each makes the store one
+       insn and the question disappears.
+           c/cv locals, store after the if/else, C A B order    873 / 50
+           same with per-block locals c2/cv2                    873 / 50
+           store inside each arm, shared c/cv, C A B order      875 / 63
+       The two spellings at 50 are indistinguishable, so this park keeps the
+       shared pair; the split pair is equally correct and the target does not
+       choose between them.
+
+   MEASURED AND REJECTED FROM THE 873 / 50 BODY -- do not re-derive these.
+       dropping the != 0 from the ternary condition          873 / 50  (free)
+       (cond == 0) ? 0x80E080 : 0x709070, arms swapped       875 / 76
+       the volatile 0x98 read BEFORE c = -0x14 in all four arms  875 / 61
+       c and cv reused for the D_800814A8+0x60 blocks too    873 / 56
+       c and cv reused for state 4's two stores only         873 / 56
+       hoisting D_800814A8's +0x2A read into k before A      877 / 76  (free)
+   The +0x60 result is worth keeping: the obvious unification of "every colour
+   write goes through cv" is six rows WORSE, so the target does not share one
+   value across the colour blocks and the +0x60 blocks.
+
+   WHAT THE 50 ROWS ARE NOW, priced from the 873-word body.
+
+     * 22 rows, 11 in each colour block: THE TARGET SHARES ONE
+       lui %hi(D_800814A8) BETWEEN THE TWO ARMS and the built rematerialises it
+       per arm.  Target word 134 is that lui, sitting in the inner gate's bnez
+       DELAY SLOT, and the flat arm at word 147 reads lw %lo(D)($v0) off it.
+       The built emits a high in each arm (its words 135 and 147) and in
+       exchange loses the target's nop at 137 and its ori at 151, so the word
+       count is unaffected -- this group cannot be found by counting words.
+       For cse to share the high, the set reg (high (symbol_ref)) insn has to be
+       in the DOMINATOR block: cse follows the bnez into the flat arm
+       (cse.c:8150, LABEL_NUSES == 1 and a BARRIER before the label, which both
+       hold here) and would then find it available.  No spelling that puts it
+       there was found.  A u32 *dp = &D_800814A8 local is NOT it: that is
+       lui/addiu plus lw 0($dp), a different encoding from the target's
+       lw %lo(D)(reg), and costs a word.
+     * 22 rows across the three D_800814A8+0x60 and state 4 blocks: caller-saved
+       names only, no word delta, no instruction moved.  The target holds the
+       actor pointer in $a1 where the built has $a0 or $a2, and the colour in
+       $a0 where the built has $v1.  $a0 is free in the built, so the target's
+       $a1 means $a0 conflicts with that range there and does not here.
+     * 5 rows, state 3's scale: the target's lh $a0, 0x20($s2) and
+       addiu $v1, $zero, 0x10 sit two words earlier than the built's, and the
+       subu then reads $a0 against the built's $v0.  Register plus a two-word
+       schedule shift, no word delta.
+     * 1 row, rounding on the groups above.
+
+   NEW NAMED NEXT STEP.  This is now a WORD-EXACT body with one named cause and
+   two allocation groups, which is the shape the dispatcher's permuter closes.
+   The statement to hand it is the colour block -- the eleven words from
+   c = *(u8 **)(D_800814A8 - 0x14) through *(u32 *)(c + 0xC) = cv, in both
+   state 2 and state 3, which are byte-identical to each other.  The specific
+   question for a search is whether any spelling of those four statements puts
+   the (high (symbol_ref D_800814A8)) insn in the block that holds the inner
+   gate while keeping TWO lw %lo of the global, one per arm.  If it does, 22 of
+   the 50 rows go with it and the +0x60 group is the author's "same wake", so it
+   may follow.  Do NOT re-sweep the condition read, the ternary form or the
+   state 1 order: all three are settled above with their losing scores.
+
 DECLARATIONS
 typedef struct UnkDngS65Pt
 {
@@ -200,6 +344,8 @@ void func_s65_8002458C(u8 *p, UnkVec *v, UnkSlot *s)
     UnkVec *m;
     UnkSlot *r;
     Unk80083462 *h;
+    u8 *c;
+    s32 cv;
     s32 k;
     s32 k2;
     s32 arr[2];
@@ -234,9 +380,9 @@ void func_s65_8002458C(u8 *p, UnkVec *v, UnkSlot *s)
         *(s16 *)(p + 0x20) = 0x14;
         *(s16 *)(o + 0xA6) = *(u16 *)(o + 0xA6) - 1;
         o[0xA8] = p[0x8];
+        *(s16 *)(p + 0x26) = *(u16 *)(D_800814A8 + 0x2A);
         *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
         *(s16 *)(p + 0x2A) = 0;
-        *(s16 *)(p + 0x26) = *(u16 *)(D_800814A8 + 0x2A);
         func_s65_800243E4_3(p, v, s);
         if (*(u8 **)(p + 0x68) != NULL)
         {
@@ -264,16 +410,17 @@ void func_s65_8002458C(u8 *p, UnkVec *v, UnkSlot *s)
         {
             if (*(s16 *)(p + 0x20) >= 5)
             {
+                c = *(u8 **)(D_800814A8 - 0x14);
                 *(volatile u16 *)(D_800814A8 + 0x98);
-                ((*(u16 *)(p + 0x20) & 1) != 0)
-                    ? (*(u32 *)(*(u8 **)(D_800814A8 - 0x14) + 0xC) = 0x709070)
-                    : (*(u32 *)(*(u8 **)(D_800814A8 - 0x14) + 0xC) = 0x80E080);
+                cv = ((*(volatile u16 *)(p + 0x20) & 1) != 0) ? 0x709070 : 0x80E080;
             }
             else
             {
+                c = *(u8 **)(D_800814A8 - 0x14);
                 *(volatile u16 *)(D_800814A8 + 0x98);
-                *(u32 *)(*(u8 **)(D_800814A8 - 0x14) + 0xC) = 0x80E080;
+                cv = 0x80E080;
             }
+            *(u32 *)(c + 0xC) = cv;
         }
         *(s16 *)(p + 0x20) = *(u16 *)(p + 0x20) - 1;
         if (*(s16 *)(p + 0x20) <= 0)
@@ -448,16 +595,17 @@ void func_s65_8002458C(u8 *p, UnkVec *v, UnkSlot *s)
         {
             if (*(s16 *)(p + 0x20) < 0xD)
             {
+                c = *(u8 **)(D_800814A8 - 0x14);
                 *(volatile u16 *)(D_800814A8 + 0x98);
-                ((*(u16 *)(p + 0x20) & 1) != 0)
-                    ? (*(u32 *)(*(u8 **)(D_800814A8 - 0x14) + 0xC) = 0x709070)
-                    : (*(u32 *)(*(u8 **)(D_800814A8 - 0x14) + 0xC) = 0x80E080);
+                cv = ((*(volatile u16 *)(p + 0x20) & 1) != 0) ? 0x709070 : 0x80E080;
             }
             else
             {
+                c = *(u8 **)(D_800814A8 - 0x14);
                 *(volatile u16 *)(D_800814A8 + 0x98);
-                *(u32 *)(*(u8 **)(D_800814A8 - 0x14) + 0xC) = 0x80E080;
+                cv = 0x80E080;
             }
+            *(u32 *)(c + 0xC) = cv;
         }
         if (*(s16 *)(p + 0x20) >= 0xD)
         {
