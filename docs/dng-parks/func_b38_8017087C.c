@@ -122,6 +122,48 @@
    `target 125 words, candidate 124 words, 125 differing' purely because it
    compares word N against word N and the whole stream is shifted by one.
 
+   THE THREE EDITS, VERIFIED AGAINST THE CONTAINER BYTES, 2026-11-25.  The
+   dispatcher read the bytes rather than reasoning about them, and the park's
+   reading is confirmed exactly.  From `xxd' on build/dungeon.bin:
+
+       0xfa7068  0010 000c 0010 0018 0014 0000   D_b38_80170868, 0xC bytes,
+                                                 six halfwords ending 0x0000
+       0xfa7074  0010 0018 0010 0008             D_b38_80170874, 8 bytes
+       0xfa707c  000c 0000                       THE DISPUTED WORD -- two more
+                                                 halfwords ending in the same
+                                                 0x0000 TERMINATOR, so the
+                                                 array is six halfwords too
+       0xfa7080  c8ff bd27  = addiu $sp,$sp,-0x38  the real first instruction
+
+   (A caution for whoever repeats this: read `build/dungeon.bin', NOT `az.bin'.
+   az.bin is the 298MB disc image and the same offset in it lands somewhere
+   unrelated -- it gave `0800 4000' here and briefly looked like a refutation.)
+
+   SO THE EDITS ARE:
+
+     (i)   csrc/ovl_dng_b38.c, D_b38_80170874: append `0x00, 0x0C, 0x00, 0x00'
+           so the array is 0xC bytes.  This is the edit that moves TEXT_START
+           from 0x8017087C to 0x80170880, because the linker script does not
+           pin .text.
+     (ii)  splat/dungeon.bin.yaml:794
+             - [0xfa707c, c, ovl_dng_b38]   ->   - [0xfa7080, c, ovl_dng_b38]
+     (iii) splice the body below in place of the INCLUDE_ASM stub AND RENAME IT
+           `func_b38_80170880'.  Its address changes, so splat will expect that
+           name, and the handler word at 0xfa7000 can only resolve to a symbol
+           that exists at 0x80170880 -- which is the defect this whole park is
+           about.
+
+   All three together, then `make splat' (it regenerates asm/ and the data
+   listing), then the build gate.  Nothing else in the unit moves: the body
+   ends at 0x80170A70 exactly as the 125-word stub listing does today.
+
+   WHY THIS IS NOT DONE YET, 2026-11-25: `make splat' does `rm -rf asm
+   build/asm' and regenerates every container's listings.  Four agents were
+   measuring against those listings when this was prepared, and deleting them
+   mid-run is the one thing every agent brief forbids -- the rule applies to
+   the dispatcher too.  The edits are small, verified and independent of any
+   agent's work; they need a quiet tree, not more analysis.
+
    WHAT IS ACTUALLY WRONG IS THE SEGMENT BOUNDARY, NOT THE FUNCTION.
    splat/dungeon.bin.yaml has
 
