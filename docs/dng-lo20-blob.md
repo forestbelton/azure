@@ -63,6 +63,51 @@ successful re-split makes the percentage go DOWN while unlocking real work.
 That is the same effect the original carve had, and the rule from it stands:
 **ask `progress.py`, never a remembered figure.**
 
+## lo20's SYMBOL BOUNDARIES ARE ALSO WRONG, and the metric counts two phantoms
+
+Separate from the blob, and found by counting `jr $ra` in each listing (see
+the lever of that name). In this unit:
+
+* **7 stubs have no `jr $ra` at all** -- `func_lo20_800250B4`, `80025E3C`,
+  `8002640C`, `80027008`, `80027328`, `80027534`, `800280FC` -- so each is a
+  fragment HEAD whose body runs into the next symbol;
+* **4 small stubs have two `jr $ra`** -- `80025514`, `8002553C`, `800255AC`,
+  `800264D4` -- so each is TWO functions under one symbol, with the second
+  function's symbol missing;
+* **13 of 46 names handed to one agent were not functions at all.**
+
+Run across all 116 carved objects, **every one of these cases is in lo20.**
+The other 115 are clean, which is what makes this a bounded repair.
+
+**TWO ALREADY-LANDED BODIES ARE PHANTOMS AND THE FUNCTION COUNT INCLUDES
+THEM.** `func_lo20_80025FF4` and `func_lo20_80028208` are both literally
+
+    void func_lo20_80025FF4(void)
+    {
+    }
+
+and their predecessors `func_lo20_80025E3C` and `func_lo20_800280FC` have
+**zero** `jr $ra`. They are those functions' epilogues, and they read 2 words
+at 0 differing only because `void f(void) {}` compiles to `jr $ra` + `nop`.
+
+**They are not wrong -- they are byte-correct, and the containers are
+byte-identical with them in place.** They are simply not functions, so the
+landed count is two higher than the work done, and when the boundaries are
+repaired these two symbols disappear into their predecessors. Do NOT unsplice
+them on their own: that gains nothing and loses a byte-correct definition.
+Fix them with the boundary repair, in one step.
+
+**Two joined bodies are already proven.** Measured against their two listings
+CONCATENATED (which `ovlverify` cannot do, since it takes its target from the
+per-function listing and stops at the spurious symbol):
+
+    func_lo20_80026EC0 + 80026ED0   4+13 = 17 words   0 differing
+    func_lo20_80027328 + 80027368  16+ 7 = 23 words   0 differing
+    func_lo20_80026F04 + 80026F1C   6+14 = 20 words  11 differing
+
+Neither interior symbol is a branch target of anything, so deleting it is
+safe. Those bodies are in `docs/dng-parks/func_lo20_80026EC0.c`.
+
 ## The order to do it in
 
 1. Wait until no agent holds `ovl_dng_lo20` or `ovl_dng_b31f`.
