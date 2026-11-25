@@ -241,7 +241,21 @@ def main():
                     declared += "\n" + io.open(
                         hp, encoding="utf-8", errors="replace").read()
             body_txt = raw[cut:]
-            for c in sorted(set(re.findall(r"\b(func_[0-9A-Fa-f]{8})\b", body_txt))):
+            # THE NAME PATTERN HAS TO ALLOW A CARVED TAG. It was
+            # `func_[0-9A-Fa-f]{8}' -- written before DUNGEON.BIN was carved,
+            # when every name was `func_<8 hex>'. A carved name is
+            # `func_s21_800255E8', so this loop matched NOTHING on any carved
+            # park and the prototype synthesis below silently did nothing.
+            #
+            # Symptom: `permrun' prints `base=?' with 0 iterations, because
+            # base.c fails on an undeclared same-unit callee. It is recorded in
+            # my notes as a recurring cause with two suspects, and this was the
+            # real one the whole time -- the park's own DECLARATIONS block
+            # cannot cover it, since when the park was written those callees
+            # were still stubs and are now DEFINED BELOW it in the unit.
+            for c in sorted(set(re.findall(
+                    r"\b(func_(?:[A-Za-z][A-Za-z0-9]*_)?[0-9A-Fa-f]{8})\b",
+                    body_txt))):
                 if c == func:
                     continue
                 if re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + c + r"\s*\([^;]*;", declared):

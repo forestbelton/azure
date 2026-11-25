@@ -144,6 +144,7 @@ def parked():
 # Reading the oldest figure systematically under-rates exactly the parks that
 # have had the most work done on them.
 ALIGNED = re.compile(r"(\d+)\s+ALIGNED\s+(?:DIFFERENCE|[Dd]ifference)")
+ALIGNED_ANY = re.compile(r"(\d+)\s+aligned\s+difference", re.I)
 # A LAYOUT blocker has to be matched NARROWLY. The first version of this
 # matched a bare "rodata" or "layout" and fired on 7 of 16 parks, including one
 # whose text says "no `rodata' block and no `jtbl_' symbol" -- i.e. it asserts
@@ -165,11 +166,21 @@ def park_report():
             continue
         name = fn[:-2]
         txt = open(os.path.join(d, fn), errors="replace").read()
+        # Prefer the CAPS headline convention; fall back to any case, and say
+        # so. Requiring caps alone made three parks that write their headline
+        # in lowercase read "blocker not parsed" -- which is worse than an
+        # uncertain figure, because it hides a 7-row body entirely.
         hits = [int(x) for x in ALIGNED.findall(txt)]
+        loose = False
+        if not hits:
+            hits = [int(x) for x in ALIGNED_ANY.findall(txt)]
+            loose = bool(hits)
         resid = hits[-1] if hits else None
         # show the narrowing when there is one -- it says who has worked on it
         prog = (" (was %s)" % " -> ".join(str(h) for h in hits[:-1])
                 if len(hits) > 1 and len(set(hits)) > 1 else "")
+        if loose:
+            prog += " [no CAPS headline -- figure is a guess, read the file]"
         layout = bool(LAYOUT.search(txt))
         me = pool.get(name)
         best = ([r for r in dngtwin.rank(

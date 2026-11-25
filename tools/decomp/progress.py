@@ -59,7 +59,7 @@ DEF_RE = re.compile(r'^[A-Za-z_][\w \*]*?\b(\w+)\s*\([^;]*?\)\s*\{', re.M)
 # So the identifiers are filtered against the C type keywords, which is what
 # makes the K&R form unambiguous.
 KNR_RE = re.compile(
-    r'^[A-Za-z_][\w \*]*?\b(func_[0-9A-Fa-f]+)\s*\('
+    r'^[A-Za-z_][\w \*]*?\b(func_(?:[A-Za-z][A-Za-z0-9]*_)?[0-9A-Fa-f]+)\s*\('
     r'(\s*[A-Za-z_]\w*\s*(?:,\s*[A-Za-z_]\w*\s*)*)\)\s*$', re.M)
 TYPE_WORDS = {
     'void', 'int', 'char', 'short', 'long', 'float', 'double', 'signed',
