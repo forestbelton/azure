@@ -73,7 +73,17 @@ def check(unit, tmp, src=None):
     # The Makefile's own flags, RELATIVE, run from the project root -- psyq's
     # headers do not parse with absolute -I paths from another directory.
     rel = os.path.relpath(os.path.abspath(src), PROJ)
-    cmd = [CC, "-S", "-O2", "-Iinclude", "-Ipsyq/include", "-G0",
+    # -Wimplicit IS NOT OPTIONAL AND ITS ABSENCE MADE THIS TOOL LIE.
+    #
+    # Without it, gcc 2.7.2 prints NOTHING for a wholly undeclared callee, and
+    # this tool's own summary line -- "0 with an undeclared or mistyped
+    # callee" -- was a false statement rather than a gap. Verified 2026-11-25
+    # by deleting two real declarations from a landed unit: declcheck said 0
+    # warnings, and `-Wimplicit' on the identical file says 3. The project's
+    # build flags carry no -W at all, so a body can land, measure 0 differing
+    # and be committed with its callees implicit-int -- which is invisible
+    # whenever the arguments happen to pass in the same registers either way.
+    cmd = [CC, "-S", "-O2", "-Iinclude", "-Ipsyq/include", "-G0", "-Wimplicit",
            "-o", os.path.join(tmp, unit + ".s"),
            rel if not rel.startswith("..") else os.path.abspath(src)]
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJ)
