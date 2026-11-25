@@ -234,7 +234,24 @@ def main():
         # as a missing symbol in the park rather than a missing parse.
         import parkresidue as _pr
         decls = [l for l in _pr.decls_of(park).split("\n") if l.strip()]
-        m = re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + re.escape(func) + r"\s*\(", raw)
+        # MATCH THE DEFINITION, NOT A FORWARD DECLARATION OF THE SAME NAME.
+        #
+        # This pattern alone matched the park's own self-prototype inside its
+        # DECLARATIONS block. There is no `*/' before that line, so the
+        # "everything after the header comment" slice below started AT the
+        # prototype and carried `END DECLARATIONS', the trailing prose and the
+        # real `*/' into source.c as C code -- and cc1psx then failed on
+        # "unterminated character constant", because the prose spells symbols
+        # as `rand'. The park was fine; the parser was not.
+        #
+        # A definition's parameter list is followed by `{', never by `;'. That
+        # is the same declaration-versus-definition trap that has cost three
+        # hand edits in this project, so require the brace.
+        m = None
+        for cand in re.finditer(r"(?m)^[A-Za-z_][^\n;]*\b" + re.escape(func)
+                                + r"\s*\([^;{]*\)\s*\n?\s*\{", raw):
+            m = cand
+            break
         if not m:
             print("permimport: no definition of %s in %s" % (func, park))
             return 1
