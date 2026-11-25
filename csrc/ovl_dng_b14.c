@@ -2754,8 +2754,8 @@ void func_b14_80173B4C(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
     sp->unk_B0[2].vz = *(u16 *)(p + 0x74);
     sp->unk_B0[3].vz = *(u16 *)(p + 0x7A);
     sp->unk_100 = RotAverage4(&sp->unk_B0[0], &sp->unk_B0[1], &sp->unk_B0[2], &sp->unk_B0[3],
-                              (s32 *)(q + 0x8), (s32 *)(q + 0x14), (s32 *)(q + 0x20),
-                              (s32 *)(q + 0x2C), &sp->unk_D0, &sp->unk_D4) -
+                              (long *)(q + 0x8), (long *)(q + 0x14), (long *)(q + 0x20),
+                              (long *)(q + 0x2C), (long *)&sp->unk_D0, (long *)&sp->unk_D4) -
                   d - 6;
     if ((u32)sp->unk_100 < 0x1E0)
     {

@@ -154,8 +154,8 @@ void func_s59_8002406C(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
     sp->unk_B0[2].vz = *(u16 *)(p + 0x5C);
     sp->unk_B0[3].vz = *(u16 *)(p + 0x62);
     sp->unk_100 = RotAverage4(&sp->unk_B0[0], &sp->unk_B0[1], &sp->unk_B0[2], &sp->unk_B0[3],
-                              (s32 *)(q + 0x8), (s32 *)(q + 0x10), (s32 *)(q + 0x18),
-                              (s32 *)(q + 0x20), &sp->unk_D0, &sp->unk_D4) -
+                              (long *)(q + 0x8), (long *)(q + 0x10), (long *)(q + 0x18),
+                              (long *)(q + 0x20), (long *)&sp->unk_D0, (long *)&sp->unk_D4) -
                   d - 6;
     if ((u32)sp->unk_100 < 0x1E0)
     {
@@ -256,7 +256,7 @@ s32 func_s59_80024598(u8 *p, UnkVec *v)
         sp->unk_04 = *(u16 *)((u8 *)v + 0xA);
         t = (TILE_1 *)sp->unk_18;
         sp->unk_18 = (u8 *)(t + 1);
-        sp->unk_C0 = RotTransPers((SVECTOR *)sp, (s32 *)&t->x0, &sp->unk_90, &sp->unk_94);
+        sp->unk_C0 = RotTransPers((SVECTOR *)sp, (long *)&t->x0, (long *)&sp->unk_90, (long *)&sp->unk_94);
         if ((u32)sp->unk_C0 < 0x1E0)
         {
             *(u32 *)&t->r0 = *(u32 *)(p + 0x8);
