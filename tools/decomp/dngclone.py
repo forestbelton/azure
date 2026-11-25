@@ -462,11 +462,31 @@ _TYPEWORD = re.compile(
 _DECL_CAND = re.compile(r"\b([A-Za-z_]\w*)\s*(?=\(|\[|;)")
 
 
+# An `__asm__("sym")' ALIAS SUFFIX MUST BE STRIPPED BEFORE READING THE NAME.
+#
+# For a FUNCTION alias -- `s32 f(s32) __asm__("g");' -- the declared name is
+# followed by `(' and the scan finds `f' correctly. For a DATA alias --
+# `extern s16 D_80026472_i __asm__("D_80026472");' -- the last identifier
+# before a `(' is **__asm__**, so that is what came back as the declared name.
+#
+# Consequence, batch 30: `needed_decls' then asked whether the body refers to
+# `__asm__', which no body does, and SILENTLY DROPPED the declaration. The
+# unit failed to compile at integration with `D_80026472_i' undeclared, while
+# the agent's own copy -- which has the declaration -- compiled and verified
+# fine. The two function aliases beside it survived, so the failure looked
+# arbitrary.
+#
+# Data aliases are rare, which is why this lasted: the project's alias pattern
+# is normally applied to functions. The dry run caught it.
+_ASM_ALIAS = re.compile(r"__asm__\s*\(\s*\"[^\"]*\"\s*\)")
+
+
 class DECLARED:
     """`DECLARED.search(decl)` -> a match whose group(1) is the declared name."""
 
     @staticmethod
     def search(decl):
+        decl = _ASM_ALIAS.sub(" ", decl)
         for m in _DECL_CAND.finditer(decl):
             if not _TYPEWORD.match(m.group(1)):
                 return m

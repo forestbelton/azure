@@ -86,6 +86,98 @@
    func_8004491C delay slot (word 29) and the `lh $v0, 0x0($s4)' ring load
    (word 45).  Whatever it is produces no instruction in that window.
 
+   AGENT-h130, 2026-11-24, BATCH 30.  STILL 5 ALIGNED DIFFERENCES.  The body
+   below is unchanged: I reproduced agent-h38's 170 words / 5 aligned rows
+   exactly, byte for byte, with the same five rows at the same target words,
+   and 13 further spellings are priced below.  (My dispatch brief said this
+   park stood at 23 rows; that is the figure of the DELETED h13 park.  The
+   file is right and the brief was wrong -- 5 is what this shape measures.)
+
+   THE DIAGNOSIS IS NARROWED FROM `find the missing $v0 consumer' TO A PROOF
+   THAT THERE IS NO SUCH CONSUMER REACHABLE AT 170 WORDS.  I read sched1's
+   output (`probe.c.sched') rather than only `.lreg'/`.greg', which names the
+   pseudos and, more usefully, the TIES.  In sched1 order the window is
+
+     insn 53   pseudo 105 = -0x10                  (li)
+     insn 54   pseudo  92 = ia = i & -0x10         (and)   <- chain's rival
+     insn 57   pseudo 106 = i + 1
+     insn 58   pseudo  93 = ib = (i + 1) & 0xF
+     insn 61   pseudo 107 = ia + ib
+     insn 62   pseudo 108 = 107 << 3
+     insn 66   pseudo  83 = a = 108 + base
+     insn 69   pseudo 111 = i + 0x10
+     insn 70   pseudo 112 = 111 << 3
+     insn 74   pseudo  84 = b = 112 + base
+     insn 77   pseudo  94 = ic = ib + 0x10         (REG_DEAD 93 here)
+     insn 80   pseudo 115 = ia + ic                (REG_DEAD 94 here)
+
+   so the chain 106 -> 93 -> 94 is one `combine_regs' quantity whose range is
+   insns 57..80, and that range CONTAINS six other values: 107, 108, 83, 111,
+   112, 84.  Those are the only candidates to hold $v0 across the chain, and
+   every one of them is unavailable, for a reason that is a fact about the
+   TARGET and not about this body:
+
+     * 107/108 are tied into one quantity with each other (each dies at the
+       next) and 108 IS USED AGAIN AFTER THE rand() CALLS -- it is the scaled
+       `a' index the target re-adds D_80026648 to with `addu $s3, $s3, $t3'.
+       So that quantity crosses five calls, `find_free_reg' starts from
+       `call_used_reg_set', and it can only have a callee-saved register.  It
+       gets $s3 in both bodies.
+     * 111/112/84 are one quantity ending in `b', which crosses the same five
+       calls: $s2 in both bodies.
+     * 83 is `a' and 92 is `ia' (tied to `c'): $s4 and $s1, both call-crossing.
+
+   I CONFIRMED 108's call-crossing IS FORCED, not a choice of this body: the
+   second-bank copy written off the pointer instead, `*(u32 *)((u8 *)a +
+   0x80)', comes out 168 words / 62 -- TWO WORDS SHORT, which is the
+   `lui'/`addiu D_80026648' pair the target really emits.  So there is no
+   spelling that frees 108 from the calls while keeping 170 words, and with
+   all six rivals callee-saved nothing marks $v0 in `regs_live_at' over insns
+   57..80.  `find_free_reg' then scans ascending (cdk-gcc's mips.h has no
+   `REG_ALLOC_ORDER') and hands the chain $v0.
+
+   WHAT THIS MEANS FOR THE NEXT AGENT.  Do not look for another statement
+   order and do not look for a reference bump: the quantity's priority is
+   irrelevant here, because NO rival wants $v0 at all, so the chain takes it
+   whatever its rank.  The only two things that can move it are
+     (a) a value that is born before insn 57, dies after insn 80, does NOT
+         cross a call, and costs no instruction -- which I believe is
+         impossible, since a quantity needs a set and a use; or
+     (b) the chain itself crossing a call, which I MEASURED for the first time
+         (it was listed as untried): the whole index block moved above
+         func_8004491C is 170 words / 24 rows, and it does hold the word
+         count, so the register IS reachable from the quantity's own
+         properties -- just in the wrong direction (callee-saved, not $v1).
+   My own reading is that these five rows are not a C-level fact at all and
+   that the next real move is the permuter on the index block, or accepting
+   the park.  They are 5 rows out of 170 words and the whole rest of the body,
+   including the $s0..$s7/$fp assignment, is exact.
+
+   EVERY SPELLING agent-h130 MEASURED, all 170 words unless stated, all
+   against the 5-row body:
+
+     `ic = ((i + 1) & 0xF) + 0x10' recomputed instead of `ib + 0x10'      5
+       (cse unifies it back to `ib + 0x10'; identical code)
+     `a's index as `(ib + ia)' rather than `(ia + ib)'                    5
+     `c's index as `(ic + ia)' rather than `(ia + ic)'                   23
+     a separate local `j' for `i + 1', then `ib = j & 0xF'                5
+     `(ia + ib) * 8' for the `a' index instead of `<< 3'                  5
+     `(ia + ic) * 8' for the `c' index instead of `<< 3'                  5
+     `a = &D_800265C8[ia + ib]' (array ref) with b and c left integer     5
+     `b's scaled index hoisted into its own local used twice             27
+     the second-bank `a' copy as `*(u32 *)((u8 *)a + 0x80)'
+         -- TWO WORDS SHORT, so the target really emits the
+            lui/addiu D_80026648 pair                     168 words,     62
+     the second-bank `a' copy indexed `(ic - 0x10 + ia)'    176 words,    68
+     the second-bank `a' copy indexed `(ia + ic - 0x10)'                 32
+     the whole index block moved ABOVE func_8004491C
+         (the chain then crosses the call)                               24
+     `n->unk_10 = step' moved BELOW the index block                      13
+
+   The last two are the park's own two "what I would try next" shapes, now
+   priced.  Neither helps, and the 13-row one is the closest miss in this
+   file after the kept body.
+
    WHAT I WOULD TRY NEXT.  Find the missing $v0 consumer, not another
    statement order -- order is exhausted below.  Two concrete shapes:
      * a value computed before the index block and used after it that

@@ -151,6 +151,93 @@
    are compiler-layout questions rather than missing statements, so a
    permuter run over the tail is the next step and not more reading.
 
+   ===================================================================
+   UPDATE, agent-h126, 2026-11-24, batch 30.  STILL PARKED at 118 words
+   and 11 ALIGNED DIFFERENCES -- the body below is unchanged and is still
+   the best on rows.  Nothing above is retracted; the twin
+   func_b44_80172050 and the four call-graph donors in NEAR.txt were read
+   and neither lends anything here.  What is new is that THE THREE WORDS
+   ARE NOW REACHABLE IN PLAIN C, and a pass-order fact that explains the
+   whole of this park's first table.
+
+   WHY EVERY DUPLICATED ARM LOSES THE COMPUTE, from toplev.c.  In this
+   compiler jump_optimize is called with cross_jump = 1 ONLY ONCE, at
+   toplev.c:3690, AFTER reload and sched2; every earlier call
+   (toplev.c:3266, 3312, 3373, 3379) passes cross_jump = 0 and the first
+   and third pass after_regscan = 1.  So (a) identical arms cannot be
+   cross-jumped before flow, yet they still collapse, and (b) a then-arm
+   whose only insn is a DEAD SET is killed by the after_regscan dead-store
+   removal in jump.c BEFORE flow, which turns the branch into a jump to the
+   next insn, which the same pass deletes, after which flow removes the
+   compute.  That is the mechanism behind every 118-word row above, and it
+   is why no arm-shaped device can keep the three words.  Measured, all
+   118 words unless stated:
+
+       no device at all, plain `d[0x85] = 0;'              17   also moves
+                                                                the 0x85 sb
+       then-arm is `zz = 1;' (fresh dead s32 local)        17
+       then-arm is `t = NULL;' (dead, t already dead)      11   identical
+                                                                residue to
+                                                                the parked
+                                                                body, and one
+                                                                line shorter
+       then-arm is `e = e;'                                17   deleted
+       then-arm is `c = c;'                                17   deleted
+       then-arm is `d = d;'                                17   deleted
+       `e = D_80173FB8;' dominating, then-arm repeats it   17   cse -> copy,
+                                                                deleted
+       the two arms are the SAME TWO INDEPENDENT STORES IN
+         THE OPPOSITE ORDER (0x84 / 0x85)       125 words, 27
+       the same with three stores               126 words, 17
+   The last two are the interesting negative: sched2 does NOT normalise the
+   order of two independent adjacent stores across two blocks, so the
+   "arms identical only after scheduling" route is closed, and the arms
+   survive as two real blocks plus the branch.
+
+   THE THREE WORDS, IN PLAIN C, AT 121 WORDS AND 13 ROWS.  Give the ANDed
+   value a consumer that flow cannot delete -- a store into the frame's
+   unreferenced 8-byte local.  Replacing the duplicated arm with
+
+       d[0x85] = 0;
+       unused[0] = *(u16 *)(p + 0x98) & 0x8000;
+
+   measures 121 words / 13 aligned differences and EMITS the second read:
+   `lhu $v0, 0x98($s2)' and `andi $v0, $v0, 0x8000' land where the target
+   has them.  `unused[1]' instead of `unused[0]' is the same 121 / 13.
+   The remaining tail delta is one word in the wrong place, not a missing
+   one: built `lhu / andi / sw $v0, 0x18($sp)' against target
+   `lhu / nop / andi', and the `lui $a1, %hi(D_80173FB8)' schedules six
+   words early.  So the carrier store is itself the last fault in the
+   tail, and this is the build to scaffold a permuter run from -- NOT the
+   body below -- because it is 2 words from the target where the body
+   below is 5, and both of its remaining faults are named.
+   For the record a volatile read keeps only the load:
+       (void)(*(volatile u16 *)(p + 0x98) & 0x8000);   119 words, 14
+   which is `lhu' alone -- the andi is dead and flow takes it.
+
+   THE TWO WORDS (the second shared return-0 pair) ARE STILL UNSOLVED and
+   two more shapes are now ruled out:
+       the gate rewritten with no `else' at all -- `if (flag) { if (t !=
+         NULL) goto cont; return 0; } if (func_800A2CB8(...) == 0)
+         return 0; cont:'                                    11   FREE,
+                                                                  identical
+                                                                  to the
+                                                                  `else if'
+       `return (s32)t;' in the t == NULL arm                  11   FREE
+       the arms the other way round in the goto form  119 words, 22
+   The first of those kills the natural hypothesis -- that the t == NULL
+   return 0 and the func_800A2CB8 return 0 merge BECAUSE they are sibling
+   arms of one if/else.  They are not: separate them completely and jump2
+   still merges them.  From jump.c, the merge is find_cross_jump over
+   jump_chain[epilogue label], which is pushed at the head while insns are
+   scanned forward (jump.c:259) and so is walked LATEST-FIRST, with
+   minimum = 2 matching insns; all three `addu $v0, $zero, $zero' + jump
+   blocks match at 2, so the choice is made inside the chain walk and no
+   source ordering reached it.  Note the parked build already reproduces
+   the t == NULL pair EXACTLY, rows 31..36 inclusive -- the only fault is
+   where the func_800A2CB8 arm's branch points.
+
+   ===================================================================
    DECLARATIONS
    u8 *func_800A04F0_r(u8 *p, s32 x, s32 y, s16 dir) __asm__("func_800A04F0");
    s16 func_800A0134(u8 *a, u8 *b);

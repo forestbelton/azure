@@ -120,7 +120,30 @@ def parked():
         return set()
 
 
-ALIGNED = re.compile(r"(\d+)\s+ALIGNED DIFFERENCE", re.I)
+# THE HEADLINE RESIDUE: MATCH ACROSS A LINE BREAK, THEN TAKE THE LAST.
+#
+# The original pattern had a LITERAL SPACE in "ALIGNED DIFFERENCE" and park
+# headlines wrap ("... 25 ALIGNED\n   DIFFERENCES"), so it matched NO headline
+# and fell through to the first unwrapped number in the file -- a rejected
+# spelling's price for one park (125 where the truth is 25) and ANOTHER
+# FUNCTION'S figure for another (23 where the truth is 5; park files quote a
+# sibling member's state as context). `\s+' is the actual fix; taking the last
+# match is what survives append-only UPDATE sections on top of it.
+#
+# Park files follow a convention I did not notice when I wrote this: the
+# current residue is written with ALIGNED in CAPS near the top, rejected
+# spellings in the priced table use lowercase, and an agent that NARROWS a
+# park appends a new caps figure rather than editing the old one. So a park
+# carries its whole history and the newest figure is last.
+#
+# My first version was case-insensitive and took the FIRST match. On
+# func_s21_80025BA0 -- narrowed 23 -> 16 -> 5 by two earlier agents -- that
+# reported **23** where the truth was **5**, and the brief I generated from it
+# told an agent the body was four times further from landing than it is. The
+# agent caught it ("my measurement puts it at 5, not the 23 in my brief").
+# Reading the oldest figure systematically under-rates exactly the parks that
+# have had the most work done on them.
+ALIGNED = re.compile(r"(\d+)\s+ALIGNED\s+(?:DIFFERENCE|[Dd]ifference)")
 # A LAYOUT blocker has to be matched NARROWLY. The first version of this
 # matched a bare "rodata" or "layout" and fired on 7 of 16 parks, including one
 # whose text says "no `rodata' block and no `jtbl_' symbol" -- i.e. it asserts
@@ -142,8 +165,11 @@ def park_report():
             continue
         name = fn[:-2]
         txt = open(os.path.join(d, fn), errors="replace").read()
-        m = ALIGNED.search(txt)
-        resid = int(m.group(1)) if m else None
+        hits = [int(x) for x in ALIGNED.findall(txt)]
+        resid = hits[-1] if hits else None
+        # show the narrowing when there is one -- it says who has worked on it
+        prog = (" (was %s)" % " -> ".join(str(h) for h in hits[:-1])
+                if len(hits) > 1 and len(set(hits)) > 1 else "")
         layout = bool(LAYOUT.search(txt))
         me = pool.get(name)
         best = ([r for r in dngtwin.rank(
@@ -152,15 +178,16 @@ def park_report():
         rows.append((best[0][0] if best else 0.0, name,
                      len(me[1]) if me else 0,
                      best[0][2] if best else None,
-                     best[0][1] if best else None, resid, layout))
+                     best[0][1] if best else None, resid, layout, prog))
     rows.sort(reverse=True)
     print("%d park(s), %d words" % (len(rows), sum(r[2] for r in rows)))
     print("a twin only helps a park blocked on C-LEVEL RESIDUE; a LAYOUT "
           "blocker is immune to it\n")
-    for ratio, name, w, nm, vtag, resid, layout in rows:
+    for ratio, name, w, nm, vtag, resid, layout, prog in rows:
         twin = ("%.3f %s (%s)" % (ratio, nm, vtag)) if nm else "no twin at 0.60"
         why = ("LAYOUT -- a twin does NOT unblock this" if layout and resid is None
-               else "%d aligned" % resid if resid is not None else "blocker not parsed")
+               else "%d aligned%s" % (resid, prog) if resid is not None
+               else "blocker not parsed")
         if layout and resid is not None:
             why += " + mentions layout, read the file"
         print("  %-22s %4dw  %-34s %s" % (name, w, twin, why))
