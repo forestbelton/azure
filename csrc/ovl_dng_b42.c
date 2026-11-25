@@ -266,6 +266,11 @@ extern u8 D_8017612C[];
 s32 func_800C77D0(void *, u8 *, s16, s32);
 void func_b42_80174AA4(u8 *p, UnkVec *b, u8 *c);
 
+s16 func_8009A350(s16, s16, s32, u16 *);
+s16 func_800BCB04u(u16, u16, s16) __asm__("func_800BCB04");
+void func_800AA53C(u8 *);
+void func_8009CE1C(u8 *, s16, s16, s16, s16, u32, s16);
+
 void func_b42_801708D4(u8 *p, UnkVec *b, u8 *c)
 {
     SVECTOR sv;
@@ -2979,7 +2984,7 @@ void func_b42_80174300(u8 *p, UnkVec *b, u8 *c)
    `--raw' is 18 differing, all relocations: 10 `jal's (7 of them `rand') and
    the 4 %hi/%lo pairs for D_80045340, func_b42_80174300, D_8017610C and
    D_800DEC70. */
-void func_b42_801744DC(u8 *p, UnkVec *b)
+void func_b42_801744DC(u8 *p, UnkVec *b, u8 *c)
 {
     UnkNode *n;
     u8 *q;
@@ -3031,7 +3036,7 @@ void func_b42_801744DC(u8 *p, UnkVec *b)
    slot template.  Every fact in func_b42_801744DC's comment was measured on
    that body and none was re-measured here, because there is nothing between
    the two for one to bite on. */
-void func_b42_801746EC(u8 *p, UnkVec *b)
+void func_b42_801746EC(u8 *p, UnkVec *b, u8 *c)
 {
     UnkNode *n;
     u8 *q;
@@ -3171,7 +3176,393 @@ u8 *func_b42_80174A00(u8 *p, u16 x, u16 y, s16 z)
     return NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b42", func_b42_80174AA4);
+/* The thrown object's own +0x10 driver and the largest body in this unit: a
+   thirteen-state machine on the payload's +0x16 that func_b42_80175494
+   spawns and parks the owner at +0x28 for.  State 0 fades the renderable's
+   three colour bytes in over ten frames on a /10 ramp; state 1 waits 0x1E
+   frames and then launches the object along the D_8017610C delta the owner's
+   +0x1C selects; state 2 is the flight, which steps the thrown object and
+   the actor it has grabbed (+0x2C) and the one it is dragging (+0x30) one
+   cell at a time, tests each destination with func_8009A350, func_800A45D8,
+   func_b42_80174A00, func_800BCB04 and func_b42_801748FC, and on a blocked
+   cell backs the step out, re-seats everything through func_800A2B04 /
+   func_8009A21C / func_800AA53C and hands the actor to func_8009CE1C;
+   state 10 fires sixteen func_b42_801744DC and sixteen func_b42_801746EC
+   bursts and cues 0x80B; state 11 is a ten-frame wait; state 12 marks the
+   owner 0x4D and retires the node.  636 words, 0 differing.
+
+   IT OWNS jtbl_b42_80170858: 14 words = 13 cases + 1 pad, dispatch bound 13,
+   only SEVEN distinct targets (jtcheck).  MINVAL IS 0 -- the dispatch
+   `sltiu $v0, $v1, 0xD' reads +0x16 with no subtraction -- so entry k IS
+   case k.  Real arms: 0, 1, 2, 10, 11 and 12.  CASES 3 THROUGH 9 ARE NOT
+   WRITTEN: their seven entries all hold .Lb42_80175460, which is the range
+   check's own `beqz' target and the function's return, so they are gcc's pad
+   to maxval and NOT arms.  Thirteen entries, six real cases, seven labels.
+   Thirteen cases is odd and a pad word is present, so another 8-aligned
+   rodata object follows it.  Six case nodes clears the five-node threshold
+   (`stmt.c:4808' with HAVE_casesi 0), so no filler case was needed.
+
+   NO TWIN AT ANY RATIO -- dngtwin reports no carved sibling at >= 0.60 and
+   xsibs nothing for this unit.  Written off the listing on top of the four
+   bodies around it: func_b42_80175494 (its spawner, so +0x28/+0x2C/+0x30 and
+   the n+0x20 payload were already named), func_b42_80174A00 and
+   func_b42_801748FC (the two ring walks it calls), func_b42_801744DC and
+   func_b42_801746EC (the bursts state 10 fires), and func_b42_80170DD0.
+
+   SIX FACTS, every one priced on this body at 636 words:
+
+   | spelling                                              | words | aligned |
+   | as written below                                       |  636  |    0    |
+   | no `do' wrapper on `blk = 1'                           |  636  |  143    |
+   | no `do' wrapper on `*(s16 *)(p + 0x16) = 0xA'          |  636  |  103    |
+   | NEITHER wrapper                                        |  636  |   67    |
+   | `u16 xx/yy' instead of `s32' + u16 parameters          |  636  |    6    |
+   | the two `cell' pointer locals kept                     |  636  |   19    |
+   | `g = *(u8 **)(p + 0x28)' with no `h' copy              |  634  |    5    |
+   | the +0x2C null re-test on `h2' instead of on memory    |  636  |    1    |
+
+   THE TWO REFERENCE BUMPS ARE ONLY CORRECT TOGETHER, and that is the
+   headline: each one ALONE is far worse than neither (143 and 103 against
+   67), and only the pair reaches 0.  They are two halves of one
+   `allocno_compare' ordering.  `-da' on this body (probe.c.flow) gives
+   blk 9 refs / 94 insns / 4 calls, mv 26 / 297 / 7, u 29 / 336 / 14,
+   p 78 / 657 / 20, so the unbumped order is mv > u > blk and the target's is
+   blk > mv > u with p ahead of u; bumping blk alone fixes blk and mv and
+   then lets `u' take $s3 off the `p' parameter, and bumping p alone does
+   nothing for blk.  Both bumps are word-free `do { } while (0)' wrappers
+   round a single store, and the scope is deliberately ONE STATEMENT: a
+   wrapper round the whole three-test gate bumps every register inside it and
+   is 191 aligned differences.  I think both are MACRO RESIDUE -- "mark this
+   cell blocked" and "retire to state 0xA" are exactly the one-line macros a
+   state machine of this shape would have -- but the scope is chosen by
+   measurement, so call them devices.
+
+   THE HEIGHT ARGUMENTS MUST BE `s32' LOCALS PASSED TO `u16' PARAMETERS, not
+   `u16' locals.  A `u16' local is an SImode pseudo carrying an explicit
+   `and 0xffff', and combine's `simplify_and_const_int' then rewrites the
+   enclosing `(plus (ashift X 6) 32)' into an `ior' because the low six bits
+   are known zero: six `ori $a1, $v0, 0x20' against the target's `addiu'.
+   With `s32' locals the `plus' has no `and' beside it and stays an `addiu',
+   and the truncation moves to the CALL, which is why
+   `func_800BCB04u(u16, u16, s16)' is a second alias beside the unit's
+   existing `func_800BCB04h(s32, s32, s16)': cse then computes each `andi'
+   once and both calls share it, exactly as $s1/$s0 do in the target.  Where
+   the listing really does show `ori' -- the two inline argument pairs at
+   .Lb42_80175174 and .Lb42_8017526C -- the source is `(x << 6) | 0x20' on a
+   `u8' whose value cannot exceed 0xFFFF, so the truncation is deleted
+   outright.
+
+   THREE RETURN VALUES NEED THEIR OWN COPY LOCAL, which is the brief's
+   missing-register-to-register-copy shape pointing the other way: the target
+   loads into a temp, TESTS the temp, and only then copies to the long-lived
+   pseudo.  `h' for `*(u8 **)(p + 0x28)' is the expensive one -- without it
+   the body is two words short and the whole callee-saved assignment shifts,
+   and case 12's one use is what keeps the raw load alive (it is spelled
+   `h[0xAC]', not `g[0xAC]').  `h3' does the same for both
+   `*(u8 **)(p + 0x30)' sites.
+
+   NO `cell' POINTER LOCAL: the D_8017610C record must be re-indexed inline
+   at both subtract sites (19 rows with the locals).  That is the opposite of
+   the usual advice and it is a birth-order effect -- with a local the
+   pointer is born before the `lb' that shares its block and takes $a0 off
+   it.
+
+   AND THE +0x2C NULL RE-TEST MUST READ MEMORY, `if (*(u8 **)(p + 0x2C) !=
+   NULL)' and not `if (h2 != NULL)', for the last single row: cse then knows
+   the field is NULL on the failing path and threads the branch straight to
+   .Lb42_801751DC instead of through the shared re-test.
+
+   `--raw' is 53 differing and all 53 are relocations -- 16 D_8017610C halves
+   (8 `lui'/`addiu' pairs), 2 for the jump table, 23 `jal's, 7 `j's, 3 for
+   D_800814A0 and 2 for func_b42_80174A00. */
+void func_b42_80174AA4(u8 *p, UnkVec *b, u8 *c)
+{
+    u16 sp20;
+    u8 *g;
+    u8 *h;
+    u8 *h2;
+    u8 *h3;
+    u8 *q;
+    u8 *r;
+    UnkVec *mv;
+    u8 *u;
+    s32 xx;
+    s32 yy;
+    s32 hh;
+    s32 blk;
+    s32 i;
+    s32 t;
+
+    h = *(u8 **)(p + 0x28);
+    g = h;
+    switch (*(s16 *)(p + 0x16))
+    {
+    case 0:
+        *(s16 *)(p + 0x1E) = *(u16 *)(p + 0x1E) + 1;
+        t = *(s16 *)(p + 0x1E) * 0x80 / 10;
+        c[0xE] = t;
+        c[0xD] = t;
+        c[0xC] = t;
+        if (*(s16 *)(p + 0x1E) >= 0xA)
+        {
+            *(s16 *)(p + 0x16) = *(u16 *)(p + 0x16) + 1;
+            *(s16 *)(p + 0x1E) = 0;
+        }
+        break;
+    case 1:
+        *(s16 *)(p + 0x1E) = *(u16 *)(p + 0x1E) + 1;
+        if (*(s16 *)(p + 0x1E) >= 0x1E)
+        {
+            *(s16 *)(p + 0x16) = *(u16 *)(p + 0x16) + 1;
+            *(s16 *)(p + 0x1E) = 0;
+            b->unk_0C = D_8017610C[*(s16 *)(p + 0x1C)].unk_00 << 20;
+            b->unk_10 = D_8017610C[*(s16 *)(p + 0x1C)].unk_02 << 20;
+            func_800A56E0(0x808);
+        }
+        break;
+    case 2:
+        if (*(s8 *)(p + 0x4C) * 64 + 0x20 == *(s16 *)((u8 *)b + 0x2) &&
+            *(s8 *)(p + 0x4D) * 64 + 0x20 == *(s16 *)((u8 *)b + 0x6))
+        {
+            *(s16 *)(p + 0x26) = 0;
+            func_8009A350(*(s8 *)(p + 0x4C), *(s8 *)(p + 0x4D), *(s16 *)(p + 0x1C), &sp20);
+            if ((sp20 & 0x8400) != 0)
+            {
+                *(s16 *)(p + 0x26) = 1;
+            }
+            p[0x4C] = p[0x4C] + ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_00;
+            p[0x4D] = p[0x4D] + ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_02;
+            xx = *(s8 *)(p + 0x4C) * 64 + 0x20;
+            yy = *(s8 *)(p + 0x4D) * 64 + 0x20;
+            if (*(s16 *)(p + 0x26) == 0)
+            {
+                if ((s16)func_800A45D8(xx, yy, *(s16 *)((u8 *)b + 0xA)) != 0)
+                {
+                    *(s16 *)(p + 0x26) = 1;
+                }
+            }
+            if (*(s16 *)(p + 0x26) == 0)
+            {
+                if (func_b42_80174A00(g, (s8)p[0x4C], (s8)p[0x4D], *(s16 *)((u8 *)b + 0xA)) != NULL)
+                {
+                    *(s16 *)(p + 0x26) = 1;
+                }
+            }
+            if (*(s16 *)(p + 0x26) == 0)
+            {
+                hh = func_800BCB04u(xx, yy, *(u16 *)((u8 *)b + 0xA) - 0x20);
+                if (hh >= 0x200 || hh > *(s16 *)((u8 *)b + 0xA) + 0x20 ||
+                    hh < *(s16 *)((u8 *)b + 0xA))
+                {
+                    *(s16 *)(p + 0x26) = 1;
+                }
+            }
+            if (*(s16 *)(p + 0x26) == 1)
+            {
+                do
+                {
+                    *(s16 *)(p + 0x16) = 0xA;
+                } while (0);
+                *(s16 *)(p + 0x1E) = 0;
+                b->unk_10 = 0;
+                b->unk_0C = 0;
+                q = *(u8 **)(p + 0x30);
+                if (q == NULL)
+                {
+                    break;
+                }
+                u = q + 0x20;
+                r = *(u8 **)(q + 0xC);
+                mv = *(UnkVec **)(q + 0x8);
+                *(s32 *)(u + 0x14) &= ~0x100000;
+                func_800A2B04(mv, r[0x24], r[0x25]);
+                func_8009A21C(r[0x24], r[0x25], (*(s32 *)(u + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+                func_800AA53C(u);
+                break;
+            }
+            if (*(u8 **)(p + 0x2C) == NULL)
+            {
+                h2 = func_b42_801748FC(g, (s8)p[0x4C], (s8)p[0x4D], *(s16 *)((u8 *)b + 0xA));
+                *(u8 **)(p + 0x2C) = h2;
+                if (*(u8 **)(p + 0x2C) != NULL)
+                {
+                    q = h2;
+                    u = q + 0x20;
+                    r = *(u8 **)(q + 0xC);
+                    *(s32 *)(u + 0x14) |= 0x100000;
+                    func_8009A3D0(r[0x24], r[0x25],
+                                  (*(s32 *)(u + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+                }
+            }
+        }
+        if (*(u8 **)(p + 0x2C) != NULL)
+        {
+            q = *(u8 **)(p + 0x2C);
+            r = *(u8 **)(q + 0xC);
+            mv = *(UnkVec **)(q + 0x8);
+            u = q + 0x20;
+            if (r[0x24] * 64 + 0x20 == *(s16 *)((u8 *)mv + 0x2) &&
+                r[0x25] * 64 + 0x20 == *(s16 *)((u8 *)mv + 0x6))
+            {
+                func_8009A350(r[0x24], r[0x25], *(s16 *)(p + 0x1C), &sp20);
+                blk = (sp20 & 0x8400) != 0;
+                r[0x24] = r[0x24] + ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_00;
+                r[0x25] = r[0x25] + ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_02;
+                xx = r[0x24] * 64 + 0x20;
+                yy = r[0x25] * 64 + 0x20;
+                if (blk == 0)
+                {
+                    if ((s16)func_800A45D8(xx, yy, *(s16 *)((u8 *)mv + 0xA)) != 0)
+                    {
+                        do
+                        {
+                            blk = 1;
+                        } while (0);
+                    }
+                }
+                if (blk == 0)
+                {
+                    if (func_b42_80174A00(g, r[0x24], r[0x25], *(s16 *)((u8 *)b + 0xA)) != NULL)
+                    {
+                        blk = 1;
+                    }
+                }
+                if (blk == 0)
+                {
+                    hh = func_800BCB04u(xx, yy, *(u16 *)(u + 0x88) - 0x20);
+                    if (hh >= 0x200 || hh > *(s16 *)(u + 0x88) + 0x20 || hh < *(s16 *)(u + 0x88))
+                    {
+                        blk = 1;
+                    }
+                }
+                if (func_b42_801748FC(u, r[0x24], r[0x25], *(s16 *)(u + 0x88)) != NULL)
+                {
+                    blk = 1;
+                }
+                if (blk == 1)
+                {
+                    *(s32 *)(u + 0x14) &= ~0x100000;
+                    r[0x24] = r[0x24] -
+                              ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_00;
+                    r[0x25] = r[0x25] -
+                              ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_02;
+                    func_800A2B04(mv, r[0x24], r[0x25]);
+                    func_8009A21C(r[0x24], r[0x25],
+                                  (*(s32 *)(u + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+                    func_800AA53C(u);
+                    *(s16 *)(p + 0x16) = 0xA;
+                    *(s16 *)(p + 0x1E) = 0;
+                    b->unk_10 = 0;
+                    b->unk_0C = 0;
+                    func_8009CE1C(u, 7, g[0x11], 0xA, *(s16 *)(g + 0x2A),
+                                  (u32)g | 0xA0000000, 2);
+                    h3 = *(u8 **)(p + 0x30);
+                    if (h3 == NULL)
+                    {
+                        break;
+                    }
+                    q = h3;
+                    u = q + 0x20;
+                    r = *(u8 **)(q + 0xC);
+                    mv = *(UnkVec **)(q + 0x8);
+                    *(s32 *)(u + 0x14) &= ~0x100000;
+                    func_800A2B04(mv, r[0x24], r[0x25]);
+                    func_8009A21C(r[0x24], r[0x25],
+                                  (*(s32 *)(u + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+                    func_800AA53C(u);
+                    break;
+                }
+            }
+            if ((r[0x24] - D_8017610C[*(s16 *)(p + 0x1C)].unk_00) * 64 + 0x20 !=
+                    *(s16 *)((u8 *)mv + 0x2) ||
+                (r[0x25] - D_8017610C[*(s16 *)(p + 0x1C)].unk_02) * 64 + 0x20 !=
+                    *(s16 *)((u8 *)mv + 0x6))
+            {
+                hh = func_800BCB04h((r[0x24] << 6) | 0x20, (r[0x25] << 6) | 0x20,
+                                    *(s16 *)(u + 0x88));
+                if (*(s16 *)((u8 *)mv + 0xA) < hh)
+                {
+                    *(s16 *)((u8 *)mv + 0xA) = *(u16 *)((u8 *)mv + 0xA) + 0x10;
+                    *(s16 *)(u + 0x88) = hh;
+                }
+            }
+            mv->unk_00 += b->unk_0C;
+            mv->unk_04 += b->unk_10;
+        }
+        h3 = *(u8 **)(p + 0x30);
+        if (h3 != NULL)
+        {
+            q = h3;
+            r = *(u8 **)(q + 0xC);
+            mv = *(UnkVec **)(q + 0x8);
+            u = q + 0x20;
+            if (r[0x24] * 64 + 0x20 == *(s16 *)((u8 *)mv + 0x2) &&
+                r[0x25] * 64 + 0x20 == *(s16 *)((u8 *)mv + 0x6))
+            {
+                r[0x24] = r[0x24] + ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_00;
+                r[0x25] = r[0x25] + ((UnkDngB42Cell *)&D_8017610C[*(s16 *)(p + 0x1C)])->unk_02;
+            }
+            else
+            {
+                hh = func_800BCB04h((r[0x24] << 6) | 0x20, (r[0x25] << 6) | 0x20,
+                                    *(s16 *)(u + 0x88));
+                if (*(s16 *)((u8 *)mv + 0xA) < hh)
+                {
+                    *(s16 *)((u8 *)mv + 0xA) = *(u16 *)((u8 *)mv + 0xA) + 0x10;
+                    *(s16 *)(u + 0x88) = hh;
+                }
+            }
+            mv->unk_00 += b->unk_0C;
+            mv->unk_04 += b->unk_10;
+        }
+        if ((*(s8 *)(p + 0x4C) - D_8017610C[*(s16 *)(p + 0x1C)].unk_00) * 64 + 0x20 !=
+                *(s16 *)((u8 *)b + 0x2) ||
+            (*(s8 *)(p + 0x4D) - D_8017610C[*(s16 *)(p + 0x1C)].unk_02) * 64 + 0x20 !=
+                *(s16 *)((u8 *)b + 0x6))
+        {
+            xx = *(s8 *)(p + 0x4C) * 64 + 0x20;
+            yy = *(s8 *)(p + 0x4D) * 64 + 0x20;
+            hh = func_800BCB04u(xx, yy, *(s16 *)((u8 *)b + 0xA));
+            if (*(s16 *)((u8 *)b + 0xA) < hh)
+            {
+                *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) + 0x10;
+            }
+        }
+        b->unk_00 += b->unk_0C;
+        b->unk_04 += b->unk_10;
+        break;
+    case 10:
+        i = 0;
+        do
+        {
+            func_b42_801744DC(p, b, c);
+            i++;
+        } while (i < 0x10);
+        i = 0;
+        do
+        {
+            func_b42_801746EC(p, b, c);
+            i++;
+        } while (i < 0x10);
+        func_800A56E0(0x80B);
+        *(s16 *)(p + 0x16) = *(u16 *)(p + 0x16) + 1;
+        *(s16 *)(p + 0x1E) = 0;
+        *(u16 *)(c + 0x14) |= 0x80;
+    case 11:
+        *(s16 *)(p + 0x1E) = *(u16 *)(p + 0x1E) + 1;
+        if (*(s16 *)(p + 0x1E) >= 0xA)
+        {
+            *(s16 *)(p + 0x16) = *(u16 *)(p + 0x16) + 1;
+            *(s16 *)(p + 0x1E) = 0;
+        }
+        break;
+    case 12:
+        h[0xAC] = 0x4D;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    }
+}
 
 /* The state-spawner for this bank's thrown object: allocate a 0x212 node
    driven by func_b42_80174AA4, park the owner at the payload's +0x28 and
