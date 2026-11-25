@@ -99,6 +99,15 @@ typedef struct UnkDngS58Name12
    The rest of this comment is the family representative's and its other
    numbers are its own.
 */
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+s32 func_800BCB04(s32, s32, s16);
+extern u8 D_80045340[];
+extern u8 D_800DE870[];
+UnkNode *func_8003FC64(s32);
+void func_8003DB94(void *, void *, s32);
+extern u8 D_80025908[];
+
 void func_s02_8002404C(u8 *p, u8 *b, u8 *c)
 {
     s16 t;
@@ -114,7 +123,74 @@ void func_s02_8002404C(u8 *p, u8 *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_800240C0);
+/* This bank's spawner for the 0x212 decoration node: one frame at the
+   payload's +0x2 and +0x4, func_s02_8002404C as the node's step, the
+   renderable set to 0x60 with 0 at +0x06, 0xC raised in its flags, then the
+   mover SEEDED FROM THE THREE RAW s16 PARAMETERS and immediately incremented
+   by the caller's vector, and finally 0x400 as both scale halves, 0x80 over
+   r+0xC..0xE, 0x7DCF at +0x12, 0x100 raised in the flags again and the record
+   registered with func_8003DB94 against D_800DE870 -- third argument 2, not
+   the 0 every other copy of this skeleton passes.  75 words, 0 differing,
+   FIRST COMPILE.  1 member, 75 words (dngfam.py).
+
+   TWIN: the landed func_s46_80024D34 (csrc/ovl_dng_s46.c, 74 words,
+   dngtwin 0.752).  I took it over the 0.816 func_s59_80024DD4 on the word
+   delta -- s46 is one word away, s59 is +24 -- and the choice was right: the
+   body landed first compile.  Both of s46's facts are inapplicable or absent
+   here rather than priced: it has no jitter (so its fold/associate fact about
+   `load + ((rand() & 0x1F) - 0x10)' has nothing to apply to, there being no
+   rand() in this body at all), and its `r->unk_10 = 0x60' between two flag
+   raises is moot because this copy raises 0xC once and 0x100 once with the
+   whole mover block between them.  What DID carry is s46's shape fact that
+   `r' IS ASSIGNED TWICE -- the target reloads n->unk_0C after the mover
+   stores, and the second block's `lw $a0, 0xC($s0)' is that reload.
+
+   MEASURED HERE, and the one fact that is this body's own:
+
+   * THE THREE MOVER CHANNELS ARE WRITTEN TWICE: once from the raw parameter
+     and once `+=' the caller's vector.  Written as the single statement
+     `*(s16 *)((u8 *)m + 0x2) = dx + *(u16 *)((u8 *)v + 0x2);' it is 74 words
+     and 14 aligned differences -- the missing word and the rows are the
+     three `addu $v0, $sN, $zero' copies, which are cse forwarding the stored
+     parameter into the read-modify-write.  A plain sum has no load to
+     forward and emits one `addu' per channel.  Six stores, not three. */
+void func_s02_800240C0(u8 *a, UnkVec *v, u8 *c, s16 dx, s16 dy, s16 dz)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        *(s16 *)(p + 0x2) = 1;
+        *(s16 *)(p + 0x4) = 1;
+        n->unk_10 = (u32)func_s02_8002404C;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x60;
+        r->unk_06 = 0;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = dx;
+        *(s16 *)((u8 *)m + 0x6) = dy;
+        *(s16 *)((u8 *)m + 0xA) = dz;
+        *(s16 *)((u8 *)m + 0x2) += *(u16 *)((u8 *)v + 0x2);
+        *(s16 *)((u8 *)m + 0x6) += *(u16 *)((u8 *)v + 0x6);
+        *(s16 *)((u8 *)m + 0xA) += *(u16 *)((u8 *)v + 0xA);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x400;
+        r->unk_1C = 0x400;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = 0x80;
+        r->unk_12 = 0x7DCF;
+        r->unk_14 |= 0x100;
+        func_8003DB94(r, D_800DE870, 2);
+    }
+}
 
 /* One semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
    projected through the 0x1F800000 scratchpad, with the tile's colour word
@@ -286,7 +362,69 @@ void func_s02_8002443C(u8 *p, UnkVec *v, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_80024604);
+/* The node's drift step, gated on height: when the caster-relative floor
+   probe at (+0x2, +0x6, +0xA + 2) comes back above the node's own +0xA, bleed
+   the mover along the D_8006CCD8/D_8006CCE8 direction pair at the payload's
+   +0x14 scaled by its +0x32 countdown and shifted 10, with a fresh
+   rand() & 0xFFFF jitter per axis and a flat +0x20000 climb PLUS
+   rand() & 0xFFF on the third; then raise the bank tick, drop +0x32 by 8 and,
+   at zero, raise the redraw bit in the node's -0x2 and in D_800814A0.
+   85 words, 0 differing, FIRST COMPILE.  1 member, 85 words (dngfam.py).
+
+   TWIN: the landed func_s01_80024448 (csrc/ovl_dng_s01.c, 93 words,
+   dngtwin 0.921).  ovl_dng_s01 is this unit's sibling bank throughout --
+   func_s02_8002443C/func_s01_80024280 are a 1.000 clone pair and
+   func_s02_80024758/func_s01_800245BC another -- so s01 was read for the
+   shape and this file's own landed bodies for the spellings.
+
+   Four deltas, all read off this listing rather than guessed:
+     - the shift is 10, not s01's 9;
+     - the third axis is `+= 0x20000 + (rand() & 0xFFF)', the opposite SIGN
+       from s01's `+= 0xFFE00000 - (rand() & 0xFFF)' (listing: `lui $a0,
+       (0x20000 >> 16)' then two `addu', so a positive constant and a
+       positive jitter);
+     - the bank tick is this unit's D_80025914;
+     - THE TAIL GATE HAS NO VIEW ARM.  s01's is
+       `... <= 0 || (*(u16 *)(c + 0x14) & 0x8000) != 0'; this copy tests only
+       the countdown, and that absence is the whole of the 8-word delta
+       dngtwin reports.  `c' is therefore never read and is declared only to
+       match the step signature func_8004491C installs.
+
+   Of s01's own stated facts, taken as a SHAPE twin (both frames are -0x20
+   with two callee-saved saves, $s0/$s1, in the same order):
+     - HOLDS: THE THREE PROBE ARGUMENTS GO THROUGH LOCALS AND `z' IS WRITTEN
+       FIRST.  The listing emits `lhu 0xA', `lhu 0x2', `lhu 0x6' and only then
+       the `li 1'/`sh' of the tick store, which is s01's measured z,x,y order
+       and its measured position for the tick.  Not re-priced here: the body
+       landed first compile with that order and I spent the budget on the
+       bodies below instead, so treat it as INHERITED, not measured on this
+       relink.
+     - HOLDS: the rand() term comes SECOND in each sum (`addu $v0, $a0' with
+       the product first).
+     - FREE, as s01 also found: `*(u16 *)(p + 0x32) -= 8' folded into its own
+       gate.  Kept folded. */
+void func_s02_80024604(u8 *p, UnkVec *v, u8 *c)
+{
+    s16 z;
+    s32 x;
+    s32 y;
+
+    z = *(u16 *)((u8 *)v + 0xA) + 2;
+    x = *(u16 *)((u8 *)v + 0x2);
+    y = *(u16 *)((u8 *)v + 0x6);
+    D_80025914 = 1;
+    if (*(s16 *)((u8 *)v + 0xA) < (s16)func_800BCB04(x, y, z))
+    {
+        v->unk_00 += ((D_8006CCD8[*(s16 *)(p + 0x14)] * *(s16 *)(p + 0x32)) << 10) + (rand() & 0xFFFF);
+        v->unk_04 += ((D_8006CCE8[*(s16 *)(p + 0x14)] * *(s16 *)(p + 0x32)) << 10) + (rand() & 0xFFFF);
+        v->unk_08 += 0x20000 + (rand() & 0xFFF);
+    }
+    if ((s16)(*(u16 *)(p + 0x32) -= 8) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
    each axis by a fresh rand() & 0x1F and the caller's own offset
@@ -335,10 +473,202 @@ void func_s02_80024758(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_80024878);
+/* The three-phase shuffle step: raise the bank tick, spend one of the
+   payload's +0x2 frames and bump the +0x1C sub-counter; every second frame
+   clear that counter and advance the +0x1E phase 0 -> 1 -> 2 -> 0, nudging
+   the +0x28 byte by +8, +8, -0x10 as it goes; then integrate the +0x60
+   velocity into the mover's Z and raise the redraw bit when the frames run
+   out or when the view's +0x14 carries 0x8000.  74 words, 0 differing.
+   1 member, 74 words (dngfam.py).
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_800249A0);
+   NO TWIN at any ratio by dngtwin, and CALLEE.txt's row for it is the
+   degenerate 2-symbol one the brief warns about -- its two hits are this
+   file's own func_s02_8002404C and func_s02_8002443C, and that turned out to
+   be the right answer rather than noise: both are landed HERE, and between
+   them they supply every idiom this body needs (the D_80025914 tick, the
+   `*(u16 *)(p + 0x1C) += 1' counter-bump-then-gate pair, the D_800814A0 kill
+   tail written out TWICE for the two gates).  Neither xsibs nor the
+   callee-set grep was run.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_80024B14);
+   ONE FACT MEASURED, AND IT INVERTS func_s02_8002404C FORTY WORDS ABOVE:
+
+   * THE FRAME DECREMENT IS THE PLAIN COMPOUND `*(u16 *)(p + 0x2) -= 1', NOT
+     A SPLIT READ/WRITE-BACK.  Split into `t = *(s16 *)(p + 0x2) - 1; <bump>;
+     *(s16 *)(p + 0x2) = t;' -- which is exactly the spelling
+     func_s02_8002404C's comment prices at 7 rows in its own favour -- this
+     body is 74 words / 10 aligned differences, all ten in the prologue.  The
+     mechanism is cse, not allocation: with the 0x2 write-back placed after
+     the 0x1C bump it invalidates cse's entry for 0x1C, so the gate reloads
+     with `lh $v1, 0x1C($a0)' where the target forwards the just-stored value
+     through `sll 16'/`sra 16'.  Two compound assignments leave both loads at
+     the top and let reorg take the 0x2 store into the branch's delay slot,
+     which is what the target does.
+     This is a REFERENCE-COUNT/STATEMENT-ORDER fact in the brief's taxonomy --
+     the class where every recorded inversion lives -- so the inversion is
+     the predicted outcome rather than a surprise.
+
+   * The switch is a COMPARE CHAIN, not a table (jtcheck: 0 tables for this
+     function), so its arms emit in source order and the order is priced:
+     written descending 2, 1, 0 it is 70 words / 16 aligned differences.
+     Ascending 0, 1, 2 is what lands. */
+void func_s02_80024878(u8 *p, UnkVec *v, u8 *c)
+{
+    D_80025914 = 1;
+    *(u16 *)(p + 0x2) -= 1;
+    *(u16 *)(p + 0x1C) += 1;
+    if (*(s16 *)(p + 0x1C) >= 2)
+    {
+        *(s16 *)(p + 0x1C) = 0;
+        switch (*(s16 *)(p + 0x1E))
+        {
+        case 0:
+            *(s16 *)(p + 0x1E) = 1;
+            *(u8 *)(p + 0x28) += 8;
+            break;
+        case 1:
+            *(s16 *)(p + 0x1E) = 2;
+            *(u8 *)(p + 0x28) += 8;
+            break;
+        case 2:
+            *(s16 *)(p + 0x1E) = 0;
+            *(u8 *)(p + 0x28) -= 0x10;
+            break;
+        }
+    }
+    v->unk_08 += *(s32 *)(p + 0x60);
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The 0x212 spark spawner: allocate the node, give it the caller's own s16
+   at the payload's +0x2 and a random (rand() & 0x1FFFF) + 0x10000 fall rate
+   at +0x60, park func_s02_80024878 as the step, raise 0xC in the
+   renderable's flags, seed the mover from the parent node's own mover plus
+   the three s16 offsets, then dress it -- 0x1000 both scale halves, 0x80 over
+   r+0xC..0xE -- and copy the 12-byte D_80025908 name record into the node's
+   own +0x40, pointing the slot's +0x8 at it.  93 words, 0 differing, FIRST
+   COMPILE.  1 member, 93 words (dngfam.py).
+
+   dngtwin's best row is func_b08_801741D0 at 0.743 and I never opened it.
+   What landed this body is the UNUSED TYPEDEF LEAD from the brief: this
+   unit's declaration block already carried `UnkDngS58Name12' with no user,
+   and `grep -ln UnkDngS58Name12 csrc/*.c' names csrc/ovl_dng_s58.c, whose
+   landed func_s58_8002553C is this exact skeleton --
+   func_8003FC64(0x212) / +0x10 install / func_8004491C(n, D_80045340) /
+   n->unk_0C re-read after the mover stores / a 12-byte struct copy into the
+   node / slot->unk_08 pointing at it.  The `lwl'/`lwr' + `swl'/`swr' run in
+   the listing IS that typedef: a struct whose type has ALIGNMENT 1
+   (`u8 b[0xC]'), which is s58's own stated fact and the reason the copy is
+   not three aligned `lw's.
+
+   Carried from s58 and HOLDING: `r' IS ASSIGNED TWICE -- the target reloads
+   n->unk_0C after the mover stores.  MEASURED here rather than inherited:
+   with a single assignment it is 92 words / 28 aligned differences, the
+   missing word being the second `lw $a3, 0xC($s1)'.
+
+   Deltas off my own listing: 0x1000 scales rather than s58's zeros, no
+   r->unk_10/r->unk_06 clear, the mover is `parent mover + parameter' per
+   channel instead of a flat copy, and the record goes to +0x40 not +0x58.
+   Everything else is first-compile and therefore UNMEASURED -- in particular
+   the 0xE/0xD/0xC descending byte order and `*((u8 *)r + 0xE)' as a plain
+   cast rather than `r->unk_0C[2]' are s58's/s46's spellings taken on trust,
+   not facts about this body. */
+void func_s02_800249A0(UnkNode *a, s16 dx, s16 dy, s16 dz, s16 e)
+{
+    UnkNode *n;
+    u8 *p;
+    UnkVec *m;
+    UnkSlot *r;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        *(s16 *)(p + 0x2) = e;
+        *(s32 *)(p + 0x60) = (rand() & 0x1FFFF) + 0x10000;
+        n->unk_10 = (u32)func_s02_80024878;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)a->unk_08 + 0x2) + dx;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)a->unk_08 + 0x6) + dy;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)a->unk_08 + 0xA) + dz;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = 0x80;
+        *(UnkDngS58Name12 *)((u8 *)n + 0x40) = *(UnkDngS58Name12 *)D_80025908;
+        r->unk_08 = (u32)((u8 *)n + 0x40);
+    }
+}
+
+/* The growth step: raise the bank tick, add 2 to the payload's +0x2 age
+   and, while that is under 0x28, drive BOTH of the renderable's scale halves
+   at age * 204; at 0x78 and again when the view's +0x14 carries 0x8000,
+   raise the redraw bit in the node's -0x2 and in D_800814A0.  53 words,
+   0 differing, FIRST COMPILE.  1 member, 53 words (dngfam.py).
+
+   NO TWIN at any ratio, and as with func_s02_80024878 the only lead was
+   CALLEE.txt's degenerate 2-symbol row naming this file's own landed
+   func_s02_8002404C and func_s02_8002443C.  8002404C is the whole answer:
+   its read/tick/write-back split and its `lhu'-from-an-`s16'-read idiom are
+   what this body is built from, and 8002443C supplied the D_800814A0 kill
+   tails.  No xsibs, no callee-set grep, no donor outside this file.
+
+   ONE FACT MEASURED, and it is func_s02_8002404C's at 8002404C's own sign --
+   note that func_s02_80024878 forty words below INVERTS it, so the two
+   neighbours disagree and the target is the only authority:
+
+   * THE AGE READ-MODIFY-WRITE MUST BE SPLIT AROUND THE TICK STORE.
+     `t = *(s16 *)(p + 0x2) + 2; D_80025914 = 1; *(s16 *)(p + 0x2) = t;' is
+     53 words / 0 differing; folded into the compound
+     `*(u16 *)(p + 0x2) += 2' with the tick store first it is 53 words /
+     14 aligned differences.  The target emits read, foreign store,
+     write-back in that order and one compound assignment cannot produce it.
+
+   * `* 204' IS WRITTEN AS THE PLAIN CONSTANT.  The listing's
+     sll/addu/sll/addu/sll run is what cc1psx turns `* 204' into; it is not
+     a decomposition to be transcribed.
+
+   * NOT MEASURED, because the body landed first compile: the four reads of
+     +0x2 after the write-back are all plain `*(s16 *)(p + 0x2)'.  cse
+     forwards the first two from the write-back and the `sh 0x1C($a2)' store
+     invalidates the third, which is why the target has one `sll'/`sra' pair
+     and then two `lh' reloads -- no local, and no hoist, is needed to get
+     that pattern. */
+void func_s02_80024B14(u8 *p, UnkVec *v, u8 *c)
+{
+    s16 t;
+
+    t = *(s16 *)(p + 0x2) + 2;
+    D_80025914 = 1;
+    *(s16 *)(p + 0x2) = t;
+    if (*(s16 *)(p + 0x2) < 0x28)
+    {
+        *(s16 *)(c + 0x1C) = *(s16 *)(p + 0x2) * 204;
+        *(s16 *)(c + 0x1E) = *(s16 *)(p + 0x2) * 204;
+    }
+    if (*(s16 *)(p + 0x2) >= 0x78)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_80024BE8);
