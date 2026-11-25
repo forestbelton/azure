@@ -41,13 +41,13 @@ void func_s55_800243C4(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern u8 D_800DF334[];
 
 u8 *func_8003DE58(u8 *, UnkSlot *, s16 *, s16);
-UnkNode *func_s55_80024ED4(UnkVec *);
+UnkNode *func_s55_80024ED4(UnkVec *b);
 s32 func_80065F90(s32, s32);
 s32 func_80064710(s32);
 
 void func_s55_8002660C(u8 *s, s16 *b, s16 lo, s16 hi);
 void func_s55_800266D0(u8 *s, s16 d);
-void func_s55_80026548(u8 *, UnkElem *);
+void func_s55_80026548(u8 *p, UnkElem *e);
 void func_s55_8002589C(UnkNode *a, s16 b, s32 c);
 s32 func_800A44E0(u16, u16, s16, u32);
 u8 *func_8009B4B0(u8 *, u16, u16);
@@ -68,13 +68,66 @@ u8 *func_s55_80024578(u8 *m, u8 *act);
 extern u32 D_800814A8;
 extern u8 D_80028F68[];
 extern u8 D_8002964C[];
-s32 func_s55_80026384(s16, s16, s16, s16);
-void func_s55_80025604(s16, s16, s16);
+s32 func_s55_80026384(s16 x, s16 y, s16 z, s16 h);
+UnkNode *func_s55_80025604(s16 x, s16 y, s16 z);
 extern u8 D_80028220[];
 s32 func_800C95C0(u8 *, UnkVec *, UnkSlot *);
 extern u8 D_8002822C[];
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80024024);
+void func_s55_80025528(u8 *p, UnkVec *b);
+s32 func_80064584(s32);
+s32 func_800644B8(s32);
+void func_8003E0C4(void *, void *, void *);
+s32 func_8003FA44(s32);
+extern u8 D_80028268[];
+extern u8 D_80083498[];
+s16 func_800A07D0(s16, s16, s16, s16);
+extern u8 D_80028214[];
+s32 func_80045C34(u8 *, UnkVec *, UnkSlot *);
+void func_s55_80024728(u8 *p, UnkVec *b, UnkSlot *s);
+UnkNode *func_s55_80025344(s16 x, s16 y, s16 z, s16 r);
+extern s16 D_80083228;
+extern u8 *D_800E3D18;
+s32 func_800CEEFC(u8 *, UnkVec *, UnkSlot *);
+
+/* Rotate an SVECTOR by the heading in `h' and project it: build a MATRIX with
+   RotMatrix and a zero translation, then hand it, a two-word SVECTOR holding
+   {0, h << 12}, and the caller's output vector to csrc/unk_113D0.c's
+   func_8003E0C4, which is PushMatrix / SetTransMatrix / SetRotMatrix /
+   RotTrans / PopMatrix. Its one caller is func_s55_80024728's state 1, which
+   passes the payload's sign-extended +0xC..+0x10 triple and gets the world
+   delta back at a stack VECTOR. 21 words, 0 differing.
+
+   func_80065820 IS `RotMatrix' (splat/common_syms.txt), so the call needs no
+   declaration at all and the first parameter's type is read off the library
+   prototype rather than guessed. The project had no name for func_8003E0C4;
+   its definition is csrc/unk_113D0.c's and its signature is copied from there.
+
+   THE ONE FACT: the three translation stores must be `m.t[2]', `m.t[1]',
+   `m.t[0]' -- DESCENDING. Ascending they emit ascending and it is 21 words /
+   2 aligned differences. Adjacent independent stores are an order to price,
+   not to read, and here the listing's order IS the source's.
+
+   The frame fixes the storage: locals occupy sp+0x10..0x37, which is 40 bytes
+   -- a 32-byte MATRIX plus 8. The 8-byte object takes two WORD stores
+   (sw $zero, 0x30 and sw $v0, 0x34), so it is a two-element `s32' array
+   cast at the call, which is this unit's own idiom in func_s55_80024578 and
+   func_s55_80025B5C, and not an SVECTOR with halfword field assignments.
+   `h' is `s32': the shift is a bare `sll $v0, $a1, 12' with no sll/sra
+   promotion pair in front of it. */
+void func_s55_80024024(SVECTOR *r, s32 h, void *out)
+{
+    MATRIX m;
+    s32 arr[2];
+
+    m.t[2] = 0;
+    m.t[1] = 0;
+    m.t[0] = 0;
+    arr[0] = 0;
+    arr[1] = h << 12;
+    RotMatrix(r, &m);
+    func_8003E0C4(&m, arr, out);
+}
 
 /* The bank's SEVEN-state cutscene driver, run off *(s16 *)(p + 0xA) and the
    relink of csrc/ovl_dng_s69.c's landed six-state func_s69_80024020
@@ -444,9 +497,392 @@ void func_s55_80024654(s16 x0, s16 y0, s16 z0, s16 x1, s16 y1, s16 z1, s16 *out)
     out[2] = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80024728);
+/* The 0x12 chain link's +0x10 step and the biggest body in this unit: three
+   states on *(s16 *)(p + 0x2C), under a top-level split on whether the
+   payload's +0x8 holds a predecessor link.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80024ED4);
+   State 0 installs func_800CEEFC through func_8004491C and FALLS THROUGH into
+   state 1. State 1, with no predecessor, flies the head of the chain: it
+   turns the vector from the mover to the payload's +0x14/+0x16/+0x18 target
+   into a bearing pair through this unit's func_s55_80024654, sign-extends the
+   twelve-bit current bearing at +0xC/+0xE/+0x10 and the new one, splices the
+   new bearing's top nibble back from the old one whenever the two differ by
+   0x801 or more (the wrap guard), eases the current bearing a quarter of the
+   way towards it, and turns that into a world delta through this unit's
+   func_s55_80024024, which it adds onto the mover. When the +0x30 countdown
+   runs out it re-seeds the target from D_80083780 and the party's own slot,
+   projected through func_8003DE58 against the direction-indexed sheet at
+   D_800E3D18, and raises +0x2E. With +0x2E at 1 it instead drags the mover
+   onto the target by 1/count, and at the end of that count snaps it there,
+   spawns the burst through this unit's func_s55_80025344 four times -- once
+   with heading 0 and then with 3 and 2 -- and advances. With a predecessor it
+   follows that link's mover a quarter of the way, takes the darker of the two
+   slots' three colour bytes, and retires when the link has. State 2 is the
+   fade. Every state that does not retire eases the mover's velocity triple a
+   quarter of the way towards its position triple, on alternate frames of the
+   +0x34 counter -- a block the target has THREE TIMES, once per arm, because
+   each copy falls into a different continuation and jump2 cannot cross-join
+   them. 491 words, 0 differing.
+
+   NO TWIN at any ratio, and jtcheck reports no table in this unit: the
+   three-case switch is a compare chain. Written from the listing on this
+   unit's own landed bodies -- func_s55_80025C80 for the switch skeleton and
+   the `((s16 *)p)[N]' array-ref idiom, func_s55_800250B4 for the 1/count
+   ease, func_s55_80025AC4 for the retire pair -- plus the two functions I
+   landed just before it, func_s55_80024024 and func_s55_80025344, which are
+   its own callees. That is the in-unit route at its strongest: the two
+   callees' parameter lists are what fixed this body's argument types, and it
+   came in at 492 words / 9 aligned differences on the FIRST COMPILE.
+
+   TWO FACTS CARRIED IT FROM 9 TO 0, and both are already in this unit.
+
+   (1) THE +0x34 COUNTER BUMP MUST BE THE ARRAY REF
+   `((s16 *)p)[0x1A] = ((u16 *)p)[0x1A] + 1'. As the plain cast
+   `*(s16 *)(p + 0x34) = *(u16 *)(p + 0x34) + 1' it is 491 words / 5 aligned
+   differences: the `sh %lo(D_800281F8)' cannot move below the +0x34 load and
+   the whole five-instruction prologue group emits in a different order.
+   MEM_IN_STRUCT_P on the varying store lets alias.c's
+   fixed-scalar-versus-varying-struct rule drop the edge to the fixed-address
+   counter. Identical mechanism, identical polarity and the same `D_800281F8'
+   partner as func_s55_80025528 above -- two bodies, one cause, which is the
+   difference between a number and an explanation.
+
+   (2) STATE 2's COLOUR NEEDS A `u8 c' LOCAL. Written as a read-back --
+   `*(u8 *)(s + 0xD) = *(u8 *)(s + 0xC)' -- it is 492 WORDS, one long, and 4
+   aligned differences, the extra word a `move' the target does not have.
+   Same class as func_s55_80024ED4's three read locals, and the same spelling
+   the landed func_s55_800250B4 uses forty listings up.
+
+   PRICED FROM THE BODY AT 0, LOAD-BEARING:
+     the twelve-bit sign extension must be a CONDITIONAL EXPRESSION with ONE
+     store. Writing just the FIRST of its six sites as an `if'/`else' with a
+     store in both arms is 492 / 6 -- the same `reg_n_sets'/cross-join
+     mechanism as func_s55_80025604's, which needed the identical form.
+     the wrap guard must be `__builtin_abs(...) >= 0x801'; as two
+     comparisons it is 489 words / 7.
+     D_80083780 must be a pointer local in the re-seed: inline it is
+     490 / 13.
+     the sheet must be an ARRAY SUBSCRIPT,
+     `((u8 **)D_800E3D18)[(... >> 9) & 7]'. Transcribing the folded form the
+     listing shows -- `*(u8 **)(D_800E3D18 + ((... >> 7) & 0x1C))' -- is
+     491 / 2. combine folds `(y & 7) * 4' into `(x >> 7) & 0x1C'; the source
+     cannot be read back off it.
+     the predecessor's mover and slot must be reached by RE-READING
+     `*(UnkNode **)(p + 0x8)', not through the local `n' the NULL gate uses.
+     Through `n' each is 489 words / 8, and the two faults are independent.
+     The same fact, the same way round, is in func_s55_80025AC4 above.
+
+   MEASURED AND FREE at 491 / 0, so none of these is why it lands:
+     the sign-extension mask written `| 0xF800' instead of `| 0xFFFFF800' at
+     all six sites -- the store is a halfword, so combine narrows either one;
+     `r2 = D_800E3D7C' as a pointer local versus the symbol inline at both
+     reads (the OPPOSITE of D_80083780 thirty words away, which is 13 rows --
+     two symbols in one block wanting different answers);
+     `for (j = 3; j > 1; j--)' for `j >= 2', which is the same tree;
+     and `n->unk_1E' written as the plain cast `*(u16 *)((u8 *)n + 0x1E)'.
+     THAT LAST ONE IS AN INVERSION OF A SIBLING'S FACT AND WORTH THE INK:
+     func_s55_80025AC4 in this same unit prices the plain cast at 39 words /
+     17 and insists on the COMPONENT_REF, and csrc/ovl_dng_s25.c records the
+     same for four sites. Here it is free in both directions, because the
+     gate sits in a block of its own with a CODE_LABEL between it and the
+     fixed-address store it would otherwise have to serialise against. So
+     "what the rest of this unit does" is not evidence, even for
+     MEM_IN_STRUCT_P. */
+void func_s55_80024728(u8 *p, UnkVec *b, UnkSlot *s)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *r2;
+    u8 *g;
+    u8 c;
+    s32 j;
+    s16 d[3];
+    s32 v[3];
+    s16 o[3];
+
+    D_800281F8 += 1;
+    ((s16 *)p)[0x1A] = ((u16 *)p)[0x1A] + 1;
+    switch (*(s16 *)(p + 0x2C))
+    {
+    case 0:
+        func_8004491C((UnkNode *)(p - 0x20), (u32)func_800CEEFC);
+        *(s16 *)(p + 0x2C) = *(u16 *)(p + 0x2C) + 1;
+    case 1:
+        n = *(UnkNode **)(p + 0x8);
+        if (n == NULL)
+        {
+            if (*(s16 *)(p + 0x2E) == 0)
+            {
+                func_s55_80024654(*(s16 *)((u8 *)b + 0x2), *(s16 *)((u8 *)b + 0x6),
+                                  *(s16 *)((u8 *)b + 0xA), *(s16 *)(p + 0x14),
+                                  *(s16 *)(p + 0x16), *(s16 *)(p + 0x18), o);
+                *(s16 *)(p + 0xC) = ((*(u16 *)(p + 0xC) & 0x800) != 0) ? (*(u16 *)(p + 0xC) | 0xFFFFF800) : (*(u16 *)(p + 0xC) & 0x7FF);
+                *(s16 *)(p + 0xE) = ((*(u16 *)(p + 0xE) & 0x800) != 0) ? (*(u16 *)(p + 0xE) | 0xFFFFF800) : (*(u16 *)(p + 0xE) & 0x7FF);
+                *(s16 *)(p + 0x10) = ((*(u16 *)(p + 0x10) & 0x800) != 0) ? (*(u16 *)(p + 0x10) | 0xFFFFF800) : (*(u16 *)(p + 0x10) & 0x7FF);
+                o[0] = ((*(u16 *)&o[0] & 0x800) != 0) ? (*(u16 *)&o[0] | 0xFFFFF800) : (*(u16 *)&o[0] & 0x7FF);
+                o[1] = ((*(u16 *)&o[1] & 0x800) != 0) ? (*(u16 *)&o[1] | 0xFFFFF800) : (*(u16 *)&o[1] & 0x7FF);
+                o[2] = ((*(u16 *)&o[2] & 0x800) != 0) ? (*(u16 *)&o[2] | 0xFFFFF800) : (*(u16 *)&o[2] & 0x7FF);
+                if (__builtin_abs(o[0] - *(s16 *)(p + 0xC)) >= 0x801)
+                {
+                    o[0] = (*(u16 *)(p + 0xC) & 0xF000) | (o[0] & 0xFFF);
+                }
+                if (__builtin_abs(o[1] - *(s16 *)(p + 0xE)) >= 0x801)
+                {
+                    o[1] = (*(u16 *)(p + 0xE) & 0xF000) | (o[1] & 0xFFF);
+                }
+                if (__builtin_abs(o[2] - *(s16 *)(p + 0x10)) >= 0x801)
+                {
+                    o[2] = (*(u16 *)(p + 0x10) & 0xF000) | (o[2] & 0xFFF);
+                }
+                *(s16 *)(p + 0xC) = *(u16 *)(p + 0xC) + ((o[0] - *(s16 *)(p + 0xC)) >> 2);
+                *(s16 *)(p + 0xE) = *(u16 *)(p + 0xE) + ((o[1] - *(s16 *)(p + 0xE)) >> 2);
+                *(s16 *)(p + 0x10) = *(u16 *)(p + 0x10) + ((o[2] - *(s16 *)(p + 0x10)) >> 2);
+                func_s55_80024024((SVECTOR *)(p + 0xC), *(s16 *)(p + 0x3A), v);
+                b->unk_00 += v[0];
+                b->unk_04 += v[1];
+                b->unk_08 += v[2];
+                *(s16 *)(p + 0x3A) = 0xA0;
+                if ((*(s16 *)(p + 0x30) -= 1) <= 0)
+                {
+                    g = D_80083780;
+                    o[0] = *(u16 *)(g + 0x2);
+                    o[1] = *(u16 *)(g + 0x6);
+                    r2 = D_800E3D7C;
+                    o[2] = *(u16 *)(r2 + 0x88) - 0x50;
+                    func_8003DE58(((u8 **)D_800E3D18)[((D_80083228 + *(s16 *)(r2 + 0x2A) + 0x100) >> 9) & 7],
+                                  (UnkSlot *)D_80082E80, d, 0);
+                    o[0] = o[0] + d[0];
+                    *(s16 *)(p + 0x14) = o[0];
+                    o[1] = o[1] + d[1];
+                    *(s16 *)(p + 0x16) = o[1];
+                    o[2] = o[2] + d[2];
+                    *(s16 *)(p + 0x18) = o[2];
+                    *(s16 *)(p + 0x2E) = 1;
+                    *(s16 *)(p + 0x30) = 8;
+                }
+                if (*(u8 *)((u8 *)s + 0xC) < 0x80)
+                {
+                    *(s32 *)((u8 *)s + 0xC) += 0x80808;
+                }
+            }
+            else if (*(s16 *)(p + 0x2E) == 1)
+            {
+                if (*(s16 *)(p + 0x30) > 0)
+                {
+                    *(s16 *)((u8 *)b + 0x2) =
+                        *(u16 *)((u8 *)b + 0x2) +
+                        (*(s16 *)(p + 0x14) - *(s16 *)((u8 *)b + 0x2)) / *(s16 *)(p + 0x30);
+                    *(s16 *)((u8 *)b + 0x6) =
+                        *(u16 *)((u8 *)b + 0x6) +
+                        (*(s16 *)(p + 0x16) - *(s16 *)((u8 *)b + 0x6)) / *(s16 *)(p + 0x30);
+                    *(s16 *)((u8 *)b + 0xA) =
+                        *(u16 *)((u8 *)b + 0xA) +
+                        (*(s16 *)(p + 0x18) - *(s16 *)((u8 *)b + 0xA)) / *(s16 *)(p + 0x30);
+                }
+                if ((*(s16 *)(p + 0x30) -= 1) <= 0)
+                {
+                    *(s16 *)(p + 0x30) = 0;
+                    *(s16 *)((u8 *)b + 0x2) = *(u16 *)(p + 0x14);
+                    *(s16 *)((u8 *)b + 0x6) = *(u16 *)(p + 0x16);
+                    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(p + 0x18);
+                    if (func_s55_80025344(*(s16 *)(p + 0x14), *(s16 *)(p + 0x16),
+                                          *(u16 *)(p + 0x18) + 0x10, 0) != NULL)
+                    {
+                        for (j = 3; j >= 2; j--)
+                        {
+                            func_s55_80025344(*(s16 *)(p + 0x14), *(s16 *)(p + 0x16),
+                                              *(u16 *)(p + 0x18) + 0x10, j);
+                        }
+                        *(s16 *)(p + 0x30) = 8;
+                        *(s16 *)(p + 0x2C) = *(u16 *)(p + 0x2C) + 1;
+                    }
+                }
+            }
+            if ((*(u16 *)(p + 0x34) & 1) != 0)
+            {
+                b->unk_0C += (b->unk_00 - b->unk_0C) >> 2;
+                b->unk_10 += (b->unk_04 - b->unk_10) >> 2;
+                b->unk_14 += (b->unk_08 - b->unk_14) >> 2;
+            }
+        }
+        else
+        {
+            if ((n->unk_1E & 0x8000) != 0)
+            {
+                *(s16 *)(p + 0x30) = 2;
+                *(s16 *)(p + 0x2C) = *(u16 *)(p + 0x2C) + 1;
+            }
+            m = (*(UnkNode **)(p + 0x8))->unk_08;
+            b->unk_00 += (m->unk_00 - b->unk_00) >> 2;
+            b->unk_04 += (m->unk_04 - b->unk_04) >> 2;
+            b->unk_08 += (m->unk_08 - b->unk_08) >> 2;
+            if ((*(u16 *)(p + 0x34) & 1) != 0)
+            {
+                b->unk_0C += (b->unk_00 - b->unk_0C) >> 2;
+                b->unk_10 += (b->unk_04 - b->unk_10) >> 2;
+                b->unk_14 += (b->unk_08 - b->unk_14) >> 2;
+            }
+            r = (u8 *)(*(UnkNode **)(p + 0x8))->unk_0C;
+            if (*(u8 *)(r + 0xC) < *(u8 *)((u8 *)s + 0xC))
+            {
+                *(u8 *)((u8 *)s + 0xC) = *(u8 *)(r + 0xC);
+            }
+            if (*(u8 *)(r + 0xD) < *(u8 *)((u8 *)s + 0xD))
+            {
+                *(u8 *)((u8 *)s + 0xD) = *(u8 *)(r + 0xD);
+            }
+            if (*(u8 *)(r + 0xE) < *(u8 *)((u8 *)s + 0xE))
+            {
+                *(u8 *)((u8 *)s + 0xE) = *(u8 *)(r + 0xE);
+            }
+            if (*(u8 *)((u8 *)s + 0xC) < 0x80 - (*(s16 *)(p + 0x38) << 3))
+            {
+                *(s32 *)((u8 *)s + 0xC) += 0x80808;
+            }
+        }
+        break;
+    case 2:
+        if ((*(u16 *)(p + 0x34) & 1) != 0)
+        {
+            b->unk_0C += (b->unk_00 - b->unk_0C) >> 2;
+            b->unk_10 += (b->unk_04 - b->unk_10) >> 2;
+            b->unk_14 += (b->unk_08 - b->unk_14) >> 2;
+        }
+        c = *(u8 *)((u8 *)s + 0xC);
+        c = c - c / *(s16 *)(p + 0x30);
+        *(u8 *)((u8 *)s + 0xC) = c;
+        *(u8 *)((u8 *)s + 0xD) = c;
+        *(u8 *)((u8 *)s + 0xE) = c;
+        if ((*(s16 *)(p + 0x30) -= 1) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
+
+/* Spawn the 0x12 chain: sixteen nodes, each stepped by this unit's
+   func_s55_80024728, threaded onto each other through the payload's +0x8 and
+   numbered at +0x38. The first link is allocated against the resident
+   D_80083498 and the rest against their predecessor, and the first is kind
+   0x12 where the rest are 0x212. Every node's mover gets the caller's
+   position in BOTH its +0x2/+0x6/+0xA and its +0xE/+0x12/+0x16 triple, its
+   slot gets this bank's D_80028214 with 0x800 scales, and its payload a 0x10
+   countdown. Only link 0 seeds the flight: it offsets the target point by
+   func_80064584/func_800644B8 of the bearing func_800A07D0 returns from
+   D_80083780 to the caller, drops 0x40 on the third axis, runs
+   func_s55_80024654 to turn that into the +0x2C bearing pair, and dresses
+   through func_800B835C. It returns the last node, or the previous one if an
+   allocation fails. 120 words, 0 differing.
+
+   NO TWIN -- dngtwin reports no carved sibling anywhere in this unit. Written
+   off this unit's own landed func_s55_8002589C and func_s55_80025B5C for the
+   `func_8003FD64' / `n->unk_10' / `q = (u8 *)n + 0x20' spawn skeleton, and
+   off func_s55_80025C80 for the `r = D_80083780' pointer-local idiom.
+   func_800A07D0's `s16' signature is csrc/ovl_dungeon_800CABA8.c's.
+
+   FOUR FACTS, all measured here from a body at 0.
+
+   (1) THE THREE MOVER READS NEED THREE SEPARATE LOCALS, one per axis. With
+   ONE `u16 v' reused for all three it is 120 words / 2 aligned differences --
+   the `lw $s0, 0x8($s2)' that loads the mover moves one slot later. A local
+   assigned three times carries three `reg_n_sets' and loses
+   `adjust_priority's `birthing_insn_p' boost; three single-set locals keep
+   it. Declaring the shared local `s16' instead of `u16' is the same 2, so it
+   is the SET COUNT and not the width. SIXTEEN spellings of the surrounding
+   dress block -- both access forms for `n->unk_08' and `n->unk_10' crossed
+   with four statement orders -- all measure the IDENTICAL 120 / 2, which is
+   how I know the two rows are not a dependence or an order.
+   NOT MEASURABLE, and worth saying so rather than calling it free: writing
+   the +0xE/+0x12/+0x16 stores as read-backs of the +0x2/+0x6/+0xA stores
+   with no locals at all is also 120 / 0. cse forwards the stored value, so
+   the emitted code is identical and the tools cannot choose between them.
+
+   (2) D_80083780 MUST BE A POINTER LOCAL. Written inline at both reads it is
+   120 / 3: cc1psx keeps the `%hi' and folds the `%lo' into the first load's
+   offset, so the second load comes off a base that is `symbol + 2' and the
+   `addiu $v0, $v0, %lo(D_80083780)' the target has disappears. This is the
+   folded-offset trap the brief names, seen from the other side.
+
+   (3) THE ALLOCATION FAILURE MUST BE AN `else' ARM, not an early return.
+   `if (n == NULL) { return prev; }' before the body is 119 WORDS -- one
+   short -- and 9 aligned differences, because gcc then puts the return
+   INLINE after the gate where the target has it out of line between the loop
+   body and the loop increment. One `else' moves all nine.
+
+   (4) THE KIND TERNARY IS `(i != 0) ? 0x212 : 0x12'. Written the natural way
+   round, `(i == 0) ? 0x12 : 0x212', it is 120 / 3 -- the branch opcode
+   inverted and the two `addiu's exchanged. The same inversion holds in
+   func_s55_80025344 below at the same price, so it is the family's spelling
+   and not this body's. */
+UnkNode *func_s55_80024ED4(UnkVec *b)
+{
+    UnkNode *n;
+    UnkNode *prev;
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+    u8 *g;
+    u16 v;
+    u16 v2;
+    u16 v3;
+    s16 h;
+    s32 i;
+    s32 arr[2];
+
+    prev = NULL;
+    g = D_80083780;
+    h = func_800A07D0(*(s16 *)(g + 0x2), *(s16 *)(g + 0x6), *(s16 *)((u8 *)b + 0x2),
+                      *(s16 *)((u8 *)b + 0x6));
+    for (i = 0; i < 0x10; i++)
+    {
+        n = func_8003FD64((i != 0) ? 0x212 : 0x12,
+                          (prev != NULL) ? (void *)prev : (void *)D_80083498);
+        if (n != NULL)
+        {
+            q = (u8 *)n + 0x20;
+            n->unk_10 = (u32)func_s55_80024728;
+            m = n->unk_08;
+            v = *(u16 *)((u8 *)b + 0x2);
+            *(s16 *)((u8 *)m + 0x2) = v;
+            *(s16 *)((u8 *)m + 0xE) = v;
+            v2 = *(u16 *)((u8 *)b + 0x6);
+            *(s16 *)((u8 *)m + 0x6) = v2;
+            *(s16 *)((u8 *)m + 0x12) = v2;
+            v3 = *(u16 *)((u8 *)b + 0xA);
+            *(s16 *)((u8 *)m + 0xA) = v3;
+            *(s16 *)((u8 *)m + 0x16) = v3;
+            r = (u8 *)n->unk_0C;
+            *(u32 *)(r + 0x8) = (u32)D_80028214;
+            *(s16 *)(r + 0x1E) = 0x800;
+            *(s16 *)(r + 0x1C) = 0x800;
+            *(s16 *)(q + 0x30) = 0x10;
+            if (i == 0)
+            {
+                *(s16 *)(q + 0x14) = *(u16 *)((u8 *)m + 0x2) + (func_80064584(h) >> 5);
+                *(s16 *)(q + 0x16) = *(u16 *)((u8 *)m + 0x6) + (func_800644B8(h) >> 5);
+                *(s16 *)(q + 0x18) = *(u16 *)((u8 *)m + 0xA) - 0x40;
+                func_s55_80024654(*(s16 *)((u8 *)m + 0x2), *(s16 *)((u8 *)m + 0x6),
+                                  *(s16 *)((u8 *)m + 0xA), *(s16 *)(q + 0x14),
+                                  *(s16 *)(q + 0x16), *(s16 *)(q + 0x18),
+                                  (s16 *)((u8 *)n + 0x2C));
+                arr[0] = 0x1200340;
+                arr[1] = 0x200020;
+                func_800B835C(D_800DF334, arr, 1, 0);
+            }
+            *(UnkNode **)(q + 0x8) = prev;
+            prev = n;
+            *(s16 *)(q + 0x38) = i;
+        }
+        else
+        {
+            return prev;
+        }
+    }
+    return n;
+}
 
 /* The 0x212 beam's +0x10 step, three states on *(s16 *)(p + 0x2C) under this
    bank's D_800281F8 frame counter. State 0 opens the beam: the slot's +0x1E
@@ -591,11 +1027,267 @@ void func_s55_800250B4(u8 *p, UnkVec *b, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80025344);
+/* Spawn the 0x212 ring: sixteen nodes stepped by this unit's landed
+   func_s55_800250B4 with func_80045C34 through func_8004491C, each one placed
+   at (x, y, z) offset by cos/sin of i * 0x100 scaled by the caller's `r', its
+   slot given this bank's D_80028220 at +0x8 with a 0x1000 scale and an
+   i * 0x100 + 0x400 rotation, its +0x16/+0x18 tilt pair set from the same
+   trig divided by six at a 12-bit fixed point, and its payload armed with the
+   same point, the ring index at +0x38 and `r' / `r' + 4 at +0x3C / +0x30.
+   It returns the last node. 121 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80025528);
+   NO TWIN. Written off this unit's own landed func_s55_8002589C and
+   func_s55_80025B5C for the spawn skeleton; func_80045C34's signature is
+   csrc/ovl_dungeon_800CABA8.c's. Its one caller is func_s55_80024728's
+   state 1, below, which is where the four `s16' parameters come from.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80025604);
+   FIVE FACTS, all measured here from a body at 0.
+
+   (1) THE DIVISION IS BY 6 AND THE `>> 12' IS SOURCE. There is no `div' in
+   the listing, so the divisor is a literal; the magic is
+   `lui 0x2AAA' / `ori 0xAAAB' = 0x2AAAAAAB, which is ceil(2^32 / 6), and
+   gcc 2.7.2's expmed.c:3048 emits `(hi >> post_shift) - (x >> 31)' with the
+   SHIFT BEFORE the subtraction. The listing has `mfhi' / `subu' / `sra 12',
+   i.e. the shift AFTER, so post_shift is 0 and the `sra 12' belongs to the
+   program: `(-(f(a) << 12) / 6) >> 12'. Spelled as one division by
+   0x6000 = 6 * 4096 it is 121 words / 28 aligned differences, because that
+   divisor's own post_shift then lands inside the magic sequence. Reading the
+   pass source settled this in one grep where a sweep would not have found it.
+
+   (2) THE FINAL SUM NEEDS ITS OWN LOCAL. With one `s16 cx' carrying all
+   three stages -- the trig, the `r' scaling and the `x +' -- it is 121 / 2,
+   the final `addu's destination and operand order (`addu $s3, $s3, $v1' for
+   the target's `addu $s3, $v1, $s3'). Three `reg_n_sets' again, as in
+   func_s55_80024ED4 above: splitting the last stage off into `cx' leaves
+   `c0' with two sets and `cx' with one, and the order appears. With the
+   split in place the operand order is then MEASURABLE and load-bearing:
+   `cx = x + c0' lands and `cx = c0 + x' is 121 / 2. With the merged local
+   both orders read the same 2, so one-at-a-time pricing of the operand order
+   from the unsplit body says "free" and is wrong -- the brief's
+   "an improvement is not evidence" with the sign reversed.
+
+   (3) `c0' AND `c1' MUST BE `s16'. As `s32' the body is 117 words / 23: four
+   sll/sra promotion pairs vanish and the two `mult' operands change.
+
+   (4) THE KIND TERNARY IS `(r != 0) ? 0x212 : 0x12'; `(r == 0) ? 0x12 : 0x212'
+   is 121 / 3, the same figure and the same mechanism as
+   func_s55_80024ED4's.
+
+   (5) THE SCALING IS A SHIFT, NOT A DIVIDE: `c0 + (c0 * r >> 2)'. A bare
+   `sra $v0, $v1, 2' with no `srl 31' bias correction in front of it cannot
+   be a signed division by 4.
+
+   MEASURED AND FREE at 121 / 0, so it is not why this lands: the +0x2 store
+   written before the `cx' assignment rather than after it. */
+UnkNode *func_s55_80025344(s16 x, s16 y, s16 z, s16 r)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *t;
+    u8 *q;
+    s32 a;
+    s16 c0;
+    s16 c1;
+    s16 cx;
+    s16 cy;
+    s32 i;
+
+    for (i = 0; i < 0x10; i++)
+    {
+        n = func_8003FC64((r != 0) ? 0x212 : 0x12);
+        if (n != NULL)
+        {
+            n->unk_10 = (u32)func_s55_800250B4;
+            func_8004491C(n, (u32)func_80045C34);
+            a = i * 0x100;
+            m = n->unk_08;
+            c0 = func_80064584(a) >> 7;
+            c0 = c0 + (c0 * r >> 2);
+            c1 = func_800644B8(a) >> 7;
+            c1 = c1 + (c1 * r >> 2);
+            q = (u8 *)n + 0x20;
+            cx = x + c0;
+            *(s16 *)((u8 *)m + 0x2) = cx;
+            *(s16 *)(q + 0x1C) = cx;
+            cy = y + c1;
+            *(s16 *)((u8 *)m + 0x6) = cy;
+            *(s16 *)(q + 0x1E) = cy;
+            *(s16 *)((u8 *)m + 0xA) = z;
+            *(s16 *)(q + 0x20) = z;
+            t = (u8 *)n->unk_0C;
+            *(u32 *)(t + 0x8) = (u32)D_80028220;
+            *(s16 *)(t + 0x1C) = 0x1000;
+            *(s16 *)(t + 0x1A) = a + 0x400;
+            *(s16 *)(t + 0x16) = (-(func_800644B8(a) << 12) / 6) >> 12;
+            *(s16 *)(t + 0x18) = ((func_80064584(a) << 12) / 6) >> 12;
+            *(s16 *)(q + 0x14) = cx;
+            *(s16 *)(q + 0x16) = cy;
+            *(s16 *)(q + 0x18) = z;
+            *(s16 *)(q + 0x38) = i;
+            *(s16 *)(q + 0x30) = r + 4;
+            *(s16 *)(q + 0x3C) = r;
+        }
+    }
+    return n;
+}
+
+/* The 0x212 ring shard's +0x10 step, installed by func_s55_80025604 below:
+   glide the mover one frame, bleed the two horizontal velocity components by
+   3/16 a frame (`>> 3' plus `>> 4'), bump this bank's D_800281F8 counter, and
+   retire the node when the +0x30 countdown runs out OR when the two bled
+   components have decayed to within 4 of cancelling. 55 words, 0 differing.
+
+   NO TWIN -- dngtwin reports no carved sibling for any stub in this unit. The
+   glide block is this unit's own landed func_s55_80025C80's case 0x10 almost
+   verbatim (`b->unk_00 += b->unk_0C' and the two following), with that body's
+   `>> 2' decay replaced by the `>> 3' plus `>> 4' pair, and the retire pair is
+   func_s55_80025AC4's. The in-unit route; nothing else was needed.
+
+   THE ONE FACT, AND IT IS THE WHOLE BODY: the +0x30 countdown must be the
+   ARRAY REF `((s16 *)p)[0x18] -= 1'. As the plain cast
+   `*(s16 *)(p + 0x30) -= 1' it is 56 WORDS -- one long -- and 21 aligned
+   differences. The array ref gives the MEM MEM_IN_STRUCT_P, so alias.c's
+   fixed-scalar-versus-varying-struct rule drops the edge between the
+   `sh %lo(D_800281F8)' store and this varying store, and reorg sinks the
+   counter's store into the `blez's delay slot -- the extra word is the `nop'
+   that slot is left as otherwise. Same mechanism and same polarity as
+   func_s55_80025C80's `((s16 *)p)[0x1C] = 8' twelve listings up, and the
+   opposite polarity to func_s55_80025764's argument loads.
+
+   THE BUMP'S POSITION IS FREE HERE, which is worth saying because it is
+   priced at 15 and 18 aligned differences on two other bodies in this unit
+   (func_s55_80025AC4 and func_s55_80025764). With the array ref in place
+   `D_800281F8 += 1' measures 55 / 0 at the top, in the middle and last. Once
+   the store can reach the delay slot its RTL position no longer decides
+   anything -- so that fact is about those bodies' dependences, not about this
+   family, and a body at 0 is the only place it could have been seen.
+
+   MEASURED AND FREE at 55 / 0, so neither is why this lands: the three
+   position updates written as plain casts instead of struct fields, and the
+   retire test written as two separate arms instead of one `||'. (The second
+   is FREE and not NOT-MEASURABLE: the two arms compile to the same 55 words.)
+
+   LOAD-BEARING, all re-priced from this body at 0: the two decays must be
+   STRUCT FIELDS (as plain casts 55 / 2 -- the opposite of the position
+   updates beside them, two spellings in one statement group wanting opposite
+   answers); the decay of +0xC must come before the decay of +0x10 (reversed
+   54 words / 5); the +0x8 update must sit BEFORE both decays, not between
+   them (54 / 38); the three position updates must be +0x0, +0x4, +0x8 in that
+   order (+0x4 first is 54 / 14); each decay must be ONE subtraction of a sum,
+   not two subtractions (`x = x - (x >> 3) - (x >> 4)' is 55 / 23); and the
+   cancellation test must be `__builtin_abs' and not a pair of comparisons
+   (53 words / 5). */
+void func_s55_80025528(u8 *p, UnkVec *b)
+{
+    b->unk_00 += b->unk_0C;
+    b->unk_04 += b->unk_10;
+    b->unk_08 += b->unk_14;
+    b->unk_0C -= (b->unk_0C >> 3) + (b->unk_0C >> 4);
+    b->unk_10 -= (b->unk_10 >> 3) + (b->unk_10 >> 4);
+    D_800281F8 += 1;
+    if ((((s16 *)p)[0x18] -= 1) <= 0 ||
+        __builtin_abs(*(s16 *)((u8 *)b + 0xE) + *(s16 *)((u8 *)b + 0x12)) < 4)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* Spawn a ring of 0x20 shards around (x, y, z): each is a 0x212 node with
+   func_s55_80025528 as its +0x10 step and func_800C95C0 through
+   func_8004491C, its mover put at the caller's point with a velocity of
+   cos/sin of 0x80 per shard scaled by 1 << 11 and a fixed 0xFFFE0000 on the
+   third axis, and a payload armed with 0x20/0x20/1/0 at +0x0/+0x2/+0x4/+0x6
+   and 0x20 at +0x30. It returns the LAST node it allocated, which the one
+   caller -- this unit's landed func_s55_800250B4 -- discards.
+   88 words, 0 differing.
+
+   NO TWIN. Written off this unit's own landed func_s55_8002589C, which
+   spawns 0x212 nodes in a `for (i = ...; i > 0; i--)' loop the same way and
+   supplies the q = (u8 *)n + 0x20 payload idiom and the +0x0/+0x2/+0x4/+0x6
+   arming verbatim. func_80064584 and func_800644B8 are the resident
+   cos/sin pair (csrc/unk_113D0.c's func_8003E02C uses them that way); the
+   `& 0x800' / `| 0xFFFFF800' / `& 0x7FF' triple is a hand-written
+   sign-extension of their 12-bit result, and the source really does call the
+   routine THREE times per axis -- once for the test and once in each arm.
+
+   SIGNATURE CHANGE, AND IT IS REPORTED SEPARATELY: this unit's declaration
+   block had `void func_s55_80025604(s16, s16, s16)'. The body ends
+   `addu $v0, $s2, $zero' before the epilogue, which a void function does not
+   emit, so the return type is `UnkNode *'. func_s55_800250B4 calls it as a
+   statement and re-verifies at 164 words / 0 differing with the new
+   declaration.
+
+   THE ONE FACT, and it is a REFERENCE COUNT, not an allocation priority.
+   Each axis must be ONE store of a CONDITIONAL EXPRESSION,
+   `*(s32 *)((u8 *)m + 0xC) = (cond ? (f(a) | 0xFFFFF800) : (f(a) & 0x7FF))
+   << 11'. Written as an `if'/`else' with the store inside BOTH arms it is
+   88 words / 17 aligned differences -- a clean whole-body $s0/$s1 exchange
+   between `m' and the loop's cos/sin argument, nothing moved and no word
+   gained. The EMITTED CODE IS THE SAME either way, because jump2 cross-joins
+   the two arms' shared `sll'/`sw' pair; what differs is what local-alloc saw
+   BEFORE that join.
+
+   `-da' SETTLED IT IN ONE COMPILE and the arithmetic is exact. In the losing
+   form `.lreg' gives `m' 18 references across 36 insns and the strength-
+   reduced `i * 0x80' giv 17 across 57, so `allocno_compare' ranks them
+   4*18/36 = 2.000 against 4*17/57 = 1.193 and `.greg's allocation order line
+   reads `87 142 86 ...' -- `m' first, taking $s0. The duplicated store is
+   TWO insns of `m', and flow.c:2122 counts each once per enclosing loop, so
+   it is FOUR of those 18 references. Removing it takes `m' to 14, which drops
+   it a power of two to 3*14/36 = 1.167, just under the giv's 1.193, and the
+   order reverses. This is the brief's cliff arithmetic running the other way:
+   the usual remedy is to ADD references to win a register, and here the fix
+   is to stop paying for references that only exist before a cross-join.
+
+   AND THE DECLARATION ORDER IS NOT THE LEVER: all 24 permutations of the four
+   locals measure the IDENTICAL 88 words / 17 aligned differences. That is
+   what ruled out allocation priority before `-da' was run, and it is the
+   check the brief asks for first on a two-register exchange.
+
+   MEASURED AND REJECTED, 88 / 17 -- the same figure as the duplicated store,
+   which is the tell that it does not touch the cause: an `s32 t' local
+   assigned in both arms with ONE store after them, and the same with a
+   separate `t2' per axis. One store is not enough; the value must never be a
+   named local, because a local set in two arms carries two `reg_n_sets' and
+   loses `adjust_priority's birthing boost. */
+UnkNode *func_s55_80025604(s16 x, s16 y, s16 z)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *q;
+    s32 i;
+
+    for (i = 0; i < 0x20; i++)
+    {
+        n = func_8003FC64(0x212);
+        if (n != NULL)
+        {
+            n->unk_10 = (u32)func_s55_80025528;
+            func_8004491C(n, (u32)func_800C95C0);
+            m = n->unk_08;
+            *(s16 *)((u8 *)m + 0x2) = x;
+            *(s16 *)((u8 *)m + 0x6) = y;
+            *(s16 *)((u8 *)m + 0xA) = z;
+            *(s32 *)((u8 *)m + 0xC) =
+                (((func_80064584(i * 0x80) & 0x800) != 0) ? (func_80064584(i * 0x80) | 0xFFFFF800)
+                                                          : (func_80064584(i * 0x80) & 0x7FF))
+                << 11;
+            *(s32 *)((u8 *)m + 0x10) =
+                (((func_800644B8(i * 0x80) & 0x800) != 0) ? (func_800644B8(i * 0x80) | 0xFFFFF800)
+                                                          : (func_800644B8(i * 0x80) & 0x7FF))
+                << 11;
+            *(s32 *)((u8 *)m + 0x14) = 0xFFFE0000;
+            q = (u8 *)n + 0x20;
+            *(s16 *)(q + 0x0) = 0x20;
+            *(s16 *)(q + 0x2) = 0x20;
+            *(s16 *)(q + 0x4) = 1;
+            *(s16 *)(q + 0x6) = 0;
+            *(s16 *)(q + 0x30) = 0x20;
+        }
+    }
+    return n;
+}
 
 /* The 0x212 spark's +0x10 step: bump this bank's D_800281F8 counter, then
    turn the mover towards func_800BCB04's bearing or -- if it is already past
@@ -1095,11 +1787,193 @@ void func_s55_80025C80(u8 *p, UnkVec *b, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80026384);
+/* Spawn the 0x12 cluster: eighteen nodes, all stepped by this unit's landed
+   func_s55_80025C80, each at the caller's point with a 0x400 rotation at the
+   slot's +0x16 and the caller's heading plus 0x400 at +0x1A, 0x1000 scales,
+   0x20 at +0x10 and 0xC raised in the slot's flag halfword, and the slot's
+   sheet taken from this bank's D_80028268 sixteen bytes per node. Node 0 is
+   allocated against the resident D_80083498 and the rest against node 0,
+   which they also stash at their payload's +0x20. It refuses outright if
+   func_8003FA44 says the 0x12 pool is unavailable, UNWINDS every node it has
+   already made if one allocation fails, and otherwise finishes by running
+   this unit's func_s55_80025B5C on node 0 and returning it.
+   113 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_80026548);
+   NO TWIN. Written off this unit's own landed func_s55_8002589C and
+   func_s55_80025B5C; func_8003FA44's signature is csrc/unk_12DEC.c's and the
+   `extern u8 D_80083498[]' spelling with `func_8003FD64(kind, D_80083498)' is
+   csrc/ovl_dng_b11.c's and csrc/ovl_dng_b01.c's.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s55", func_s55_800265D0);
+   The return type stays `s32' as this unit's declaration block already had
+   it -- the one caller, the landed func_s55_800250B4, tests it against 0 --
+   so node 0 goes back through a `(s32)' cast rather than by widening the
+   prototype. The value IS measurable: returning `arr[1]' instead is
+   113 / 1.
+
+   THE ONE FACT, AND IT IS A HOIST CONTEST THAT `-da' SETTLED IN ONE COMPILE.
+   D_80028268 must be written INLINE in the loop, with no pointer local.
+   Given a local -- `u8 *g = D_80028268;' before the loop, which is the
+   spelling func_s55_80024ED4 above REQUIRES and which this unit uses
+   everywhere -- the body is 111 WORDS, two short, and 9 aligned differences:
+   the table ends up rematerialised inside the loop and $fp holds
+   func_s55_80025C80's address instead, which is the exact mirror of the
+   target.
+
+   `.lreg' prices it to one part in forty. Both candidates have THREE
+   loop-weighted references, so `allocno_compare' can only separate them on
+   live length: my local (pseudo 89) spans 114 insns because it is born in
+   the function's first block, and loop.c's own hoist of the step symbol
+   (pseudo 113) spans 108 because loop.c emits it into the loop PREHEADER,
+   after `i = 0'. 1*3/114 = 0.0263 against 1*3/108 = 0.0278, and `.greg's
+   allocation order line reads `... 113 89' -- the step first. Write the
+   symbol inline and BOTH are loop.c movables born in the preheader, and it
+   is the table that keeps $fp. Confirming the mechanism rather than the
+   spelling: `g' assigned immediately before its USE, inside the loop, is
+   also 113 / 0.
+
+   MEASURED AND FREE at 111 / 9 -- the same figure as the losing spelling,
+   which is the tell that it changes nothing: `(u32)&func_s55_80025C80' in
+   place of `(u32)func_s55_80025C80'.
+
+   The unwind must be the `else' arm of the allocation gate, not an early
+   return: as `if (arr[i] == NULL) { unwind; return 0; }' gcc puts the unwind
+   inline after the gate and the body is 110 words / 93 differences, with the
+   whole tail relocated. Same lever as func_s55_80024ED4's fact (3) and far
+   more expensive here because the unwind is a loop. (Priced mid-fight,
+   before the hoist was fixed; the direction is the transferable part.) */
+s32 func_s55_80026384(s16 x, s16 y, s16 z, s16 h)
+{
+    UnkNode *arr[0x12];
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+    s32 i;
+
+    if (func_8003FA44(0x12) == 0)
+    {
+        return 0;
+    }
+    for (i = 0; i < 0x12; i++)
+    {
+        arr[i] = func_8003FD64(0x12, (i != 0) ? (void *)arr[0] : (void *)D_80083498);
+        if (arr[i] != NULL)
+        {
+            arr[i]->unk_10 = (u32)func_s55_80025C80;
+            m = arr[i]->unk_08;
+            *(s16 *)((u8 *)m + 0x2) = x;
+            *(s16 *)((u8 *)m + 0x6) = y;
+            *(s16 *)((u8 *)m + 0xA) = z;
+            r = (u8 *)arr[i]->unk_0C;
+            *(s16 *)(r + 0x16) = 0x400;
+            *(s16 *)(r + 0x1A) = h + 0x400;
+            *(s16 *)(r + 0x20) = 0x1000;
+            *(s16 *)(r + 0x1E) = 0x1000;
+            *(s16 *)(r + 0x1C) = 0x1000;
+            *(u32 *)(r + 0x8) = (u32)(D_80028268 + i * 0x10);
+            *(s16 *)(r + 0x10) = 0x20;
+            *(u16 *)(r + 0x14) |= 0xC;
+            q = (u8 *)arr[i] + 0x20;
+            if (i != 0)
+            {
+                *(UnkNode **)(q + 0x20) = arr[0];
+            }
+            *(s16 *)(q + 0x30) = 0x10;
+            *(s16 *)(q + 0x34) = h;
+            *(s16 *)(q + 0x36) = 7;
+        }
+        else
+        {
+            for (i = i - 1; i >= 0; i--)
+            {
+                D_800814A0 |= 0x8000;
+                arr[i]->unk_1E |= 0x8000;
+            }
+            return 0;
+        }
+    }
+    func_s55_80025B5C(arr[0], h);
+    return (s32)arr[0];
+}
+
+/* Build the slot's 0x12-element transform in place: RotMatrix from the
+   element's own SVECTOR, ScaleMatrix by its +0x10/+0x12/+0x14 triple, and the
+   +0x8/+0xA/+0xC triple widened into the matrix's translation vector. The
+   payload `p' IS the MATRIX -- t[0..2] are its +0x14/+0x18/+0x1C -- which is
+   what makes the three `sw' of sign-extended halfwords the last thing it
+   does. 34 words, 0 differing, FIRST COMPILE.
+
+   func_80065820 is `RotMatrix' and func_80064BC0 is `ScaleMatrix'
+   (splat/common_syms.txt), so this body needs no new declaration: the
+   argument types come from psyq/include/libgte.h and the parameter list was
+   already in this unit's declaration block, put there by the landed
+   func_s55_80025C80 that calls it.
+
+   Its caller passes `s->unk_00', and `UnkElem' as include/structs.h has it is
+   only 8 bytes, so every access past +0x4 goes through a `(u8 *)e' cast
+   rather than a field. The usage witnessed here is an SVECTOR at +0x0, a
+   translation at +0x8/+0xA/+0xC and a scale at +0x10/+0x12/+0x14; I have NOT
+   widened the typedef, because the one landed caller's own declaration is
+   what fixes the parameter type and the struct is shared with other units.
+
+   FIRST COMPILE, so nothing in it is measured and there is no fact to claim.
+   The one thing worth recording is the frame: locals are sp+0x10..0x1F, which
+   is a 16-byte VECTOR, so the scale triple goes through a `VECTOR' and not
+   through three loose words. */
+void func_s55_80026548(u8 *p, UnkElem *e)
+{
+    VECTOR v;
+
+    RotMatrix((SVECTOR *)e, (MATRIX *)p);
+    v.vx = *(s16 *)((u8 *)e + 0x10);
+    v.vy = *(s16 *)((u8 *)e + 0x12);
+    v.vz = *(s16 *)((u8 *)e + 0x14);
+    ScaleMatrix((MATRIX *)p, &v);
+    *(s32 *)(p + 0x14) = *(s16 *)((u8 *)e + 0x8);
+    *(s32 *)(p + 0x18) = *(s16 *)((u8 *)e + 0xA);
+    *(s32 *)(p + 0x1C) = *(s16 *)((u8 *)e + 0xC);
+}
+
+/* func_s55_800266D0's body with a frame reset in front of it: park the signed
+   frame index at the slot's +0x4, clear the +0x5 sub-counter, point the slot's
+   +0x00 element at its sheet's +0xC plus 24 bytes per frame of that index, and
+   drop the slot's 0x4000 and 0x2000 flags. 15 words, 0 differing.
+
+   No twin: dngtwin reports no carved sibling anywhere in this unit, and this
+   is the unit's one tiny stub. Written off this unit's own landed
+   func_s55_800266D0 four listings down, which is the +0x00 store verbatim
+   with the same 24-byte stride, plus func_s55_8002660C's
+   `*(u16 *)(s + 0x14)' flag idiom. The in-unit route again: no offset in this
+   body needed guessing.
+
+   TWO FACTS, both measured here from a body at 0. The shape was right on the
+   first compile and all eleven of its rows were these two orders.
+
+   (1) THE +0x14 MASK MUST COME LAST, after the +0x00 store. Written in
+   address order (+0x4, +0x5, +0x14, +0x00) it is 15 words / 11 aligned
+   differences. A sweep of all eleven orderings that start with the +0x4 or
+   the +0x00 store gives 0 / 7 / 9 / 10 / 11 / 12 / 12 plus four rows that are
+   16 WORDS -- one word long -- all four of which put the +0x00 store first.
+   So the position is measurable, the curve has a single minimum and nothing
+   else reaches it. What the order decides is which quantity the sheet pointer
+   competes with: with the mask last, the +0x14 halfword and the `* 24'
+   product share $v0 and the pointer keeps $v1, which is the target's
+   assignment.
+
+   (2) THE SUM MUST BE `<deref> + d * 24', the DEREF FIRST. The product first
+   is 15 / 2 at this statement order, and the two rows are the final `addu's
+   destination and operand order -- `addu $v1, $v1, $v0' where the target has
+   it and `addu $v0, $v0, $v1' where it does not -- with every other word in
+   place. Note the interaction, because it is a trap: at the WRONG statement
+   order the two sum orders read 11 (deref first) and 9 (product first), so
+   the losing form looks better there. An improvement is not evidence; priced
+   from the body at 0 the deref-first form is the only one that lands. */
+void func_s55_800265D0(u8 *s, s16 d)
+{
+    *(s8 *)(s + 0x4) = d;
+    *(s8 *)(s + 0x5) = 0;
+    *(s32 *)s = *(s32 *)(*(u8 **)(s + 0x8) + 0xC) + d * 24;
+    *(u16 *)(s + 0x14) &= 0x9FFF;
+}
 
 /* A renderable's facing step: point the slot's +0x00 element at its sheet's
    +0xC plus 24 bytes per frame of the signed +0x04 index, step that index by
