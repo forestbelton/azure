@@ -258,6 +258,21 @@ extern u8 D_80174530[];
 extern u8 D_80174548[];
 extern u8 D_80174560[];
 
+void func_b28_80174460(u8 *p);
+void func_b28_801744B8(u8 *p);
+UnkNode *func_8003FC64(s32);
+u8 *func_8003DE58(u8 *, u8 *, void *, s16);
+void func_8003DB94(void *, void *, s32);
+s32 func_80064584(s32);
+void func_b28_80173F8C();
+extern u8 D_800DEA68[];
+extern u8 D_800DEEC0[];
+void func_b28_80174254();
+u8 *func_800D3F74(s16, s16, s16, s16);
+void func_80042640(Unk42710 *, s16);
+void func_b28_80174084(u8 *a, UnkVec *b, u8 *c);
+u8 *func_b28_801742AC(u8 *p, UnkVec *b, u8 *c);
+
 u8 *func_b28_80170854(s16 a, u16 b, u16 c, s16 d)
 {
     UnkNode *n;
@@ -2345,9 +2360,201 @@ void func_b28_801739E8(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80173A20);
+/* The actor's +0x9B three-state hand-off for the 0x80C cue. State 0 either
+   arms c + 0x14's 0x6000 and jumps to state 2 or steps to state 1; state 1,
+   on the `(c[4] == 8 && 0x1000) || 0xE000' gate, shows the bank-local
+   message, rings func_800A56E0(0x80C), runs func_b28_80174084 and parks
+   func_b28_801742AC's result in p + 0xA4; state 2 raises 0x8000 on that
+   record's +0x1E and in D_800814A0, spawns a func_800D3F74 node on the cell
+   the D_8006CCD8/D_8006CCE8 facing pair picks, dresses it through
+   func_80042640 and a clamped +0x28/+0x29 pair, and hands the actor back to
+   func_b28_80170E5C. 176 words, 0 differing, 0 aligned differences. Owns no
+   jump table: the three-state dispatch is a compare chain and the listing has
+   no `.section .rodata'. No twin at any ratio; this body came from the park
+   docs/dng-parks/func_b28_80173A20.c, which reached 2 aligned differences.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80173CE0);
+   THE `u1' BASE HOIST IS THE WHOLE LANDING, AND IT IS A sched LUID FACT, NOT
+   AN ALLOCATION ONE. Written the natural way, `t1 = &D_8006CCD8[k]', the body
+   is 176 words with ONE row wrong: `andi $v1, $v1, 0xE' comes out three words
+   early, before the D_800814A0 store instead of after the table's
+   `lui'/`addiu' (2 aligned differences, measured on this body). The cause is
+   visible in a `-da' dump pair. In sched2's block 14 the ready list reaches
+   `ready list at T-26: 379 (1) 170 (4) 172 (4)' -- the `andi' and the table's
+   `lo_sum' tied at priority 4 -- and `rank_for_schedule' (sched.c) then falls
+   past the priority test and past the class test (both are class 3: the
+   `addsi3' that consumes them costs 1) to `INSN_LUID (tmp) - INSN_LUID
+   (tmp2)', which is source order. A SYMBOL_REF costs no insn at expand time:
+   `expand_expr's PLUS arm takes `goto binop', `op0' is the array's ADDR_EXPR
+   and comes back as a bare `symbol_ref' with nothing emitted, so it is
+   `expand_binop' that forces it into a register AFTER the index operand is
+   evaluated. The `andi' therefore always gets the LOWER LUID and always wins
+   the tie. Assigning the base to a pointer local first makes the `high'/
+   `lo_sum' pair real insns at the assignment, the `andi' becomes the later
+   LUID, and the tie goes the other way: 0 rows.
+
+   MEASURED ON THIS BODY, all with aligndiff and all from the landing (so
+   these are prices, not improvements):
+
+   | spelling                                        | words | aligned diffs |
+   | as written below                                |  176  |      0        |
+   | `t1 = &D_8006CCD8[k]' with no `u1' at all       |  176  |      2        |
+   | `u1 = D_8006CCD8' moved ABOVE the split store   |  176  |      0        |
+   |   -- so the hoist's slot between the two        |       |               |
+   |   statements is NOT MEASURABLE; what is         |       |               |
+   |   measurable is that it must come AFTER `k'.    |       |               |
+   | `u1 = D_8006CCD8' moved ABOVE `k'              |  174  |     24        |
+   |   (then the `srl' moves below the store too)    |       |               |
+   | `s32 r' for the clamp instead of `u8 r'         |  175  |     13        |
+   | `D_800814A0 |= 0x8000' unsplit                  |  176  |      2        |
+   | func_800D3F74's first argument `!= 0' not `> 0' |  176  |      2        |
+   | the two func_800BCB04 arguments inline instead  |  176  |     18        |
+   |   of through `x1'/`x2'                          |       |               |
+   | no `hx', the d + 0x88 read inside the `h =' arm |  176  |      4        |
+   | array-ref derefs (`t1[0]'/`t2[0]') at all four  |  176  |      2        |
+   |   table reads, which is the MEM_IN_STRUCT_P     |       |               |
+   |   route the park named as its next idea: dead.  |       |               |
+
+   AND ONE OF THE PARK'S FACTS IS NOW FREE. It priced `s16 *t1' DECLARED
+   BEFORE `s16 *t2' at 177 words / 39-42 aligned differences and called it the
+   reason t1 gets $s4. From the landing the two declaration orders both
+   measure 176 / 0: the park's figure was taken with the sched fault live and
+   the two faults were adding. The declaration order below is the park's and
+   is kept only because it is what landed.
+*/
+void func_b28_80173A20(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+    u8 *q;
+    s16 *t2;
+    s16 *t1;
+    s16 *u1;
+    s32 h;
+    s32 t;
+    s32 k;
+    s32 hx;
+    s32 w;
+    u8 r;
+    s32 x3;
+    s32 x1;
+    s32 x2;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x6000;
+            p[0x9B] = 2;
+            return;
+        }
+        p[0x9B] = 1;
+    case 1:
+        if ((*(s8 *)(c + 0x4) == 8 && (*(u16 *)(c + 0x14) & 0x1000) != 0) ||
+            (*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            func_b28_80174460(d);
+            func_800A56E0(0x80C);
+            func_b28_80174084(p, b, c);
+            *(u8 **)(p + 0xA4) = func_b28_801742AC(p, b, c);
+            p[0x9B] += 1;
+        }
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        e = *(u8 **)(p + 0xA4);
+        *(u16 *)(e + 0x1E) |= 0x8000;
+        w = D_800814A0;
+        k = (*(u16 *)(d + 0x2A) >> 9) & 7;
+        x3 = *(u16 *)(d + 0x88);
+        D_800814A0 = w | 0x8000;
+        u1 = D_8006CCD8;
+        t1 = &u1[k];
+        x1 = ((c[0x24] + *t1) << 6) & 0xFFC0;
+        t2 = &D_8006CCE8[k];
+        x2 = ((c[0x25] + *t2) << 6) & 0xFFC0;
+        h = func_800BCB04(x1, x2, x3 - 0x20);
+        hx = *(u16 *)(d + 0x88);
+        if (*(s16 *)(d + 0x88) < (s16)h)
+        {
+            h = hx;
+        }
+        q = func_800D3F74((*(s32 *)(d + 0x1C) & 0x2000) > 0, c[0x24] + *t1, c[0x25] + *t2, h);
+        func_80042640((Unk42710 *)q, 0x36);
+        t = q[0x29] + (d[0x11] * 2 + (func_800A6D30() & 3));
+        r = t;
+        if (t >= 0x100)
+        {
+            r = 0xFF;
+        }
+        q[0x28] = r;
+        q[0x29] = r;
+        func_800AD594(d, 0x400);
+        func_800A2B04(b, c[0x24], c[0x25]);
+        *(u32 *)(p + 0x8C) = (u32)func_b28_80170E5C;
+        D_8008346C = 0;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        return;
+    }
+}
+
+/* The same +0x9B three-state hand-off as func_b28_80173A20 above, with state
+   2's whole spawn block deleted: no e = p + 0xA4 record, no D_800814A0 raise,
+   no facing-table lookup, no func_800D3F74 node and no clamp -- just the
+   shared teardown. State 1 shows this bank's other message through
+   func_b28_801744B8 rather than func_b28_80174460 and does not park a
+   func_b28_801742AC result. Written off func_b28_80173A20 in this same file;
+   dngtwin's 0.708 func_b28_801728B4 was not needed and was not read.
+   90 words, 0 differing, 0 aligned differences, FIRST COMPILE.
+
+   Three spellings priced from the landing, since a first-compile body has
+   measured nothing:
+     `p[0x9B] += 1' in state 1 is load-bearing -- `p[0x9B] = 2' is 86 words
+       and 10 aligned differences, because the constant store loses the
+       `lbu'/`addiu'/`sb' and lets jump2 fold the arm's tail.
+     `*(s8 *)(c + 0x4) == 8' is worth 1 row: `c[0x4] == 8' gives `lbu' where
+       the target has `lb', and nothing else moves.
+     FREE: writing the two flag tests bare (`& 0x1000' instead of
+       `(& 0x1000) != 0') measures 90 / 0 either way. Both operands here are
+       different symbols, so fold_truthop has nothing to merge.
+*/
+void func_b28_80173CE0(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x6000;
+            p[0x9B] = 2;
+            return;
+        }
+        p[0x9B] = 1;
+    case 1:
+        if ((*(s8 *)(c + 0x4) == 8 && (*(u16 *)(c + 0x14) & 0x1000) != 0) ||
+            (*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            func_b28_801744B8(d);
+            func_800A56E0(0x80C);
+            func_b28_80174084(p, b, c);
+            p[0x9B] += 1;
+        }
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        func_800AD594(d, 0x400);
+        func_800A2B04(b, c[0x24], c[0x25]);
+        *(u32 *)(p + 0x8C) = (u32)func_b28_80170E5C;
+        D_8008346C = 0;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        return;
+    }
+}
 
 /* THE PARAMETER COPY HAS TO LEAVE THE PROLOGUE'S UNSCHEDULABLE PREFIX. The
    target saves and copies its four parameters in the order $s1, $s2, $s3,
@@ -2412,11 +2619,183 @@ s32 func_b28_80173E48(u8 *a, void *b, void *c, s32 d)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80173F8C);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80174084);
+/* The bank's 0x212 spark burst, called out of state 1 of both +0x9B
+   hand-offs (func_b28_80173A20 and func_b28_80173CE0): project the caller's
+   own slot once through func_8003DE58 into a zeroed SVECTOR, then spawn FOUR
+   nodes driven by func_b28_80173F8C, each with a 0x60/0x60/0x60 colour, a
+   random 0..0xFFF spin in +0x1A, a 0x1000/0x1000 scale, dressed from
+   D_800DEA68 and D_80045340, and each node's mover seeded with a whole copy
+   of the caller's UnkVec plus the projection's three deltas and a fresh
+   +0xC/+0x10 velocity off p + 0x2A's angle with a 0x9C40 +0x14.
+   116 words, 0 differing, 0 aligned differences.
+
+   Written off csrc/ovl_dng_s13.c's func_s13_80024628, which dngcallee names
+   at 7 of 10 symbols and which is the same 0x212 skeleton (same
+   func_8003FC64(0x212), same `u8 *r = (u8 *)n->unk_0C' plain-cast dress
+   block, same func_8004491C(n, (u32)D_80045340) tail), plus the two facts in
+   csrc/ovl_dng_b16.c's own 0x212 spawner comment. Both of b16's facts HELD
+   here. Priced on this body, every figure taken from the landing:
+
+   | spelling                                              | words | aligned |
+   | as written below                                       |  116  |    0    |
+   | func_8003DE58's fourth argument as `i' with an         |  117  |    2    |
+   |   `i = 0;' statement before the call instead of the    |       |         |
+   |   literal 0 with the `for' owning the init             |       |         |
+   | no `p = a' alias -- parameter 0 used directly          |  116  |    5    |
+   | the three SVECTOR zero stores ASCENDING vx, vy, vz     |  116  |    4    |
+   | the UnkVec seeded with six word assignments instead    |  122  |   36    |
+   |   of `*m = *b'                                         |       |         |
+   | `rand() & 0xFFF' instead of `rand() % 0x1000'          |  111  |    9    |
+
+   THE FOURTH ARGUMENT IS THE LITERAL 0 AND THE LISTING STILL SHOWS
+   `addu $a3, $s2, $zero'. That copy is NOT evidence the source passed the
+   counter: the `for' init sets a pseudo to 0 in the same basic block, sched
+   lifts it above the `jal', and cse then forwards that known-zero register
+   into the constant argument. Writing the counter there really does cost a
+   word (the `i = 0' becomes its own insn), so a register copy from a
+   loop counter in an argument slot is worth checking against a literal.
+
+   `p = a' IS b16's PARAMETER-0 FACT and it reproduces: the target's four
+   leading copies run $s5 (b), $a1 (c), $s2, $s3 (p) -- parameter 0 LAST --
+   and only a body-level copy moves it there, because combine folds the
+   prologue copy into the user insn, which sched then ranks after the three
+   argument moves.
+*/
+void func_b28_80174084(u8 *a, UnkVec *b, u8 *c)
+{
+    u8 *p;
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    s32 i;
+    SVECTOR out;
+
+    p = a;
+    out.vz = 0;
+    out.vy = 0;
+    out.vx = 0;
+    func_8003DE58(*(u8 **)(c + 0x8), c, &out, 0);
+    for (i = 0; i < 4; i++)
+    {
+        n = func_8003FC64(0x212);
+        if (n != NULL)
+        {
+            r = (u8 *)n->unk_0C;
+            n->unk_10 = (u32)func_b28_80173F8C;
+            r[0xE] = 0x60;
+            r[0xD] = 0x60;
+            r[0xC] = 0x60;
+            *(u16 *)(r + 0x14) |= 0xC;
+            *(u16 *)(r + 0x10) |= 0x20;
+            func_8003DB94(r, D_800DEA68, 0);
+            func_800478B8(r);
+            *(s16 *)(r + 0x1A) = rand() % 0x1000;
+            *(s16 *)(r + 0x1E) = 0x1000;
+            *(s16 *)(r + 0x1C) = 0x1000;
+            func_8004491C(n, (u32)D_80045340);
+            m = n->unk_08;
+            *m = *b;
+            *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)m + 0x2) + (u16)out.vx;
+            *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)m + 0x6) + (u16)out.vy;
+            *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)m + 0xA) + (u16)out.vz;
+            m->unk_0C = (func_80064584(*(s16 *)(p + 0x2A)) >> 4) << 11;
+            m->unk_10 = (func_800644B8(*(s16 *)(p + 0x2A)) >> 4) << 11;
+            m->unk_14 = 0x9C40;
+        }
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_80174254);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b28", func_b28_801742AC);
+/* The 0x212 node func_b28_80173A20's state 1 parks in p + 0xA4: allocate it,
+   install func_b28_80174254 as its +0x10 step, seed the payload's +0x00 with
+   0 and its +0x02 with the actor's facing index out of p + 0x2A, dress the
+   slot 0x80/0x80/0x80 with a 0x7E40 +0x12, the 0x100 flag, D_800DEEC0 and
+   D_80045340 and a 0x800/0x800 scale, then copy the caller's whole UnkVec
+   into the node's mover and overwrite its +0x2/+0x6 with the facing pair's
+   cell centre plus 0x20 and clamp its +0x8 down to func_800BCB04's floor
+   shifted up 16. Returns the node, or NULL. 109 words, 0 differing, 0
+   aligned differences.
+
+   Same donor as func_b28_80174084 above -- csrc/ovl_dng_s13.c's
+   func_s13_80024628, which dngcallee names at 7 of 9 symbols -- with the
+   facing-table geometry taken off func_b28_80173A20 in this same file.
+   Priced on this body, all figures from the landing:
+
+   | spelling                                              | words | aligned |
+   | as written below                                       |  109  |    0    |
+   | BOTH stores before BOTH table reads (x, store, y,      |  110  |   16    |
+   |   store) instead of x, y, store, store                 |       |         |
+   | `if (n == NULL) return NULL;' as an early exit rather  |  109  |    6    |
+   |   than the `if (n != NULL) { ... return n; } return    |       |         |
+   |   NULL;' nesting                                       |       |         |
+   | no `(s16)' cast on the two c[]+table sums              |  107  |    7    |
+   | the three colour bytes ASCENDING 0xC, 0xD, 0xE         |  109  |    4    |
+   | the UnkVec seeded with six word assignments instead    |  115  |   26    |
+   |   of `*m = *b'                                         |       |         |
+   | FREE: the `k' local dropped and `*(s16 *)(v + 0x2)'    |  109  |    0    |
+   |   written inline in both array refs. With both reads   |       |         |
+   |   above both stores cse unifies the reload either way;  |       |         |
+   |   it is only load-bearing in the interleaved order.    |       |         |
+
+   THE ORDER FACT IS A MEMORY-DEPENDENCE FACT, NOT AN ALLOCATION ONE. The
+   target loads `lbu $a1, 0x25($s3)' at word 68, ABOVE the `sh $v1, 0x2($s0)'
+   at 78. A c[] load cannot be hoisted over a store through `m', so the only
+   source that can emit it there is one that reads c[0x25] before the store.
+   Interleaving the stores costs the extra word as well -- our word 68 comes
+   out a `nop' the target fills with that load.
+
+   `(s16)' ON THE SUM IS WHAT MAKES `sll 16' / `sra 10' OUT OF A `<< 6', and
+   it is also why both table loads are `lhu' where the signed `s16
+   D_8006CCD8[]' would give `lh': the 16-bit truncation makes the high bits
+   dead and combine takes the unsigned load. Without the cast the two
+   `sll 16' go away, which is the two missing words.
+*/
+u8 *func_b28_801742AC(u8 *p, UnkVec *b, u8 *c)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *v;
+    s32 x;
+    s32 y;
+    s32 h;
+    s32 k;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        v = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_b28_80174254;
+        *(s16 *)v = 0;
+        *(s16 *)(v + 0x2) = (*(u16 *)(p + 0x2A) >> 9) & 7;
+        r = (u8 *)n->unk_0C;
+        r[0xE] = 0x80;
+        r[0xD] = 0x80;
+        r[0xC] = 0x80;
+        *(s16 *)(r + 0x12) = 0x7E40;
+        *(u16 *)(r + 0x14) |= 0x100;
+        func_8003DB94(r, D_800DEEC0, 0);
+        func_800478B8(r);
+        *(s16 *)(r + 0x1E) = 0x800;
+        *(s16 *)(r + 0x1C) = 0x800;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *m = *b;
+        k = *(s16 *)(v + 0x2);
+        x = (s16)(c[0x24] + D_8006CCD8[k]) << 6;
+        y = (s16)(c[0x25] + D_8006CCE8[k]) << 6;
+        *(s16 *)((u8 *)m + 0x2) = x + 0x20;
+        *(s16 *)((u8 *)m + 0x6) = y + 0x20;
+        h = func_800BCB04(x & 0xFFC0, y & 0xFFC0, *(u16 *)(p + 0x88) - 0x20) << 16;
+        if (h < m->unk_08)
+        {
+            m->unk_08 = h;
+        }
+        return (u8 *)n;
+    }
+    return NULL;
+}
 
 /* The resident overlay's func_80099844 (csrc/ovl_dungeon.c) with the message
    string a bank-local constant instead of a parameter, so the second saved
