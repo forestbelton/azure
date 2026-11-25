@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""dngtiny -- the stubs dngpick CANNOT SEE, grouped by identical body.
+
+docs/dng-twinsweep.json has no entry for a function below its minimum size, so
+`dngpick' never offers one: 94 stubs and 937 words were invisible when this was
+written, which is 12% of the remaining FUNCTIONS for under 1% of the remaining
+words.  The project metric counts functions as well as words, so these are the
+cheapest rows on the board.
+
+They also replicate heavily.  Thirteen stubs in ovl_dng_b31f are the same
+eight-word thunk byte for byte -- one spelling lands all thirteen -- so this
+tool groups by normalised body text rather than listing them flat.
+
+    dngtiny.py                 every tiny stub, classes first
+    dngtiny.py --unit b31f     one unit
+    dngtiny.py --classes       only the multi-member classes
+    dngtiny.py --max 24        raise the size cut (default: whatever the
+                               sweep omitted, i.e. no cut at all)
+
+A CLASS IS A PROMISE ABOUT THE SOURCE, NOT A GUARANTEE.  Identical asm means
+one spelling compiles to all members, but each member still has its own
+listing and must be verified on its own -- a bank-local symbol renamed per copy
+is normalised here and is NOT normalised by the compiler.
+"""
+
+import argparse
+import collections
+import glob
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dngfam  # noqa: E402
+
+PRE = re.compile(r"^\s*/\* [0-9A-F]+ [0-9A-F]+ [0-9A-F]+ \*/\s{1,2}")
+HDR = re.compile(r"nonmatching (func_[0-9A-Za-z_]+), (0x[0-9A-Fa-f]+)")
+
+
+def body(text):
+    """Normalised instruction text: no addresses, no per-copy label or symbol.
+
+    The prefix MUST be stripped line by line.  A regex that skips a line it
+    cannot match (an operandless `nop') re-matches across the newline and
+    swallows the next line's address comment, which makes every copy look
+    distinct -- that is exactly how this tool's first version reported 92
+    distinct bodies for 94 stubs, including thirteen that are byte-identical.
+    """
+    out = []
+    for line in text.split("\n"):
+        if not PRE.match(line):
+            continue
+        ins = PRE.sub("", line).rstrip()
+        ins = re.sub(r"\.L[a-z0-9]+_[0-9A-F]+", ".L", ins)
+        ins = re.sub(r"(func|D|jtbl)_[a-z0-9]*_?[0-9A-F]{6,8}", r"\1_X", ins)
+        out.append(ins)
+    return "\n".join(out)
+
+
+def tiny(max_words=0):
+    """[(words, func, unit, normalised body)] for stubs the sweep omits."""
+    sweep = json.load(open(os.path.join(dngfam.PROJ, "docs/dng-twinsweep.json")))
+    stubs = dngfam.stubs()
+    rows = []
+    for path in glob.glob(os.path.join(dngfam.PROJ, "asm/nonmatchings/*/*.s")):
+        text = open(path, encoding="utf-8", errors="replace").read()
+        m = HDR.search(text[:400])
+        if not m:
+            continue
+        func = m.group(1)
+        if func not in stubs:
+            continue
+        words = int(m.group(2), 16) // 4
+        if not words:
+            continue
+        # the sweep's own omission is the definition, unless --max overrides
+        if max_words:
+            if words > max_words:
+                continue
+        elif sweep.get(func, {}).get("words"):
+            continue
+        unit = os.path.basename(os.path.dirname(path))
+        rows.append((words, func, unit, body(text)))
+    return rows
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--unit", default="", help="restrict to one unit tag or name")
+    ap.add_argument("--classes", action="store_true",
+                    help="only the classes with more than one member")
+    ap.add_argument("--max", type=int, default=0,
+                    help="size cut in words (default: whatever the sweep omits)")
+    args = ap.parse_args()
+
+    rows = tiny(args.max)
+    if args.unit:
+        want = args.unit if args.unit.startswith("ovl_") else "ovl_dng_" + args.unit
+        rows = [r for r in rows if r[2] == want]
+        if not rows:
+            print("no tiny stub in %s" % want)
+            return
+
+    cls = collections.defaultdict(list)
+    for words, func, unit, b in rows:
+        cls[b].append((func, words, unit))
+    groups = sorted(cls.values(), key=lambda v: (-len(v), -v[0][1]))
+
+    multi = [g for g in groups if len(g) > 1]
+    print("%d tiny stub(s), %d words, %d distinct body(s)"
+          % (len(rows), sum(r[0] for r in rows), len(groups)))
+    if multi:
+        print("\n%d CLASS(ES) WITH MORE THAN ONE MEMBER -- one spelling each:"
+              % len(multi))
+        for g in multi:
+            g = sorted(g)
+            print("  %2d x %2dw = %3dw" % (len(g), g[0][1], sum(x[1] for x in g)))
+            for func, words, unit in g:
+                print("        %-28s %s" % (func, unit))
+    if args.classes:
+        return
+
+    singles = [g[0] for g in groups if len(g) == 1]
+    if singles:
+        print("\n%d singleton(s), %d words:" % (len(singles), sum(s[1] for s in singles)))
+        per = collections.defaultdict(list)
+        for func, words, unit in singles:
+            per[unit].append((words, func))
+        for unit in sorted(per, key=lambda u: -len(per[u])):
+            v = sorted(per[unit])
+            print("  %-22s %2d fn %4dw" % (unit, len(v), sum(w for w, _ in v)))
+            for words, func in v:
+                print("        %-28s %3dw" % (func, words))
+
+
+if __name__ == "__main__":
+    main()
