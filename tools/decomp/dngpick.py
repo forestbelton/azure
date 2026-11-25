@@ -508,6 +508,29 @@ def main():
         print('  "%s": [%s],   # yield %d, %d words'
               % (tag, ",".join('(%d,%d,"%s")' % (r[0], r[1], r[3])
                                for r in pick), y, w))
+        # THE REST OF THE UNIT. This ranking scores a unit by TWIN YIELD, so a
+        # large body with no twin at any ratio contributes nothing and never
+        # reaches `pick' -- while being, often, the biggest thing in the unit.
+        # Three batches running I discovered such a body only after dispatch:
+        # an 834-word driver that then parked word-exact at 5 rows, and two
+        # more at 873 and 531 words found while composing the next batch.
+        # The unit choice is sound; the function list was the incomplete part.
+        # So print everything else that is still a stub here, because the
+        # agent should be given the whole unit and decide, not handed the
+        # ratio's view of it.
+        picked = {r[3] for r in pick}
+        rest = sorted(((r[1], r[3]) for r in rows
+                       if r[4] == tag and r[3] not in picked), reverse=True)
+        # NB: do not bind `w' in the loop below -- it is the unit's picked
+        # word count and the next print() uses it. The first version of this
+        # block did, and reported "74 of 176" for a 701-word pick.
+        if rest:
+            print("        REST OF THE UNIT, still stubs (%d, %d words) -- "
+                  "offer these too:" % (len(rest), sum(w for w, _ in rest)))
+            for rw, rf in rest:
+                c = cheap.get(rf, 0.0)
+                print("            %-24s %5dw  %s"
+                      % (rf, rw, ("%.3f" % c) if c else "no twin"))
         if cheap:
             near = [(r[3], cheap.get(r[3], 0.0)) for r in pick]
             nw = sum(r[1] for r in pick if cheap.get(r[3], 0.0) >= 0.90)
