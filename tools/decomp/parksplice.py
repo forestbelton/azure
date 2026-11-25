@@ -42,9 +42,22 @@ def main():
               "the container ELF from it); got %r"
               % (out, want, os.path.basename(out)))
         return 2
-    park = os.path.join(pr.PROJ, "docs/dungeon-parks/%s.c" % func)
-    if not os.path.exists(park):
-        print("%s: no park at %s" % (func, park))
+    # SEARCH BOTH PARK DIRECTORIES. This hardcoded `docs/dungeon-parks/' --
+    # the OLD block's directory -- so it could not find any of the twelve
+    # carved parks in `docs/dng-parks/' and reported "no park at ..." for every
+    # one of them. parkresidue.py already resolves both through PARK_DIRS;
+    # reuse it rather than keep a second copy of the path. Third tool today
+    # still wired to the pre-carve layout, after permimport's name pattern and
+    # dngcallee's unit glob.
+    park = None
+    for d in pr.PARK_DIRS:
+        cand = os.path.join(pr.PROJ, d, "%s.c" % func)
+        if os.path.exists(cand):
+            park = cand
+            break
+    if park is None:
+        print("%s: no park in %s"
+              % (func, " or ".join(pr.PARK_DIRS)))
         return 1
     body = pr.body_of(park, func)
     if body is None:
