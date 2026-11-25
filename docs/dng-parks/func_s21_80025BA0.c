@@ -341,6 +341,156 @@
    defined above this function in csrc/ovl_dng_s21.c.  Of the block below,
    only D_80026648 is new to that unit as of this run.
 
+   AGENT-h146, 2026-11-25, BATCH 34.  STILL PARKED AT 5 ALIGNED DIFFERENCES,
+   BUT THE FIVE ROWS ARE NO LONGER A MYSTERY: I CAN NOW MAKE THEM MATCH, AND
+   THE REASON NO RESPELLING FOUND IT IS THAT THIS FILE'S MODEL OF
+   `find_free_reg' IS INCOMPLETE.  I reproduced 170 words / 5 rows at the same
+   five target words first, so everything below is measured against that.
+
+   WHAT THIS FILE GETS WRONG, and it is the one load-bearing claim in it:
+   `local-alloc.c's find_free_reg then scans plain ascending hard-register
+   order ... the quantity's priority is irrelevant here, because NO rival
+   wants $v0 at all, so the chain takes it whatever its rank.'  find_free_reg
+   is called in TWO ROUNDS, not one (local-alloc.c:1576-1586, then
+   :1627-1648):
+
+     ROUND 1 walks the quantities in `qty_sugg_compare_1' order and allocates
+       EVERY quantity that has a hard-register SUGGESTION -- before any
+       un-suggested quantity is considered at all.  A successful allocation
+       calls `post_mark_life (regno, mode, 1, born_index, dead_index)'
+       (local-alloc.c:2235), which marks that hard register live in
+       `regs_live_at' over the quantity's WHOLE [birth, death) range.
+     ROUND 2 then walks the rest in `qty_compare_1' order -- DECREASING LIFE
+       LENGTH, not source order -- and find_free_reg excludes, for each,
+       `for (ins = born_index; ins < dead_index; ins++) used |=
+       regs_live_at[ins]' (local-alloc.c:2179).
+
+   So a rival does NOT have to `want $v0'.  It only has to carry a
+   SUGGESTION of $v0 and have a live range that covers the chain's, and round
+   1 will hand it $v0 and reserve it over the window before the chain is ever
+   looked at.  Suggestions are recorded in `combine_regs' (local-alloc.c:
+   1867-1907) whenever a pseudo is tied to a HARD register, and on MIPS the
+   only hard registers that tie to a pseudo are the argument registers
+   $a0..$a3 and the RETURN REGISTER $v0.  So the question this file asks --
+   `find a value born before insn 57, dying after insn 80, not crossing a
+   call' -- was the wrong question.  The right one is: WHICH CALL'S RETURN
+   VALUE IS LIVE ACROSS THE INDEX BLOCK IN THE TARGET.
+
+   THREE POSITIVE CONTROLS.  Target words 32, 33, 34, 40 and 41 MATCH EXACTLY
+   in all three, which is the first time in three agent-runs that this block
+   has been reproduced:
+
+     x = rand() inserted immediately before `ia' and folded into the x sum
+       (`x = x + w->unk_00 + ...')                        172 words,     28
+       -- the rand result is copy-suggested $v0, is call-free, and its range
+          covers the chain.  Index block EXACT.  Two words over, so not a
+          landing: this is the mechanism's positive control, nothing more.
+     qq = (UnkNode *)func_8004491C(n, (u32)func_s21_800259DC) with
+       `m = qq->unk_08' in place of `m = n->unk_08'        170 words,      9
+       -- HOLDS THE WORD COUNT AND THE INDEX BLOCK IS EXACT.  Of the 9 rows
+          exactly one is the real residue, `lw $s0, 0x8($v0)' at word 47
+          where the target has `lw $s0, 0x8($s6)'; the other 8 are knock-on
+          register rotation through the sums block.  THIS BODY IS IN FULL AT
+          THE END OF THIS SECTION and it is the better permuter seed, because
+          its residue is one base register rather than a whole allocator
+          decision.
+     n = (UnkNode *)func_8004491C(n, ...), reassigning n   171 words,     10
+       -- one word over (the return copy survives) and the index block is
+          BACK TO 5 rows, because the reassigned `n' crosses the five rand()
+          calls and so takes a callee-saved register instead of $v0.
+
+   THE OTHER CONSUMERS OF THE RETURN VALUE, all measured, all worse:
+     consumed as `e's base (`e = (u8 *)qq->unk_0C')        176 words,     71
+     consumed as `q's base (`q = (u8 *)qq + 0x20')         175 words,     85
+     consumed as BOTH `m's and `e's base                   176 words,     45
+   `e' and `q' are both computed AFTER the five rand() calls, so a return
+   value kept alive to reach them crosses the calls and goes callee-saved --
+   which is also why the `m' spelling is the only one that works: `m's load
+   is the one use of a node pointer that sits between the index block and the
+   first rand().
+
+   TWO NEGATIVE RESULTS THAT CLOSE THE SOURCE-REORDERING SEARCH FOR GOOD, AND
+   THE REASON, WHICH THIS FILE DOES NOT STATE: sched1 RUNS BEFORE LOCAL-ALLOC
+   AND NORMALISES THIS WINDOW, so source order cannot place a value's birth
+   above the index block or its death below it.
+
+     `x = w->unk_00' hoisted above `ia', with the rest of the sum left
+       where it was (`x = x + a->unk_00 + b->unk_00 + c->unk_00')
+                                                           170 words,     33
+       -- this is agent-h130's shape (a) in its most natural form, and it
+          FAILS FOR A NEW REASON: sched1 SINKS the load back to target word
+          44, BELOW the index block, so the quantity never overlaps the chain
+          at all.  It is emitted in $t3 and the chain still takes $v0.  The
+          park's reading that `nothing in C can make a rival whose range
+          CONTAINS the chain' is right, but the obstruction is sched1, not
+          the impossibility of a zero-word pseudo.
+     `n->unk_10 = step' moved below the index block -- THE 13-ROW ROW IN THIS
+       FILE IS POSITION-INVARIANT.  I re-priced it at SEVEN source positions
+       (immediately before `ia', before `ib', before `ic', before `c',
+       before `w', before `m', and before the x sum) and every one is
+       170 words / 13 aligned differences, identical residue, because sched1
+       re-emits `sw $v0, 0x10($s6)' at target word 31 -- above the index
+       block again -- in all seven.  Three further positions are worse and
+       are new figures: before the y sum 25, before the first mover store 50,
+       before `m->unk_0C' 14, before `e' 169 words / 16, before `q' 15.
+       So this file's single 13 is not one spelling among many: it is what
+       the whole family of `store the step later' shapes measures.
+
+   WHY IT STILL DOES NOT LAND, STATED EXACTLY, because this is the part that
+   is actionable.  The $v0 holder must be live across target words 32..41 and
+   its LAST USE must be an instruction the target already emits.  Walk the
+   target forward from word 42: 42 `addu $s1, $s1, $v1', 43 `sll $s1, $s1, 3',
+   44 `addu $s1, $s1, $fp', 45 `lh $a0, 0x0($s7)', 46 `lh $v0, 0x0($s4)'.
+   Words 42..44 are the `c' chain off $s1 and $fp; words 45 and 46 are the
+   `w' and `a' ring loads off $s7 and $s4.  NOT ONE of them can be the use of
+   a node pointer returned by func_8004491C, and word 47 -- `lw $s0,
+   0x8($s6)' -- names $s6, which is `n' itself and not the return value.  So
+   the target's $v0 holder dies at a point where the target emits NOTHING
+   that could be its use, and a C pseudo needs a use or flow deletes its set
+   before local-alloc sees it.  That is the same wall agent-h136 hit, but it
+   is now a wall at a NAMED location with a NAMED register and a NAMED call,
+   rather than an open search.
+
+   MY READING, and I agree with h130 and h136 on the verdict while
+   disagreeing with the file's reason for it: THIS IS PERMUTER WORK, AND THE
+   EXACT STATEMENT IS `func_8004491C(n, (u32)func_s21_800259DC);' -- its
+   DISCARDED RETURN VALUE.  The permuter should be given the index block
+   TOGETHER WITH that call statement, and what it is looking for is a
+   consumer of that return value that costs no word.  Seed it with the 9-row
+   body below rather than the 5-row body above: the 9-row body already has
+   the index block exact, holds 170 words, and its residue is a single base
+   register plus rotation, which is the kind of thing a permuter moves.  If
+   no such consumer exists, accept the park -- 5 rows out of 170 words, with
+   the whole $s0..$s7/$fp assignment exact, and 340 words across the family.
+
+   NOT RE-PRICED BY ME, so this file's figures stand: the whole spelling
+   ladder above (the shape search, the ten head orders, the eight
+   measured-and-free rows and the three h136 rows).  I re-priced only the two
+   rows that bear on the mechanism -- the 13-row step store and h130's shape
+   (a) -- and both got WORSE or stayed equal, never better.
+
+   THE 9-ROW BODY, for the permuter.  It is the body below with exactly two
+   changes: one added local, and the call's return value consumed as `m's
+   base.  170 words, 9 aligned differences, index block EXACT.
+
+       UnkNode *qq;                     -- added after `UnkNode *n;'
+
+       qq = (UnkNode *)func_8004491C(n, (u32)func_s21_800259DC);
+                                        -- replaces the bare call
+       m = qq->unk_08;                  -- replaces `m = n->unk_08;'
+
+   Its nine rows, for comparison with the five above:
+
+       R  45  lh v1,0(s4)      / lh $v0, 0x0($s4)
+       R  46  lh a1,0(s1)      / lh $v1, 0x0($s1)
+       R  47  lw s0,8(v0)      / lw $s0, 0x8($s6)     <- the one real row
+       R  48  lh v0,2(s7)      / lh $a1, 0x2($s4)
+       R  53  addu a0,a0,v1    / addu $a0, $a0, $v0
+       R  54  lh v1,0(s2)      / lh $v0, 0x0($s2)
+       R  56  addu a0,a0,v1    / addu $a0, $a0, $v0
+       R  57  addu a0,a0,a1    / addu $a0, $a0, $v1
+       R  58  lh a1,2(s4)      / lh $v0, 0x2($s7)
+
 DECLARATIONS
 (UnkDng26478 is now defined in ovl_dng_s21 itself, by a body landed after
 this park was written.  Declaring it here again is a redefinition and is why
