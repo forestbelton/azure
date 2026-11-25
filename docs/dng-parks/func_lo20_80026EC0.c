@@ -1,5 +1,8 @@
 /* PARK: func_lo20_80026EC0 (joined, 0 differing) -- and with it the whole of
-   ovl_dng_lo20's THIRTEEN unlandable function symbols, agent-h161, 2026-11-25.
+   ovl_dng_lo20's unlandable function symbols, agent-h161, 2026-11-25,
+   AMENDED BY AGENT h171 the same day (see WHAT h171 ADDED at the end: the
+   third body here now measures 0, SIX more joined functions are at 0 in
+   their own park files, and one statement in section A is wrong).
    Filed under this name so parkcheck and the landing tools see it; it is not
    a park about a hard body but a park about the UNIT'S SYMBOL TABLE, and it
    carries THREE bodies (func_lo20_80026EC0, func_lo20_80027328 and
@@ -99,15 +102,38 @@
         spurious symbol        joined function      words   result
         func_lo20_80026ED0  -> func_lo20_80026EC0   4+13=17  0 DIFFERING
         func_lo20_80027368  -> func_lo20_80027328  16+ 7=23  0 DIFFERING
-        func_lo20_80026F1C  -> func_lo20_80026F04   6+14=20  11 differing
+        func_lo20_80026F1C  -> func_lo20_80026F04   6+14=20  0 DIFFERING
+                                                              (h171; it read
+                                                              11 when this
+                                                              park was written)
 
-      So TWO of the three are word-exact and finished; land them by deleting
-      the interior symbol and splicing the bodies below.  Note that
+      So ALL THREE are word-exact and finished; land them by deleting the
+      interior symbol and splicing the bodies below.  Note that
       func_lo20_80026ED0 is only the LOAD-DELAY `nop' after the loop head
       `.Llo20_80026ECC', and func_lo20_80027368 is only an epilogue -- neither
       address is a branch target of anything.
 
-   WHAT THE THIRD ONE IS STILL MISSING, measured: the target opens with
+   WHAT THE THIRD ONE WAS MISSING -- SOLVED BY h171, and the answer is the
+   SUBSCRIPT FORM, not the parameter copy this paragraph blames.  The four
+   spellings in the table below all keep the base LOOP-INVARIANT or
+   pre-offset; what lands is the base assigned INSIDE THE LOOP BODY with the
+   stride AND the 0x57D2 BOTH in the subscript, which is the landed
+   func_lo20_80026FA8's recorded fact applied here:
+
+       for (i = c; i < 0x40; i++)
+       {
+           q = (u8 *)0x80010000;
+           if (q[i * 0x13 + 0x57D2] == a) { return i; }
+       }
+
+   20 words / 0 differing, and 0 under --raw as well, so the displacement
+   and the stride are byte-confirmed.  The reasoning below is kept because
+   its PRICES are real and its reading of the listing is right; only its
+   conclusion (that the remaining job is to keep a parameter copy alive) is
+   wrong -- the copy appears by itself once the base is rebuilt in the body.
+   The original paragraph follows.
+
+   The target opens with
    `addu $a2, $a1, $zero', a copy of the `start' parameter into the loop
    cursor, and then computes the giv init `start * 0x13' off `$a1' -- the
    ORIGINAL parameter -- while counting in `$a2'.  Writing `for (i = start;
@@ -139,10 +165,80 @@
    constant `(0x80010000 >> 16)'/`0x57D2' in another; the instruction words
    are identical and the rendering is not evidence.
 
+   ---------------------------------------------- WHAT h171 ADDED, 2026-11-25
+
+   Batch 35 handed h171 the 22 remaining names in this unit and, by the rule
+   at the top of this file, 11 of them are not functions.  Eleven of the
+   eleven REAL ones are landed in csrc/ovl_dng_lo20.c.  For the fragments:
+
+   1. THE THIRD BODY HERE NOW MEASURES 0 -- see the amended section above.
+      The missing ingredient was the subscript form, not the parameter copy.
+
+   2. SIX MORE JOINED FUNCTIONS ARE AT 0 DIFFERING, each in its own park
+      file named after its HEAD, because a landing tool looks up a park by
+      the name it is going to define:
+
+        docs/dng-parks/func_lo20_800250B4.c   + 80025170   57w  0 differing
+        docs/dng-parks/func_lo20_80026A64.c   + 80026A84   56w  0 differing
+        docs/dng-parks/func_lo20_80026C20.c   + 80026C88   43w  0 differing
+        docs/dng-parks/func_lo20_80027008.c   + 80027070   66w  0 differing
+        docs/dng-parks/func_lo20_80028050.c   + 800280F4   43w  0 differing
+        docs/dng-parks/func_lo20_80027A20.c   THREE functions, 44w, 0
+
+      func_lo20_80027A20 is a case this park's rule does not cover: THREE
+      `jr $ra' in one 44-word listing, i.e. three functions under one
+      symbol, with splat already naming the two inner entries as DATA
+      (`alabel D_lo20_80027A68' and `alabel D_lo20_80027A88') because each
+      is stored as a handler pointer rather than called.  So the rule's
+      third clause should read "two OR MORE `jr $ra'", and an `alabel'
+      inside a listing is a strong hint that the missing symbol is a
+      FUNCTION entry rather than data.
+
+      That leaves ONE group in this unit unwritten, and it is the big one:
+      func_lo20_800274A8 (35w) + func_lo20_80027534 (130w) +
+      func_lo20_8002773C (46w) + func_lo20_800277F4 (139w) is ONE function
+      of 350 words at 0x800274A8..0x80027A1C.  The chain is forced by the
+      branch targets: 800274A8 branches to .Llo20_80027548 (inside 80027534)
+      and .Llo20_80027790 (inside 8002773C), 80027534 has no `jr $ra' and
+      also branches to .Llo20_80027790, and 8002773C branches to
+      .Llo20_80027820 and .Llo20_80027A08 (both inside 800277F4).
+
+   3. SECTION A IS WRONG ON ONE POINT and right on everything else.  It says
+      the `INCLUDE_ASM(..., func_lo20_8001E814)' names a data symbol, and
+      that is correct -- the recovered listing's own header says "symbol type
+      O, not F, 26668 bytes".  But the batch-35 dispatch brief describes
+      that same stub as "the unit's text collapsed into one `.word' blob by
+      the same defect", which is a different claim and is not what the
+      listing says.  The two descriptions should not both be acted on.
+
+   4. A MEASUREMENT TOOL, so the next agent does not rebuild it.  Section D
+      says "the harness that did it is 60 lines and reuses ovlverify.report;
+      recreate it or ask for it."  It is now
+      scratch/azure-dng/agent-h171/pairverify.py -- same invocation as
+      ovlverify plus the extra part names, PAIRVERIFY_FLAGS=--raw for raw
+      mode and PAIRVERIFY_SPLIT=1 when the candidate defines each part as
+      its own C function (which is what func_lo20_80027A20 needs).
+
+   5. TWO PROTOTYPE PROBLEMS THIS PARK'S OWN BODY WALKS INTO.  The joined
+      func_lo20_80027328 below stores func_lo20_80026DE0's RETURN VALUE
+      (`sw $v0, 0x8($s0)' sits after that `jal' and its delay slot), and
+      func_lo20_80026DE0 is already LANDED in csrc/ovl_dng_lo20.c as
+      `void'.  This park's DECLARATIONS block declares it `s32', which
+      conflicts with the landed definition in the same translation unit.
+      Use the project's unit-local alias instead --
+      `s32 func_lo20_80026DE0_r(s32, s32) __asm__("func_lo20_80026DE0");'
+      -- which is the device this unit already uses for
+      func_lo20_80025040_4, and leaves the landed body alone.  Likewise
+      func_lo20_80027328 returns `u8 *' where the unit's existing
+      declaration says `void'; changing it is safe (its only caller,
+      the landed func_lo20_80027454, drops the result and still measures 0
+      differing, re-checked across all 70 defined bodies in the unit).
+
    DECLARATIONS
    void func_8004B1A4(s32);
    s32 func_lo20_80025080(s32);
-   s32 func_lo20_80026DE0(s32, s32);
+   s32 func_lo20_80026DE0_r(s32, s32) __asm__("func_lo20_80026DE0");
+   u8 *func_lo20_80027328(u8 *, s32);
    END DECLARATIONS */
 
 /* JOINED func_lo20_80026EC0 + func_lo20_80026ED0 -- 17 words, 0 differing
@@ -176,26 +272,28 @@ u8 *func_lo20_80027328(u8 *p, s32 q)
 {
     func_8004B1A4(*(s32 *)(p + 0x8));
     *(s32 *)(p + 0x4) = func_lo20_80025080(*(s32 *)p);
-    *(s32 *)(p + 0x8) = func_lo20_80026DE0(*(s32 *)p, q);
+    *(s32 *)(p + 0x8) = func_lo20_80026DE0_r(*(s32 *)p, q);
     return p;
 }
 
-/* JOINED func_lo20_80026F04 + func_lo20_80026F1C -- 20 words, 11 differing
-   against the two listings concatenated.  Returns the index of the first
-   entry at or after `start' whose byte equals `a', or -1. */
+/* JOINED func_lo20_80026F04 + func_lo20_80026F1C -- 20 words, 0 DIFFERING
+   against the two listings concatenated, and 0 under --raw too (h171).
+   Returns the index of the first entry at or after `start' whose byte
+   equals `a', or -1.  The base is assigned INSIDE the loop body on purpose:
+   loop.c hoists it into the preheader, which is after the entry guard that
+   a runtime start index forces.  See the amended analysis above. */
 s32 func_lo20_80026F04(s32 a, s32 start)
 {
     s32 i;
     u8 *q;
 
-    q = (u8 *)0x80010000 + start * 0x13;
     for (i = start; i < 0x40; i++)
     {
-        if (q[0x57D2] == a)
+        q = (u8 *)0x80010000;
+        if (q[i * 0x13 + 0x57D2] == a)
         {
             return i;
         }
-        q += 0x13;
     }
     return -1;
 }

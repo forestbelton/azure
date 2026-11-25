@@ -215,7 +215,7 @@ extern u16 D_b31f_80174CF0[];
 void func_8004D7A8(s32);
 void func_8004D294(u16 *, u8 *, s32);
 
-void func_b31f_80171F30(u8 *, s32, s32, s16);
+void func_b31f_80171F30(u8 *p, s32 b, s16 c, s16 d);
 extern u8 D_800DE870[];
 void func_b31f_80172274(u8 *p, UnkVec *b, u8 *c);
 void func_8009A028(u8 *);
@@ -233,6 +233,34 @@ void func_b31f_8016AD00(void);
 extern const u8 D_b31f_8016A858[];
 void func_800489F4_4(u8 *, s32, s32, s32) __asm__("func_800489F4");
 extern u16 D_80083460h[] __asm__("D_80083460");
+
+extern const u8 D_b31f_8016A87C[];
+extern u8 D_b31f_80174C74[];
+extern u8 D_800DEDB0[];
+extern u8 D_b31f_80174C5C[];
+extern u8 D_b31f_80174C84[];
+extern u8 D_b31f_80174C8C[];
+extern u8 D_b31f_8016A808[];
+extern s16 D_b31f_80174708[][2];
+extern u8 D_800777B8[];
+extern u8 D_b31f_80174B30[];
+void func_800419EC(u16, u32);
+void func_b31f_8016E528();
+void *func_800990FC(void);
+u8 *func_8009929C(s32 c, u8 *p);
+void *func_80099194(u8 *, u8 *);
+u8 *func_80099290(u8 *);
+s32 func_800A5720(void *);
+s32 func_800A152C(s16 a, s16 b);
+void func_b31f_801730AC();
+void func_b31f_80172A14_3(u8 *, UnkVec *, UnkSlot *) __asm__("func_b31f_80172A14");
+extern s8 D_800DCECC[];
+UnkNode *func_800BC26C(void *, s16, s32, s32);
+void func_b31f_80172610();
+typedef struct UnkDngB31fName24
+{
+    u8 bb[0x18];
+} UnkDngB31fName24;
 
 void func_b31f_8016A908(u8 *p)
 {
@@ -322,7 +350,117 @@ s32 func_b31f_8016A928(u8 *p)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016A9FC);
+/* The 0x12 helper node's driver, the one func_b31f_8016AC30 above installs:
+   a three-state fade of D_80083160's +0xA8/+0xA9/+0xAA grey triple.  State 0
+   steps the triple DOWN by 4 a frame while +0xA8 is at least 0x65, and when
+   it drops below that advances the state, clears the +0x1A frame counter and
+   builds and shows the bank's message (func_800990FC, six appends, this
+   bank's D_b31f_8016A808 string through func_80099194, func_80099290, then
+   func_800A5720 on the handle).  State 1 counts +0x1A up and advances after
+   0x3C frames.  State 2 steps the triple back UP by 4 and, once +0xA8 would
+   pass 0x80, pins all three at 0x80, spends one of D_80083460's +0xA counter
+   and raises 0x8000 in the node's -0x2 and in D_800814A0.
+   115 words, 0 differing.
+
+   A THREE-CASE COMPARE TREE, arms ascending, and the two fade arms SHARE
+   their +0xA9/+0xAA stores through jump2's cross-join (the target's
+   .Lb31f_8016AB64) -- that happens by itself, no `goto' and no device.
+
+   THE ONE MEASURED FACT, 2 aligned differences: THE MESSAGE HANDLE IS A
+   COPY OF THE APPEND CURSOR, NOT OF THE CALL RESULT.
+   | spelling                                               | words | aligned |
+   | `t = func_800990FC(); h = t; t = func_8009929C(0xA, t)' |  115  |    0    |
+   | `h = func_800990FC(); t = func_8009929C(0xA, h)'        |  115  |    2    |
+   The target has `addu $a1, $v0, $zero' and THEN `addu $s0, $a1, $zero' --
+   the callee-saved handle is copied OUT OF the argument register.  Assigning
+   `h' straight from the call result gives the two copies the other way round
+   (`$s0 = $v0' then `$a1 = $s0').  This is the regmove tying rule the brief
+   states for a dying parameter, read from the other end.  Two other
+   spellings of the same thing also measure 115/0 -- `t = ...; h = (void *)t'
+   and `t = func_8009929C(0xA, h = t)' -- so the target does NOT constrain
+   which of the three is written, only that `h' comes off the cursor.
+
+   TWO READINGS THE LISTING FORCES, both unmeasured because there is no
+   other way to spell them:
+   - state 1 tests the +0x1A counter BEFORE the increment (`lhu', `addiu +1'
+     into a second register, then `sll 16'/`sra 16'/`slti 0x3C' on the
+     ORIGINAL), so the counter goes through a local and the gate reads the
+     local, not the field.
+   - state 2's gate has an `andi $v0, $v1, 0xFF' that state 0's identical
+     gate has not got, so state 2's +0xA8 byte goes through a `u8' LOCAL
+     (the QImode pseudo is re-zero-extended for the compare while the `+ 4'
+     uses the raw `lbu' value), where state 0 reads the field directly.
+   The 0x80 pin is a chained assignment with the inner lvalue FIRST
+   (`g[0xA8] = g[0xA9] = g[0xAA] = 0x80'), which gives the target's
+   descending +0xAA, +0xA9, +0xA8 store order.
+
+   `D_b31f_8016A808' is this bank's own rodata and is already defined in
+   asm/data/1343000.data.s, so it needs only the `extern' declaration -- it
+   must NOT be written into this file as a `const' array.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_8016A9FC(u8 *p)
+{
+    u8 *g;
+    void *h;
+    u8 *t;
+    s32 k;
+    u8 v;
+
+    g = (u8 *)&D_80083160;
+    switch (*(s16 *)(p + 0x12))
+    {
+    case 0:
+        if (g[0xA8] >= 0x65)
+        {
+            g[0xA8] -= 4;
+            g[0xA9] -= 4;
+            g[0xAA] -= 4;
+        }
+        else
+        {
+            *(s16 *)(p + 0x12) = *(u16 *)(p + 0x12) + 1;
+            *(s16 *)(p + 0x1A) = 0;
+            t = (u8 *)func_800990FC();
+            h = t;
+            t = func_8009929C(0xA, t);
+            t = func_8009929C(0xA, t);
+            t = (u8 *)func_80099194(D_b31f_8016A808, t);
+            t = func_8009929C(0xA, t);
+            t = func_8009929C(0xA, t);
+            t = func_8009929C(0xA, t);
+            t = func_8009929C(1, t);
+            func_80099290(t);
+            func_800A5720(h);
+        }
+        break;
+    case 1:
+        k = *(u16 *)(p + 0x1A);
+        *(s16 *)(p + 0x1A) = k + 1;
+        if ((s16)k >= 0x3C)
+        {
+            *(s16 *)(p + 0x1A) = 0;
+            *(s16 *)(p + 0x12) = *(u16 *)(p + 0x12) + 1;
+        }
+        break;
+    case 2:
+        v = g[0xA8];
+        if (v < 0x80)
+        {
+            g[0xA8] = v + 4;
+            g[0xA9] += 4;
+            g[0xAA] += 4;
+        }
+        else
+        {
+            g[0xA8] = g[0xA9] = g[0xAA] = 0x80;
+            D_80083460h[5] -= 1;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
 
 /* 26 words, 0 differing, first compile. The +0xA8/+0xA9/+0xAA triple of
    D_80083160 is advanced by 4 while the +0xA8 byte is under 0x80; otherwise
@@ -2075,7 +2213,84 @@ void func_b31f_8016E264(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016E300);
+/* The three-state driver for the actor this bank parks at
+   D_b31f_80174704: state 0 waits for the record's +0xAC to reach 0x11 and
+   then advances the state and clears the +0x1A frame counter; state 1 pulls
+   the mover 0x80000 back and, after 0xB frames, advances the state and
+   plays 0x516; state 2 pulls it 0x20000 back and, after 0x14 frames, raises
+   0x8000 in the OTHER parked actor's node (-0x2 off D_b31f_80174CC8 + 0x20)
+   and in D_800814A0 and drops that parking slot.  77 words, 0 differing,
+   FIRST COMPILE.
+
+   A THREE-CASE COMPARE TREE, NOT A JUMP TABLE -- three case nodes is under
+   gcc 2.7.2's `case_values_threshold', and the arms emit in SOURCE order
+   (0, 1, 2 ascending, which is the order of the target's blocks at
+   0x8016E350, 0x8016E36C and 0x8016E3C0).
+
+   THREE SPELLINGS PRICED FROM THE LANDED BODY:
+   | spelling                                               | words | aligned |
+   | as written below                                       |   77  |    0    |
+   | `g' assigned inside case 0 instead of before the switch|   77  |   14    |
+   | the +0xAC read written inline, with no `g' at all      |   77  |   14    |
+   | the D_b31f_80174CC8 = NULL store written FIRST         |   77  |    4    |
+   | the +0x1A zero AFTER the +0x12 bump in case 1          |   77  |    0    |
+   THE +0x20 POINTER MUST BE COMPUTED BEFORE THE SWITCH even though only
+   case 0 uses it: the target's `addiu $a3, $v0, 0x20' sits in the dispatch
+   block, next to the `lw' of the parking slot it comes off, and moving it
+   into the arm costs 14 rows without changing the word count.  This is the
+   same shape func_b31f_8016DF10 above records for its own +0x20 pointer.
+   THE NULL STORE COMES LAST, which is func_b31f_8016E264's priced fact in
+   this file (the `sw $zero' only fits in the hole between D_800814A0's
+   `lw' and its `ori'); here it is 4 rows rather than its 17.
+   The +0x1A zero's position in case 1 is FREE, so it is not evidence: the
+   target's `sh $zero, 0x1A' is in the `lhu 0x12' load-delay slot either
+   way.
+
+   `func_b31f_8016E300' already had a K&R `void func_b31f_8016E300();'
+   declaration in this unit's block (its address is taken by
+   func_b31f_8016E264's spawner above); the four-parameter definition is
+   compatible with it and the declaration is left alone.  The arity is the
+   house +0x10-step shape -- only $a0 and $a1 are read.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_8016E300(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *q;
+
+    g = D_b31f_80174704 + 0x20;
+    switch (*(s16 *)(p + 0x12))
+    {
+    case 0:
+        if (*(s16 *)(g + 0xAC) == 0x11)
+        {
+            *(u16 *)(p + 0x12) += 1;
+            *(s16 *)(p + 0x1A) = 0;
+        }
+        break;
+    case 1:
+        b->unk_08 -= 0x80000;
+        *(u16 *)(p + 0x1A) += 1;
+        if (*(s16 *)(p + 0x1A) >= 0xB)
+        {
+            *(s16 *)(p + 0x1A) = 0;
+            *(u16 *)(p + 0x12) += 1;
+            func_800A56E0(0x516);
+        }
+        break;
+    case 2:
+        b->unk_08 -= 0x20000;
+        *(u16 *)(p + 0x1A) += 1;
+        if (*(s16 *)(p + 0x1A) >= 0x14)
+        {
+            q = D_b31f_80174CC8 + 0x20;
+            *(u16 *)(q - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+            D_b31f_80174CC8 = NULL;
+        }
+        break;
+    }
+}
 
 /* The 0x212 spawn for the mote that sits 0x400000 below the parked actor:
    allocate the node, install func_b31f_8016E300 as its +0x10 step, hand it
@@ -2158,7 +2373,96 @@ const u8 D_b31f_8016A858[] = {
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016E528);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016EB14);
+/* The 0x12 helper node for the parked actor at D_b31f_80174704: a kind-0x12
+   node with this unit's table-owning func_b31f_8016E528 as its +0x10 driver,
+   the parking slot's +0x20 record parked at the new payload's +0x24, the
+   actor's mover copied across with +0xA pulled 0x20 back, the +0x4C/+0x50
+   pair seeded from this bank's 0x80174708 octant table scaled by 1 << 18,
+   -0x80000 at +0x54 and 0x14900 at +0x60, the octant itself at +0x18, 0x1000
+   scale halves, the slot's +0x6 at six times the table's second column, 0x4D
+   in the record's +0xAA, the actor's +0x2/+0x6 divided by 64 into the
+   payload's +0x48/+0x49, the grey triple at 0x80, D_800777B8 at the slot's
+   +0x8 and the +0x44..+0x47 quad set to 0xF/1/0/0.  116 words, 0 differing.
+
+   TWO MEASURED FACTS, and they are the whole fight:
+   | spelling                                               | words | aligned |
+   | as written below                                       |  116  |    0    |
+   | the +0x54 and +0x60 stores BEFORE the +0x50 store      |  116  |   24    |
+   | the +0x60 store first of the four                      |  117  |   14    |
+   | `w' computed AFTER func_8004491C                       |  114  |   59    |
+   | `r' read before func_8004491C                          |  115  |   38    |
+   | `m' read before func_8004491C                          |  115  |   61    |
+   | the table as `s16 []' with `[i * 2]' and `[i * 2 + 1]' |  116  |   25    |
+   1. THE FOUR +0x4C..+0x60 STORES ARE WRITTEN IN ASCENDING OFFSET ORDER.
+      The listing interleaves them -- its emitted order is 0x4C, 0x54, 0x60,
+      0x50 -- and transcribing that is 24 rows.  This is the brief's "a
+      store's position inside a block is not readable"; the ascending source
+      order is what sched1 turns into the listing's order.
+   2. `w = (u8 *)n + 0x20' MUST BE WRITTEN BEFORE func_8004491C, and that is
+      worth the body's last TWO WORDS: written after the call the pseudo does
+      not cross it, takes $a2 instead of a callee-saved register, and the
+      frame comes out -0x20 with three saves where the target has -0x28 with
+      four.  The target's `addiu $s0, $s1, 0x20' is EMITTED after the call
+      (sched1 moves it; a pseudo-only add has no hard-register dependence on
+      a CALL_INSN), so the listing cannot be read directly here -- only the
+      SAVE COUNT says where the statement goes.
+   3. The octant table is a 2-COLUMN array, `extern s16 D_b31f_80174708[][2]',
+      indexed `[i][0]' and `[i][1]'.  Spelled as a flat `s16 []' with
+      `[i * 2 + 1]' the +1 folds into the base (`addiu $a0, $a0, 0x2') where
+      the target keeps it in the MEM displacement (`lh $v1, 0x2($v0)').
+
+   MEASURED AND FREE, so NOT the reason this lands: a `tbl' pointer local for
+   the three table references instead of naming the symbol (116/24 either
+   way -- cse commons the address regardless, so this body is no evidence
+   about that lever); `+ -0x20' instead of `- 0x20' on the mover's +0xA.
+   The index is recomputed at all four sites because the intervening stores
+   invalidate cse's entry for the +0x2A halfword; no local is involved.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_8016EB14(void)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkVec *src;
+    UnkSlot *r;
+    u8 *q;
+    u8 *w;
+
+    src = *(UnkVec **)(D_b31f_80174704 + 0x8);
+    q = D_b31f_80174704 + 0x20;
+    n = func_8003FC64(0x12);
+    if (n != NULL)
+    {
+        w = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_b31f_8016E528;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_14 &= 0xFFF3;
+        *(u8 **)(w + 0x24) = q;
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)src + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)src + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)src + 0xA) - 0x20;
+        *(s32 *)(w + 0x4C) = D_b31f_80174708[(*(u16 *)(q + 0x2A) >> 9) & 7][0] << 18;
+        *(s32 *)(w + 0x50) = D_b31f_80174708[(*(u16 *)(q + 0x2A) >> 9) & 7][1] << 18;
+        *(s32 *)(w + 0x54) = -0x80000;
+        *(s32 *)(w + 0x60) = 0x14900;
+        *(s16 *)(w + 0x18) = (*(u16 *)(q + 0x2A) >> 9) & 7;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        *(s16 *)((u8 *)r + 0x6) = D_b31f_80174708[(*(u16 *)(q + 0x2A) >> 9) & 7][1] * 6;
+        *(s16 *)(q + 0xAA) = 0x4D;
+        *(s8 *)(w + 0x48) = *(s16 *)((u8 *)src + 0x2) / 64;
+        *(s8 *)(w + 0x49) = *(s16 *)((u8 *)src + 0x6) / 64;
+        ((u8 *)r)[0xC] = ((u8 *)r)[0xD] = ((u8 *)r)[0xE] = 0x80;
+        r->unk_08 = (u32)D_800777B8;
+        w[0x44] = 0xF;
+        w[0x45] = 1;
+        w[0x46] = 0;
+        w[0x47] = 0;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016ECE4);
 
@@ -3382,7 +3686,99 @@ void func_b31f_80170DCC(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80170EA0);
+/* The driver for the actor this bank parks at D_b31f_80174CDC: a three-state
+   machine on the payload's +0x9A.  State 0 arms the state and clears the
+   +0x96 counter and FALLS THROUGH into state 1, which counts +0x96 up and,
+   after 0x24 frames, re-arms +0x96 and +0x9E at 0x14, advances the state,
+   plays func_800419EC(6, 0xC), spawns the mote through this unit's
+   func_b31f_80170DCC, cues 0x601, drops the mover's +0xC to -0x200000 and
+   re-dresses the slot off this bank's D_b31f_80174B30 table.  State 2
+   integrates +0xC into the mover, halves it, counts +0x96 back down with the
+   grey triple ramped from it against +0x9E, and calls func_b31f_80170CE0
+   when it runs out.  Every path ends in func_800478B8 on the slot.
+   111 words, 0 differing.
+
+   THREE MEASURED FACTS:
+   | spelling                                               | words | aligned |
+   | as written below                                       |  111  |    0    |
+   | the `t' alias dropped, `q' at the +0x2A index          |  108  |    9    |
+   | case 0 with `break' instead of falling through         |  109  |   10    |
+   | the grey triple written +0xE first                     |  111  |    4    |
+   1. THERE IS AN ALIAS LOCAL AND IT IS WORTH THREE WORDS.  The target copies
+      the +0x20 payload pointer into a SECOND callee-saved register
+      (`addu $s3, $s0, $zero', in the dispatch `beq's delay slot) and uses it
+      at exactly ONE site -- the `lh $v1, 0x2A($s3)' inside the re-dress
+      index.  Naming `q' there instead loses the copy, the save/restore pair
+      and one more word.  This is the brief's alias-local lever at its
+      smallest: one site out of eleven.
+   2. STATE 0 FALLS THROUGH INTO STATE 1.  With a `break' the body is two
+      words short and ten rows out -- jump.c folds state 0's tail into the
+      common exit instead of letting it run on into state 1's counter test.
+   3. The grey triple is a chain with the inner lvalue FIRST
+      (`r[0xC] = r[0xD] = r[0xE] = v'), giving the target's descending +0xE,
+      +0xD, +0xC store order -- the same sign func_b31f_80172B00 needs in
+      this batch and the OPPOSITE of func_b31f_80172874's.  The sign is per
+      body; read the `sb' order.
+
+   TWO READINGS THE LISTING FORCES: the +0x96 counter is INCREMENTED FIRST
+   and the gate tests the PRE-INCREMENT value through a local (the
+   `sh $v1, 0x96' sits in the `bnez's delay slot, so it runs on both paths
+   and state 1's arm then overwrites it with 0x14); and the re-dress table is
+   a POINTER LOCAL because it is used twice, which is func_b31f_8016C698's
+   idiom in this file.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80170EA0(void)
+{
+    u8 *q;
+    u8 *t;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *tbl;
+    s32 k;
+
+    q = D_b31f_80174CDC + 0x20;
+    m = *(UnkVec **)(D_b31f_80174CDC + 0x8);
+    r = (UnkSlot *)*(u32 *)(D_b31f_80174CDC + 0xC);
+    t = q;
+    switch (q[0x9A])
+    {
+    case 0:
+        q[0x9A] = 1;
+        *(s16 *)(q + 0x96) = 0;
+        /* fall through */
+    case 1:
+        k = *(u16 *)(q + 0x96);
+        *(s16 *)(q + 0x96) = k + 1;
+        if ((s16)k >= 0x24)
+        {
+            *(s16 *)(q + 0x96) = 0x14;
+            *(s16 *)(q + 0x9E) = 0x14;
+            q[0x9A] += 1;
+            func_800419EC(6, 0xC);
+            func_b31f_80170DCC(q, m, (u8 *)r);
+            func_800A56E0(0x601);
+            m->unk_0C = -0x200000;
+            r->unk_10 = 0x20;
+            tbl = D_b31f_80174B30;
+            *(u8 **)((u8 *)r + 0x2C) = tbl;
+            r->unk_14 |= 0xC;
+            func_80047784((u8 *)r, tbl[((D_80083228 + *(s16 *)(t + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        break;
+    case 2:
+        m->unk_00 += m->unk_0C;
+        m->unk_0C = m->unk_0C / 2;
+        *(s16 *)(q + 0x96) = *(u16 *)(q + 0x96) - 1;
+        ((u8 *)r)[0xC] = ((u8 *)r)[0xD] = ((u8 *)r)[0xE] = *(s16 *)(q + 0x96) * 128 / *(s16 *)(q + 0x9E);
+        if (*(s16 *)(q + 0x96) <= 0)
+        {
+            func_b31f_80170CE0();
+        }
+        break;
+    }
+    func_800478B8((u8 *)r);
+}
 
 /* func_b31f_8016DE1C's teardown on D_b31f_80174CD8, with
    func_b31f_80173ED0 as the reaper. 44 words, 0 differing.
@@ -3467,7 +3863,46 @@ void func_b31f_80171130(s32 i)
     *(u16 *)(D_b31f_80174CD8 + 0xD2) = 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80171168);
+/* func_b31f_8016E138's nudge on the OTHER parked actor: the same body with
+   D_b31f_80174CD8 for D_b31f_80174704 and this bank's 0x18-byte
+   D_b31f_8016A87C record for the 0xC-byte D_b31f_8016A858 one.
+   87 words, 0 differing.
+
+   The record copy is 0x18 bytes here, not 0xC -- the listing has SIX
+   `lwl'/`lwr' pairs and six `swl'/`swr' pairs covering $sp+0x10..0x27 --
+   so it needs its own 0x18-byte name type rather than UnkDngB31fName12.
+   Every other fact is func_b31f_8016E138's, priced there: the indexed
+   address hoisted into its own `e' statement (1 aligned difference inline,
+   because the target's `addu $a0, $s1, $a0' is base-then-index), and the
+   0x300/0x3000 pick inline in both calls.
+
+   `const u8 D_b31f_8016A87C[]' is defined in this file BELOW this function,
+   so this body needs the `extern' declaration and the definition MUST NOT
+   MOVE -- cc1psx emits rodata in function order.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80171168(s32 i)
+{
+    UnkDngB31fName24 t;
+    u8 *q;
+    u8 *r;
+    u8 *g;
+    u8 *e;
+    UnkVec *m;
+
+    t = *(UnkDngB31fName24 *)D_b31f_8016A87C;
+    q = D_b31f_80174CD8 + 0x20;
+    r = *(u8 **)(D_b31f_80174CD8 + 0xC);
+    m = *(UnkVec **)(D_b31f_80174CD8 + 0x8);
+    *(u16 *)(r + 0x14) &= 0xFF7F;
+    func_8009A3D0(r[0x24], r[0x25], (*(s32 *)(q + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+    g = D_80082E80;
+    e = &t.bb[i * 2];
+    r[0x24] = g[0x24] + e[0];
+    r[0x25] = g[0x25] + e[1];
+    func_800A2B04(m, r[0x24], r[0x25]);
+    func_8009A21C(r[0x24], r[0x25], (*(s32 *)(q + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_801712C4);
 
@@ -3565,7 +4000,83 @@ void func_b31f_801714B0(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80171594);
+/* The bank's SECOND 0x112 actor spawner, parked in D_b31f_80174CDC: a 0x112
+   node off D_80083498 with func_b31f_801714B0 as its +0x10 driver, 0x15 in
+   the payload's +0x13 state, the mover's +0xA set from the third parameter
+   less 0x18, the slot dressed from this bank's D_b31f_80174C5C table with
+   the first two parameters as its +0x24/+0x25 cell and -4 in its +0x6, then
+   handed to func_800A9C18, armed at 0x200 facing, re-dressed through
+   func_80047784, given 0x1800 scale halves, its mover pulled 0x10 back on
+   both axes, reported through func_8009A3D0 and func_8009A028, published in
+   D_b31f_80174CDC and finally marked with 0x80000000 in the node's +0x10.
+   92 words, 0 differing.
+
+   THE WIDTHS OF THE FIRST TWO PARAMETERS ARE THE WHOLE FIGHT, and this is
+   the second body in this batch where that is true (see
+   func_b31f_80171F30 above):
+   | signature                                              | words | aligned |
+   | `(s16 a, s16 b, s32 c)', as below                      |   92  |    0    |
+   | `(s32 a, s32 b, s32 c)'                                |   92  |    5    |
+   | `(u8 a, u8 b, s32 c)'                                  |   92  |    5    |
+   | `(s32 a, s32 b, s16 c)'                                |   92  |    5    |
+   | `(u8 a, u8 b, s16 c)'                                  |   92  |    5    |
+   | `(u8 a, s32 b, s32 c)'                                 |   92  |    5    |
+   The residue is NOT at the two `sb' stores -- those are byte-identical in
+   every spelling -- it is the ORDER OF THE PROLOGUE'S PARAMETER COPIES: the
+   target copies $a2 FIRST ($s0), then $a0 ($s4), then $a1 ($s5), and only
+   `s16 a, s16 b' gives that.  sched1 is bottom-up and ties on dependence
+   path length, so narrowing a and b shortens their chains, their copies get
+   picked first and are therefore PLACED LAST.  `u8' is not the same as
+   `s16' here even though both stores are `sb': the figure is 5 either way,
+   so the fact is "narrow AND signed AND exactly these two", not "narrow".
+
+   The arity is from the listing alone (nothing in this unit calls it; the
+   three incoming registers are all copied to callee-saved registers).
+
+   The dress index is the unit's idiom,
+   `((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7', and cse folds it
+   to `+ 0x300' because the +0x2A store of 0x200 is three statements above
+   it -- that constant in the listing is NOT a source constant.  The table
+   is RE-READ out of r+0x2C rather than kept in a local, because the
+   func_800A9C18 call between the store and the index invalidates cse's
+   entry; func_b31f_8016C698 in this file keeps a local for the same pair of
+   uses and has no call between them.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80171594(s16 a, s16 b, s32 c)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *q;
+
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        q = (u8 *)n + 0x20;
+        q[0x13] = 0x15;
+        n->unk_10 = (u32)func_b31f_801714B0;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = c - 0x18;
+        r = (UnkSlot *)n->unk_0C;
+        *(u8 **)((u8 *)r + 0x2C) = D_b31f_80174C5C;
+        *((u8 *)r + 0x24) = a;
+        *((u8 *)r + 0x25) = b;
+        r->unk_06 = -4;
+        func_800A9C18(n, m, r, 0);
+        *(s16 *)(q + 0x2A) = 0x200;
+        func_80047784((u8 *)r, (*(u8 **)((u8 *)r + 0x2C))[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+        r->unk_1E = 0x1800;
+        r->unk_1C = 0x1800;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)m + 0x2) - 0x10;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)m + 0x6) - 0x10;
+        func_8009A3D0(((u8 *)r)[0x24], ((u8 *)r)[0x25], (*(s32 *)(q + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        func_8009A028(q);
+        D_b31f_80174CDC = (u8 *)n;
+        n->unk_10 |= 0x80000000;
+    }
+}
 
 /* func_800D5AC0 (csrc/ovl_dungeon_800D50FC.c), byte for byte: one
    semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
@@ -3780,7 +4291,94 @@ void func_b31f_80171E60(u8 *p, UnkVec *b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80171F30);
+/* The 0x211 particle spawn this bank fires for its bursts: allocate the node
+   off the caller's own record, pick one of three per-frame drivers by the
+   fourth parameter, copy the caller's mover's three position halfwords,
+   jitter the +0x2 and +0x6 pair by -4 + (rand() & 7) for kind 0 and by
+   -0xC + (rand() & 0xF) for every other kind, clear the slot's +0x6, put
+   the third parameter in the payload's +0x32 and +0x34, hand the node to
+   func_8004491C with this unit's func_b31f_80171704 as its step, and put
+   the second parameter in the node's +0x20 and the payload's +0x8.
+   104 words, 0 differing.
+
+   PROTOTYPE CHANGE, SAID LOUDLY: the declaration in this unit's block was
+   `void func_b31f_80171F30(u8 *, s32, s32, s16)' and the third parameter is
+   `s16', not `s32'.  THAT ONE WIDTH IS THE WHOLE OF THIS BODY'S FIGHT:
+   | spelling                                               | words | aligned |
+   | `(u8 *p, s32 b, s16 c, s16 d)', as below               |  104  |    0    |
+   | `(u8 *p, s32 b, s32 c, s16 d)' (the old declaration)   |  104  |    4    |
+   | `(u8 *p, s16 b, s32 c, s16 d)'                         |  106  |   17    |
+   | all three wide, `s32 d'                                |   97  |   37    |
+   The 4-row residue is NOT where the width is used -- the two `sh' stores
+   of `c' are byte-identical either way -- it is the PROLOGUE: with `s32 c'
+   the entry copies come out $a0, $a1, $a2, $a3 and the target has
+   $a0, $a1, [the call's arguments], $a3, $a2.  The narrow pseudo shortens
+   `c's dependence chain to the end of the block, so sched1 (which is
+   bottom-up) picks its entry copy FIRST and therefore PLACES IT LAST.
+   All five callers in this unit pass literals (0x8080/8/0, 0x8080/0x1C/1,
+   0x8080/0x1C/2), so the narrowing is safe and all of them were
+   re-verified after the change.
+
+   Thirteen other spellings measured FLAT at 4 while the width was wrong, so
+   none of them is evidence: the handler choice through an `f' local or
+   stored in each arm; the `else if' chain nested; `q' computed before `r';
+   both `b' stores off `q' instead of one off the node; the `c' and `b'
+   pairs as chained assignments; an `(s16)' cast at the `c' stores; the
+   mover source read through a struct member instead of a cast.
+   LOAD-BEARING AND MEASURED: the jitter gate must be `if (d == 0)' with the
+   7/4 arm FIRST (inverted, 37 rows); the +0x32 store before the +0x34 store
+   (swapped, 8 rows); the jitter written `load + ((rand() & M) - K)' so the
+   `addiu -K' lands on the loaded halfword, which is
+   func_b31f_80172160's priced fact in this file; and the three-way handler
+   pick must be an `if'/`else if' chain and NOT a `switch' (106 words / 13).
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80171F30(u8 *p, s32 b, s16 c, s16 d)
+{
+    UnkNode *n;
+    u8 *q;
+    UnkSlot *r;
+    u32 f;
+
+    n = func_8003FD64(0x211, p);
+    if (n != NULL)
+    {
+        if (d == 0)
+        {
+            f = (u32)func_b31f_80171CC0;
+        }
+        else if (d == 1)
+        {
+            f = (u32)func_b31f_80171D90;
+        }
+        else
+        {
+            f = (u32)func_b31f_80171E60;
+        }
+        n->unk_10 = f;
+        *(s16 *)((u8 *)n->unk_08 + 0x2) = *(u16 *)(*(u8 **)(p + 0x8) + 0x2);
+        *(s16 *)((u8 *)n->unk_08 + 0x6) = *(u16 *)(*(u8 **)(p + 0x8) + 0x6);
+        *(s16 *)((u8 *)n->unk_08 + 0xA) = *(u16 *)(*(u8 **)(p + 0x8) + 0xA);
+        if (d == 0)
+        {
+            *(s16 *)((u8 *)n->unk_08 + 0x2) = *(u16 *)((u8 *)n->unk_08 + 0x2) + ((rand() & 0x7) - 0x4);
+            *(s16 *)((u8 *)n->unk_08 + 0x6) = *(u16 *)((u8 *)n->unk_08 + 0x6) + ((rand() & 0x7) - 0x4);
+        }
+        else
+        {
+            *(s16 *)((u8 *)n->unk_08 + 0x2) = *(u16 *)((u8 *)n->unk_08 + 0x2) + ((rand() & 0xF) - 0xC);
+            *(s16 *)((u8 *)n->unk_08 + 0x6) = *(u16 *)((u8 *)n->unk_08 + 0x6) + ((rand() & 0xF) - 0xC);
+        }
+        r = (UnkSlot *)n->unk_0C;
+        q = (u8 *)n + 0x20;
+        r->unk_06 = 0;
+        *(s16 *)(q + 0x32) = c;
+        *(s16 *)(q + 0x34) = c;
+        func_8004491C(n, (u32)func_b31f_80171704);
+        *(s32 *)((u8 *)n + 0x20) = b;
+        *(s32 *)(q + 0x8) = b;
+    }
+}
 
 /* The step func_b31f_80172160 installs at its node's +0x10: pull the mover's
    +0xA back by 4, and while bit 0 of the payload's +0x16 countdown is clear
@@ -4108,7 +4706,98 @@ s32 func_b31f_801725F0(s32 n)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172610);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172874);
+/* csrc/ovl_dng_b24.c's func_b24_80170A84 relinked into this bank, with
+   three states instead of six: a LEAF per-frame driver that eases the
+   renderable's +0x1A by 0x190 a frame modulo 0x1000, copies the parked
+   record's +0x6 into the view, and then runs a three-state fade on the
+   payload's +0x12 -- state 0 ramps the grey triple up from the +0x16
+   counter against the +0x38-equivalent +0x18 span and advances after five
+   frames; state 1 advances (and arms the counter pair at 0x14) when the
+   D_b31f_80174CE0 slot has been dropped OR when the parked record's +0x2C
+   table is this bank's D_b31f_80174C8C, then copies the parked mover's
+   three position words into the view; state 2 ramps the triple back down
+   and raises 0x8000 in the node's -0x2 and in D_800814A0 when it runs out.
+   104 words, 0 differing, FIRST COMPILE.  A LEAF -- no frame at all, the
+   listing opens with `addu $a3, $a0, $zero'.
+
+   DELTAS from func_b24_80170A84: the two parked pointers are at +0x20/+0x24
+   (b24's +0x40/+0x44), the state is +0x12 (b24's +0x2C) and the counter
+   pair +0x16/+0x18 (b24's +0x36/+0x38), there are three states and not six
+   -- so this is a COMPARE TREE and not b24's jump table -- and state 1's
+   two gates are this bank's own.
+
+   B24'S GREY-TRIPLE FACT HOLDS HERE AT ITS OWN SIGN, which is worth saying
+   because func_b31f_80172B00 in this same batch needed it INVERTED:
+   | spelling                                               | words | aligned |
+   | `c[0xE] = c[0xD] = c[0xC] = v', as below               |  104  |    0    |
+   | `c[0xC] = c[0xD] = c[0xE] = v'                         |  104  |    4    |
+   The chain emits inner-lvalue-FIRST, and this target stores +0xC, +0xD,
+   +0xE, which is b24's order.
+
+   TWO MORE MEASURED, BOTH LOAD-BEARING:
+   | the parked record WITHOUT the `w' local, read inline   |  109  |   13    |
+   | `v' read in state 1 instead of at the top              |  104  |    7    |
+   | the +0x6 store after the +0x1A ease                    |  106  |   11    |
+   Both pointers are locals assigned BEFORE the ease, even though `v' is
+   used only in state 1: the target loads +0x20, +0x24 and the -0x14
+   indirection as the first three instructions of the function.
+   MEASURED AND FREE, so NOT the reason this lands: the ramp written
+   `(x << 7) / y' instead of `x * 128 / y' (104/0 -- `sll 16'/`sra 9' is the
+   s16 sign extension folded with the shift either way, and the divisor is a
+   variable so the `div' is real).
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80172874(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *w;
+    UnkVec *v;
+
+    w = *(u8 **)(*(u8 **)(p + 0x20) - 0x14);
+    v = *(UnkVec **)(p + 0x24);
+    *(s16 *)(c + 0x6) = *(u16 *)(w + 0x6);
+    *(s16 *)(c + 0x1A) = *(u16 *)(c + 0x1A) + 0x190;
+    if (*(u16 *)(c + 0x1A) > 0x1000)
+    {
+        *(s16 *)(c + 0x1A) = *(u16 *)(c + 0x1A) - 0x1000;
+    }
+    switch (*(s16 *)(p + 0x12))
+    {
+    case 0:
+        *(s16 *)(p + 0x16) = *(u16 *)(p + 0x16) + 1;
+        c[0xE] = c[0xD] = c[0xC] = *(s16 *)(p + 0x16) * 128 / *(s16 *)(p + 0x18);
+        if (*(s16 *)(p + 0x16) >= 5)
+        {
+            *(s16 *)(p + 0x12) = *(u16 *)(p + 0x12) + 1;
+        }
+        break;
+    case 1:
+        if (D_b31f_80174CE0 == NULL)
+        {
+            *(s16 *)(p + 0x12) = *(u16 *)(p + 0x12) + 1;
+            *(s16 *)(p + 0x18) = 0x14;
+            *(s16 *)(p + 0x16) = 0x14;
+        }
+        if (*(u8 **)(w + 0x2C) == D_b31f_80174C8C)
+        {
+            *(s16 *)(p + 0x18) = 0x14;
+            *(s16 *)(p + 0x16) = 0x14;
+            *(s16 *)(p + 0x12) = *(u16 *)(p + 0x12) + 1;
+        }
+        b->unk_00 = v->unk_00;
+        b->unk_04 = v->unk_04;
+        b->unk_08 = v->unk_08;
+        break;
+    case 2:
+        *(s16 *)(p + 0x16) = *(u16 *)(p + 0x16) - 1;
+        c[0xE] = c[0xD] = c[0xC] = *(s16 *)(p + 0x16) * 128 / *(s16 *)(p + 0x18);
+        if (*(s16 *)(p + 0x16) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
 
 /* The 0x12 child spawn for the caller's actor: allocate the node UNDER
    p - 0x20 through func_8003FD64, publish it in the caller's +0xAC, install
@@ -4175,13 +4864,282 @@ void func_b31f_80172A14(u8 *p, UnkVec *b)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172B00);
+/* csrc/ovl_dng_b24.c's func_b24_801708B8 relinked into this bank: the
+   kind-0x112 ECHO node, with this unit's func_b31f_80172610 as the
+   per-frame driver, this bank's D_b31f_80174C74 for the facing table, and
+   the caller's record parked at the new slot's +0xAC.  114 words,
+   0 differing, FIRST COMPILE.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172CC8);
+   THE ONE REAL DELTA, and it is why this body is a word SHORTER than its
+   115-word twin: the second argument of func_8003FD64 is `p - 0x20', not
+   the twin's D_80083498, and it is the SAME value the +0xAC publish stores
+   -- so one `addiu $s0, $s4, -0x20' serves both where the twin pays a
+   `lui'/`addiu' pair for the symbol plus its own `addiu'.  Written as a
+   local `q' it holds $s0 across the call, which is what the target does.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172DFC);
+   Every other fact is func_b24_801708B8's and carried unchanged at its
+   recorded price:
+   - the 0x30-byte slot copy is a `u32 w[0xC]' struct assignment, and this
+     unit ALREADY DECLARES that struct as UnkDngB01Word48 (it was an unused
+     typedef in this unit's block -- the donor lead the brief describes).
+     UnkSlot is 0x2C and emits a two-iteration loop plus a 12-byte tail
+     where the target has one three-iteration loop and the
+     `addiu $t0, $s5, 0x30' bound.
+   - the D_800DCECC entry is `* 4', not `<< 2'.
+   THE TWIN'S GREY-TRIPLE FACT INVERTS HERE, priced 2 aligned differences.
+   func_b24_801708B8 records the chain with the inner lvalue LAST
+   (`r[0xE] = r[0xD] = r[0xC] = v') because that gives ITS +0xC, +0xD, +0xE
+   store order; this target stores +0xE, +0xD, +0xC, so the chain has to be
+   `r[0xC] = r[0xD] = r[0xE] = v' -- gcc emits a chain inner-lvalue-FIRST,
+   and the two spellings are 2 rows apart (the +0xC and +0xE `sb's
+   transposed, the +0xD one in place, nothing else moving).
+   - `g = (u8 *)&D_80083160' with +0xC8: the target hoists that base into
+     $s0 and uses the 0xC8 displacement twice.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80172F44);
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80172B00(u8 *p, UnkVec *b, u8 *c)
+{
+    UnkNode *n;
+    UnkVec *v;
+    u8 *q;
+    u8 *w;
+    u8 *r;
+    u8 *g;
+
+    q = p - 0x20;
+    n = func_8003FD64(0x112, q);
+    if (n != NULL)
+    {
+        w = (u8 *)n + 0x20;
+        *(s16 *)(w + 0x96) = 0x78;
+        n->unk_10 = (u32)func_b31f_80172610;
+        *(u8 **)(w + 0xAC) = q;
+        *(s16 *)(w + 0x94) = *(u16 *)(p + 0x2A);
+        *(s16 *)(w + 0x2A) = *(u16 *)(p + 0x2A);
+        r = (u8 *)n->unk_0C;
+        *(UnkDngB01Word48 *)r = *(UnkDngB01Word48 *)c;
+        func_8004491C(n, (u32)D_80045340);
+        *(u8 **)(r + 0x2C) = D_b31f_80174C74;
+        g = (u8 *)&D_80083160;
+        func_80047784(r, D_b31f_80174C74[((*(s16 *)(g + 0xC8) + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7], 0);
+        v = n->unk_08;
+        *(s16 *)((u8 *)v + 0x2) = *(u16 *)((u8 *)b + 0x2);
+        *(s16 *)((u8 *)v + 0x6) = *(u16 *)((u8 *)b + 0x6);
+        *(s16 *)((u8 *)v + 0xA) = *(u16 *)((u8 *)b + 0xA);
+        *(s16 *)(r + 0x1C) = *(u16 *)(c + 0x1C);
+        *(s16 *)(r + 0x1E) = *(u16 *)(c + 0x1E);
+        r[0xC] = r[0xD] = r[0xE] = 0x80;
+        *(s16 *)(r + 0x6) = D_800DCECC[((*(s16 *)(g + 0xC8) + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7] * 4;
+        p[0xB0] += 1;
+        func_800BC26C(n, 0, (s32)(r + 0x2C), (s32)(w + 0x2A));
+    }
+}
+
+/* func_b31f_80170DCC's 0x212 spawn with the mover copied VERBATIM and
+   jittered by three parameters, and the registration table picked by a
+   FIFTH: allocate the node, install func_b31f_80170D60 as its +0x10 step,
+   hand it to func_8004491C/D_80045340, put 0x20 in the slot's +0x10 and 6 in
+   its +0x6 and raise 0xC in its flags, copy the caller's mover and add the
+   three offsets into its +0x2, +0x6 and +0xA halfwords, then 0x1400 as both
+   scale halves, 0x80/0x80/0x80 over +0xC..+0xE, and register the record with
+   func_8003DB94 against D_800DEDB0 when the fifth parameter is non-zero and
+   D_800DE870 when it is not.  77 words, 0 differing.
+
+   Skeleton and every spelling in the first half are func_b31f_80170DCC's
+   (53 words, in this file): same `r->unk_10'/`unk_06'/`unk_14 |= 0xC'
+   prologue, same two-`r' shape, same struct-field mover copy.  The jitter
+   triple is func_b31f_80172F44's below.
+
+   ARITY FROM THE LISTING: $a0..$a3 are copied to callee-saved registers and
+   a FIFTH argument is read with `lw $s5, 0x40($sp)' -- the outgoing slot 5
+   of the caller's frame -- so five parameters.
+
+   TWO MEASURED FACTS, and both are about how the five parameters compete:
+   | spelling                                               | words | aligned |
+   | all four offsets `s16', two separate calls             |   77  |    0    |
+   | `s32 x, y, z' with `s16 e'                             |   77  |   12    |
+   | the table pick as a ternary in ONE call                |   77  |   17    |
+   1. ALL FOUR OFFSET PARAMETERS ARE `s16'.  With `s32 x, y, z' the residue
+      is 12 rows and every one of them is the SAME parameter rotation:
+      `e' takes $s2 and x/y/z slide up to $s3/$s4/$s5, where the target has
+      x/y/z in $s2/$s3/$s4 and `e' in $s5.  Five parameters with one
+      reference each all score 0 in `allocno_compare'
+      (`floor_log2(1) * 1 == 0'), so the order is the allocno order, which is
+      the pseudo order -- and a MIXED width list does not give the pseudos
+      in declaration order.  Nothing sign-extends x/y/z in the listing
+      because only the low half of each sum reaches its `sh', so the width
+      is invisible from the instructions and visible only here.
+      (func_b31f_80172F44 below has the same three offsets declared `s32'
+      and lands at 0: with four parameters instead of five there is no
+      fifth allocno to displace, so that body does not price this.)
+   2. THE TWO TABLES ARE TWO SEPARATE CALLS, NOT A TERNARY ARGUMENT.  The
+      ternary is 5 rows worse than the two calls on top of fault 1: it
+      inverts the gate (`beqz' for the target's `bnez') and it gives
+      `lui $v0' / `addiu $a1, $v0' where the target has the TIED
+      `lui $a1' / `addiu $a1, $a1' at both arms -- the `reg_n_sets'
+      signature.  Written as two calls, each arm sets the argument register
+      itself, jump2 cross-joins the `jal' and its `addu $a2, $zero, $zero'
+      into the shared tail, and the word count is unchanged.  The gate is
+      `if (e == 0)' with the D_800DE870 arm FIRST, which is what puts
+      D_800DEDB0 at the `bnez' target.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80172CC8(UnkVec *b, s16 x, s16 y, s16 z, s16 e)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_b31f_80170D60;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x20;
+        r->unk_06 = 6;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        m->unk_00 = b->unk_00;
+        m->unk_04 = b->unk_04;
+        m->unk_08 = b->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)m + 0x2) + x;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)m + 0x6) + y;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)m + 0xA) + z;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x1400;
+        r->unk_1C = 0x1400;
+        r->unk_0C[2] = 0x80;
+        r->unk_0C[1] = 0x80;
+        r->unk_0C[0] = 0x80;
+        if (e == 0)
+        {
+            func_8003DB94(r, D_800DE870, 0);
+        }
+        else
+        {
+            func_8003DB94(r, D_800DEDB0, 0);
+        }
+    }
+}
+
+/* csrc/ovl_dng_s31.c's func_s31_80024124 relinked into this bank: integrate
+   the three +0x64..+0x6C accelerations into the +0x58..+0x60 velocities and
+   those into the mover, bump the payload's +0x18 phase and refresh the
+   renderable on even phases only, lift both scale halves by 0x28 a frame,
+   then the same two kill gates as its donor.  82 words, 0 differing.
+
+   THE DONOR'S ONE FACT IS VACUOUS HERE, which is why this is a word shorter
+   than its 83-word twin: func_s31_80024124 needs the phase bump through an
+   `s32' local with the bank-tick store between the read and the write-back,
+   because the target fills the `lhu's load-delay slot with the tick store's
+   `addiu'.  This bank's step RAISES NO TICK -- the listing has no such store
+   and leaves that slot a `nop' -- so the plain
+   `*(u16 *)(p + 0x18) += 1' with the gate re-reading the field is what
+   matches, and the local has nothing to separate.  Deltas from the donor:
+   phase at +0x18 (donor +0x4), kill counter at +0x16 (donor +0x2), scale
+   lift 0x28 (donor 0xC8), no tick store.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80172DFC(u8 *p, UnkVec *v, UnkSlot *c)
+{
+    *(s32 *)(p + 0x58) += *(s32 *)(p + 0x64);
+    *(s32 *)(p + 0x5C) += *(s32 *)(p + 0x68);
+    *(s32 *)(p + 0x60) += *(s32 *)(p + 0x6C);
+    v->unk_00 += *(s32 *)(p + 0x58);
+    v->unk_04 += *(s32 *)(p + 0x5C);
+    v->unk_08 += *(s32 *)(p + 0x60);
+    *(u16 *)(p + 0x18) += 1;
+    if ((*(u16 *)(p + 0x18) & 0x1) == 0)
+    {
+        func_800478B8((u8 *)c);
+    }
+    c->unk_1C += 0x28;
+    c->unk_1E += 0x28;
+    *(u16 *)(p + 0x16) -= 1;
+    if (*(s16 *)(p + 0x16) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    if ((c->unk_14 & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The 0x212 spawn for the ACCELERATED flare: allocate the node, arm the
+   payload's +0x16 counter at 0x1A, install this unit's func_b31f_80172DFC
+   (the accelerated mover step, just above) at the node's +0x10, hand it to
+   func_8004491C/D_80045340, put 0x40 in the slot's +0x10 and 6 in its +0x6
+   and raise 0xC in its flags, copy the caller's mover and jitter its +0x2,
+   +0x6 and +0xA halfwords by the three parameters, seed the payload's
+   +0x58..+0x60 velocities with `rand() - 0x8000' twice and
+   `rand() - 0x40000' once, then -- through a re-read of n->unk_0C -- 0x400
+   as both scale halves, 0x16 over +0xC..+0xE, 0x7DCF in +0x12, 0x100 raised
+   in the flags and the record registered with func_8003DB94 against
+   D_800DE870.  90 words, 0 differing, FIRST COMPILE.
+
+   The skeleton is func_b31f_80170DCC in this file (53 words): same
+   allocation, same `r->unk_10'/`unk_06'/`unk_14 |= 0xC' prologue, same
+   two-`r' shape with the second read before the scale pair.  dngtwin's
+   carved lead (func_s59_80024DD4, 0.741) was not needed.
+
+   ARITY FROM THE LISTING: $a0..$a3 are all copied to callee-saved registers
+   in the prologue, so four parameters -- a mover to copy from and the three
+   halfword offsets added into the copy.  They are `s32': nothing
+   sign-extends them, so they are not narrow.
+
+   THE THIRD VELOCITY IS `- 0x40000', NOT `+ 0xFFFC0000'.  The additive hex
+   form would make the whole expression unsigned (no `int' holds it); the
+   subtraction gives the same `lui $v1, 0xFFFC' / `addu' and keeps it signed.
+
+   Nothing in this body was measured against an alternative, so nothing in it
+   is claimed to be load-bearing.  In particular the three mover copies as
+   struct field assignments carry func_b31f_80170AEC's 11-row
+   MEM_IN_STRUCT_P fact and were not re-priced here.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80172F44(UnkVec *b, s32 x, s32 y, s32 z)
+{
+    UnkNode *n;
+    u8 *q;
+    UnkVec *m;
+    UnkSlot *r;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        q = (u8 *)n + 0x20;
+        *(s16 *)(q + 0x16) = 0x1A;
+        n->unk_10 = (u32)func_b31f_80172DFC;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x40;
+        r->unk_06 = 6;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        m->unk_00 = b->unk_00;
+        m->unk_04 = b->unk_04;
+        m->unk_08 = b->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)m + 0x2) + x;
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)m + 0x6) + y;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)m + 0xA) + z;
+        *(s32 *)(q + 0x58) = rand() - 0x8000;
+        *(s32 *)(q + 0x5C) = rand() - 0x8000;
+        *(s32 *)(q + 0x60) = rand() - 0x40000;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x400;
+        r->unk_1C = 0x400;
+        r->unk_0C[2] = 0x16;
+        r->unk_0C[1] = 0x16;
+        r->unk_0C[0] = 0x16;
+        r->unk_12 = 0x7DCF;
+        r->unk_14 |= 0x100;
+        func_8003DB94(r, D_800DE870, 0);
+    }
+}
 
 /* 0x18 bytes of this bank's own rodata, between its jump tables,
    read by func_b31f_80171168. Spelled as BYTES because that is all the
@@ -4416,9 +5374,182 @@ void func_b31f_80173ED0(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80173F6C);
+/* The bank's THIRD 0x112 actor spawner, parked in D_b31f_80174CE0: a 0x112
+   node off D_80083498 with the table-owning func_b31f_801730AC as its +0x10
+   driver, 0x18 in the payload's +0x13 state and its +0x9A/+0x96 cleared,
+   the mover's +0xA copied from the +0xA of whatever D_80083498 + 0x8 points
+   at, the slot's +0x24/+0x25 cell offset +9/-9 from D_80082E80's and dressed
+   from this bank's D_b31f_80174C84 table, handed to func_800A9C18, armed at
+   0x800 facing with 1 in the payload's +0xB6, re-dressed through
+   func_80047784, given 0x1000 scale halves, reported through func_8009A3D0
+   and func_8009A028, marked with 0x80000000, run once through this unit's
+   func_b31f_80172A14, published in D_b31f_80174CE0 and finished with
+   `r->unk_14 |= 0x80' and func_800A152C(0x18, 1).  99 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_801740F8);
+   TWO STATEMENT POSITIONS, BOTH MEASURED:
+   | spelling                                               | words | aligned |
+   | as written below                                       |   99  |    0    |
+   | the +0x2C dress BETWEEN the +0x24 and +0x25 stores     |   99  |    7    |
+   | the +0x2C dress BEFORE the +0x24 store                 |   99  |   12    |
+   | the +0x10 driver install before the +0x9A/+0x96 clears |   99  |   13    |
+   | `r' read before the mover's +0xA store                 |   99  |   17    |
+   | the mover's +0xA store after the +0x24 store           |  101  |   28    |
+   THE SLOT DRESS COMES AFTER BOTH CELL BYTES.  Written between them -- the
+   order func_b31f_8016F160 and func_b31f_80171594 in this file both use --
+   the `lbu' of D_80082E80's +0x25 and the func_800A9C18 third-argument copy
+   each land one slot late, 7 rows.  Two bodies in this unit want opposite
+   answers for the same three statements, so "what the rest of the unit
+   does" is not evidence here.
+   THE +0x10 DRIVER INSTALL IS THE LAST STATEMENT BEFORE func_8004491C,
+   which is what puts its `sw $v0, 0x10($s2)' in the `jal's delay slot.
+
+   MEASURED AND FREE, so NOT the reason this lands: D_80082E80 read through
+   a pointer local instead of twice off the symbol (99/0 -- cse commons the
+   address either way); `9 + load' and `-9 + load' instead of `load + 9' and
+   `load - 9' (99/0); `D_80083498' passed to func_8003FD64 inline with `g'
+   assigned after (99/0 -- the symbol still ends up in a callee-saved
+   register because it is read again after the call).
+
+   ARITY OF func_b31f_80172A14: the landed definition in this file takes TWO
+   parameters and this call sets $a0, $a1 AND $a2, with $a2 dead after the
+   call and computed only for it.  It is therefore called with THREE here,
+   through a unit-local alias declaration
+   (`func_b31f_80172A14_3 ... __asm__("func_b31f_80172A14")') so the landed
+   definition and its other callers are untouched.
+
+   The dress index is the unit's idiom with cse folding the +0x2A store of
+   0x800 into it, so the listing's `+ 0x900' is not a source constant.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel'. */
+void func_b31f_80173F6C(void)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *q;
+    u8 *g;
+
+    g = D_80083498;
+    n = func_8003FD64(0x112, g);
+    if (n != NULL)
+    {
+        q = (u8 *)n + 0x20;
+        q[0x13] = 0x18;
+        q[0x9A] = 0;
+        *(s16 *)(q + 0x96) = 0;
+        n->unk_10 = (u32)func_b31f_801730AC;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)(*(u8 **)(g + 0x8) + 0xA);
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x24) = D_80082E80[0x24] + 9;
+        *((u8 *)r + 0x25) = D_80082E80[0x25] - 9;
+        *(u8 **)((u8 *)r + 0x2C) = D_b31f_80174C84;
+        func_800A9C18(n, m, r, 0);
+        q[0xB6] = 1;
+        *(s16 *)(q + 0x2A) = 0x800;
+        func_80047784((u8 *)r, (*(u8 **)((u8 *)r + 0x2C))[((D_80083228 + *(s16 *)(q + 0x2A) + 0x100) >> 9) & 7], 0);
+        r->unk_1E = 0x1000;
+        r->unk_1C = 0x1000;
+        func_8009A3D0(((u8 *)r)[0x24], ((u8 *)r)[0x25], (*(s32 *)(q + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        func_8009A028(q);
+        n->unk_10 |= 0x80000000;
+        func_b31f_80172A14_3(q, m, r);
+        D_b31f_80174CE0 = (u8 *)n;
+        r->unk_14 |= 0x80;
+        func_800A152C(0x18, 1);
+    }
+}
+
+/* The four-state drift handler for this bank's actor: state 0 re-dresses the
+   slot from D_b31f_80174A7C if it is not already on it, raises bit 3 of the
+   payload's +0x98, drops 0x8000000 from the mover record's +0x1C, arms the
+   +0x9E countdown at 5 and clears the +0xA4 drift; state 1 takes the drift
+   back out of +0x90, recomputes it as
+   `-func_800644B8(countdown * 409) << 10', puts it back in and spends one
+   frame, and when the countdown goes negative zeroes +0x90, clears bit 3,
+   raises 0x8000000 back in +0x1C and advances; state 2 waits for that
+   0x8000000 and then clears bit 3, zeroes the view's +0xC/+0x10/+0x14 and
+   republishes the slot's cell through func_800A2B04; state 3 re-dresses from
+   D_b31f_80174A2C.  STATE 0 FALLS THROUGH INTO 1 AND 1 INTO 2.
+   138 words, 0 differing, FIRST COMPILE.
+
+   THREE MEASURED FACTS:
+   | spelling                                               | words | aligned |
+   | as written below                                       |  138  |    0    |
+   | case 0 with `break' instead of falling through         |  139  |   24    |
+   | case 1 with `break' instead of falling through         |  131  |   30    |
+   | the view's three zero stores written +0x14 first       |  138  |    4    |
+   Both fall-throughs are load-bearing and they fail in OPPOSITE directions:
+   breaking case 0 makes the body a word LONGER (its tail can no longer run
+   on into state 1's drift arithmetic), while breaking case 1 makes it SEVEN
+   words shorter (state 2's whole gate stops being reachable from it, so
+   jump.c folds the arm into the exit).
+   The three zero stores are ONE CHAINED ASSIGNMENT with the inner lvalue
+   FIRST (`b->unk_0C = b->unk_10 = b->unk_14 = 0'), which gives the target's
+   descending +0x14, +0x10, +0xC order.
+
+   The `* 409' is the plain constant, not the `sll'/`addu'/`sll' chain the
+   listing shows -- func_b31f_8016D6F0's comment in this file already records
+   the same `-func_800644B8(step * 409) << 10' drift with the shift of 10, so
+   that spelling is carried rather than re-measured here.
+   The two re-dress sites name their table THREE times each (the compare, the
+   store and the index) and cse materialises each address once; no pointer
+   local is involved, which is func_b31f_8016DCC8's recorded reading.
+
+   No jump table and no rodata of its own -- the listing opens at `glabel',
+   and the four-case dispatch is a COMPARE TREE (four case nodes is under
+   gcc 2.7.2's `case_values_threshold'). */
+void func_b31f_801740F8(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    switch (p[0x9B])
+    {
+    case 0:
+        if (*(u8 **)(c + 0x2C) != D_b31f_80174A7C)
+        {
+            *(u8 **)(c + 0x2C) = D_b31f_80174A7C;
+            func_80047784(c, D_b31f_80174A7C[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        *(u16 *)(p + 0x98) |= 8;
+        *(s32 *)(d + 0x1C) &= ~0x8000000;
+        *(s16 *)(p + 0x9E) = 5;
+        *(s32 *)(p + 0xA4) = 0;
+        p[0x9B] += 1;
+        /* fall through */
+    case 1:
+        *(s32 *)(p + 0x90) -= *(s32 *)(p + 0xA4);
+        if (*(s16 *)(p + 0x9E) != 0)
+        {
+            *(s32 *)(p + 0xA4) = -func_800644B8(*(s16 *)(p + 0x9E) * 409) << 10;
+        }
+        *(s32 *)(p + 0x90) += *(s32 *)(p + 0xA4);
+        *(u16 *)(p + 0x9E) -= 1;
+        if (*(s16 *)(p + 0x9E) < 0)
+        {
+            *(s32 *)(p + 0x90) = 0;
+            *(u16 *)(p + 0x98) &= 0xFFF7;
+            *(s32 *)(d + 0x1C) |= 0x8000000;
+            p[0x9B] += 1;
+        }
+        /* fall through */
+    case 2:
+        if ((*(s32 *)(d + 0x1C) & 0x8000000) != 0)
+        {
+            *(u16 *)(p + 0x98) &= 0xFFF7;
+            b->unk_0C = b->unk_10 = b->unk_14 = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            p[0x9B] += 1;
+        }
+        break;
+    case 3:
+        if (*(u8 **)(c + 0x2C) != D_b31f_80174A2C)
+        {
+            *(u8 **)(c + 0x2C) = D_b31f_80174A2C;
+            func_80047784(c, D_b31f_80174A2C[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        break;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_80174320);
 
