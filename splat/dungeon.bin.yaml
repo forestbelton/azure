@@ -791,7 +791,7 @@ segments:
     subsegments:
       - [0xfa7000, data]
       - [0xfa7008, .rodata, ovl_dng_b38]
-      - [0xfa707c, c, ovl_dng_b38]
+      - [0xfa7080, c, ovl_dng_b38]
       - [0xfab2cc, data]
   - [0xfab2d0, bin]
   - name: ovl_dng_b39

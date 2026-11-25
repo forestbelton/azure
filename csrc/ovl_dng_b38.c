@@ -1,4 +1,9 @@
 #include "common.h"
+UnkNode *func_8003FD64(s32, void *);
+s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
+extern u8 D_80083498[];
+extern u8 D_80045340[];
+void func_b38_80170A70(u8 *, UnkVec *, u8 *);
 
 s32 func_800A19E4(s32 a, u8 *b, s16 c, s16 d, u8 *out);
 u8 *func_800A02AC(u8 *p, u16 x, u16 y);
@@ -132,7 +137,65 @@ void func_800A2FE0(u8 *);
 u8 *func_800A32A4(u8 *);
 void func_8009A028(u8 *);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_8017087C);
+u8 *func_b38_80170880(s16 a, u16 b, u16 c, s16 d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *p;
+    u8 *w;
+    s32 k;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        w = p;
+        n->unk_10 = (u32)func_b38_80170A70;
+        p[0x13] = 0x26;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = d;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x25) = c;
+        *(u8 **)((u8 *)r + 0x2C) = D_80174AD4;
+        k = a & 3;
+        *((u8 *)r + 0x24) = b;
+        if (k == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x6000;
+            *(u32 *)(p + 0x1C) |= 0x6000;
+        }
+        else if (k >= 2)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        else if ((a & ~3) == 0)
+        {
+            if ((*(u32 *)(p + 0x14) & 0x200) == 0)
+            {
+                if ((func_800A6D30() & 1) != 0)
+                {
+                    *(u32 *)(p + 0x1C) |= 0x200;
+                    func_800A48F0((s8 *)p, 1, (func_800A6D30() & 0x3F) | 0x20);
+                    *(u8 **)((u8 *)r + 0x2C) = D_80174AFC;
+                }
+            }
+        }
+        func_800A9C18(n, m, r, a);
+        w[0x9A] = 0xFF;
+        *(s8 *)(w + 0x9C) = -1;
+        *(u32 *)(w + 0x8C) = (u32)func_b38_80171138;
+        *(u32 *)(p + 0x1C) |= 0x40000;
+        *(s16 *)(w + 0xA0) = 0;
+        *(s16 *)(w + 0x92) = -0x30;
+        func_800AA36C(w, m, (u8 *)r, p);
+    }
+    return p;
+}
+
 
 /* The banked room script's per-frame actor driver -- this object's second
    handler word at D_b38_80170800 -- and the largest member of the
@@ -443,7 +506,7 @@ void func_b38_80170A70(u8 *p, UnkVec *b, u8 *c)
 }
 
 /* The banked room script's IDLE handler -- the body parked at the actor's
-   +0x8C by func_b38_8017087C above, and the one the switch below re-installs
+   +0x8C by func_b38_80170880 above, and the one the switch below re-installs
    through func_800AAF00. OWNS A JUMP TABLE: jtbl_b38_80170808, twelve entries
    for the +0x46 state 1..12, with 4, 10 and 11 carrying the default label
    rather than arms of their own. 334 words, 0 differing.
@@ -1586,6 +1649,11 @@ const u8 D_b38_80170868[] = {
    reference witnesses, and `const' because without it the array
    goes to .data and the linker puts it outside this segment's
    declared .rodata. */
+/* 0xC bytes, six halfwords ending in the 0x0000 terminator -- the same shape
+   as D_b38_80170868 above. The last four bytes were carried as the first
+   `instruction' of func_b38_80170880's INCLUDE_ASM listing until 2026-11-25;
+   they are rodata, and splat's `c' start moved to 0xfa7080 with this change.
+   See docs/dng-parks/func_b38_8017087C.c for the whole derivation. */
 const u8 D_b38_80170874[] = {
     0x00,
     0x10,
@@ -1595,6 +1663,10 @@ const u8 D_b38_80170874[] = {
     0x10,
     0x00,
     0x08,
+    0x00,
+    0x0C,
+    0x00,
+    0x00,
 };
 
 /* The banked room script's three-state glide, switched on p + 0x9B: state 0
