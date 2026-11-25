@@ -178,6 +178,31 @@ def main():
     d = os.path.join(PROJ, "nonmatchings", func)
     os.makedirs(d, exist_ok=True)
 
+    # ARCHIVE ANY PREVIOUS RUN'S `output-*' DIRECTORIES.
+    #
+    # A permuter score is only meaningful against the base it was measured on,
+    # and re-scaffolding replaces base.c while leaving the old winners in
+    # place. On 2026-11-25 this directory held `output-25-1' from a run against
+    # the parked body alongside `output-60-1' and `output-70-1' from a run
+    # against a different, better seed -- and `ls' sorts the STALE one to the
+    # front as though it were the best result. I nearly reported it as the new
+    # run's finding.
+    #
+    # They are not deleted, because a previous run's source is sometimes worth
+    # reading; they are moved aside so the directory only ever shows the
+    # current run's outputs.
+    stale = sorted(g for g in os.listdir(d) if g.startswith("output-"))
+    if stale:
+        import shutil
+        import time
+        box = os.path.join(d, "prev-%s" % time.strftime("%Y%m%d-%H%M%S"))
+        os.makedirs(box, exist_ok=True)
+        for g in stale:
+            shutil.move(os.path.join(d, g), os.path.join(box, g))
+        print("permimport: moved %d stale output dir(s) from an earlier run "
+              "into %s -- a score is only valid against its own base"
+              % (len(stale), os.path.relpath(box, PROJ)))
+
     # A DUNGEON PARK IS NOT A COMPILABLE FILE, and the symptom of handing one
     # to the permuter anyway is `base=?' with zero iterations -- which looks
     # exactly like a dead permuter rather than a parse failure. Two things are
