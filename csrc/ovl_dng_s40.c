@@ -111,7 +111,109 @@ typedef struct UnkDng24094SP
     u16 unk_10A;
 } UnkDng24094SP;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s40", func_s40_8002407C);
+typedef struct UnkDngS58Blk32
+{
+    u8 b[0x20];
+} UnkDngS58Blk32;
+typedef struct UnkDngS58Rec
+{
+    s16 a;
+    u16 b;
+} UnkDngS58Rec;
+typedef struct UnkDngS58Blk64
+{
+    u8 b[0x40];
+} UnkDngS58Blk64;
+typedef struct UnkDngS58Name12
+{
+    u8 b[0xC];
+} UnkDngS58Name12;
+s32 func_8009D218(u8 *, s32, u8 *);
+u16 func_800A6D30(void);
+void *func_800990FC(void);
+u8 *func_8009929C(s32, u8 *);
+void *func_80099194(u8 *, u8 *);
+void *func_80099734(u8 *, u8 *);
+u8 *func_80099290(u8 *);
+s32 func_800A5720(void *);
+void func_80099844(u8 *, u8 *);
+UnkNode *func_800B4C7C(u16, u8 *, s16, s16);
+extern u8 D_800E2096[];
+extern u8 D_800E20BC[];
+
+/* The slot's "use the item on me" responder, reached from
+   func_s41_800257D0's state 5: refuse if func_8009D218 does, then on a
+   1-in-p[0x3] roll (or with the caller's strength at 0xFF) spend half the
+   remaining 0x27 charges and print the three-part D_800E2096 message,
+   otherwise print D_800E20BC, and tell func_800B4C7C 0x53 either way.
+   77 words, 0 differing, 0 aligned differences.
+
+   func_8009D218 TAKES THE THIRD PARAMETER STRAIGHT THROUGH. Nothing in
+   this body sets $a2 and nothing reads it either; the caller at
+   0x8002661C passes `g' there and the call inherits it, so the arity is
+   three and `q' is otherwise unused. A two-argument alias is 1 word short.
+
+   THE DIVIDEND IS AN `s32' LOCAL AND THE TRUNCATION IS WRITTEN AT THE
+   DIVISION: `x = (u16)r % p[0x3]'. With `u16 r' and a plain `r % p[0x3]'
+   it is 76 words and 5 aligned differences -- the divisor's extra `addu'
+   never appears, because the HImode pseudo dies at the zero-extend and the
+   remainder reuses its register. The compound form
+   `x = func_800A6D30(); x %= p[0x3];' is the right 77 words and 3 rows:
+   expand_divmod drops a target mentioned in op0, so the remainder lands in
+   the dividend's own register where the target gives it a third. The
+   divisor guard is a real source-level `if (p[0x3] != 0)', not the
+   assembler's div-by-zero expansion: the zero arm sets the remainder to 0
+   and jumps, where a `break 7' would trap. Reading p[0x3] once into a
+   local measures the same 0; the two reads are not what buys the copy.
+
+   The message-assembly chain is csrc/ovl_dng_s18.c's func_s18_800240B8's,
+   with func_8009929C(8, h) in place of its first func_80099194 -- two
+   locals, `h' chained and `m' kept for func_800A5720. 
+   THIS COPY'S OWN CONSTANT: 0x2 -> 0x1 at 1 of 2 sites, 0x27 -> 0x26 at all 3 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s40_8002407C(u8 *p, u8 b, u8 *q)
+{
+    void *m;
+    void *h;
+    s32 r;
+    s32 x;
+    s16 n;
+
+    if (func_8009D218(p, 1, q) != 0)
+    {
+        return;
+    }
+    r = func_800A6D30();
+    if (p[0x3] != 0)
+    {
+        x = (u16)r % p[0x3];
+    }
+    else
+    {
+        x = 0;
+    }
+    if (x < (b << 5) || b == 0xFF)
+    {
+        if (p[0x26] >= 2)
+        {
+            n = (p[0x26] + 1) >> 1;
+            p[0x26] -= n;
+            h = func_800990FC();
+            m = h;
+            h = func_8009929C(8, h);
+            h = func_80099734(p, h);
+            h = func_80099194(D_800E2096, h);
+            func_80099290(h);
+            func_800A5720(m);
+            func_800B4C7C(0x53, p, n, 1);
+            return;
+        }
+    }
+    func_80099844(p, D_800E20BC);
+    func_800B4C7C(0x53, p, -1, 1);
+}
 
 /* One semi-transparent 1x1 tile and one DR_MODE per node of the tag chain,
    projected through the 0x1F800000 scratchpad, with the tile's colour word
