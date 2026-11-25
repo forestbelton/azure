@@ -70,6 +70,60 @@ def main():
         return 1
     decls = pr.decls_of(park) + pr.preamble_of(park, func)
 
+    # DROP ANY DECLARATION THE UNIT ALREADY HAS.
+    #
+    # A park's DECLARATIONS block is written against the AGENT's copy of the
+    # unit. Every body that agent landed alongside the park then goes into
+    # `csrc/', bringing its own typedefs and prototypes with it -- so the
+    # park's copy becomes a REDEFINITION and the park stops splicing. This has
+    # now happened three times, and the third was entirely predictable: the
+    # park and the landed bodies came from the SAME agent in the SAME batch, so
+    # the duplicate was created by integrating that agent's work.
+    #
+    # `dngland' already filters this way for the landing direction
+    # (dngclone.reconcile_decls against the unit text); parksplice did not
+    # filter at all. A declaration the unit already carries is by definition
+    # not needed, so dropping it is safe in every case and silent when there is
+    # nothing to drop.
+    def _norm(t):
+        return re.sub(r"\s+", "", t)
+
+    def _units(text):
+        """Whole declarations: a typedef spans lines and must not be split.
+
+        The first version of this filter worked per LINE, and a typedef's field
+        lines (`u16 unk_64;') occur verbatim in other structs -- so it deleted
+        them out of the park's own typedef and left `typedef struct X' followed
+        by `}', a syntax error at the splice point. Brace depth is what
+        separates one declaration from the next.
+        """
+        out, cur, depth = [], [], 0
+        for line in (text or "").split("\n"):
+            cur.append(line)
+            depth += line.count("{") - line.count("}")
+            if depth <= 0 and line.strip().endswith(";"):
+                out.append("\n".join(cur))
+                cur, depth = [], 0
+        if cur:
+            out.append("\n".join(cur))
+        return out
+
+    unit_norm = _norm(unit)
+    kept, dropped_decls = [], []
+    for decl in _units(decls):
+        t = decl.strip()
+        if t and len(_norm(t)) > 8 and _norm(t) in unit_norm:
+            dropped_decls.append(t.split("\n")[0])
+            continue
+        kept.append(decl)
+    if dropped_decls:
+        decls = "\n".join(kept)
+        print("%s: dropped %d declaration(s) the unit already has "
+              "(park rot from a sibling landing): %s"
+              % (func, len(dropped_decls),
+                 "; ".join(d[:48] for d in dropped_decls[:4])
+                 + (" ..." if len(dropped_decls) > 4 else "")))
+
     # THE SYNTHESISED SELF-PROTOTYPE IS A MEASUREMENT AID THAT CAN BREAK A
     # LANDED FUNCTION, SO SAY SO BEFORE ANYONE MERGES THIS FILE.
     #
