@@ -253,6 +253,84 @@
    func_80069EF8' in the listing are the five `rand()' calls here; the real
    name needs no declaration.
 
+   AGENT-h136, 2026-11-24, BATCH 32.  STILL 5 ALIGNED DIFFERENCES, AND THIS
+   TIME MEASURED ON THE OTHER MEMBER.  I was dispatched on func_s20_80026010
+   (the s20 relink) and translated the body below into it symbol for symbol.
+   It builds 170 words with THE SAME FIVE ROWS AT THE SAME TARGET WORDS --
+   32, 33, 34, 40, 41, all `$v0' where the target has `$v1' -- so the shape in
+   this file is confirmed independently on both members and the residue is a
+   property of the family, not of one unit's allocation.  Everything else,
+   including the whole $s0..$s7/$fp assignment and the two
+   `lui/addiu D_800264F8' pairs, is exact.
+
+   THE s20 RELINK MAP, so the next agent does not re-derive it.  The body is
+   otherwise character for character the one below:
+
+     D_80026476  (loop bound, cleared on exit)  ->  D_s20_8002632A
+     D_800265C8  (ring bank 1)                  ->  D_80026478
+     D_80026648  (ring bank 2, bank1 + 0x80)    ->  D_800264F8
+     D_800265C0 / D_800265C4  (colour pair)     ->  D_80026470 / D_80026474
+     func_s21_800255E8  (the +0x10 step)        ->  func_s20_80025A58
+     func_s21_800259DC  (the func_8004491C draw)->  func_s20_80025E4C
+     every payload offset from +0x34 down is FOUR LOWER: the corner records
+     run +0x30..+0x4C and the colour pair is +0x50/+0x54, against +0x34..+0x50
+     and +0x54/+0x58 here.  +0x1A, the life, is unchanged.
+
+   In ovl_dng_s20 that needs `extern UnkDng26478 D_800264F8[];' (the unit
+   already declares the `UnkDng26478' typedef, `D_80026478', `D_s20_8002632A'
+   and `D_80026470'/`D_80026474' as `u32', and `func_8003FC64'), plus forward
+   declarations for the two handlers, which are DEFINED LOWER in that file:
+   `void func_s20_80025A58(u8 *p, UnkVec *v, UnkSlot *s);' and
+   `s32 func_s20_80025E4C(u8 *p, UnkVec *v, UnkSlot *s);'.  Note also that
+   ovl_dng_s20's declaration block already carries an UNUSED
+   `typedef struct UnkDng265C8 { s16 unk_00; s16 unk_02; s16 unk_04;
+   u8 pad_06[0x2]; } UnkDng265C8;' -- that is residue of THIS shape's s21
+   type name and is a witness that the two units' ring banks are one layout.
+
+   FOUR OF THIS FILE'S ORDER AND ARITHMETIC ROWS REPRODUCE TO THE DIGIT on
+   the s20 member, which is the strongest transfer I have seen in this tree:
+
+     `ic = ib + 0x10' moved BEFORE the `a' statement       17  (file: 17)
+     `ic = ib + 0x10' between `a' and `b'                   7  (file:  7)
+     `c's index as `(ic + ia)' rather than `(ia + ic)'     23  (file: 23)
+     `ib' assigned before `ia'                              9  (file:  9)
+
+   THREE NEW SPELLINGS, all against the 5-row body:
+
+     `ia = i - (i & 0xF)' in place of `i & -0x10'        170 words,       7
+       -- a third arithmetic form of the mask, untried here; it keeps the
+          word count and costs 7, so `& -0x10' stays.
+     `w' in the INTEGER form `(i << 3) + (u32)D_800265C8' rather than the
+       array ref `&D_800265C8[i]'                        170 words,       5
+       -- FREE, and worth knowing because this file's prose explains the
+          kept array ref as what lets loop.c strength-reduce `w' into the
+          `$s7' giv.  It does that from the integer form too, so the array
+          ref is NOT a reason this shape reaches 5.
+     a fourth inline spelling of the indices,
+       `(i & -0x10) + (((i + 1) & 0xF) + 0x10)' for `c' with no locals
+                                                        177 words,     101
+       -- distinct from both inline rows above (23 and 7); recorded so the
+          next agent does not count it as a contradiction of either.
+
+   AND I TESTED agent-h130's SHAPE (a) -- "a value born before insn 57, dying
+   after insn 80, not crossing a call" -- in the one form C can express it:
+   a separate local for `i + 0x10' ASSIGNED BEFORE `ia', so its quantity is
+   born ahead of the chain and dies inside it.  170 words, 35 ROWS.  That
+   kills the shape from the other end: a rival that OVERLAPS the chain does
+   take a call-used register, but it takes it at the cost of displacing the
+   `b' block, and nothing in C can make a rival whose range CONTAINS the
+   chain without also costing an instruction.  I agree with h130's reading
+   and I want to state the negative result plainly: a pseudo needs a set and
+   a use, flow deletes a dead set before local-alloc ever sees it, so there
+   is no zero-word $v0 holder.  The next move on this body is the permuter on
+   the index block or accepting the park -- not another respelling.  (I was
+   explicitly barred from the permuter.)
+
+   MY MEASUREMENTS AGREE WITH THIS FILE EVERYWHERE THEY OVERLAP; nothing here
+   contradicts it.  Two of the file's own claims I did NOT re-price, because
+   they describe the kept body and the kept body is what I reproduced: the
+   `>> 2' placement and the `((s16 *)m)[1]' store spelling.
+
    raw 37 == the 5 masked rows plus 32 relocation and local-label words:
    R_MIPS_26 on func_8003FC64, func_8004491C and rand five times, HI16/LO16
    pairs on D_80026476 three times, D_800265C8, func_s21_800255E8,
