@@ -208,6 +208,124 @@
    NO DEVICES ARE USED BELOW. Nothing in the body is an asm device or a
    phantom-zero; it is all plain C.
 
+
+   ===== AGENT h149, BATCH 34 (PARKS BATCH), 2026-11-25 =====
+   NOW 359 WORDS / 49 ALIGNED DIFFERENCES, and the body below is REPLACED.
+   The author's analysis above stands except where marked RE-PRICED.
+
+   FIRST, WHAT THIS FILE WAS WHEN I PICKED IT UP.  The permuter section says
+   "the body below is updated" and it was NOT: the body still carried
+   `*(s16 *)(rec + 0x18) = 0x40;' where that same section says the fix is
+
+       i = 0x40;
+       *(s16 *)(rec + 0x18) = i;
+
+   so the park as committed measured 359 words / 97 ALIGNED, not 358 / 77.
+   parksplice.py reproduces 97 on the file exactly as it stood.  Writing that
+   one statement in is the first 20 rows, free.  The fix itself is real and is
+   still load-bearing on the new base -- re-priced below.
+
+   THE FINDING: `zr'/`xr' MUST NOT BE SHARED BETWEEN LOOP A AND LOOP B.
+   The author's entire section (2) sweeps ONE pair of row pointers walked by
+   -8 through both loops.  Give loop B its own pair (`zr2'/`xr2' below) and
+   the function reaches its word count for the first time.  Section (2)'s
+   rows, RE-PRICED, with the shared-pair figures from above beside them:
+
+   | loop-B row pointers                       | words | rows | was  |
+   | shared zr/xr, both zw/xw copies           |  358  |  77  |  97  |
+   | separate zr2/xr2, both zw/xw copies       |  364  |  87  |   -  |
+   | separate zr2/xr2, xw copy only (zw gone)  |  359  |  49  | 103  |
+   | separate zr2/xr2, zw copy only (xw gone)  |  361  |  53  |  99  |
+   | separate zr2/xr2, no copies at all        |  358  |  58  | 130  |
+   | separate zr2/xr2, [j] off zr2/xr2 and     |  364  |  87  |  97  |
+   |   [jj] off zw/xw                          |       |      |      |
+
+   The order of those four spellings INVERTS when the pairs are separated,
+   which is why nine spellings of a shared pair could not find it.  The
+   364-word row is the first word-exact measurement this function has had.
+
+   WHY 359/49 IS KEPT AS THE BODY AND 364/87 IS THE BETTER LEAD.
+   At 364 the frame is 0x288, two spill slots more than the target's 0x280,
+   and then every one of the ten prologue saves and ten epilogue restores is
+   an aligned difference because all their offsets shift by 8 -- about 20 of
+   the 87.  At 359/49 the frame IS 0x280, the save and restore offsets match
+   to the word, and the whole callee-saved assignment (s0..s7, fp) matches:
+   the author's "33 rows are PURE REGISTER RENAMES" group is GONE, and so is
+   the 8-row addPrim-mask group (the mask is in $s7 and the outer counter in
+   $s6, as the target has them).  So 49 is the closer body; but the next
+   agent wants the 364-word shape with TWO FEWER SPILL SLOTS, not this one
+   plus five words.
+
+   WHAT IS STILL WRONG AT 359 / 49, in target order:
+     * 2 body-only words at the head (`sw $t0,0x240' + `addiu $t0,$sp,0x38')
+       against 2 target-only in loop A's preheader (`addu $a0,$s4,$zero' +
+       `lui $a1,%hi(D_1F8000E0)'): the target keeps the GRID BASE in $s4
+       across the whole body and this body spills it at 0x240 and reloads it.
+       This is the author's 1-row `addu $a0,$s4' group, now 4 rows.
+       Making the grid base a pointer local is MEASURED AND REJECTED (65).
+     * 3 target-only words at 0x80174358..0x80174360 (`nop',
+       `sw $t0,0x244', `lw $t0,0x24C') -- the ZW COPY, which the 49-row shape
+       drops and the target has.  Re-adding it is the 364/87 row.
+     * the q=p cluster at 0x80174050..0x80174060, 3 target-only against 2
+       body-only: the target stores q to 0x238, reloads p from 0x280, then
+       sets `$a1 = 0x40' and calls; this body hoists `li a1,64' above the
+       record stores and sinks the q store past the jal.
+     * the `sh $v0,0x30($sp)' transposition -- the author's 2-row group,
+       unchanged.
+     * `addiu $t0,-0x10' and `addiu $t0,-0x20' transposed in loop B's outer
+       latch: the two bivs' decrements emitted in the opposite order.
+     * the unexplained `sw $t0,0x280' + `lw $a1,0x8($a1)' pair -- unchanged.
+       Still the one fact in this function nobody has explained.
+
+   RE-PRICED AGAINST 359 / 49 (the brief's rule; both facts hold):
+   | the `i = 0x40' reference bump, as written below           | 359 | 49 |
+   | ... written back as `*(s16 *)(rec + 0x18) = 0x40'         | 360 | 70 |
+   | grid base as a `u8 *gr = (u8 *)grid' pointer local        | 359 | 65 |
+   | ... + no `i = 0x40' bump                                  | 360 | 85 |
+   | the now-unused `s16 *zw' declaration removed              | 359 | 49 |
+
+   MEASURED AND REJECTED on the 364-word both-copies shape, all aimed at the
+   author's "pseudo 93 needs one more reference" question:
+   | `zr2 = sz + 48' written before `xr2 = dv + 48'            | 365 | 94 |
+   | loop-B bivs initialised before loop A instead             | 363 | 93 |
+   | `zr2'/`xr2' declared before `zw'/`xw'                     | 364 | 88 |
+   | do-while(0) around `*(ln + 0x10) = xw[jj]'                | 367 |103 |
+   | do-while(0) around both xw endpoint stores                | 360 | 92 |
+   | do-while(0) around the `xw[j]' store only                 | 359 | 85 |
+   | do-while(0) around the whole two-endpoint publish          | 359 |116 |
+   | the two xw stores moved below the first addPrim           | 364 |134 |
+   | loop-B `[j]' off `xr2' instead of `xw'                    | 364 | 87 |
+   | loop-B depth off `zr2[j]' instead of `zw[j]'              | 364 | 87 |
+
+   THE ALLOCATION RACE IS STILL EXACTLY WHERE THE AUTHOR LEFT IT, and I
+   re-derived its arithmetic from a fresh `.lreg'/`.greg' pair on the
+   77-row body: pseudos 92 and 93 are STILL 25 refs over 176 and 178 insns
+   after the `i = 0x40' fix, so that fix did not touch them at all.  `.greg'
+   prints "92 in 30" and NO disposition for 93, i.e. 92 takes $fp and 93
+   spills.  QTY_CMP_PRI (local-alloc.c:1693) is floor_log2(25) x 25 / 176 =
+   0.5682 against 0.5618 -- 93 needs 26 refs (0.5843) or 175 insns (0.5714).
+   Ten spellings above move neither number, and a do-while(0) wrapper is the
+   wrong instrument because flow.c counts a reference once per ENCLOSING
+   LOOP: at the depth of loop B's inner body a wrapper changes the word count
+   before it changes the race, which is what every row above shows.
+
+   NEW NEXT STEP, in order.
+     1. THE 364-WORD SHAPE MINUS TWO SPILL SLOTS IS THE WHOLE REMAINING JOB
+        and it is worth about 20 rows before anything else is touched.  Count
+        them: the target uses 0x238..0x254, eight words, with loop A's zr in
+        $fp and loop B's `&xw[j]' giv in $fp; the 364-word body uses
+        0x238..0x25C, ten.  Read `.greg's dispositions for the two extra
+        spilled pseudos rather than sweeping, and remove ONE of them.
+     2. 93 wants exactly +1 reference and every wrapper gives it more.  The
+        only +1 lever that costs no insn is a reference that is already in
+        the function: hoist the `[jj]' address out as its own statement
+        (`xw2 = xw + jj;' then `*(s32 *)(ln + 0x10) = *xw2;'), which names
+        `xw' once more without adding an instruction.  Untried.
+     3. This body is now FIVE words from the target with a correct frame and
+        a correct callee-saved set.  If this goes to the permuter, run it
+        from THIS body, not from the 77-row one, and rank by aligned
+        differences -- the author's warning (a) above still applies.
+
    DECLARATIONS
    typedef struct UnkDngB12Name8
    {
@@ -239,8 +357,9 @@ s32 func_b12_80173FDC(u8 *p, UnkVec *b)
     s16 *fl;
     s16 *zr;
     s32 *xr;
-    s16 *zw;
     s32 *xw;
+    s16 *zr2;
+    s32 *xr2;
     s32 i;
     s32 j;
     s32 jj;
@@ -271,7 +390,8 @@ s32 func_b12_80173FDC(u8 *p, UnkVec *b)
                                     18;
             }
         }
-        *(s16 *)(rec + 0x18) = 0x40;
+        i = 0x40;
+        *(s16 *)(rec + 0x18) = i;
         *(UnkDngB12Name8 *)(rec + 0x10) = *(UnkDngB12Name8 *)q;
         *(s16 *)(rec + 0x1A) = 1;
         func_800DBA90(rec);
@@ -303,16 +423,15 @@ s32 func_b12_80173FDC(u8 *p, UnkVec *b)
             zr -= 8;
             xr -= 8;
         }
-        xr = dv + 48;
-        zr = sz + 48;
+        xr2 = dv + 48;
+        zr2 = sz + 48;
         for (i = 48; i > 0; i -= 8)
         {
-            xw = xr;
-            zw = zr;
+            xw = xr2;
             for (j = 7; j >= 0; j--)
             {
                 jj = (j + 1) & 7;
-                z = (zw[j] + zw[jj]) >> 3;
+                z = (zr2[j] + zr2[jj]) >> 3;
                 if ((u32)z < 0x1E0)
                 {
                     ln = *(u8 **)(g->unk_00 + 0x8D0);
@@ -330,8 +449,8 @@ s32 func_b12_80173FDC(u8 *p, UnkVec *b)
                     addPrim((u32 *)(g->unk_00 + 0xB0) + z, dm);
                 }
             }
-            zr -= 8;
-            xr -= 8;
+            zr2 -= 8;
+            xr2 -= 8;
         }
         n = *(UnkNode **)(p - 0x8);
         if (n == NULL)

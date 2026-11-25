@@ -137,6 +137,117 @@
    at state 5's dress site (cse does not forward the stored pointer across
    the func_800AD594 call).
 
+
+   ===== AGENT h149, BATCH 34 (PARKS BATCH), 2026-11-25 =====
+   STILL 340 WORDS / 15 ALIGNED DIFFERENCES, body unchanged.  All THREE of
+   the author's next steps are now measured and all three are NEGATIVE, and
+   the Group A diagnosis is wrong in its PASS.  Everything else above holds.
+
+   NEXT STEP 1 IS ANSWERED AND GROUP A IS NOT A SCHEDULING QUESTION.
+   `-da' on the whole unit (tools/decomp/dump.sh), reading `.sched',
+   `.sched2', `.lreg' and `.greg'.  Three facts, in order:
+
+   (a) THE PROLOGUE SAVES DO NOT EXIST AT sched1.  `.sched' prints
+       ";; -- basic block number 0 from 4 to 823 --" and that block holds
+       only the four parameter copies, the two symbol materialisations, the
+       facing read, the index chain, the two `lh's and the range check.  The
+       ten saves first appear in `.sched2', as insns 856..874.  So the
+       save-versus-`lui' interleave Group A measures is produced by SCHED2,
+       after both allocators, and no argument about "sched1's ready list at
+       clock 0" can reach it -- including the structural difference from
+       func_b32_80172C90 that this park attributes it to.
+
+   (b) THE TWO symbol_ref PRIORITIES ARE EQUAL AND CANNOT BE MADE UNEQUAL.
+       `.sched' prints, for the body below:
+         insn 16 (high D_8006CCD8) priority 1   insn 38 (high D_8006CCE8) 1
+         insn 17 (low  D_8006CCD8) priority 1   insn 39 (low  D_8006CCE8) 1
+         insn 24 srl 2   insn 28 andi 2   insn 31 addu1 2   insn 42 addu2 2
+       and `.sched2' prints the same numbers.  sched.c:1456's `priority' is
+       the max over LOG_LINKS of priority(pred) + insn_cost - 1, i.e. the
+       longest path from the BLOCK HEAD, so both lo_sum insns are 1 in any
+       spelling of the head.  The target's order requires insn 39 to be
+       scheduled ahead of insn 31 -- priority 1 ahead of priority 2 -- and
+       SCHED_SORT is strict on priority.  The target's layout is therefore
+       unreachable by scheduling.  Do not dump `.sched' for this again.
+
+   (c) WHAT IT IS: local-alloc's `qty_compare', and it is ONE decision.
+       The three competing quantities in block 0, every figure read off
+       `.lreg' for the body below:
+         A  index  = (r99 lhu, r100 srl, r84 andi) tied into ONE quantity by
+            local-alloc.c's `combine_regs' (each input dies at the next
+            insn):  7 refs over 6 insns, floor_log2(7) x 7 = 14, PRI 2.333
+         C  base2  = (r105 high, r85 low+addu):  6 refs, 10 insns, PRI 1.200
+         B  base1  = (r96  high, r86 low+addu):  6 refs, 11 insns, PRI 1.091
+       QTY_CMP_PRI is local-alloc.c:1693 -- floor_log2(n_refs) x n_refs x
+       size, divided by (death - birth) -- highest allocated first, and
+       `find_free_reg' scans ascending with no REG_ALLOC_ORDER on this port.
+       So A takes $v0, C takes $v1, B takes $a0, which is exactly what the
+       body emits.  The target is A in $a0, C in $v0, B in $v1: a clean
+       3-cycle rotation, whose allocation order is C, B, A.  The index
+       quantity has to be the LOWEST priority of the three and here it is by
+       far the highest.
+       AND THE TEN ROWS ARE DOWNSTREAM OF THAT ONE CHOICE.  With base2 in
+       $v1 -- a register nothing else in the block wants -- sched2 is free to
+       hoist its `lui'/`addiu' up beside base1's.  With base2 in $v0, the
+       register the `lhu' result and the `sltiu' both use, the output and
+       anti dependences on $v0 PIN the pair between the `andi' and the
+       `sltiu', which is the target's layout to the word.  Group A is not ten
+       faults; it is one allocation, reported ten times.
+
+   MEASURED AND REJECTED -- eight more head spellings, all 340 words, so
+   WORD-EXACT still holds for every one of them:
+   | u0 in place, u1 single-assignment (dy = *(s16 *)(u1 + kk))     | 18  |
+   | u0 single-assignment (dx = *(s16 *)(u0 + kk)), u1 in place     | 16  |
+   | both single-assignment, both bases materialised first          | 17  |
+   | u0 in place, second lookup inline off the symbol + kk          | 18  |
+   | u0 in place + `kk += (s32)D_8006CCE8; dy = *(s16 *)kk'         | 18  |
+   | ... + `kk' split into `>> 8' then a separate `&= 0xE'          | 18  |
+   | the landed func_b32_80172C90 head verbatim (no base local)     | 18  |
+   | ... + `kk' split into two statements                           | 18  |
+   Not one of these changes A's 7 refs over 6 insns, which is why they all
+   land in 16..18.  With the author's eleven that is NINETEEN spellings of
+   the same four lines.  Stop sweeping the head.
+
+   NEXT STEP 2 IS MEASURED AND REFUTED.  dx/dy computed inside case 0 with a
+   second pair at the top of case 1 is 351 WORDS / 47 -- eleven words over.
+   It could not have worked: the target's two `lh's sit BEFORE the
+   `beqz'/`jr' dispatch, so they are in the entry block and cannot live in an
+   arm.  That also kills next step 1's suggestion of reading dy only in the
+   arms that need it: both values are computed unconditionally in the target.
+
+   NEXT STEP 3 IS MEASURED AND REFUTED.  `r = (s16)func_800A4E2C(...)' moved
+   above the `n--'/`blez' pair is 339 WORDS / 30 -- a word short and twice as
+   bad.  Two further Group B spellings, both word-exact:
+   | `r = func_800A4E2C(...); r = (s16)r;' as two statements        | 15  |
+   | `n -= 1' with the two restore stores in the other order        | 22  |
+   Group B is unmoved at 5 rows.  Note it has the SAME SHAPE as Group A: the
+   target puts both sign-extend results in $a0 and this body puts them in $v1
+   and $v0, so it is `find_free_reg' scanning ascending one block down, and
+   the brief's "fix the occupant, not the site" is the right frame for it.
+
+   NEW NEXT STEP, in order.
+     1. Lower the INDEX quantity's QTY_CMP_PRI below both bases' -- it needs
+        to go under 1.091 from 2.333.  Over a 6-insn range the only
+        numerators that reach that are 3 (3 refs) and 2 (2 refs), so the
+        index must be its OWN quantity rather than the three-pseudo chain.
+        `combine_regs' ties them because each input DIES at the next insn,
+        and local-alloc gives no quantity at all to a pseudo that "is not
+        local to this block or dies more than once".  READ THIS OFF THE
+        LISTING FIRST, no dump needed: the target's `srl $a0, $v0, 8' writes
+        a DIFFERENT register from the `lhu $v0' it reads, so in the target
+        the lhu destination is ALREADY not in the index quantity -- the chain
+        is broken at its first link.  The job is to find what gives the
+        facing word its second death.
+     2. Do not reach for a do-while(0) bump here.  A bump RAISES references
+        and the index needs FEWER; going the other way, each base would need
+        9 and 8 references to overtake it (floor_log2 steps at 8), and the
+        four bump variants I measured cost a word each: 341 words at 26, 29
+        and 28, and 340 words at 19 for a bump on the first lookup.
+     3. If this goes to the permuter, permute the FOUR HEAD LINES only -- the
+        rest of the body is confirmed by this park and by nineteen measured
+        spellings -- and rank the candidates by whether they emit the `srl'
+        into a register other than the `lhu's, not by score.
+
    DECLARATIONS
    extern u8 D_80174FC4[];
    extern u8 D_80174FD4[];
