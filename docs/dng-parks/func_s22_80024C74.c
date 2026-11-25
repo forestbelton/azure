@@ -134,6 +134,41 @@
      `sll 16'/`bnez' pair; so does `(s16)func_800A5690()'.
    * `--raw' not yet run on this body.
 
+==== THE PERMUTER HAS BEEN SPENT ON THIS PARK, 2026-11-25, dispatcher. NEGATIVE.
+
+50 minutes, 240,111 iterations, 8 jobs, on the statement group this park names,
+seeded from the park body itself. `base = 280 -> best = 125' on the permuter's
+own score -- and measured by hand the winner is WORSE than this body:
+
+    this park's body                      421 words / 12 aligned
+    the permuter's best (output-125-1)     420 words / 14 aligned
+
+One word short and two rows worse. I verified it twice: by reconstructing the
+change in a spliced unit and by compiling the permuter's own
+`output-125-1/source.c' directly. Both give 420/14.
+
+THE SHAPE IT FOUND IS WORTH KEEPING EVEN SO, because it is one no agent tried
+and it answers the park's own objection. The park records that a source local
+for `p[0x9]' gives the single pseudo and then costs 122 rows because `j = i'
+coalesces and the lost pseudo exchanges $s0/$s1 across the function. The
+permuter's answer is an EMBEDDED ASSIGNMENT:
+
+    i = ((nv = *(u8 *)(p + 0x9)) >> 1) + nv * 2 + (func_800A6D30() & 3) + 0x10;
+
+which confines the new pseudo to the expression instead of making it a
+statement-level local. That is a real distinction and it is not the 122-row
+shape -- it lands at 420/14 rather than 420/122. **So the embedded form is the
+right family and it is still one word short**, which says the second read is
+not what the target shares; something else supplies the word.
+
+WHAT THAT LEAVES. The park's 31 measured spellings plus this search have now
+covered the two reads and the clamp as a group. The untried direction is the
+one the park names last: the `j = i` copy and the `i >= 0x100` clamp are the
+other half, and no run so far has varied the CLAMP while holding an embedded
+read. If anyone spends more budget here, that is the pair -- and rank by
+aligned differences and word count, not by the permuter's score, which
+improved by a factor of two while the body got worse.
+
 DECLARATIONS
 typedef struct UnkDngS22LineSP
 {
