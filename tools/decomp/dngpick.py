@@ -92,6 +92,25 @@ def parked():
 
     Re-picking a park is only right once its blocker is cleared, and that is a
     deliberate act; use --with-parks to include them.
+
+    BUT A PARK'S LEAD SET AGES, AND THIS EXCLUSION USED TO BE PERMANENT.
+    Measured 2026-11-24: 8 of the 16 parks (2,575 of 4,952 park words) now have
+    a LANDED twin at >= 0.60 that did not exist when they were parked, six of
+    them at 0.84 or better -- and `func_b38_8017087C' scores 0.952 against
+    `func_b41_8017088C', which landed in the very batch that measured this. A
+    park written against a smaller pool is not evidence about the pool we have
+    now.
+
+    The blocker CLASS decides whether a new twin helps, so run --parks and read
+    it rather than trusting the ratio:
+
+      * a park blocked on measurable C-LEVEL RESIDUE (an aligned-difference
+        count) is re-pickable the moment a better donor exists -- 7 of those 8.
+      * a park blocked on LAYOUT (`.rodata' sizing, a subsegment boundary) is
+        NOT unblocked by any twin, however high. `func_b38_8017087C' is 0.952
+        and still blocked, because its 4 bytes of `.rodata' are a yaml decision
+        and no amount of C moves them. Its ratio is the most misleading number
+        in the backlog.
     """
     d = os.path.join(PROJ, "docs", "dng-parks")
     try:
@@ -99,6 +118,52 @@ def parked():
                 if f.startswith("func_") and f.endswith(".c")}
     except OSError:
         return set()
+
+
+ALIGNED = re.compile(r"(\d+)\s+ALIGNED DIFFERENCE", re.I)
+# A LAYOUT blocker has to be matched NARROWLY. The first version of this
+# matched a bare "rodata" or "layout" and fired on 7 of 16 parks, including one
+# whose text says "no `rodata' block and no `jtbl_' symbol" -- i.e. it asserts
+# the OPPOSITE -- and another that merely warns about "layout inflation" it
+# avoided. A false LAYOUT flag is worse than none: it tells me to skip a park
+# that a new twin genuinely unblocks.
+LAYOUT = re.compile(r"subsegment|layout decision|rodata'? (?:has to|must|needs"
+                    r"|would have to)|grow (?:the )?[`']?\.?rodata", re.I)
+
+
+def park_report():
+    """Print each park with its CURRENT best twin and its recorded blocker."""
+    import dngtwin
+    pool = dngtwin.carved(18)
+    d = os.path.join(PROJ, "docs", "dng-parks")
+    rows = []
+    for fn in sorted(os.listdir(d)):
+        if not fn.endswith(".c"):
+            continue
+        name = fn[:-2]
+        txt = open(os.path.join(d, fn), errors="replace").read()
+        m = ALIGNED.search(txt)
+        resid = int(m.group(1)) if m else None
+        layout = bool(LAYOUT.search(txt))
+        me = pool.get(name)
+        best = ([r for r in dngtwin.rank(
+                    me, {k: v for k, v in pool.items() if k != name},
+                    False, 0.60, 1) if not r[5]] if me else [])
+        rows.append((best[0][0] if best else 0.0, name,
+                     len(me[1]) if me else 0,
+                     best[0][2] if best else None,
+                     best[0][1] if best else None, resid, layout))
+    rows.sort(reverse=True)
+    print("%d park(s), %d words" % (len(rows), sum(r[2] for r in rows)))
+    print("a twin only helps a park blocked on C-LEVEL RESIDUE; a LAYOUT "
+          "blocker is immune to it\n")
+    for ratio, name, w, nm, vtag, resid, layout in rows:
+        twin = ("%.3f %s (%s)" % (ratio, nm, vtag)) if nm else "no twin at 0.60"
+        why = ("LAYOUT -- a twin does NOT unblock this" if layout and resid is None
+               else "%d aligned" % resid if resid is not None else "blocker not parsed")
+        if layout and resid is not None:
+            why += " + mentions layout, read the file"
+        print("  %-22s %4dw  %-34s %s" % (name, w, twin, why))
 
 
 def stub_rows(skip_parks=True):

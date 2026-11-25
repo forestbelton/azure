@@ -75,9 +75,172 @@ void func_s51_80024104(u8 *p);
 
 UnkNode *func_8003FD64(s32, void *);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_8002405C);
+extern u8 D_s51_80024004[];
+void func_800B8FC8(u8 *, s32 *, s32 *, s32, s32);
+void func_s51_8002405C(u8 *p, UnkVec *v, UnkSlot *s);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_80024104);
+/* func_s51_80024104's spawn stepped one frame: spend one of the payload's
+   +0x2A frames, raise the D_8002571C tick, drive the renderable's three
+   colour bytes off the remaining life over the original span at +0x2C (times
+   128) with +0xC lifted 0x10 above the other two, bleed +0x6 down while it is
+   still above -0x6, and when the counter runs out release the owner's
+   busy-table slot at +0x46 and raise the two 0x8000 kill bits.  42 words,
+   0 differing, first compile.  The twin is func_s58_8002407C
+   (csrc/ovl_dng_s58.c, dngtwin 0.881, +0 words), carried with the relink
+   constants and ONE shape delta read off this listing: the three colour bytes
+   are PLAIN STORES here -- `s + 0xE = k', `s + 0xD = k', `s + 0xC = k + 0x10'
+   -- where the twin has `*((u8 *)s + 0xE) += 4'.  There is no `lbu' at +0xE
+   in this listing, so it is not a read-modify-write.
+
+   THE COUNTER READ-MODIFY-WRITE MUST BE SPLIT AROUND THE D_8002571C STORE.
+   Folded into `*(s16 *)(p + 0x2a) -= 1' with the quotient read back out of
+   memory it is 42 words / 18 aligned differences; the target's
+   read / foreign-store / write-back order cannot come from one compound
+   assignment.  Same fact as func_s51_800249A0's, and it holds in three more
+   bodies in this unit at three different prices -- 18 here, 12 on
+   func_s51_80024734, 7 on func_s51_8002492C and FREE on func_s51_800248B8.
+
+   THE THREE BYTE STORES RUN 0xE, 0xD, 0xC.  Written ascending the body is
+   41 words / 11 aligned differences, because the `addiu 0x10' then has to
+   precede both other `sb's instead of sitting between them.
+
+   `s16 c' is load-bearing: as `s32' it is 41 words / 2 rows.
+
+   MEASURED AND FREE, so none of these is why it lands: `(c << 7)' for
+   `c * 128' (42 / 0); `s16 k' instead of `s32 k' (42 / 0 -- the narrow
+   result lever does not reach a quotient here); the counter read as
+   `*(s16 *)' instead of `*(u16 *)' (42 / 0); the guard written `> -0x7'
+   (42 / 0); and the release index written base-first (42 / 0). */
+void func_s51_8002405C(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    s16 c;
+    s32 k;
+
+    c = *(u16 *)(p + 0x2a) - 1;
+    k = c * 128 / *(s16 *)(p + 0x2c);
+    D_8002571C = 1;
+    *(s16 *)(p + 0x2a) = c;
+    *((u8 *)s + 0xE) = k;
+    *((u8 *)s + 0xD) = k;
+    *((u8 *)s + 0xC) = k + 0x10;
+    if (*(s16 *)((u8 *)s + 0x6) >= -0x6)
+    {
+        *(s16 *)((u8 *)s + 0x6) -= 2;
+    }
+    if (*(s16 *)(p + 0x2a) <= 0)
+    {
+        *(s16 *)(*(s16 *)(p + 0x32) * 2 + *(s32 *)(p + 0x60) + 0x46) = 0;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The 0x212 spawner behind func_s51_800243D8's step, and the owner of this
+   object's eight-slot busy table at +0x46.  Copy the 0x40-byte
+   D_s51_80024004 record table onto the stack, scan the eight slots for a free
+   one, and on finding it mark the slot, place the record through
+   func_800B8FC8, spawn a 0x212 node with func_s51_8002405C as its step, clear
+   and tint its renderable, seed its mover from the player record and copy the
+   12-byte D_800256E0 record; then spend one frame of the owner's own +0x2A
+   counter and raise the two 0x8000 kill bits when it runs out.  181 words,
+   0 differing, first compile.
+
+   THE TWIN IS func_s65_80024104 (csrc/ovl_dng_s65.c, dngtwin 0.964, 184
+   words), taken verbatim with the relink constants and ONE statement DELETED:
+   its `D_80025384 = 1' tick store has no counterpart in this listing, and
+   that single statement is the whole three-word deficit dngtwin flagged.
+   This copy raises no tick at all; func_s51_8002405C, the step it installs,
+   raises D_8002571C instead.
+
+   THE TWIN'S `i * 8' FACT CARRIED, and its rejected column reproduced to the
+   digit.  Through its own `s32 k' the shift is emitted before the
+   `addiu $v0, $sp, 0x20' and the pair matches; inlined as `buf + i * 8' it is
+   181 words / 4 aligned differences (the twin records 3 on its own body, so
+   this is the one row of its table that does NOT reproduce exactly), and
+   `(u8 *)(i * 8 + (s32)buf)' is 181 / 1, which is the twin's recorded 1.
+
+   THE TWIN'S ALIGNMENT-1 FACT ALSO CARRIED, and it is the biggest thing in
+   this body.  The 0x40-byte copy's struct type has `u8 b[0x40]', alignment 1,
+   which is what makes expand_block_move emit the `andi 0x3' runtime
+   alignment test and BOTH loops.  Through an otherwise identical struct of
+   `u32 w[0x10]' the whole test and the entire `lwl'/`lwr' arm vanish:
+   157 words / 25 aligned differences.
+
+   `s16 i' is load-bearing: as `s32' it is 175 words / 18 rows (the six
+   missing words are the `sll 16'/`sra 16' pairs the scan loop needs).
+   `SVECTOR w' must be declared BEFORE `buf' -- after it, 181 / 5, the two
+   stack objects exchanged.  The two 7-seeds go +0x2A then +0x2C (swapped,
+   181 / 2) and the two tail `sb's go +0x7A then +0x7B (swapped, 181 / 6).
+
+   MEASURED AND FREE, so NOT the reason this lands: the scan index written
+   `*(s16 *)(p + 0x46 + i * 2)' instead of `*(s16 *)(i * 2 + (s32)p + 0x46)'
+   -- 181 / 0, so only the `k' statement's existence matters, not the operand
+   order of either sum. */
+void func_s51_80024104(u8 *p)
+{
+    SVECTOR w;
+    u8 buf[0x40];
+    UnkNode *n;
+    u8 *q;
+    u8 *e;
+    u8 *s;
+    UnkVec *m;
+    UnkSlot *r;
+    s16 i;
+    s32 k;
+
+    *(UnkDngS58Blk64 *)buf = *(UnkDngS58Blk64 *)D_s51_80024004;
+    for (i = 0; i < 8; i++)
+    {
+        if (*(s16 *)(i * 2 + (s32)p + 0x46) == 0)
+        {
+            break;
+        }
+    }
+    if (i != 8)
+    {
+        *(s16 *)(i * 2 + (s32)p + 0x46) = 1;
+        k = i * 8;
+        e = buf + k;
+        w.vx = *(u16 *)(e + 0x0) + ((s16) * (u16 *)(e + 0x4) >> 1);
+        w.vy = *(u16 *)(e + 0x2) + 0x30;
+        func_800B8FC8((u8 *)D_800814A8, (s32 *)e, (s32 *)&w, 1, 1);
+        n = func_8003FC64(0x212);
+        if (n != NULL)
+        {
+            q = (u8 *)n + 0x20;
+            *(s16 *)(q + 0x2a) = 7;
+            *(s16 *)(q + 0x2c) = 7;
+            *(s16 *)(q + 0x32) = i;
+            *(u8 **)(q + 0x60) = p;
+            n->unk_10 = (u32)func_s51_8002405C;
+            func_8004491C(n, (u32)D_80045340);
+            r = (UnkSlot *)n->unk_0C;
+            r->unk_06 = 4;
+            r->unk_14 &= ~0xC;
+            s = *(u8 **)(D_800814A8 - 0x18);
+            m = n->unk_08;
+            m->unk_00 = *(s32 *)(s + 0x0);
+            m->unk_04 = *(s32 *)(s + 0x4);
+            m->unk_08 = *(s32 *)(s + 0x8);
+            r = (UnkSlot *)n->unk_0C;
+            r->unk_1E = 0x1000;
+            r->unk_1C = 0x1000;
+            *((u8 *)r + 0xE) = 0x80;
+            *((u8 *)r + 0xD) = 0x80;
+            *((u8 *)r + 0xC) = 0x80;
+            *(UnkDngS58Name12 *)((u8 *)n + 0x92) = *(UnkDngS58Name12 *)D_800256E0;
+            r->unk_08 = (u32)((u8 *)n + 0x92);
+            q[0x7a] = e[0] - 0x40;
+            q[0x7b] = e[2];
+        }
+    }
+    if (--*(s16 *)(p + 0x2a) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* func_s51_80024104's own spawner, run as a step: allocate a 0x212 node, give
    it 0xB frames at the payload's +0x2C and the owner `a` at +0x7C, park
@@ -193,7 +356,51 @@ s32 func_s51_800244E4(u8 *p, UnkVec *v)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_80024734);
+/* func_s51_80024798's spawn stepped one frame: pull the mover's +0x8 channel
+   back by 0x18000, spend 8 of the payload's +0x32 life, raise the D_8002571C
+   tick, and when the life runs out raise the 0x8000 kill bit in the node's
+   -0x2 flags and in D_800814A0.  25 words, 0 differing, first compile.
+
+   THE TWIN IS THIS FILE'S OWN LANDED func_s51_800249A0 (dngtwin 0.889, 20
+   words), two listings up, PLUS ONE STATEMENT.  `*(s32 *)(b + 0x8) -=
+   0x18000' written FIRST is the whole five-word delta -- `lui'/`ori' for the
+   constant plus `lw'/`addu'/`sw' -- and nothing else changes but 0x2a -> 0x32
+   and -1 -> -8.  No new declarations were needed.
+
+   800249A0's ALLOCATION FACT CARRIED AT ITS OWN SIGN: the counter must be
+   read into an `s16' local BEFORE the D_8002571C store, with the gate testing
+   the LOCAL rather than reloading.  Folded into `*(s16 *)(p + 0x32) -= 8'
+   with a reloading `<= 0' gate it is 25 words / 12 aligned differences.
+   Both bodies are leaves with no saved registers, so the frame matched and
+   the budget rule predicted the carry.  The same fact is FREE on
+   func_s51_800248B8 in this file -- see that comment.
+
+   THE VECTOR STATEMENT MUST COME FIRST.  Moved below the counter read it is
+   25 words / 16 aligned differences: the `sw 0x8($a1)' then cannot be
+   emitted before the `lhu 0x32' and the tick store's `lui' loses its hole.
+
+   `s16 t' is load-bearing: as `s32' it is 23 words / 5 rows, losing the
+   `sll 16'/`bgtz' pair -- 800249A0 records 19 words / 19 differing for the
+   same substitution, so the direction reproduces and the magnitude does not.
+
+   MEASURED AND FREE, so NOT the reason this lands: the pull written
+   `+= 0xFFFE8000' instead of `-= 0x18000' (25 / 0).  Both give the same
+   `lui'/`ori'/`addu'; the C89 signedness trap does not fire because the value
+   never feeds a division, a shift or a comparison. */
+void func_s51_80024734(u8 *p, u8 *b, u8 *c)
+{
+    s16 t;
+
+    *(s32 *)(b + 0x8) -= 0x18000;
+    t = *(s16 *)(p + 0x32) - 8;
+    D_8002571C = 1;
+    *(s16 *)(p + 0x32) = t;
+    if (t <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* A 0x211 spawner: seed the new node's mover from the parent `a`'s, jitter
    each axis by a fresh rand() & 0x1F and the caller's own offset
@@ -246,9 +453,99 @@ void func_s51_80024798(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_800248B8);
+/* A spawn stepped one frame with a spin: spend one of the payload's +0x2A
+   frames, push the renderable's scale pair at +0x1C/+0x1E out by 0x320 and
+   its rotation at +0x1A by 0x190, raise the D_8002571C tick, and close the
+   node when the counter runs out.  29 words, 0 differing.  No twin above
+   0.717; read off the listing with func_s51_800249A0's teardown and
+   func_b01_80170970's (csrc/ovl_dng_b01.c) scale-bump idiom.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_8002492C);
+   THE GATE'S LOAD MUST BE THE ARRAY REF `((s16 *)p)[0x15]', NOT
+   `*(s16 *)(p + 0x2a)'.  As a cast it is 30 words / 11 aligned differences.
+   `expr.c:5344' sets MEM_IN_STRUCT_P when the INDIRECT_REF's operand is a
+   PLUS_EXPR, which an array ref on a pointer is and a cast is not;
+   `true_dependence's last clause then drops the edge between this varying
+   load and the fixed-address, non-struct `sh %lo(D_8002571C)', and reorg
+   sinks the tick store into the `bgtz's delay slot.  The cast form ALSO
+   loses the entry `addu $a1, $a0, $zero': with the gate's value no longer
+   taking $a0, the parameter coalesces with its incoming register and every
+   later reference reads $a0.  One spelling, two symptoms.
+
+   THE THREE BUMPS ARE WRITTEN 0x1C, 0x1E, 0x1A AND EMITTED 0x1C, 0x1A, 0x1E.
+   sched1 exchanges the last two load/add/store chains -- `memrefs_conflict_p'
+   disambiguates the three constant offsets off $a2, so nothing pins them and
+   the tie breaks the other way round.  THE LISTING'S STORE ORDER IS NOT THE
+   SOURCE ORDER HERE.  All five other permutations, each the single remaining
+   fault: 1C/1A/1E 10 rows, 1E/1C/1A 4, 1A/1E/1C 10, 1A/1C/1E 13,
+   1E/1A/1C 13.
+
+   MEASURED FREE HERE AND LOAD-BEARING 40 WORDS AWAY, both directions:
+   * splitting the counter decrement into an `s16' local around the tick store
+     is 29 / 0 here and is what func_s51_8002492C and func_s51_80024734 need
+     (7 and 12 rows folded).  Both those bodies and this one have identical
+     frames -- leaves, no saves -- so the save-count rule predicts nothing;
+     what differs is that this body's tick store is already free to sink past
+     the gate, so the split buys it nothing.
+   * conversely the array-ref gate above is FREE on func_s51_8002492C (29 / 0)
+     and worth 11 rows here.
+
+   MEASURED AND FREE: the counter read-modify-write itself as
+   `((s16 *)p)[0x15] -= 1' (29 / 0) -- only the GATE's load needs the flag;
+   the three bumps as `((u16 *)c)[0xE]' array refs (29 / 0); and the three
+   bumps as explicit `*(s16 *)(c + K) = *(u16 *)(c + K) + N' assignments
+   (29 / 0). */
+void func_s51_800248B8(u8 *p, u8 *b, u8 *c)
+{
+    *(s16 *)(p + 0x2a) -= 1;
+    *(u16 *)(c + 0x1C) += 0x320;
+    *(u16 *)(c + 0x1E) += 0x320;
+    *(u16 *)(c + 0x1A) += 0x190;
+    D_8002571C = 1;
+    if (((s16 *)p)[0x15] <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The same spawn stepped one frame, re-sending the renderable instead of
+   spinning it: spend one of the payload's +0x2A frames, raise the D_8002571C
+   tick, push the slot back through func_800478B8, and close the node when
+   the counter runs out.  29 words, 0 differing.  The countdown-plus-call
+   idiom is func_b01_801708E8's (csrc/ovl_dng_b01.c) and the teardown is this
+   file's own landed func_s51_800249A0.
+
+   THE COUNTER READ-MODIFY-WRITE MUST BE SPLIT AROUND THE TICK STORE, which
+   is func_s51_800249A0's own fact at its own sign.  Folded into
+   `*(s16 *)(p + 0x2a) -= 1' it is 29 words / 7 aligned differences: the
+   target emits read, foreign store, write-back in that order, and that order
+   cannot come from one compound assignment.  The tick store must sit BETWEEN
+   the read and the write-back -- moved after the write-back it is also
+   29 / 7, the same residue.
+
+   func_800478B8(c) GOES BEFORE THE GATE.  Moved after it the body is 26 words
+   / 19 aligned differences, which is b01's own stated fact in the same
+   direction.
+
+   MEASURED AND FREE, so NOT the reason this lands: the gate's load as the
+   array ref `((s16 *)p)[0x15]' (29 / 0).  That spelling is worth 11 rows on
+   func_s51_800248B8 40 words above, where the tick store has to sink past
+   the gate; here the call already separates them, so the MEM_IN_STRUCT_P
+   escape has nothing to buy. */
+void func_s51_8002492C(u8 *p, u8 *b, u8 *c)
+{
+    s16 t;
+
+    t = *(s16 *)(p + 0x2a) - 1;
+    D_8002571C = 1;
+    *(s16 *)(p + 0x2a) = t;
+    func_800478B8(c);
+    if (*(s16 *)(p + 0x2a) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spend 8 of the payload's +0x32 life counter, raise the engine's D_8002571C
    tick, and when the counter runs out set the 0x8000 kill bit in the node's
@@ -287,6 +584,86 @@ void func_s51_800249A0(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_800249F0);
+/* The unit's general-purpose 0x212 decoration spawner, called twice from
+   func_s51_80024B38's state 0: allocate the node, give it 0x3C frames at the
+   payload's +0x2A, install func_s51_800249A0 as its step, raise the 0xC and
+   0x80 bits in the slot's +0x14 with the caller's scale factor at +0x10
+   between them, seed the mover from the caller's own record at p - 0x18, then
+   -- through a RE-READ of n->unk_0C -- the caller's two scale halves, a
+   0x80/0x80 pair with the caller's colour byte at +0xC, and the 12-byte
+   record at `s' copied to the node's own +0x92 for the slot's +0x08 to point
+   at.  RETURNS the payload pointer, which the caller parks at its own +0x64.
+   82 words, 0 differing.
+
+   NO USABLE TWIN: dngtwin's best is 0.805 at -15 words and the 0.919 donor
+   dngnear names is a different shape.  It was read off the listing on this
+   file's own landed func_s51_800243D8 skeleton.  EIGHT PARAMETERS, OF WHICH
+   $a1 AND $a2 ARE NEVER READ -- that is not a mistake: the two call sites in
+   asm/nonmatchings/ovl_dng_s51/func_s51_80024B38.s set $a0..$a3 and four
+   stack words (1, 0x1000, 0x1000, 0x808080 at the first site), and the frame
+   is -0x28 with four outgoing slots and five saves, so +0x38..+0x44 are
+   incoming arguments 5 to 8.  The colour word arrives whole and only its low
+   byte is stored.
+
+   `r->unk_10 = e * 32' MUST SIT BETWEEN THE TWO `r->unk_14 |=' STATEMENTS.
+   With the two `|=' adjacent gcc folds them to a single `ori 0x8C' and
+   DELETES the first `sh': 77 words / 10 aligned differences.  The two
+   plain-cast dodges -- `*(u16 *)((u8 *)r + 0x14) |= ...' on either the first
+   or the second lvalue -- give the identical 77 / 10 with a bit-identical
+   residue, so that is ONE fact and not three; MEM_IN_STRUCT_P is not the
+   lever here, the intervening store is.
+
+   THE GATE IS `if (n != NULL) { ...; return q; } return NULL;'.  The
+   early-return form `if (n == NULL) return NULL;' collapses the test to a
+   single `beqz' past the whole body and is 82 words / 6 aligned differences.
+   RE-PRICED: that same change read 77 words / 10 rows while the flag fault
+   above was still live, which is two faults adding, not one fact.
+
+   THE SECOND `r = (UnkSlot *)n->unk_0C' RE-READ IS LOAD-BEARING: dropped, the
+   body is 81 words / 25 rows.  `t = *(u8 **)(p - 0x18)' must be a local: with
+   the three mover stores written through the inline dereference it is 86
+   words / 12 rows, one reload per store.  The three colour bytes go 0xE, 0xD,
+   0xC (ascending, 82 / 6) and the scale pair goes +0x1C then +0x1E (swapped,
+   82 / 6).
+
+   MEASURED AND FREE, so neither is why it lands: `e << 5' for `e * 32'
+   (82 / 0 -- a power-of-two multiply is the same tree) and
+   `r->unk_0C[0] = col' for `*((u8 *)r + 0xC) = col' (82 / 0). */
+u8 *func_s51_800249F0(u8 *p, UnkVec *b, u8 *c, u8 *s, s32 e, s32 f, s32 g, s32 col)
+{
+    UnkNode *n;
+    u8 *q;
+    u8 *t;
+    UnkVec *m;
+    UnkSlot *r;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        q = (u8 *)n + 0x20;
+        *(s16 *)(q + 0x2a) = 0x3C;
+        n->unk_10 = (u32)func_s51_800249A0;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_14 |= 0xC;
+        r->unk_10 = e * 32;
+        r->unk_14 |= 0x80;
+        t = *(u8 **)(p - 0x18);
+        m = n->unk_08;
+        m->unk_00 = *(s32 *)(t + 0x0);
+        m->unk_04 = *(s32 *)(t + 0x4);
+        m->unk_08 = *(s32 *)(t + 0x8);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1C = f;
+        r->unk_1E = g;
+        *((u8 *)r + 0xE) = 0x80;
+        *((u8 *)r + 0xD) = 0x80;
+        *((u8 *)r + 0xC) = col;
+        *(UnkDngS58Name12 *)((u8 *)n + 0x92) = *(UnkDngS58Name12 *)s;
+        r->unk_08 = (u32)((u8 *)n + 0x92);
+        return q;
+    }
+    return NULL;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s51", func_s51_80024B38);

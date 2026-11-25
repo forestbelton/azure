@@ -92,12 +92,23 @@ def main():
     units = argv or sorted(
         os.path.basename(p)[:-2]
         for p in glob.glob(os.path.join(PROJ, "csrc", "ovl_dng_*.c")))
+    # ACCEPT A BARE TAG. Every brief in this sweep told agents to run
+    # `declcheck.py <tag> --src <copy>', so a bare tag is the form they type --
+    # and without --src it was a SILENT NO-OP: `b35' printed nothing at all and
+    # "0 unit(s) checked", while `s51' printed NO SUCH UNIT. Found 2026-11-24 by
+    # an agent who tried it without --src. Normalise instead of failing.
+    units = [u if os.path.exists(os.path.join(PROJ, "csrc", u + ".c"))
+             else "ovl_dng_" + u for u in units]
     nu = nbad = nhit = nfail = 0
     with tempfile.TemporaryDirectory() as tmp:
         for unit in units:
             r = check(unit, tmp, src)
             if r is None:
-                print("%-24s NO SUCH UNIT" % unit)
+                # Not a skip: a named unit that does not resolve means the
+                # caller believes it checked something it did not.
+                print("%-24s NO SUCH UNIT -- csrc/%s.c does not exist"
+                      % (unit, unit))
+                nfail += 1
                 continue
             hits, rc, out = r
             nu += 1

@@ -42,6 +42,22 @@ extern u8 *D_800E3D7C;
    for each actor the cursor admits whose grid cell is within 2 of (x, y)
    calls the 0x800C87C4 report with a 0x10 chance -- 0xFF when D_800E3D68
    is saturated -- and a rank of (d >> 2) + 0x10 plus two random bits. */
+UnkNode *func_8003FC64(s32);
+void func_8003DB94(void *, void *, s32);
+s32 func_8004491C(UnkNode *, u32);
+void func_800478B8(u8 *);
+s32 func_800644B8(s32);
+s32 func_80064584(s32);
+s16 func_800A45D8(u16, u16, s32);
+void func_s15_80024264(u8 *v, u8 *q, u8 k);
+void func_s15_8002418C(u8 *p, UnkVec *q, u8 *m);
+void func_s15_80024384(u8 *p, UnkVec *b, u8 *c);
+void func_s15_80024730(u8 *, UnkVec *, u8 *);
+extern u8 D_800DEDB0[];
+extern u8 D_80045340[];
+extern u8 D_s15_80025368[];
+extern u32 D_800814A0;
+
 void func_s15_80024060(s16 x, s16 y, u8 *c, u8 d)
 {
     u8 *p;
@@ -85,17 +101,318 @@ void func_s15_80024060(s16 x, s16 y, u8 *c, u8 d)
     } while (p != D_800E3D7C);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s15", func_s15_8002418C);
+/* The fading-marker step: bumps the owner's +0x14 hit counter, raises the
+   marker's +0x1C/+0x1E scale by 0x400 and fades its three colour bytes by 4,
+   retires the node when the fade reaches zero, pulls the vector's z down by 8
+   and republishes through func_800478B8, then retires again if the
+   renderable's +0x14 shows 0x6000. 54 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s15", func_s15_80024264);
+   THE WHOLE +0x1E/+0x1C READ-MODIFY-WRITE MUST BE COMPLETE -- LOAD, ADD AND
+   BOTH STORES -- BEFORE THE +0xE/+0xD/+0xC BYTE BLOCK. Split so that only the
+   load and the add precede the byte block and the two `sh' follow it, the two
+   independent chains come out transposed: `lbu'/`lhu' and the two `addiu'
+   exchanged, 54 words / 4 aligned differences, in BOTH chain orders and under
+   all 16 combinations of array-ref versus cast spelling on the two loads and
+   the two stores (bit-identical residue every time, so that is one fact, not
+   sixteen). Whether the stored value is carried in an `s16' local or re-read
+   from memory for the +0x1C store is FREE -- measured 0 both ways on this
+   body at 54 words. An earlier run priced the local form at 4; that figure
+   was taken while the gate below was still wrong and is RETRACTED.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s15", func_s15_80024384);
+   THE GATE NEEDS THE `(u8)' TRUNCATION. `if ((u8)a == 0)' is the target's
+   `andi $v0, $v0, 0xFF'; `if (a == 0)' on the `s32' tests the raw value,
+   53 words / 13 aligned differences. `u8 a;' with a bare `a == 0' is the
+   same code, measured 0.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s15", func_s15_80024684);
+   Shape read off csrc/ovl_dng_b30.c's func_b30_801745F0 for the tail gate
+   (`func_800478B8(c)' one-argument, then the 0x6000 test) and off the
+   mirror-image sibling stub func_s15_80024730 for the scale/fade pairing. */
+void func_s15_8002418C(u8 *p, UnkVec *q, u8 *m)
+{
+    s32 a;
+
+    *(s16 *)(*(u8 **)p + 0x14) = *(u16 *)(*(u8 **)p + 0x14) + 1;
+    *(s16 *)(m + 0x1E) = *(u16 *)(m + 0x1E) + 0x400;
+    *(s16 *)(m + 0x1C) = *(u16 *)(m + 0x1E);
+    a = m[0xE] - 4;
+    m[0xE] = a;
+    m[0xD] = a;
+    m[0xC] = a;
+    if ((u8)a == 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    *(s16 *)((u8 *)q + 0xA) = *(u16 *)((u8 *)q + 0xA) - 8;
+    func_800478B8(m);
+    if (*(u16 *)(m + 0x14) & 0x6000)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The 0x212 spawner for func_s15_8002418C's fading marker: allocates the node,
+   stores the owner at +0x20, dresses the renderable from D_800DEDB0 with the
+   caller's colour byte, scale 0x1800 and tpage 0x7E0B, then seeds the mover
+   from `q' with the z jittered by rand() % 0x11 - 8. 72 words, 0 differing,
+   first compile, read off csrc/ovl_dng_s14.c's func_s14_8002425C (0.803) with
+   csrc/ovl_dng_s27.c's func_s27_800241F8 for the statement order.
+
+   The divisor really is 0x11: the listing's `lui 0x7878'/`ori 0x7879' magic
+   multiply with `mfhi'/`sra 3' and a `* 17' back-multiply is expand_divmod's
+   strength reduction of a LITERAL 17, so no variable divide is involved.
+
+   Measured and FREE at 72 words / 0 differing, so neither is why this lands:
+   a separate `m2' local for `n->unk_08' instead of reusing `m' (0), and
+   writing `rand() % 0x11 + *(u16 *)(q + 0xA) - 8' (0). Note the first of
+   those INVERTS on func_s15_800247DC 100 words below, where reusing `m'
+   costs 60 words / 9 differences -- same unit, opposite answer. */
+void func_s15_80024264(u8 *v, u8 *q, u8 k)
+{
+    UnkNode *n;
+    u8 *m;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s15_8002418C;
+        m = (u8 *)n->unk_0C;
+        *(u8 **)((u8 *)n + 0x20) = v;
+        m[0xE] = k;
+        m[0xD] = k;
+        m[0xC] = k;
+        func_8003DB94(m, D_800DEDB0, 0);
+        *(s16 *)(m + 0x1E) = 0x1800;
+        *(s16 *)(m + 0x1C) = 0x1800;
+        *(s16 *)(m + 0x12) = 0x7E0B;
+        *(u16 *)(m + 0x10) |= 0x60;
+        *(u16 *)(m + 0x14) |= 0x10C;
+        func_8004491C(n, (u32)D_80045340);
+        m = (u8 *)n->unk_08;
+        *(s16 *)(m + 0x2) = *(u16 *)(q + 0x2);
+        *(s16 *)(m + 0x6) = *(u16 *)(q + 0x6);
+        *(s16 *)(m + 0xA) = *(u16 *)(q + 0xA) + rand() % 0x11 - 8;
+    }
+}
+
+/* The three-spark ring handler: states 0..3 off a compare chain (no jump
+   table), with states 1 and 2 each sweeping three points of a circle --
+   func_800644B8/func_80064584 at p+0x8 plus a 16.16 angle, scaled by p+0x6
+   and offset from the mover's +0xE/+0x12 -- and spawning a marker through
+   func_s15_80024264 wherever func_800A45D8 reports the cell clear. Default
+   parks the state at 3. 192 words, 0 differing. No twin at any ratio and no
+   dngnear donor (ovl_dng_s15 has no landed in-unit neighbour to invert), so
+   this is decompiled from the listing.
+
+   THE LOOP COUNTER MUST BE ONE LOCAL SHARED BY BOTH ARMS WHILE THE 16.16
+   ANGLE ACCUMULATOR MUST BE DECLARED INSIDE EACH ARM. That is the whole
+   residue and it is `allocno_compare' crossing a power of two: the shared
+   counter collects 7 weighted references per arm, 14 in all, so
+   floor_log2(14) is 3 where each per-arm accumulator stays at 7 and scores 2.
+   Measured, all at 192 words:
+     counter shared / accumulator per arm                      0  <- kept
+     both at function scope                                   12
+     accumulator shared / counter per arm                     12
+     both at function scope + `do { i++; } while (0)'          0
+   The last row is the same win bought with a device, so the SCOPE is what
+   makes the device unnecessary; there is no device in this body. Every other
+   lever tried moved nothing: 16 statement orders for the two initialisers,
+   `while' versus `for' versus a comma initialiser, `i = 0; j = i;' and
+   `j = 0; i = j;', `3 > i' for the test, and a `do { } while (0)' on the
+   accumulator instead (32). All of those are either 4 or 12 and the 4s were
+   measured before this body reached 0, so only the table above is priced. */
+void func_s15_80024384(u8 *p, UnkVec *b, u8 *c)
+{
+    s32 i;
+    s32 s;
+
+    *(s16 *)(*(u8 **)(p + 0xC) + 0x14) = *(u16 *)(*(u8 **)(p + 0xC) + 0x14) + 1;
+    *(s16 *)(p + 0x2) = *(u16 *)(p + 0x2) + 1;
+    switch (*(s16 *)(p + 0x0))
+    {
+    case 0:
+        *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) - 4;
+        func_s15_80024264(*(u8 **)(p + 0xC), (u8 *)b, p[0x10]);
+        if (*(s16 *)(p + 0x2) >= 8)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)(p + 0x0) = *(u16 *)(p + 0x0) + 1;
+        }
+        break;
+    case 1:
+    {
+        s32 j;
+
+        i = 0;
+        j = 0;
+        *(s16 *)(p + 0x6) = *(u16 *)(p + 0x6) + 6;
+        *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 0x10;
+        *(s16 *)(p + 0x8) = *(u16 *)(p + 0x8) + *(u16 *)(p + 0xA);
+        for (; i < 3; i++)
+        {
+            s = j >> 16;
+            *(s16 *)((u8 *)b + 0x2) =
+                *(u16 *)((u8 *)b + 0xE) +
+                (((func_800644B8(*(s16 *)(p + 0x8) + s) >> 4) * *(s16 *)(p + 0x6)) >> 8);
+            *(s16 *)((u8 *)b + 0x6) =
+                *(u16 *)((u8 *)b + 0x12) +
+                (((func_80064584(*(s16 *)(p + 0x8) + s) >> 4) * *(s16 *)(p + 0x6)) >> 8);
+            if (func_800A45D8(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6),
+                              *(s16 *)((u8 *)b + 0xA)) == 0)
+            {
+                func_s15_80024264(*(u8 **)(p + 0xC), (u8 *)b, p[0x10]);
+            }
+            j += 0x5550000;
+        }
+        if (*(s16 *)(p + 0x2) >= 0x20)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)(p + 0x0) = *(u16 *)(p + 0x0) + 1;
+        }
+        break;
+    }
+    case 2:
+    {
+        s32 j;
+
+        i = 0;
+        j = 0;
+        *(s16 *)(p + 0x6) = *(u16 *)(p + 0x6) + 6;
+        *(s16 *)(p + 0x8) = *(u16 *)(p + 0x8) + *(u16 *)(p + 0xA);
+        for (; i < 3; i++)
+        {
+            s = j >> 16;
+            *(s16 *)((u8 *)b + 0x2) =
+                *(u16 *)((u8 *)b + 0xE) +
+                (((func_800644B8(*(s16 *)(p + 0x8) + s) >> 4) * *(s16 *)(p + 0x6)) >> 8);
+            *(s16 *)((u8 *)b + 0x6) =
+                *(u16 *)((u8 *)b + 0x12) +
+                (((func_80064584(*(s16 *)(p + 0x8) + s) >> 4) * *(s16 *)(p + 0x6)) >> 8);
+            if (func_800A45D8(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6),
+                              *(s16 *)((u8 *)b + 0xA)) == 0)
+            {
+                func_s15_80024264(*(u8 **)(p + 0xC), (u8 *)b, p[0x10]);
+            }
+            j += 0x5550000;
+        }
+        p[0x10] = p[0x10] - 8;
+        if (*(s16 *)(p + 0x2) >= 8)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)(p + 0x0) = *(u16 *)(p + 0x0) + 1;
+        }
+        break;
+    }
+    case 3:
+        (*(u8 **)(p + 0xC))[0x16] = 1;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        break;
+    default:
+        *(s16 *)(p + 0x0) = 3;
+        break;
+    }
+}
+
+/* The 0x212 spawner for func_s15_80024384's spark ring: allocates the node,
+   zeroes the handler state block at n+0x20, parks the owner at +0x2C with the
+   phase byte from p[0x9] and 0x40 at +0x30, then copies the mover's three
+   position halfwords into BOTH the velocity (+0xE/+0x12/+0x16) and position
+   (+0x2/+0x6/+0xA) slots. 43 words, 0 differing.
+
+   EACH VELOCITY/POSITION PAIR IS A READ-BACK OF THE HALFWORD JUST STORED,
+   NOT A LOCAL. `*(s16 *)(m + 0x2) = *(u16 *)(m + 0xE);' after storing q's
+   value into m+0xE is the target's single `lhu' per pair; carrying the value
+   in an `s16' local is 45 words / 13 aligned differences and three separate
+   locals collapse to 40 words / 18.
+
+   THE p[0x9] LOAD MUST BE A LOCAL ASSIGNED BETWEEN THE +0x22 AND +0x26 ZERO
+   STORES. Its position is the lever, not the local: sweeping the eight slots
+   of the zeroing block gives 4 / 2 / 0 / 2 / 3 / 4 / 5 and 44 words / 17 with
+   the load left inline at its own store, because written there it is a
+   successor of every one of those may-alias stores and pays an unfilled load
+   delay. Priced after this body reached 0; an earlier sweep read one higher
+   at every slot and is superseded.
+
+   Measured and FREE at 43 words / 0 differing: writing the first zero store
+   as `*(s16 *)((u8 *)n + 0x20) = 0' rather than through the `t' pointer --
+   cse rewrites `0($v0)' back to `0x20($a1)' either way, so the two spellings
+   emit the identical word. */
+void func_s15_80024684(u8 *p, u8 *q)
+{
+    UnkNode *n;
+    u8 *t;
+    u8 *m;
+    s16 h;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s15_80024384;
+        t = (u8 *)n + 0x20;
+        *(s16 *)t = 0;
+        *(s16 *)(t + 0x2) = 0;
+        h = p[0x9];
+        *(s16 *)(t + 0x6) = 0;
+        *(s16 *)(t + 0x8) = 0;
+        *(s16 *)(t + 0xA) = 0;
+        *(u8 **)(t + 0xC) = p;
+        t[0x10] = 0x40;
+        *(s16 *)(t + 0x4) = h;
+        m = (u8 *)n->unk_08;
+        *(s16 *)(m + 0xE) = *(u16 *)(q + 0x2);
+        *(s16 *)(m + 0x2) = *(u16 *)(m + 0xE);
+        *(s16 *)(m + 0x12) = *(u16 *)(q + 0x6);
+        *(s16 *)(m + 0x6) = *(u16 *)(m + 0x12);
+        *(s16 *)(m + 0x16) = *(u16 *)(q + 0xA);
+        *(s16 *)(m + 0xA) = *(u16 *)(m + 0x16);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s15", func_s15_80024730);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s15", func_s15_800247DC);
+/* The 0x212 spawner for func_s15_80024730's rising marker: same shape as
+   func_s15_80024264 above but dressed from the unit-local D_s15_80025368 at
+   scale 0x4000 with colour 0x80, and the mover seeded straight from `q' with
+   no jitter. 59 words, 0 differing, first compile, read off
+   csrc/ovl_dng_s27.c's func_s27_800241F8 (0.906).
+
+   THE SEPARATE `m2' LOCAL FOR `n->unk_08' IS LOAD-BEARING HERE: reusing `m'
+   is 60 words / 9 aligned differences. That is the opposite of
+   func_s15_80024264, where the same choice measures 0 either way.
+
+   AND THE TWO `|=' GO IN OFFSET ORDER: `+0x10 |= 0x60' before
+   `+0x14 |= 0x10C' is the target's interleaved `lhu'/`lhu'/`ori'/`ori';
+   swapped it is 59 words / 9 aligned differences. */
+void func_s15_800247DC(u8 *v, u8 *q)
+{
+    UnkNode *n;
+    u8 *m;
+    u8 *m2;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s15_80024730;
+        m = (u8 *)n->unk_0C;
+        *(u8 **)((u8 *)n + 0x20) = v;
+        m[0xE] = 0x80;
+        m[0xD] = 0x80;
+        m[0xC] = 0x80;
+        func_8003DB94(m, D_s15_80025368, 0);
+        *(s16 *)(m + 0x1E) = 0x4000;
+        *(s16 *)(m + 0x1C) = 0x4000;
+        *(s16 *)(m + 0x12) = 0x7E0B;
+        *(u16 *)(m + 0x10) |= 0x60;
+        *(u16 *)(m + 0x14) |= 0x10C;
+        func_8004491C(n, (u32)D_80045340);
+        m2 = (u8 *)n->unk_08;
+        *(s16 *)(m2 + 0x2) = *(u16 *)(q + 0x2);
+        *(s16 *)(m2 + 0x6) = *(u16 *)(q + 0x6);
+        *(s16 *)(m2 + 0xA) = *(u16 *)(q + 0xA);
+    }
+}
 
 /* The beam line: one semi-transparent LINE_G2 from the payload's +0x22/+0x26
    /+0x2A origin to its +0x3A/+0x3E/+0x42 endpoint, interpolated by the +0x10

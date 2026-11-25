@@ -53,7 +53,66 @@ UnkNode *func_8003FD64(s32, void *);
 extern s16 D_80025914;
 void func_800478B8(u8 *);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_8002404C);
+typedef struct UnkDngS58Blk32
+{
+    u8 b[0x20];
+} UnkDngS58Blk32;
+typedef struct UnkDngS58Rec
+{
+    s16 a;
+    u16 b;
+} UnkDngS58Rec;
+typedef struct UnkDngS58Blk64
+{
+    u8 b[0x40];
+} UnkDngS58Blk64;
+typedef struct UnkDngS58Name12
+{
+    u8 b[0xC];
+} UnkDngS58Name12;
+
+/* The same spawn stepped one frame, re-sending the renderable instead of
+   spinning it: spend one of the payload's +0x2A frames, raise the D_80025914
+   tick, push the slot back through func_800478B8, and close the node when
+   the counter runs out.  29 words, 0 differing.  The countdown-plus-call
+   idiom is func_b01_801708E8's (csrc/ovl_dng_b01.c) and the teardown is this
+   file's own landed func_s51_800249A0.
+
+   THE COUNTER READ-MODIFY-WRITE MUST BE SPLIT AROUND THE TICK STORE, which
+   is func_s51_800249A0's own fact at its own sign.  Folded into
+   `*(s16 *)(p + 0x2a) -= 1' it is 29 words / 7 aligned differences: the
+   target emits read, foreign store, write-back in that order, and that order
+   cannot come from one compound assignment.  The tick store must sit BETWEEN
+   the read and the write-back -- moved after the write-back it is also
+   29 / 7, the same residue.
+
+   func_800478B8(c) GOES BEFORE THE GATE.  Moved after it the body is 26 words
+   / 19 aligned differences, which is b01's own stated fact in the same
+   direction.
+
+   MEASURED AND FREE, so NOT the reason this lands: the gate's load as the
+   array ref `((s16 *)p)[0x15]' (29 / 0).  That spelling is worth 11 rows on
+   func_s51_800248B8 40 words above, where the tick store has to sink past
+   the gate; here the call already separates them, so the MEM_IN_STRUCT_P
+   escape has nothing to buy. 
+   THIS COPY'S OWN CONSTANT: 0x2a -> 0x2 at all 3 sites.
+   The rest of this comment is the family representative's and its other
+   numbers are its own.
+*/
+void func_s02_8002404C(u8 *p, u8 *b, u8 *c)
+{
+    s16 t;
+
+    t = *(s16 *)(p + 0x2) - 1;
+    D_80025914 = 1;
+    *(s16 *)(p + 0x2) = t;
+    func_800478B8(c);
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s02", func_s02_800240C0);
 
