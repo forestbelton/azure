@@ -121,6 +121,13 @@ s32 func_800A56E0(s32);
 UnkNode *func_s20_80024DE8(u8 *v, u8 *q);
 UnkNode *func_s20_80024C80(u8 *p, UnkVec *v, s16 z, u8 *t);
 void func_s20_800262B8_3(u8 *, u8, u8 *) __asm__("func_s20_800262B8");
+/* ARITY NOT WITNESSED.  func_s20_80024804 is referenced only as
+   `(u32)func_s20_80024804' -- parked as a node's +0x10 step -- so no call site
+   constrains its signature and no codegen here can depend on it.  Its prologue
+   reads $a0 and $a1 only ($a2/$a3 are written-only throughout).  This is the
+   unit's +0x10-step shape, guessed from what every landed step handler here
+   takes and what the dispatcher calls the slot with.  WHOEVER LANDS IT MUST
+   RE-DERIVE THIS LINE rather than trust it. */
 void func_s20_80024804(u8 *p, UnkVec *v, u8 *c);
 s32 func_s20_80024EF4(void);
 
