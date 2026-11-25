@@ -63,7 +63,13 @@ UBIQUITY = 0.5   # a donor offered for more than this share of a unit's stubs
                  # carries no information about any one of them
 SWEEP = os.path.join(PROJ, "docs", "dng-twinsweep.json")
 FUNC = re.compile(r"\bfunc_[A-Za-z][A-Za-z0-9]*_[0-9A-Fa-f]{8}\b")
-DEFN = re.compile(r"^[A-Za-z_][A-Za-z0-9_ \t*]*?\b(func_[A-Za-z][A-Za-z0-9]*_"
+# THE TAG SEGMENT IS OPTIONAL. This REQUIRED one -- `func_<tag>_<8 hex>' --
+# so it matched no RESIDENT function (`func_800B8830' has no tag) and parsed
+# ZERO definitions out of all 60 non-dng units. That is the exact mirror of the
+# bug fixed in permimport.py the same hour, where a pattern FORBADE the tag and
+# so matched no carved name. Both silently exclude half the corpus and neither
+# errors: write `(?:[A-Za-z][A-Za-z0-9]*_)?' and cover both.
+DEFN = re.compile(r"^[A-Za-z_][A-Za-z0-9_ \t*]*?\b(func_(?:[A-Za-z][A-Za-z0-9]*_)?"
                   r"[0-9A-Fa-f]{8})\s*\([^;]*$")
 STUB = re.compile(r'INCLUDE_ASM\("[^"]*",\s*(func_\w+)\)')
 JAL = re.compile(r"\bjal\s+(func_[A-Za-z][A-Za-z0-9]*_[0-9A-Fa-f]{8})")

@@ -151,8 +151,17 @@ ALIGNED_ANY = re.compile(r"(\d+)\s+aligned\s+difference", re.I)
 # the OPPOSITE -- and another that merely warns about "layout inflation" it
 # avoided. A false LAYOUT flag is worse than none: it tells me to skip a park
 # that a new twin genuinely unblocks.
-LAYOUT = re.compile(r"subsegment|layout decision|rodata'? (?:has to|must|needs"
-                    r"|would have to)|grow (?:the )?[`']?\.?rodata", re.I)
+# A LAYOUT MENTION MUST ASSERT A REQUIREMENT, not merely name a subsegment.
+# Matching bare "subsegment" flagged func_s01_80024CFC, whose two mentions are
+# NEGATIVE -- "ovl_dng_s01 has no .rodata subsegment at all" and "from the
+# segment's `data' subsegment" -- so I told its agent to check for a layout
+# blocker that was never there. It landed the body as plain C in one pass.
+# The genuine layout park says "the `.rodata' subsegment HAS TO end at ..."
+# and "the unit's `.rodata' MUST grow by 4 bytes": a constraint, not a fact.
+LAYOUT = re.compile(
+    r"(?:\.?rodata|subsegment)[^.\n]{0,40}(?:has to|must|needs|would have to)"
+    r"|(?:has to|must|needs|would have to)[^.\n]{0,40}(?:\.?rodata|subsegment)"
+    r"|layout decision", re.I)
 
 
 def park_report():

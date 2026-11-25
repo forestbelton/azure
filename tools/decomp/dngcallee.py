@@ -40,7 +40,13 @@ PROJ = "/home/case/projects/azure"
 SYM = re.compile(r"\b(?:func|D)_[A-Za-z0-9]*_?[0-9A-Fa-f]{6,8}\b")
 JAL = re.compile(r"\bjal\s+(func_\w+)")
 DATA = re.compile(r"%(?:hi|lo)\((D_\w+)\)")
-DEFN = re.compile(r"^[A-Za-z_][A-Za-z0-9_ \t*]*?\b(func_[A-Za-z][A-Za-z0-9]*_"
+# THE TAG SEGMENT IS OPTIONAL. This REQUIRED one -- `func_<tag>_<8 hex>' --
+# so it matched no RESIDENT function (`func_800B8830' has no tag) and parsed
+# ZERO definitions out of all 60 non-dng units. That is the exact mirror of the
+# bug fixed in permimport.py the same hour, where a pattern FORBADE the tag and
+# so matched no carved name. Both silently exclude half the corpus and neither
+# errors: write `(?:[A-Za-z][A-Za-z0-9]*_)?' and cover both.
+DEFN = re.compile(r"^[A-Za-z_][A-Za-z0-9_ \t*]*?\b(func_(?:[A-Za-z][A-Za-z0-9]*_)?"
                   r"[0-9A-Fa-f]{8})\s*\([^;]*$")
 STUB = re.compile(r'INCLUDE_ASM\("[^"]*",\s*(func_\w+)\)')
 
@@ -62,7 +68,21 @@ def bodies():
     """-> [(unit, func, symbolset)] for every LANDED body in every dng unit."""
     out = []
     import glob
-    for path in sorted(glob.glob(os.path.join(PROJ, "csrc", "ovl_dng_*.c"))):
+    # SEARCH THE RESIDENT UNITS TOO, not just the carved dng ones.
+    #
+    # This globbed `ovl_dng_*.c' only. An agent in batch 31 landed a 271-word
+    # body off the RESIDENT `func_800B8830' in csrc/ovl_dungeon_800B6AC4.c,
+    # found by running the intersection BY HAND over the whole of csrc/ --
+    # and reported that neither this tool's rows nor dngnear's were what did
+    # it. Of course not: the donor was in one of the 60 non-dng units this
+    # never opened.
+    #
+    # That is the obvious half of the recipe and I shipped the narrow half. The
+    # carved block calls the resident library constantly, so a resident body
+    # that uses the same four or five library symbols is exactly as good a
+    # donor as a banked sibling -- better, often, because the resident copy is
+    # the ORIGINAL the banks were relinked from.
+    for path in sorted(glob.glob(os.path.join(PROJ, "csrc", "*.c"))):
         unit = os.path.basename(path)[:-2]
         txt = open(path, errors="replace").read()
         stubs = set(STUB.findall(txt))
