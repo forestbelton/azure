@@ -92,6 +92,72 @@ DEFN = re.compile(r"^[A-Za-z_][A-Za-z0-9_ \t*]*?\b(func_(?:[A-Za-z][A-Za-z0-9]*_
 STUB = re.compile(r'INCLUDE_ASM\("[^"]*",\s*(func_\w+)\)')
 
 
+
+# ------------------------------------------------- library name canonicalisation
+#
+# THE INTERSECTION IS TEXTUAL, so a body that calls `RotTransPers' and one that
+# calls `func_80065420' share NOTHING here -- although they call the same
+# function. The resident dungeon units use the real libgte/libgpu names (they
+# are in splat/common_syms.txt and need no declaration) while a carved stub's
+# listing spells every call by address. An agent found a 133-word donor for a
+# 139-word body by resolving three jal targets through common_syms.txt and
+# grepping the real names; neither the ratio nor this tool could see it,
+# because every one of those three symbols read as a different string on the
+# two sides.
+#
+# So both sides are canonicalised to the REAL name where common_syms.txt has
+# one. That file is `name = 0xADDR;' lines with /* comments */.
+_SYMS = None
+_SYMLINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0x([0-9A-Fa-f]{8})\s*;")
+
+
+def _symmap():
+    """{'func_80065420': 'RotTransPers'} for every named common symbol."""
+    global _SYMS
+    if _SYMS is None:
+        _SYMS = {}
+        p = os.path.join(dngclone.PROJ, "splat", "common_syms.txt")
+        try:
+            for ln in open(p, errors="replace"):
+                m = _SYMLINE.match(ln)
+                if not m:
+                    continue
+                name, addr = m.group(1), m.group(2).upper()
+                # only the ones a listing would spell by address
+                if not name.startswith(("func_", "D_")):
+                    _SYMS["func_" + addr] = name
+                    _SYMS["D_" + addr] = name
+        except OSError:
+            pass
+    return _SYMS
+
+
+
+def _libnames(txt):
+    """Real common-symbol names appearing as whole words in TXT.
+
+    `SYM' matches only `func_...'/`D_...' shapes, so the resident units' calls
+    to RotTransPers, SetPolyFT4, SetSemiTrans and friends were invisible on the
+    donor side and canonicalising it alone changed nothing. These are the names
+    common_syms.txt defines, matched as identifiers.
+    """
+    global _LIBRE
+    try:
+        rx = _LIBRE
+    except NameError:
+        rx = None
+    if rx is None:
+        names = sorted(set(_symmap().values()), key=len, reverse=True)
+        rx = _LIBRE = (re.compile(r"\b(" + "|".join(map(re.escape, names)) + r")\b")
+                       if names else re.compile(r"(?!x)x"))
+    return set(rx.findall(txt))
+
+
+def canon(syms):
+    """Map each symbol to its real library name where one is known."""
+    m = _symmap()
+    return {m.get(x, x) for x in syms}
+
 def wanted(func):
     """The symbol set to search for: this stub's jal targets and data refs."""
     m = re.match(r"^func_([A-Za-z][A-Za-z0-9]*)_", func)
@@ -102,7 +168,7 @@ def wanted(func):
     if not os.path.exists(p):
         return None
     t = open(p, errors="replace").read()
-    return set(JAL.findall(t)) | set(DATA.findall(t))
+    return canon(set(JAL.findall(t)) | set(DATA.findall(t)))
 
 
 def bodies():
@@ -151,7 +217,7 @@ def bodies():
                 cur, acc = m.group(1), set()
                 continue
             if cur:
-                acc |= set(SYM.findall(ln))
+                acc |= canon(set(SYM.findall(ln))) | _libnames(ln)
         if cur:
             out.append((unit, cur, acc))
     return out
