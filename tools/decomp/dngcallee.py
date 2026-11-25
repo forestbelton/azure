@@ -27,6 +27,37 @@ because every bank calls the same library to do the same job.
 **So length-banded mnemonic similarity is the wrong metric for this family, and
 no floor fixes it.** This is.
 
+## A LOW OVERLAP IS NOT NOISE -- IT IS AN UNRANKED SET NEEDING A SECOND KEY
+
+I have been telling agents in their briefs that this tool is "sharp at 8-10
+symbols and noise at 2-3, where it returns 100+ functions mostly from town
+units". The first half is right. **The second half is wrong, and two agents
+disproved it in the same batch, both by landing a body off a low-overlap row.**
+
+    11 rows at 2 of 3    every one the same slot in eleven DIFFERENT BANKS.
+                         The agent read three, took only the switch skeleton,
+                         and landed 71 words on the first compile.
+    13 rows at 3 of 5    one of the thirteen has the target's frame EXACTLY
+                         (-0x38 with s0..s7+ra). It is the same spawner
+                         skeleton and it landed a 170-word twinless body that
+                         had no ratio twin at any floor.
+
+What the low-symbol case actually produces is a **large unranked set**, and
+whether it is useful depends entirely on whether you have a second key to
+sort it by:
+
+* **the frame and save list** -- printed in this tool's output for exactly
+  this reason. One frame match among thirteen rows is a separation, not a
+  ranking;
+* **whether the rows are all the same slot across banks.** Eleven rows naming
+  one library slot in eleven banks is a FAMILY, however few symbols matched.
+  Unrelated town functions at 2 of 3 are the noise case -- the discriminator
+  is whether the rows share a role, not how many symbols matched.
+
+So the honest statement is: **a high overlap gives you a donor; a low overlap
+gives you a candidate set, and the frame column is what makes it usable.**
+Do not tell an agent to discard the low tiers.
+
 ## THE ONE THING THAT MAKES IT WORK
 
 Intersecting FILES is useless: on that body the eight symbols appeared in
