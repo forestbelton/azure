@@ -68,6 +68,24 @@
    | no `q' / `t' table locals in state 4               |  334  |  53  |
    | one `e' dress local shared by states 0,1,2         |  340  |  31  |
    | one `e' local PER state                            |  340  |  24  |
+   | plain shared `kk', both lookups inline             |  340  |  18  |
+   | ... + the mask split off as `kk &= 0xE'            |  340  |  18  |
+   | ... + the second lookup as `kk += (s32)D_8006CCE8' |  340  |  18  |
+   | ... with `dy' first and `dx' written in place      |  340  |  18  |
+
+   ADDED AFTER func_b32_80172C90 LANDED IN THE SAME UNIT, and it is a
+   NEGATIVE result worth having: that body's head has the IDENTICAL Group A
+   fingerprint -- two facing-table bases, the target materialising one early
+   and one after the first index `addu' -- and there the cure was a shared
+   index local plus TWO in-place updates (`kk &= 0xE' as its own statement,
+   then `kk += (s32)D_8006CCE8' so combine_regs ties the second `addu' to the
+   dying index).  That took 80172C90 from 19 rows to 0.  Here all four
+   variants of it measure 18, worse than the 15 this park keeps.  The two
+   bodies differ in one structural detail that may be the whole story:
+   80172C90 has a statement (`*(u16 *)(p + 0x96) -= 1') BETWEEN the facing
+   reads and the switch dispatch, and this body has nothing there, so sched1's
+   ready list at clock 0 is not the same shape.  Do not spend budget
+   re-deriving the in-place lever here; it has been tried.
 
    READ THE LAST THREE ROWS FIRST, they are the transferable part.
      * `s16 dx' makes both facing loads `lhu' instead of `lh' and adds a
