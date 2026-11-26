@@ -74,6 +74,15 @@ the old outside-the-repo refusal is gone. Your copy's path is given below.
     --written COPY CSRC   which stubs your copy has landed
     FILE NAME             one function's exact span
 
+**SETTLE A SWITCH'S ARM ORDER BY COMPILING, NOT BY SWEEPING.** Run
+`tools/cdkgcc -S <your unit>` -- a standalone compile, no build and no splat --
+and read the emitted `.rdata` table's labels in ADDRESS order, then compare that
+sequence to the listing's. That is a direct measurement of the arm order your
+source produces, available BEFORE you finish the body, and it is the only way to
+check an order whose arms cross-join to one block, where the gate is blind by
+construction. Two agents found this independently; the figures are in
+docs/matching-levers.md. Do not infer arm order from a word count.
+
 **A HEADER'S WORD COUNTS ARE MOSTLY REJECTED SPELLINGS -- do not compare them
 to the tool and report a contradiction.** A landed body's comment prices every
 alternative it measured, so most "N words" figures in it belong to spellings
