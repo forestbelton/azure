@@ -98,6 +98,17 @@
      parameter (only the low half of `x - 3' matters) but the caller's sign
      extension is not explicable with `u16', so s16 wins and that park's
      prototype should be changed.**
+     RESOLVED 2026-11-25 -- NOTHING TO DO: docs/dng-parks/func_s56_80025AD8.c
+     already declares `void func_s56_80025AD8(s16 x, s16 y)' and contains no
+     `u16' spelling at all, so this note is stale and would send the next
+     reader chasing a fix already made.  The reasoning above is confirmed
+     from both listings: the caller does `sra $a0, $a0, 16' and
+     `sll $a1, $a1, 16' -- sign extensions on BOTH argument registers, where
+     a `u16' parameter would give `andi 0xFFFF' -- and the callee's
+     `sh $a0, 0x10($sp)' halfword spill is explicable under either sign and
+     therefore carries no information.  The asymmetry is the whole argument:
+     prefer the side whose instruction CANNOT be explained by the other
+     reading.
    * CASE 4's D_80027330 TEST READS IT SIGNED, AS `*(s16 *)&D_80027330'.
      The unit declares `extern u16 D_80027330;' (three landed bodies do
      `D_80027330 += 1' off it and must keep it), and `D_80027330 == 0' or
