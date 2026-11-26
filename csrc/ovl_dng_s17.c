@@ -85,6 +85,9 @@ s32 func_800A5720(void *);
    D_s17_80024004 and D_s17_80024034 ARE EXTERNS, NOT DEFINITIONS: they sit in
    this object's `data' subsegment, 0x1894800..0x1894838, below the `.rodata'
    one that owns D_s17_80024058. */
+s32 rand(void);
+extern u8 D_80026658[];
+
 void func_s17_80024098(u8 *p, u8 d)
 {
     void *m;
@@ -321,7 +324,247 @@ s32 func_s17_80024704(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s17", func_s17_80024758);
+/* The sphere-patch draw: for every 0xC-byte element record in the chain at
+   s->unk_08, emit one semi-transparent textured quad per cell of a
+   p+0xC by p+0xA lat/long grid. Each cell's four corners are a spherical
+   patch at radius p+0x68: the longitudes are `i << 12' and `(i + 1) << 12'
+   over p+0xA plus the base angle at p+0x10, both wrapped into 0..0x1000, and
+   the latitudes are `-p[0xE] * j' and `-p[0xE] * (j + 1)' over p+0xC plus
+   0x400. The corners go through the same 0x1F800000 scratchpad as
+   func_s17_80024188, into the POLY_FT4 at the +0x8D0 cursor, and the whole
+   per-quad tail -- the four on-screen tests, the 0x100 carry corrections, the
+   clut/tpage overrides, the +0x14/+0x24 and +0x1D/+0x25 decrements, the
+   e[1] semi-transparency flag and the inline addPrim -- is
+   func_s17_80024188's verbatim. The record loop ends on a negative e[0].
+
+   THE TWIN IS func_s17_80024188, FIVE LISTINGS UP IN THIS UNIT (351 words,
+   landed): same UnkDng74334SP scratchpad, same
+   PushMatrix/RotMatrix/ReadRotMatrix/CompMatrix/ScaleMatrix/SetTransMatrix/
+   SetRotMatrix chain, same `- d - 6', same four on-screen tests, same
+   s->unk_0C[3] flag byte, same `*(s32 *)(q + 0x4) = *(s32 *)s->unk_0C'. Its
+   element record is read at the same offsets (0, 1, 4, 6, 8, 9, 10, 11) --
+   this body just iterates over an ARRAY of them. Everything from
+   `if ((u32)sp->unk_100 < 0x1E0)' down was taken from it unchanged and is NOT
+   re-measured here.
+
+   FOUR FACTS MEASURED ON THIS BODY, all from the landed 543/0 state:
+
+   (1) THE RECORD IS ONE POINTER, NOT TWO -- loop.c MAKES THE SECOND ONE.
+   The target carries `e' spilled at 0x50($sp), read only for the `lb 0($t0)'
+   terminator and its `+0xC', and a SECOND cursor in $fp at `e + 1' serving
+   displacements 0, 3, 5, 7, 8, 9, 0xA. That second cursor is loop.c's
+   strength reduction of the DEST_ADDR givs, not source: written as one `e'
+   with displacements 1, 4, 6, 8..0xB it appears by itself, at e+1, with the
+   right displacements. Writing `f = e + 1' in the source as well is
+   **550 words / 49 aligned differences** -- gcc then reduces `f + 3' instead
+   and the register-resident cursor comes out at e+4 with displacements
+   0, 2, 4..7, while `f' is spilled for its single `f[0]' use.
+
+   (2) THE `+ p[0x10]' IS ITS OWN STATEMENT, AFTER ALL FOUR DIVIDES. The two
+   longitudes must be `a = (i << 12) / A;' ... `b = ((i + 1) << 12) / A;'
+   with `a += C;' and `b += C;' following, because the target emits `b += C'
+   in the block AFTER `a''s two wrap tests, which expand cannot do if the add
+   is part of `b''s initialiser. Fused into the two initialisers it is
+   **544 words / 135 aligned differences**, and the four `div's come out in
+   the order a, b, la, lb against the target's a, la, lb, b. This reads as a
+   wrap-macro over (value, base): the add and the two wraps are one unit
+   applied to `a' and then to `b'.
+
+   (3) `s->unk_14 &= 0x7FFF' COMES BEFORE `SetPolyFT4(q)', WHICH IS THE
+   TWIN'S ORDER INVERTED. The twin's `setPolyFT4' is the psyq MACRO -- two
+   `sb's, no call -- so its order there is unobservable; here the primitive is
+   the REAL function at 0x800666F4 and the `sh $v0, 0x14($t0)' is what fills
+   its `jal' delay slot. The twin's order is **544 words / 9 aligned
+   differences**: one `nop' in the delay slot plus the eight branches whose
+   offsets the extra word moves. reorg cannot steal the store from after a
+   call, because the call clobbers the `$t0' the store addresses through.
+
+   (4) THE RADIUS IS RE-READ AT EVERY USE. `*(s32 *)(p + 0x68) >> 8' appears
+   six times and the target has six `lw 0x68' / `sra 8' pairs. Hoisted into
+   one local it is **540 words / 222 aligned differences** -- THREE WORDS
+   SHORT, which is the cheap test for this class: a hoist that shortens the
+   body means the target reloads and the repetition is real.
+
+   Two spellings carried from the twin without re-measuring, so do not read
+   them as levers here: `D_80083160.unk_00 + 0xB0' direct at the top against
+   `g->unk_00' through the pointer local inside the loop (the same mixed
+   idiom func_s17_80025028 uses), and the chained
+   `sp->unk_34.vx = sp->unk_34.vy = sp->unk_34.vz = 0x2000'. The fourteen
+   sin/cos calls are in source order, one per store, with no common
+   subexpression held in a local. 543 words, 0 differing, fifth compile. */
+void func_s17_80024758(u8 *p, UnkVec *v, UnkSlot *s, s16 d)
+{
+    UnkDng74334SP *sp = (UnkDng74334SP *)0x1F800000;
+    Unk80083160 *g;
+    MATRIX m;
+    u8 *q;
+    u8 *e;
+    u8 k;
+    s32 i;
+    s32 j;
+    s32 a;
+    s32 b;
+    s32 la;
+    s32 lb;
+    s32 u;
+    s32 w;
+
+    g = &D_80083160;
+    sp->unk_24 = D_80083160.unk_00 + 0xB0;
+    sp->unk_74.t[0] = *(s16 *)((u8 *)v + 0x2);
+    sp->unk_74.t[1] = *(s16 *)((u8 *)v + 0x6);
+    sp->unk_74.t[2] = *(s16 *)((u8 *)v + 0xA);
+    s->unk_14 |= 0x8000;
+    PushMatrix();
+    sp->unk_34.vx = sp->unk_34.vy = sp->unk_34.vz = 0x2000;
+    sp->unk_A4.vx = s->unk_16;
+    sp->unk_A4.vz = s->unk_1A;
+    sp->unk_A4.vy = s->unk_18;
+    RotMatrix(&sp->unk_A4, &sp->unk_74);
+    ReadRotMatrix(&m);
+    CompMatrix(&m, &sp->unk_74, &sp->unk_54);
+    ScaleMatrix(&sp->unk_54, &sp->unk_34);
+    SetTransMatrix(&sp->unk_54);
+    SetRotMatrix(&sp->unk_54);
+    e = (u8 *)s->unk_08;
+    sp->unk_28 = s->unk_14;
+    for (;;)
+    {
+        for (j = 0; j < *(s16 *)(p + 0xC); j++)
+        {
+            for (i = 0; i < *(s16 *)(p + 0xA); i++)
+            {
+                sp->unk_0C.w = e[8];
+                sp->unk_10.w = e[9];
+                sp->unk_14.w = e[10];
+                sp->unk_18.w = e[11];
+                q = *(u8 **)(g->unk_00 + 0x8D0);
+                *(u32 *)(g->unk_00 + 0x8D0) = (u32)q + 0x28;
+                a = (i << 12) / *(s16 *)(p + 0xA);
+                la = -*(s16 *)(p + 0xE) * j / *(s16 *)(p + 0xC) + 0x400;
+                lb = -*(s16 *)(p + 0xE) * (j + 1) / *(s16 *)(p + 0xC) + 0x400;
+                b = ((i + 1) << 12) / *(s16 *)(p + 0xA);
+                a += *(s16 *)(p + 0x10);
+                if (a > 0x1000)
+                {
+                    a -= 0x1000;
+                }
+                if (a < 0)
+                {
+                    a += 0x1000;
+                }
+                b += *(s16 *)(p + 0x10);
+                if (b > 0x1000)
+                {
+                    b -= 0x1000;
+                }
+                if (b < 0)
+                {
+                    b += 0x1000;
+                }
+                u = (*(s32 *)(p + 0x68) >> 8) * func_80064584(la) >> 20;
+                w = (*(s32 *)(p + 0x68) >> 8) * func_80064584(lb) >> 20;
+                sp->unk_B0[0].vx = u * func_800644B8(a) >> 12;
+                sp->unk_B0[0].vy = u * func_80064584(a) >> 12;
+                sp->unk_B0[0].vz = -((*(s32 *)(p + 0x68) >> 8) * func_800644B8(la) >> 20);
+                sp->unk_B0[1].vx = u * func_800644B8(b) >> 12;
+                sp->unk_B0[1].vy = u * func_80064584(b) >> 12;
+                sp->unk_B0[1].vz = -((*(s32 *)(p + 0x68) >> 8) * func_800644B8(la) >> 20);
+                sp->unk_B0[2].vx = w * func_800644B8(a) >> 12;
+                sp->unk_B0[2].vy = w * func_80064584(a) >> 12;
+                sp->unk_B0[2].vz = -((*(s32 *)(p + 0x68) >> 8) * func_800644B8(lb) >> 20);
+                sp->unk_B0[3].vx = w * func_800644B8(b) >> 12;
+                sp->unk_B0[3].vy = w * func_80064584(b) >> 12;
+                sp->unk_B0[3].vz = -((*(s32 *)(p + 0x68) >> 8) * func_800644B8(lb) >> 20);
+                sp->unk_100 = RotAverage4(&sp->unk_B0[0], &sp->unk_B0[1], &sp->unk_B0[2], &sp->unk_B0[3],
+                                          (long *)(q + 0x8), (long *)(q + 0x10), (long *)(q + 0x18),
+                                          (long *)(q + 0x20), (long *)&sp->unk_D0, (long *)&sp->unk_D4) -
+                              d - 6;
+                if ((u32)sp->unk_100 < 0x1E0)
+                {
+                    if (((u16)(*(u16 *)(q + 0x8) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0xA) + 0x20) < 0x121) |
+                        ((u16)(*(u16 *)(q + 0x10) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x12) + 0x20) < 0x121) |
+                        ((u16)(*(u16 *)(q + 0x18) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x1A) + 0x20) < 0x121) |
+                        ((u16)(*(u16 *)(q + 0x20) + 0x20) < 0x181 && (u16)(*(u16 *)(q + 0x22) + 0x20) < 0x121))
+                    {
+                        s->unk_14 &= 0x7FFF;
+                        SetPolyFT4((POLY_FT4 *)q);
+                        sp->unk_14.w += sp->unk_0C.w;
+                        if ((sp->unk_14.w & 0x100) != 0)
+                        {
+                            sp->unk_14.w -= 1;
+                        }
+                        sp->unk_18.w += sp->unk_10.w;
+                        if ((sp->unk_18.w & 0x100) != 0)
+                        {
+                            sp->unk_18.w -= 1;
+                        }
+                        sp->unk_10.w <<= 8;
+                        sp->unk_18.w <<= 8;
+                        if (s->unk_12 != 0)
+                        {
+                            if ((sp->unk_28 & 0x100) != 0)
+                            {
+                                *(u16 *)(q + 0xE) = s->unk_12;
+                            }
+                            else
+                            {
+                                *(u16 *)(q + 0xE) = s->unk_12 + *(u16 *)(e + 0x6);
+                            }
+                        }
+                        else
+                        {
+                            *(u16 *)(q + 0xE) = *(u16 *)(e + 0x6);
+                        }
+                        *(u16 *)(q + 0xC) = sp->unk_10.h + sp->unk_0C.h;
+                        *(u16 *)(q + 0x14) = sp->unk_10.h + sp->unk_14.h;
+                        if (s->unk_10 != 0)
+                        {
+                            *(u16 *)(q + 0x16) = s->unk_10 + (*(u16 *)(e + 0x4) & 0xFF9F);
+                        }
+                        else
+                        {
+                            *(u16 *)(q + 0x16) = *(u16 *)(e + 0x4);
+                        }
+                        *(u16 *)(q + 0x1C) = sp->unk_18.h + sp->unk_0C.h;
+                        *(u16 *)(q + 0x24) = sp->unk_18.h + sp->unk_14.h;
+                        if (*(s16 *)(q + 0x8) > *(s16 *)(q + 0x20))
+                        {
+                            q[0x14] -= 1;
+                            q[0x24] -= 1;
+                        }
+                        if (*(s16 *)(q + 0xA) > *(s16 *)(q + 0x22))
+                        {
+                            q[0x1D] -= 1;
+                            q[0x25] -= 1;
+                        }
+                        k = e[1];
+                        s->unk_0C[3] = k;
+                        if ((sp->unk_28 & 0x8) != 0)
+                        {
+                            if ((sp->unk_28 & 0x4) != 0)
+                            {
+                                s->unk_0C[3] = k | 0x2;
+                            }
+                            else
+                            {
+                                s->unk_0C[3] = k & 0xFD;
+                            }
+                        }
+                        *(s32 *)(q + 0x4) = *(s32 *)s->unk_0C;
+                        addPrim(sp->unk_24 + sp->unk_100 * 4, q);
+                    }
+                }
+            }
+        }
+        if (*(s8 *)e < 0)
+        {
+            break;
+        }
+        e += 0xC;
+    }
+    PopMatrix();
+}
 
 /* Walk the tag chain from `p` and hand every node to func_s17_80024758 with a
    zero fourth argument.  21 words, 0 differing, first compile.
@@ -508,7 +751,166 @@ void func_s17_80025338(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s17", func_s17_80025470);
+/* The 8-state step of the burst actor: state 0 raises the 0x68/0x6A
+   fixed-point height to its 0x800 ceiling in 0x28 steps, 1 arms the fall
+   (+0x74 velocity 0, +0x80 gravity -0x900) and runs an 11-frame wait, 2
+   integrates the fall while the integer height at +0x6A is still at least
+   0x1F and copies it back to +0x1A, 3 waits 0x1F frames, 4 copies the
+   12-byte D_80026658 record onto the payload at +0x2C, publishes its address
+   at c+0x8, raises the slot flag at +0x88 of the record at +0x40 and spawns
+   0x20 jittered 0x211 particles through this unit's own
+   func_s17_80025338, 5 waits 0x10 frames, 6 fades the caller's colour triple
+   at c[0xC..0xE] by 5 a frame until it is under 6, and 7 runs the +0x2
+   countdown down and retires the node. States 0-3 also step the +0x34 angle
+   byte by 2 with a 0xE0 wrap. Out-of-range states fall straight to the
+   epilogue: the range-check `beqz' targets the function exit, so there is NO
+   `default:' arm.
+
+   OWNS jtbl_s17_80024038 -- 8 words, 8 cases + 0 pad, minval 0 (the dispatch
+   is a bare `sltiu $a0, 0x8' with no subtraction), 8 distinct targets. The
+   ROM's eight arm labels are at STRICTLY ASCENDING addresses
+   (800254CC < 80025528 < 8002559C < 800255FC < 8002564C < 80025730 <
+   8002575C < 800257B4), so entry-address order IS ascending case order and
+   the arms are written 0..7. VERIFIED by standalone compile
+   (`tools/cdkgcc -O2 -G0 -S'), because ovlverify cannot see a table at all:
+   the emitted table's eight entries sit at STRICTLY ASCENDING block
+   addresses in the .s, so the substitution against the ROM's eight strictly
+   ascending arm labels is 1:1 and the resolved entry sequence is the ROM's.
+   8 words standalone, 8 in the ROM, no pad either side. (gcc's own labels
+   are [$L103, $L106, $L109, $L112, $L115, $L121, $L123, $L126] at .s lines
+   1936 < 1976 < 2017 < 2052 < 2077 < 2159 < 2169 < 2204 in this file state;
+   the numbers move with the rest of the unit, the ORDER does not.)
+
+   TWO MEASURED FACTS, the second being the whole fight:
+
+   (1) THE STATE READ IS ITS OWN STATEMENT, AHEAD OF `D_80026664 = 1'. This is
+   the third body in this unit to pay for that dependence (func_s17_80025278
+   and func_s17_80025814 are the others): gcc 2.7.2 cannot disambiguate the
+   `mem:HI (lo_sum D_80026664)' store from `mem:HI (s3 + 0)', so the switch's
+   own load can never be scheduled above the store. Spelled
+   `D_80026664 = 1; switch (*(s16 *)p)' it is 234 words / 7 aligned
+   differences -- the `lh' sinks below the `sh' and a `nop' fills its
+   load-delay slot.
+
+   (2) THE STATE LOCAL IS `s32', NOT `s16'. `s16 st' keeps the value in
+   HImode, loads it with `lhu' and sign-extends at the switch:
+   235 words / 7 aligned differences, every row the extra `sll 16'/`sra 16'
+   pair. `s32 st' takes the sign extension in the load itself, which is the
+   target's `lh'.
+
+   The rest came out on the first two compiles and is NOT measured, so do not
+   read it as a lever: the 0xC-byte record copy as `memcpy(p + 0x2C,
+   D_80026658, 0xC)' (three unaligned word pairs off one source base, the
+   same size that csrc/ovl_dng_lo20.c's func_lo20_80028774 prices), the four
+   per-state counters as in-place `(*(s16 *)(p + 0x2) += 1) >= K' flag forms,
+   the `>= 0xE0' / `< 6' byte tests left unsigned by c-typeck's
+   shorten_compare, and the four `rand()' jitters written INLINE in the
+   spawn call rather than as locals. 233 words, 0 differing, second
+   compile. */
+void func_s17_80025470(u8 *p, UnkVec *v, u8 *c)
+{
+    s32 st;
+    s32 i;
+
+    st = *(s16 *)p;
+    D_80026664 = 1;
+    switch (st)
+    {
+    case 0:
+        *(s16 *)(p + 0x68) = 0;
+        *(s16 *)(p + 0x6A) = *(u16 *)(p + 0x1A);
+        if ((*(u8 *)(p + 0x34) += 2) >= 0xE0)
+        {
+            *(u8 *)(p + 0x34) -= 0x20;
+        }
+        if ((*(s16 *)(p + 0xE) += 0x28) >= 0x800)
+        {
+            *(s16 *)(p + 0xE) = 0x800;
+            *(s16 *)p += 1;
+        }
+        break;
+    case 1:
+        if ((*(u8 *)(p + 0x34) += 2) >= 0xE0)
+        {
+            *(u8 *)(p + 0x34) -= 0x20;
+        }
+        if ((*(s16 *)(p + 0x2) += 1) >= 0xB)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)p += 1;
+        }
+        *(s16 *)(p + 0x68) = 0;
+        *(s32 *)(p + 0x74) = 0;
+        *(s32 *)(p + 0x80) = -0x900;
+        *(s16 *)(p + 0x6A) = *(u16 *)(p + 0x1A);
+        break;
+    case 2:
+        if ((*(u8 *)(p + 0x34) += 2) >= 0xE0)
+        {
+            *(u8 *)(p + 0x34) -= 0x20;
+        }
+        if (*(s16 *)(p + 0x6A) >= 0x1F)
+        {
+            *(s32 *)(p + 0x74) += *(s32 *)(p + 0x80);
+            *(s32 *)(p + 0x68) += *(s32 *)(p + 0x74);
+            *(s16 *)(p + 0x1A) = *(u16 *)(p + 0x6A);
+            break;
+        }
+        *(s16 *)(p + 0x2) = 0;
+        *(s16 *)p += 1;
+        break;
+    case 3:
+        if ((*(u8 *)(p + 0x34) += 2) >= 0xE0)
+        {
+            *(u8 *)(p + 0x34) -= 0x20;
+        }
+        if ((*(s16 *)(p + 0x2) += 1) >= 0x1F)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)p += 1;
+        }
+        break;
+    case 4:
+        memcpy(p + 0x2C, D_80026658, 0xC);
+        *(u32 *)(c + 0x8) = (u32)(p + 0x2C);
+        *(s16 *)(p + 0x2) = 0;
+        *(s16 *)p += 1;
+        *(s16 *)(*(u8 **)(p + 0x40) + 0x88) = 1;
+        for (i = 0; i < 0x20; i++)
+        {
+            func_s17_80025338((UnkNode *)(p - 0x20), 0, 0xE04040, (rand() & 0xFF) | 0x80,
+                              (rand() & 0x7F) - 0x40, (rand() & 0x7F) - 0x40, (rand() & 0x3F) - 0x60);
+        }
+        break;
+    case 5:
+        if ((*(s16 *)(p + 0x2) += 1) >= 0x10)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)p += 1;
+        }
+        break;
+    case 6:
+        if (c[0xC] >= 5)
+        {
+            c[0xC] -= 5;
+            c[0xD] -= 5;
+            c[0xE] -= 5;
+        }
+        if (c[0xC] < 6)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)p += 1;
+        }
+        break;
+    case 7:
+        if ((*(s16 *)(p + 0x2) -= 1) <= 0)
+        {
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
 
 /* One frame of the 0x37-state spinner that feeds func_s17_80024188: rebuild
    the payload's four quad corners at +0x50..+0x67 from a 0x10-wide square

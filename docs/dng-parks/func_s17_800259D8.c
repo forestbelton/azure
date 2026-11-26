@@ -3,28 +3,30 @@
    TARGET 791 words. BEST BUILT 791 WORDS, 25 ALIGNED DIFFERENCES
    (tools/decomp/aligndiff.py), and ovlverify agrees at 25 differing -- the
    word count is EXACT and every differing word lies inside ONE 24-word
-   region, the two arms of case 1's distance/step divide at
-   .Ls17_80025D40 and .Ls17_80025D70. The other 767 words are byte-exact.
+   region, the two arms of case 1's distance/step divide at .Ls17_80025D40
+   and .Ls17_80025D70. The other 766 words are byte-exact.
    1 member (tools/decomp/dngfam.py) -- no replication value.
 
    VERDICT: a sched1 ORDERING fault inside two sibling basic blocks. Not
    ALLOC: permuting the declaration order five ways gives 791/25 every time,
-   which by the levers file rules allocation priority out. Not SHAPE: the
-   word count is exact and no opcode, immediate or displacement differs
-   outside those two blocks.
+   which by this project's rule takes allocation priority out. Not SHAPE:
+   the word count is exact and nothing differs outside those two blocks.
 
    OWNS jtbl_s17_80024078 -- 8 words, 8 cases + 0 pad, minval 0 (the dispatch
-   is a bare sltiu $v1, 0x8 off `lh 0xA($s4)' with no subtraction), 8
-   distinct targets, and the range-check beqz targets the function exit so
+   is a bare sltiu $v0, $v1, 0x8 off `lh $v1, 0xA($s4)' with no subtraction),
+   8 distinct targets, and the range-check beqz targets the function exit so
    there is NO default: arm. The ROM arm labels are at strictly ascending
    addresses (80025AD0 < 80025B50 < 80026018 < 800261D8 < 8002634C <
    80026498 < 800264B4 < 8002659C), so entry-address order IS ascending case
    order and the arms are written 0..7, with case 0 FALLING THROUGH into
-   case 1. VERIFIED by standalone compile: the emitted table is
-   [$L138, $L139, $L156, $L164, $L168, $L178, $L180, $L184] at strictly
-   ascending .s line numbers (2497 < 2530 < 2913 < 3065 < 3192 < 3314 <
-   3326 < 3407), so the substitution is 1:1 and the resolved sequence is the
-   ROM's. 8 words standalone, 8 in the ROM.
+   case 1. VERIFIED by standalone compile (tools/cdkgcc -O2 -G0 -S): the
+   emitted table's eight entries sit at strictly ascending block addresses,
+   so the substitution against the ROM's eight ascending labels is 1:1 and
+   the resolved sequence is the ROM's. 8 words standalone, 8 in the ROM.
+   (gcc's own labels were [$L138, $L139, $L156, $L164, $L168, $L178, $L180,
+   $L184] at .s lines 2497 < 2530 < 2913 < 3065 < 3192 < 3314 < 3326 < 3407
+   in the file state measured; the numbers move with the rest of the unit,
+   the ORDER does not.)
 
    THE TWIN IS func_s20_80024064 in csrc/ovl_dng_s20.c, LANDED at 488 words
    with a nine-row priced fact table. It is the same actor in another bank:
@@ -34,7 +36,7 @@
    the same `(**(u16 **)(p + 0x4) & 0x80)' guard, the same func_8004491C /
    D_80045340 dress block, the same `*(u8 **)(o + 0x60)' pair of arms with
    D_800DDC40 and the D_8006CCD8/D_8006CCE8 byte pair, and the same
-   D_8008346C / p-0x2 / D_800814A0 retirement. EIGHT of its facts carried
+   D_8008346C / p-0x2 / D_800814A0 retirement. Eight of its facts carried
    here unchanged and are not re-measured; they are listed under CARRIED.
 
    WHAT IT DOES. The eight-state driver of a summoned actor. State 0 paints
@@ -45,127 +47,138 @@
    seeds the mover from the owner, and then -- if the owner has a target at
    r+0x60 -- aims at it, reading the per-facing step from the 0x20-byte
    D_s17_80024058 table copied onto the stack, or else aims straight ahead;
-   it ends by spawning eight 0x12 nodes driven by func_s17_80025814 and
+   it ends by spawning eight 0x12 nodes stepped by func_s17_80025814 and
    drawn by func_s17_80024704. State 2 integrates the aim over the remaining
    +0x7C frames, retiring to state 7 when the target goes away or
-   func_800A4778 says the tile is blocked and to state 3 when the count runs
-   out. State 3 spawns the single 0x12 node that func_s17_80025470 steps and
-   func_s17_80024FD4 draws. State 4 fades the slot over 30 frames by
-   (0x1E - n) * 0x80 / 0x1E and (0x1E - n) * 0xE0 / 0x1E while spawning four
-   0xE02020 particles a frame. State 5 waits on +0x88. State 6 raises
-   0x10000000 on the target's +0x1C, pulses its colour for 0x47 frames and
-   then calls func_s17_80024098. State 7 counts 0xF frames and clears
-   D_8008346C, the node redraw bit and D_800814A0.
+   func_800A4778 says the tile is blocked, and to state 3 when the count
+   runs out. State 3 spawns the single 0x12 node that func_s17_80025470
+   steps and func_s17_80024FD4 draws. State 4 fades the slot over 30 frames
+   by (0x1E - n) * 0x80 / 0x1E and (0x1E - n) * 0xE0 / 0x1E while spawning
+   four 0xE02020 particles a frame through func_s17_80025338. State 5 waits
+   on +0x88. State 6 raises 0x10000000 on the target's +0x1C, pulses its
+   colour for 0x47 frames and then calls func_s17_80024098. State 7 counts
+   0xF frames and clears D_8008346C, the node redraw bit and D_800814A0.
 
-   THE REMAINING FAULT, named and priced but not fixed. Case 1 computes
+   THE REMAINING FAULT, named and not fixed. Case 1 computes
    `*(s16 *)(p + 0x7C) = abs(dv) / abs(step)' in two arms selected by
-   `*(s8 *)(r + 0x72) == e[0x24]'. In both arms the target schedules the
+   `*(s8 *)(r + 0x72) == e[0x24]'. In BOTH arms the target schedules the
    STEP TABLE READ (lh/lhu off the stack copy) BEFORE the __builtin_abs
-   insn; this body schedules the abs first in the FALL-THROUGH arm and the
+   insn; this body schedules the abs first in the fall-through arm and the
    table read after it. The two arms then differ by one instruction each in
    a way that cancels in the word count: the fall-through arm gains the
-   load-delay nop after its second `lh' that the target fills with the
-   index load, and the branch-target arm loses its `addiu $sp, 0x28' to the
-   `beq' delay slot, which reorg steals because that addiu is the first insn
-   of the thread and a MEM is not speculatively movable where an addiu is.
-   The mechanism is sched1's backward tie-break: the abs insn and the table
-   load both have zero dependents and equal priority, so rank_for_schedule
-   falls through to INSN_LUID, and the target wants the abs to carry the
-   HIGHER luid. It does not: 11 source spellings of the table read and 3
-   statement orders in each arm all leave the RTL order unchanged after
-   combine. Reading .combine with -da confirms the RTL order does change
-   with the source order while the .sched output does not, so the decision
-   is not luid-driven after all and the real discriminator is still unknown.
-   That is the next thing to attack, and it is ONE scheduling decision.
+   load-delay nop after its second `lh' that the target fills with the index
+   load, and the branch-target arm loses its `addiu $sp, 0x28' to the `beq'
+   delay slot, which reorg steals because that addiu is the first insn of
+   the thread and may_trap_p refuses a MEM there where an addiu is allowed.
+   Note the abssi2 pattern is ONE insn with an internal label, so there is
+   no basic-block boundary inside the abs and sched1 is free to order it
+   against the table read; that also explains the `nop' the target leaves in
+   the abs's own branch delay slot, which reorg cannot fill.
+   WHAT WAS RULED OUT, all measured from this body: 5 declaration orders,
+   11 spellings of the table read, and 3 statement orders in each arm --
+   every one of them leaves the identical 25 rows (see NOT MEASURABLE).
+   The -da dumps show the .combine RTL order DOES follow the source order
+   while the .sched output does not, so the tie-break is not INSN_LUID and
+   the real discriminator is still unknown. That is the next thing to
+   attack, and it is ONE scheduling decision.
 
-   MEASURED AND REJECTED, all against this 791/25 body (aligndiff):
+   MEASURED AND REJECTED. All figures are aligndiff against this body at
+   791 words / 25 rows, re-priced from that state (the figures taken while
+   other faults were live were all different and are not reported):
 
-   the branch-target arm, table read FIRST, then abs    791 words, 25  KEPT
-     ... abs first, then the table read                 792 words, 23
-     ... the difference split out and abs applied later 792 words, 24
-   the fall-through arm's table read spelled
-     ((s16 *)t)[k * 2]                                  791 words, 25  KEPT
-     ... (s16)t[k].unk_00                               791 words, 25
-     ... *(s16 *)&t[k].unk_00                           791 words, 25
-     ... *(s16 *)((u8 *)t + k * 4)                      791 words, 25
-     ... *(s16 *)(t + k)                                791 words, 25
-     all four NOT MEASURABLE -- identical residue, same rows
-   the fall-through arm's statement order, 3 ways       791 words, 25
-     NOT MEASURABLE -- identical residue
-   declaration order of dd/ee/i/f, 5 permutations       791 words, 25
-     NOT MEASURABLE -- allocation priority is therefore OUT
-   the divide and the store duplicated into both arms   790 words, 31
-   abs(dv) and abs(step) both hoisted to the divide     787 words, 34
-   the step read as a plain u16 with no sign extension  792 words, 36
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | as below                                       KEPT   |  791  |  25  |
+   | memcpy straight off the D_s17_80024058 symbol,        |       |      |
+   |   with no `u8 *sr' source local                       |  775  |  57  |
+   | the step table as `u8 t[0x20]' + pointer arithmetic   |  791  |  36  |
+   | the step table as `u16 t[0x10]' + array refs          |  790  |  35  |
+   | `s16 ee' instead of `s32 ee'                          |  794  |  38  |
+   | case 1's `-0x40' arm written as the then-arm          |  790  |  31  |
+   | case 1's `== e[0x24]' arm written as the then-arm     |  791  |  40  |
+   | case 1's branch-target arm, abs before the table read |  792  |  23  |
+   | ... the same arm with the difference split out and    |       |      |
+   |   abs applied in a later statement                    |  792  |  24  |
+   | case 2's 7-state block written ONCE at the end of     |       |      |
+   |   the case instead of twice                           |  790  |  49  |
+   | case 3's +0x3C store written last instead of third    |  791  |  35  |
+   | case 6's `e' read AFTER the +0x1C read-modify-writes  |  795  |  44  |
+   | case 6's `< 0x24' arm written as the then-arm         |  791  |  44  |
+   | case 7's counter restore as a plain cast duplicated   |       |      |
+   |   into both arms instead of one array ref above them  |  792  |  36  |
 
-   MEASURED AND LOAD-BEARING, the facts that took this body from 779/206 to
-   791/25. Each is priced against the body as it stood when it was found, so
-   re-price before building on one:
+   NOT MEASURABLE -- identical residue, same 25 rows, same 791 words:
+   the fall-through arm's table read spelled `((s16 *)t)[k * 2]' (kept),
+   `(s16)t[k].unk_00', `*(s16 *)&t[k].unk_00',
+   `*(s16 *)((u8 *)t + k * 4)' or `*(s16 *)(t + k)'; that arm's two
+   statements in either order or with the difference split out; and five
+   permutations of the `dd'/`ee'/`i'/`f' declaration order. Eleven table-read
+   spellings in all, across both choices of the branch-target arm's order.
 
-   1. THE 0x20-BYTE STACK COPY NEEDS A u8 * SOURCE LOCAL. memcpy from the
-      `const u8 D_s17_80024058[]' symbol directly emits an ALIGNED lw/sw
-      run; `sr = (u8 *)D_s17_80024058' forces get_pointer_alignment to 1 and
-      restores the target's lwl/lwr/swl/swr. This is csrc/ovl_dng_b05.c's
-      func_b05_801733BC fact (1) at 0x20 bytes instead of 8. Worth 12 rows.
-   2. THE STEP TABLE IS AN ARRAY OF 4-BYTE STRUCTS, NOT A FLAT ARRAY. All
-      four read sites want the base address &t[0] MATERIALISED with the
-      field offset as the MEM displacement; a flat `u8 t[0x20]' with
-      `*(u16 *)(t + k * 4 + 2)' reassociates the constant and gives the
-      frame base plus a 0xA displacement instead, and a flat
-      `u16 t[0x10]' with array refs folds the whole base into the MEM. The
-      COMPONENT_REF path runs through get_inner_reference, whose base
+   WHY THE KEPT SPELLINGS ARE WHAT THEY ARE, with the mechanism:
+
+   1. THE 0x20-BYTE STACK COPY NEEDS A `u8 *' SOURCE LOCAL. memcpy from the
+      `const u8 D_s17_80024058[]' symbol takes the aligned lw/sw path and the
+      body comes out SIXTEEN WORDS SHORT; `sr = (u8 *)D_s17_80024058' forces
+      get_pointer_alignment to 1 and restores the target's lwl/lwr/swl/swr
+      run. This is csrc/ovl_dng_b05.c's func_b05_801733BC fact (1) at 0x20
+      bytes rather than 8.
+   2. THE STEP TABLE IS AN ARRAY OF 4-BYTE STRUCTS. All four read sites want
+      `&t[0]' MATERIALISED with the field offset as the MEM displacement.
+      The COMPONENT_REF path goes through get_inner_reference, whose base
       address cannot stay a three-term sum, so memory_address forces it into
-      a register. Worth 39 rows across the four sites.
-   3. CASE 2 IS FOUR GATES AND THE ARM ORDER OF EVERY ONE IS OBSERVABLE.
-      The 7-state retirement block is written TWICE -- once for the
+      a register; flat pointer arithmetic goes through plus_constant, which
+      reassociates the array's own frame offset out to the MEM instead.
+   3. `s32 ee' WITH A `u16' FIELD IN ONE ARM IS WHAT GIVES THE TARGET'S
+      `lhu' PLUS `sll 16'/`sra 16'. `(s16)' on a u16 COMPONENT_REF does not
+      fold into the load (the field read is an HImode MEM and the conversion
+      a separate extendhisi2), while `(s16)*(u16 *)p' DOES fold to
+      `*(s16 *)p'. An `s16' local is the wrong answer: PROMOTE_MODE makes it
+      a sign-extended SImode pseudo, so BOTH arms pay the extension and the
+      arm whose load is already `lh' gains a redundant pair.
+   4. CASE 2'S 7-STATE RETIREMENT BLOCK IS WRITTEN TWICE -- once for the
       func_800A4778 arm placed FIRST, once at the end of the
       count-exhausted arm -- and jump.c cross-joins them from the
       `sh $v0, 0xA($s4)' onward, keeping the EARLIER copy and leaving the
-      first arm's `addiu $v0, 7' in the branch delay slot. Written once at
-      the end of the case the block lands after the integration block
-      instead of before it, 7 rows. The count gate must be
+      first arm's `addiu $v0, 7' in the branch delay slot. The count gate is
       `if ((*(s16 *)(p + 0x7C) -= 1) <= 0) { ... } integration;' so the
       integration is the fall-out and the bgtz jumps forward to it.
-   4. CASE 7 STORES THE OLD COUNTER BACK THROUGH AN ARRAY REF.
+   5. CASE 7 STORES THE OLD COUNTER BACK THROUGH AN ARRAY REF:
       `((s16 *)p)[0x42] = f;' ahead of the D_80026664 test lets sched1 hoist
       the fixed-address `lh %lo(D_80026664)' ABOVE the p-relative store --
       MEM_IN_STRUCT_P at a varying address against a plain cast at a symbol
-      address, true_dependence (sched.c:817), the same lever the twin
-      prices at 4 rows for its +0x16 facing read. With the store duplicated
-      into both arms as a plain cast it is 792 words / 42: the store never
-      reaches the branch delay slot. Worth 1 word and 11 rows.
-   5. CASE 6 READS *(u8 **)(r + 0x60) ONCE PER GROUP, AND THE -0x14 READ
+      address, true_dependence in sched.c -- and the store then fills the
+      bnez's delay slot. It is the same lever the twin prices at 4 rows for
+      its +0x16 facing read.
+   6. CASE 6 READS `*(u8 **)(r + 0x60)' ONCE PER GROUP, AND THE -0x14 READ
       MUST COME FIRST. A store through one pointer kills cse's entry for a
       load through another, so `e = *(u8 **)(*(u8 **)(r + 0x60) - 0x14);'
-      has to be written BEFORE the |= and the &= on +0x1C or the r+0x60
-      load is repeated. Worth 4 words and 18 rows over the two groups.
-   6. CASE 3'S +0x3C STORE IS WRITTEN THIRD, not last. The value is
-      `*(u8 **)(r + 0x60)' and the load cannot be scheduled above the ten
-      stores through q, so it has to be loaded before them; sched then
-      sinks the store itself to the end. Worth 3 rows.
-   7. THE CASE 1 and CASE 2 GATE POLARITIES: the out[] offsets are the
-      fall-through and the -0x40 arm the branch target; the
-      `*(s8 *)(r + 0x72) != e[0x24]' arm is the fall-through; case 6's
-      `>= 0x24' arm is the fall-through. Written the other way round the
-      three cost 206, 110 and 23 rows respectively, every row a moved block.
+      has to precede both the |= and the &= on +0x1C or the r+0x60 load is
+      repeated in each group.
+   7. CASE 3'S +0x3C STORE IS WRITTEN THIRD, not last: its value is
+      `*(u8 **)(r + 0x60)' and that load cannot be scheduled above the ten
+      stores through q, so it has to be loaded before them; sched then sinks
+      the store itself to the end on its own.
 
    CARRIED FROM THE TWIN WITHOUT RE-MEASURING, so do not read these as
-   levers for this body: the `o/n/m' head triple, `(((u16 *)r)[0x15] >> 9) &
+   levers for this body: the o/n/m head triple, `(((u16 *)r)[0x15] >> 9) &
    0x7' as an ARRAY REF so the lhu hoists above the `D_80026664 = 1' store,
    the nested-if form of the func_8003DF74 gate, the three descending
    `c[0xE]/c[0xD]/c[0xC]' byte stores as separate statements, the
    `e[0x24] + *(u8 *)&D_8006CCD8[k]' byte lookup off the s16 array, the
-   second inline `*(u8 **)(o + 0x60)' for the D_800DDC40 index, the
+   second inline `*(u8 **)(r + 0x60)' for the D_800DDC40 index, the
    `*(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1' bump spelling, and the
    three-argument alias for func_s17_80024098.
 
-   PROTOTYPE NOTE, and it is the twin's as well: func_s17_80024098 is
-   called with THREE arguments here while its landed definition higher in
-   this unit takes two, so the unit needs a three-argument alias for that
-   one site exactly as csrc/ovl_dng_s20.c carries func_s20_800262B8_3.
-   The landed func_s17_80024098 is NOT changed.
+   PROTOTYPE NOTE, and it is the twin's as well: func_s17_80024098 is called
+   with THREE arguments here while its landed definition higher in this unit
+   takes two, so the unit needs a three-argument alias for that one site,
+   exactly as csrc/ovl_dng_s20.c carries func_s20_800262B8_3. The landed
+   func_s17_80024098 is NOT changed and still measures 60 words / 0
+   differing with the alias in the block.
 
-   relcand ok (12 data symbols, 8 calls); declcheck s17 clean.
+   relcand ok (12 data symbols, 8 calls); declcheck s17 clean with this body
+   spliced; the unit's other ten bodies all still 0 differing with it in.
 
    DECLARATIONS
    s32 rand(void);
@@ -345,14 +358,14 @@ void func_s17_800259D8(u8 *p, UnkVec *v, u8 *c)
             p[0xAA] -= 0x18;
         }
         if ((s16)func_800A4778(*(u16 *)((u8 *)v + 0x2), *(u16 *)((u8 *)v + 0x6),
-                               *(s16 *)((u8 *)v + 0xA), (s32)*(u8 **)(r + 0x60)) != 0)
+                               *(s16 *)((u8 *)v + 0xA), (s32) * (u8 **)(r + 0x60)) != 0)
         {
-        *(s16 *)(p + 0xA) = 7;
-        *(s16 *)(p + 0x84) = 0;
-        c[0xE] = 0;
-        c[0xD] = 0;
-        c[0xC] = 0;
-        break;
+            *(s16 *)(p + 0xA) = 7;
+            *(s16 *)(p + 0x84) = 0;
+            c[0xE] = 0;
+            c[0xD] = 0;
+            c[0xC] = 0;
+            break;
         }
         {
             if (*(u8 **)(r + 0x60) == NULL)
@@ -412,7 +425,7 @@ void func_s17_800259D8(u8 *p, UnkVec *v, u8 *c)
             q = (u8 *)n2 + 0x20;
             *(s16 *)(q + 0x2) = 0;
             *(u32 *)(q + 0x38) = (u32)r;
-            *(u32 *)(q + 0x3C) = (u32)*(u8 **)(r + 0x60);
+            *(u32 *)(q + 0x3C) = (u32) * (u8 **)(r + 0x60);
             *(s16 *)(q + 0xA) = 0xC;
             *(s16 *)(q + 0xC) = 0x8;
             *(u32 *)(q + 0x40) = (u32)p;
