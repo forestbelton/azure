@@ -83,7 +83,7 @@ def drop_known(decls, unit, func="", quiet=False):
     # present, and keeping the park's is not an option that compiles.
     tags = set(re.findall(r"\b(?:struct|union|enum)\s+([A-Za-z_]\w*)\s*\{",
                           unit))
-    kept, dropped, refined, protos = [], [], [], []
+    kept, dropped, refined, protos, tagdiff = [], [], [], [], []
     for decl in decl_units(decls):
         t = decl.strip()
         if t and len(_norm(t)) > 8 and _norm(t) in unit_norm:
@@ -122,8 +122,28 @@ def drop_known(decls, unit, func="", quiet=False):
                 continue
         m = re.search(r"\b(?:struct|union|enum)\s+([A-Za-z_]\w*)\s*\{", t)
         if m and m.group(1) in tags:
-            refined.append("%s (the unit's definition differs; using the "
-                           "unit's)" % m.group(1))
+            # DROPPING IS STILL THE ONLY OPTION THAT COMPILES -- the two
+            # definitions cannot both be present. But whether that is HARMLESS
+            # or changes the park's figures depends on whether they AGREE, and
+            # reporting both cases the same way hid a real fault: a park whose
+            # own fact was about a field it had refined to `s8' got spliced
+            # against the unit's `u8', and the extra aligned row that produced
+            # was recorded as the park's own residue. Its real baseline was
+            # 264/3, not 264/4 -- one of its four rows was never that body's
+            # fault, and the park had been worked against the wrong number.
+            #
+            # A field width decides promotion and sign-extension, so a
+            # DIFFERING definition deserves the same loud treatment a
+            # prototype gets. An identical one is genuinely nothing.
+            tag = m.group(1)
+            um = re.search(r"\b(?:struct|union|enum)\s+%s\s*\{[^}]*\}"
+                           % re.escape(tag), unit)
+            if um and _norm(um.group(0)) == _norm(m.group(0) + t[m.end():].split("}")[0] + "}"):
+                dropped.append(t.split("\n")[0])
+                continue
+            tagdiff.append((tag,
+                            " ".join(t.split())[:160],
+                            " ".join(um.group(0).split())[:160] if um else "?"))
             dropped.append(t.split("\n")[0])
             continue
         kept.append(decl)
@@ -134,6 +154,14 @@ def drop_known(decls, unit, func="", quiet=False):
               % (func, len(protos)))
         for fn, parkv, unitv in protos:
             print("    %s\n      park: %s\n      unit: %s" % (fn, parkv, unitv))
+    if tagdiff and not quiet:
+        print("%s: %d TYPEDEF(S) THE UNIT DEFINES DIFFERENTLY -- dropped the "
+              "park's, kept the unit's. A FIELD'S WIDTH CHANGES PROMOTION AND "
+              "SIGN-EXTENSION, so THIS PARK'S RECORDED FIGURES MAY NOT "
+              "REPRODUCE -- re-measure the baseline before trusting its table:"
+              % (func, len(tagdiff)))
+        for tag, parkv, unitv in tagdiff:
+            print("    %s\n      park: %s\n      unit: %s" % (tag, parkv, unitv))
     if refined and not quiet:
         print("%s: %d park typedef(s) the unit has REDEFINED since: %s"
               % (func, len(refined), "; ".join(refined[:4])))

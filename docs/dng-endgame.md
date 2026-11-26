@@ -200,3 +200,45 @@ the park files undercount it because a fresh stub has no park. **Neither number
 is the answer and the dry-run is.** Note also that a dry-run over units with
 LIVE AGENTS prints `0 fn 0w` after refusing to overwrite their copies -- so
 read the refusal lines, and dry-run the units nobody is in.
+
+## 12 OF 83 PARKS HAVE A CORRUPTED BASELINE, AND NOBODY HAD SWEPT FOR IT
+
+A park's figures are its whole value -- the first instruction in every park brief
+is *never re-run a priced cell*. So a park whose baseline no longer reproduces is
+worse than no park: it sends the next agent to attack rows that are not the
+body's fault.
+
+An agent found one: `func_lo16_8001EF0C` was recorded at **264/4**, and one of
+those four rows came from `parksplice` dropping the park's own **refined**
+`UnkDungeonSlot` (with `s8 unk_02`, which that park's own fact is about) in
+favour of the unit's coarser `u8 unk_02`. **Its real baseline is 264/3.**
+
+I sweept all 83 parks. **Twelve are affected:**
+
+    TYPEDEF the unit defines differently   2   func_lo16_8001EF0C, func_lo16_8001CFB8
+    PROTOTYPE the unit declares differently 10  func_b27_80174BEC, func_b29_80172FC0,
+                                               func_b31f_8016FCE4, func_b32_80174428,
+                                               func_b55_80170F84, func_lo16_800165B8,
+                                               func_lo20_80026EC0, func_lo20_80027A20,
+                                               func_s27_80024E64, func_s72_800247C0
+
+> **The prototype warning already existed and printed loudly.** It had simply
+> never been run across the corpus, so ten parks were carrying it unnoticed --
+> including `func_b31f_8016FCE4`, which an agent spent a session on today. **A
+> warning nobody aggregates is a warning nobody sees.**
+
+The typedef case was silent until now, and is the sharper hazard, because a
+field's width changes promotion and sign-extension rather than just a call.
+`parksplice` now reports a DIFFERING tag definition as loudly as a prototype,
+and prints both spellings side by side; an IDENTICAL one stays a quiet drop,
+because that genuinely is nothing.
+
+**What to do with an affected park:** re-measure its baseline FIRST and correct
+its header, before trusting any cell in its table. Dropping the park's
+declaration is still the only option that compiles -- the two cannot both be
+present -- so this is not a bug to fix away, it is a fact to surface.
+
+**And the general rule:** every tool warning in this project needs a
+corpus-wide sweep, not just a per-invocation print. This is the same failure as
+the masked `ovlverify` count and the OK-without-write `dngland` -- a check that
+passes wrongly, or warns where nobody is reading.

@@ -54314,3 +54314,379 @@ outcome where the donor's figure tells you nothing in either direction. The
 existing BUDGET-fact rule ("a mismatched frame makes it impossible rather than
 wrong") is the allocation-side case of the same thing; this is the shape-side
 case.
+
+## A STRUCT COPY LETS sched HOIST A *CAST* LOAD ABOVE IT, AND AN *ARRAY REF* OF THE SAME ADDRESS IS PINNED -- 26 ROWS
+
+Measured on `func_s49_80024128` (ovl_dng_s49, 205 words), where it was the
+only fault and took four compiles.
+
+A whole-object copy out of a file-scope record into a pointer parameter --
+
+    *b = *(UnkVec *)D_80083780;          /* b is a UnkVec * parameter */
+
+is ONE `movstrsi` insn on MIPS: `output_block_move` prints the entire
+3-load/3-store/3-load/3-store sequence from a single RTL insn, so `sched`
+cannot interleave anything with it, only move things around it. The three
+halfword reads that follow it, of the SAME symbol --
+
+    *(s16 *)(p + 0x10) = *(u16 *)(D_80083780 + 0x2);     /* 204 words / 26 rows */
+    *(s16 *)(p + 0x10) = D_80083780_h[1];                /* 205 words /  0 rows */
+
+differ only in whether the load is a cast through `u8 []` or a subscript of a
+`u16 []` extern of the same symbol. With the cast, **sched1 hoists the first
+`lhu` and its address `addiu` above the block move**, which fills a load-delay
+slot the target leaves as a `nop` (one word SHORT) and keeps an extra value
+live across the copy, which pushes the parameter out of `$a3` into `$t1` and
+rotates every block-move temp -- 26 aligned rows from one hoist.
+
+The decision is `sched.c:835 true_dependence`'s fixed-scalar-versus-
+varying-struct escape:
+
+    && ! (MEM_IN_STRUCT_P (mem) && rtx_addr_varies_p (mem)
+          && GET_MODE (mem) != QImode
+          && ! MEM_IN_STRUCT_P (x) && ! rtx_addr_varies_p (x))
+
+`mem` is the copy's destination: in-struct (aggregate assignment), BLKmode,
+varying address (a pointer parameter). So the escape turns entirely on
+`! MEM_IN_STRUCT_P (x)` for the load. A cast through a `u8 []` is an
+`INDIRECT_REF` and does NOT set it; `D_80083780_h[1]` off an `extern u16
+D_80083780_h[] __asm__("D_80083780")` is a genuine `ARRAY_REF`, `expand_expr`
+sets `MEM_IN_STRUCT_P`, the escape goes false, `memrefs_conflict_p` decides
+(two distinct pseudo bases, so conflict), and the load is pinned after the
+copy.
+
+**Three things that are NOT the fix, all priced on the same body:**
+
+* a pointer local for both (`t = D_80083780; *b = *(UnkVec *)t;` and
+  `*(u16 *)(t + 0x2)`) is **204 / 26, bit-identical** to the cast form.
+  `rtx_addr_varies_p` is already true of both addresses -- with `-G0` the
+  `%lo` lives in a pseudo either way -- so varying-ness was never the half of
+  the escape that was failing, and combine folds the symbol back in regardless;
+* the three halfword stores written BEFORE the copy: **204 / 38**, worse;
+* the array ref off a SECOND extern beside the `u8 []` one: **206 / 10**. gcc
+  treats two `extern`s as two symbols and emits a second `lui` where the
+  target shares one, so the copy and the reads must go through the SAME
+  declaration.
+
+**Diagnostic, before any compile:** a body with a struct assignment through a
+pointer and a file-scope scalar read nearby, where you come out exactly one
+word SHORT with a `nop` missing at a load, and the register assignment is
+shifted by one place from a single extra live value. Do not reach for a
+scheduling barrier; change the load into a subscript of an array-typed extern.
+
+## A NARROW CALL RESULT WANTS THE *WIDE* DECLARATION WHEN IT HAS BOTH A NARROW STORE AND A WIDE COMPARISON
+
+`func_s49_8002445C` (185 words) against `func_800BFFF4`
+(csrc/ovl_town_800BF3F0.c, 122 words). The two bodies state the OPPOSITE
+fact about the same construct and both are right, which makes the pair the
+cleanest discriminator the file has for this lever.
+
+`func_800BFFF4` keeps `s16 z = RotTransPers(...)` and prices `s32 z` with a
+`(s16)` at each use at 120 words / 120 differing. `func_s49_8002445C` needs
+
+    s32 h = (s16)func_800BCB04(...);       /* 185 words /  0 rows */
+    s16 h = func_800BCB04(...);            /* 189 words / 21 rows */
+    s32 h = func_800BCB04(...);            /* 184 words /  5 rows -- one short */
+
+With the narrow declaration gcc keeps the raw `$v0` in a copy and RE-EXTENDS
+it at each use (`move $a0, $v0` plus a second `sll`/`sra` pair), and the
+narrow store then writes the UNEXTENDED copy.
+
+**The discriminator is batch 28's and it holds in both directions:** count the
+uses. `func_800BFFF4`'s `z` has narrow uses only (an add, two subscripts), so
+narrow wins; this body's `h` has one narrow STORE (`*(s16 *)(p + 0x26) = h`)
+and TWO wide COMPARISONS (`h > 0x200`, `h < *(s16 *)(p + 0x26)`), so the wide
+declaration with one explicit cast wins. **Neither the frame nor the save
+count predicts it** -- the two bodies have different frames and the rule reads
+off the source alone.
+
+## A CHAINED ASSIGNMENT'S DIRECTION IS READABLE OFF THE LISTING, BACKWARDS -- 2 ROWS
+
+`a = b = v` stores the INNER target first, so the listing's FIRST store names
+the chain's RIGHTMOST lvalue. On `func_s49_8002445C`:
+
+    *(s16 *)(q + 0x1C) = *(s16 *)(q + 0x1E) = 0x500;   /* 185 / 0  -- emits 0x1E then 0x1C */
+    *(s16 *)(q + 0x1E) = *(s16 *)(q + 0x1C) = 0x500;   /* 185 / 2 */
+
+This is the one adjacent-independent-store order that CAN be read off the
+listing, because the pair comes out of one insn-emitting statement and sched1
+has no reason to separate them. Two SEPARATE statements of the same two stores
+are the ordinary unreadable case -- except when reorg steals the second into a
+following call's delay slot, which pins them too: on `func_s49_80024128` the
+jitter pairs `*(s16 *)(e + 0xC) = j; *(s16 *)(e + 0x1E) = j;` price at
+**205 / 4** when exchanged, because the second store lands in the next
+`rand` call's delay slot.
+
+## A LANDED DONOR CAN BE CARRYING declcheck WARNINGS -- FIX THEM IN THE COPY, IT IS FREE
+
+`func_s49_80024740` is `func_800BFFF4` statement for statement (122 words, 0
+differing, first compile). The donor declares its two `RotTransPers`
+out-parameters `s32` and casts the `sxy` arguments `(s32 *)`, where
+`psyq/include/libgte.h:326` declares
+`long RotTransPers(SVECTOR *, long *, long *, long *)` -- so the donor raises
+**six** `passing arg N ... from incompatible pointer type` warnings.
+
+Spelled `long pp; long flag;` with `(long *)` casts the body is **122 words /
+0 differing, identical output**, and `declcheck` goes clean. So: run
+`declcheck --src` on your copy even when the body came verbatim from a landed
+donor, and when the fix measures free, take it rather than inheriting the
+warning. The committed `func_800BFFF4` still carries all six.
+
+## A MIXED-SIGNEDNESS READ OF ONE FIELD IS SOURCE, NOT AN ARTEFACT -- AND THE CAST STYLE IS FREE
+
+Three sites across two `ovl_dng_s49` bodies emit TWO loads of one address, one
+signed and one unsigned, with no store between them: `lb`+`lbu` at `q + 0x2`
+in `func_s49_80024004`, and `lh`+`lhu` at `p + 0x26` and at `p + 0x4C` in
+`func_s49_8002445C`. cse cannot unify them because `(sign_extend (mem:QI))`
+and `(zero_extend (mem:QI))` are different expressions.
+
+**So two loads of one address with nothing between them means the source read
+that field through two types** -- and which is which is readable: the
+arithmetic/comparison use takes the signed load, the plain HImode/QImode COPY
+takes the unsigned one (MIPS `movhi`/`movqi` load with `lhu`/`lbu`). The
+project's own bump idiom
+`*(s16 *)(p + N) = *(u16 *)(p + N) - 1` is this rule written out.
+
+**But the cast STYLE is free:** `(s8)q[2] >= -0x62` and
+`*(s8 *)(q + 0x2) >= -0x62` are both 73 words / 0 rows, because fold collapses
+the `(signed char)(unsigned char)` pair to one `lb`. The fact is the mixed
+signedness, not the spelling of it.
+
+## `local-alloc`'s HAND-ROLLED 3-QUANTITY SORT IS BUGGY: A BLOCK WITH EXACTLY THREE LOCAL QUANTITIES IS ALLOCATED IN BIRTH ORDER
+
+Measured on `func_b57_80170A4C` (ovl_dng_b57, 1366 words), where it was worth
+**63 of the body's 95 differing words across nine repeated blocks**, closed at
+no word cost. This is a register lever that no amount of expression-shape
+sweeping reaches, and the discriminator is the NUMBER OF LOCAL QUANTITIES IN
+THE BASIC BLOCK -- a quantity you cannot see in the C and have to count.
+
+`block_alloc` (local-alloc.c) sorts its quantities twice, once by
+`qty_sugg_compare` and once by `qty_compare`, and for small blocks it avoids
+`qsort` with a hand-rolled `switch (next_qty)`:
+
+```c
+    case 3:
+      /* Make qty_order[2] be the one to allocate last.  */
+      if (qty_compare (0, 1) > 0)
+	EXCHANGE (0, 1);
+      if (qty_compare (1, 2) > 0)
+	EXCHANGE (2, 1);
+      /* ... Fall through ...  */
+    case 2:
+      /* Put the best one to allocate in qty_order[0].  */
+      if (qty_compare (0, 1) > 0)
+	EXCHANGE (0, 1);
+      /* ... Fall through ...  */
+    case 1:
+    case 0:
+      break;
+    default:
+      qsort (qty_order, next_qty, sizeof (int), qty_compare_1);
+```
+
+**`qty_compare` takes QUANTITY NUMBERS, not indices into `qty_order`.** Every
+comparison in the `case 3` / `case 2` chain compares qty 0 against qty 1, or
+qty 1 against qty 2, regardless of what the exchanges have already moved. With
+three quantities and `PRI(q1) > PRI(q0)`, the third comparison re-tests the
+same pair as the first and **undoes it**: `[0,1,2] -> [1,0,2] -> [1,0,2] ->
+[0,1,2]`. The sort is a no-op and the block is allocated in BIRTH order, with
+the first-born quantity taking the lowest free register.
+
+Exhausting the three-quantity cases with the high-priority quantity born
+second: whatever the other two priorities are, the first-born still wins.
+There is no spelling of the expression that fixes it while the block has
+exactly three quantities and the wrong one is born first. **The only levers are
+(a) change the birth order, or (b) change the quantity count to 2 or 4+, which
+gets `case 2`'s single correct comparison or a real `qsort`.**
+
+### The worked case, with its own internal control
+
+Each of eleven repeated tile gates in `func_b57_80170A4C` is one basic block:
+
+```c
+    gN = D_80083780;                                  /* %hi + lo_sum */
+    if (eN[0x24] * 0x40 + 0x20 == *(s16 *)(gN + 0x2) && ...)
+```
+
+whose three *local* quantities are the `%hi` temp (2 refs), the
+`lbu`/`sll`/`addiu` chain (ONE quantity, 6 refs -- `combine_regs` ties each
+link because its input dies at the next insn) and the `lh` of `gN + 0x2`. The
+`lo_sum` destination `gN` and the base `eN` are NOT local quantities: they span
+the block boundary, so `reg_qty` is -1 and `global_alloc` places them.
+
+`QTY_CMP_PRI` makes the chain 12000 and the `%hi` 5000, so a correct sort would
+give the chain `$v0`. Birth order gives it to the `%hi`, and the whole
+comparison comes out with `$v0` and `$v1` exchanged -- 7 words per gate, every
+opcode, immediate and displacement already exact.
+
+**Two controls inside the same function, which is what made the mechanism
+certain rather than plausible:**
+
+* The SECOND comparison of every gate (`eN[0x25]` against `gN + 0x6`) has only
+  TWO local quantities -- no `%hi` is born there -- hits `case 2`, gets its one
+  correct comparison, and was already byte-exact in the parked body.
+* The gates that assign `e` and `g` adjacently inside the room test have FOUR
+  local quantities (two `%hi` temps), hit `default:` and a real `qsort`, and
+  were also already byte-exact. `.lreg`'s `;; Register N in H` lines show that
+  block's assignment as `%hi(D_80082E80)` -> 2, `%hi(D_80083780)` -> 3,
+  chain -> 2, `lh` -> 3, which `QTY_CMP_PRI` predicts exactly.
+
+**The fix was to change the birth order, at no word cost:** lift the `eN` side
+of the comparison into a per-block local ABOVE the `gN` assignment, so the
+chain's first insn is generated before the `%hi`.
+
+```c
+    qN = eN[0x24] * 0x40 + 0x20;
+    gN = D_80083780;
+    if (qN == *(s16 *)(gN + 0x2) && eN[0x25] * 0x40 + 0x20 == *(s16 *)(gN + 0x6))
+```
+
+1366 words / 95 differing -> 1366 words / 32 differing, nine blocks at once.
+Adding a FOURTH quantity instead (re-materialising `D_80082E80` inside the
+gate, which is what the already-correct gates do) also fixes the registers but
+costs one `lui` per gate: 1375 words / 36 aligned rows.
+
+### How to recognise it
+
+* The residue is a clean two-register exchange over a run of words whose
+  opcodes, immediates and displacements all already match.
+* `.lreg`'s header (`Register N used X times across Y insns in block B`) plus
+  its `;; Register N in H` lines give you `reg_n_refs` and the result;
+  `combine_regs`'s tying rule tells you how many quantities there really are.
+* **Count the block's local quantities before reaching for the allocator
+  arithmetic.** At 2 or 4+ the arithmetic is what decides; at exactly 3 it is
+  not consulted at all.
+* `combine_regs` returns at its first test for any pseudo whose `reg_qty` is
+  -1, so a variable SET IN MORE THAN ONE BASIC BLOCK is never part of a local
+  quantity -- see the next entry.
+
+## A VARIABLE SET IN SEVERAL BLOCKS CAN NEVER BE TIED BY `combine_regs`, SO AN IN-PLACE UPDATE OF IT COMES OUT AS TWO REGISTERS
+
+The companion to the above, measured on the same body and worth 8 words.
+
+`local_alloc` marks a pseudo `reg_qty = -2` (eligible to be a local quantity)
+only when `reg_basic_block[i] >= 0 && reg_n_deaths[i] == 1`; everything else
+gets -1. `combine_regs` then returns 0 immediately for a destination whose
+`reg_qty` is -1 ("Can't combine if SREG is not a register we can allocate"),
+so an insn reading such a variable and writing it back can never be tied to
+it and the two ends get different registers.
+
+`func_b57_80170A4C` has four copies of
+
+```c
+    nn = *(u16 *)(p + 0x9E);
+    *(s16 *)(p + 0x9E) = nn + 1;
+    *(s32 *)(p + 0xA0) += func_800644B8((s16)nn * 0xAA) * 0x20;
+```
+
+in four disjoint arms. With ONE shared `u16 nn`, `reg_n_deaths` is 4, so
+`reg_qty` is -1 and every site emitted `addiu $v0, $v1, 1` where the ROM has
+`addiu $v1, $v1, 1`. **Splitting it into one local per arm -- `nn`, `nn2`,
+`nn3`, `nn4` -- closed all eight rows at no word cost.**
+
+**Two spellings that look like the same fix and are 8 words WORSE, both 1358
+against 1366:** hoisting the product into a temp above the increment, and
+swapping the increment and the `+=` statement. Either one puts the `lhu` next
+to the `sll 16`/`sra 16` sign-extension, and `combine` then folds all three
+into a single `lh` -- legal because the `sh` of `nn + 1` truncates anyway. Only
+the increment-first order keeps them apart. So the order of the two statements
+is load-bearing for the WORD COUNT and the scope of `nn` is load-bearing for
+the REGISTERS, and they pull in opposite directions if you confuse them.
+
+## `sched.c`'s `adjust_priority` BOOSTS EVERY SINGLE-SET BIRTH TO `max_priority`, WHICH PUSHES IT LATE IN THE EMITTED BLOCK
+
+Measured on `func_s30_800241D4` (ovl_dng_s30, 283 words), where it accounts
+for the park's one remaining residue -- a `sll $v0, $v0, 3` emitted at word
+123 instead of 103, twenty slots past where the ROM has it.
+
+`adjust_priority` is called when an insn becomes ready. Its `switch (n_deaths)`
+is dead code: the comment in the source says so outright ("`??? This code has
+no effect, because REG_DEAD notes are removed before we ever get here`"), so
+`n_deaths` is always 0 and **every** ready insn reaches `case 0:` and
+`birthing_insn_p`. That returns
+
+```c
+      if (bb_live_regs[offset] & bit)
+	return (reg_n_sets[i] == 1);
+```
+
+-- i.e. true for any insn whose destination pseudo is live and **set exactly
+once in the function**. Its priority is then raised to `max_priority`, which
+`schedule_insn` keeps as `MAX (INSN_PRIORITY (ready[0]), INSN_PRIORITY (insn))`
+-- the current frontier's best, not the block's global maximum. The scan is
+backward, so a boosted insn is picked immediately and therefore lands LATE in
+the emitted order.
+
+**The lever is `reg_n_sets`, and it has one trap and one non-lever:**
+
+* TWO SETS REMOVE THE BOOST, but only if a READ of the first value sits between
+  them. `w = t % 4; w = w * 8;` is NOT a two-set form: the first value has a
+  single use, `combine` merges the pair, and it measures identically to
+  `w = (t % 4) * 8`. (This correction retired a figure that had been in the
+  park header through three agents.)
+* A DEAD SECOND SET IS NOT A LEVER. `w = (t % 4) * 8;` plus a trailing
+  `w = 0;` measures the same 283 / 8 as the single set alone: `flow` deletes
+  the dead insn before `reg_n_sets` is what `birthing_insn_p` reads.
+* Reusing a variable the function ALREADY sets twice works for the boost
+  (`d = (t % 4) * 8;` put the `sll` at word 103) but drags that variable's
+  other uses' registers with it: 283 words / 36 aligned rows, with rows at the
+  variable's earlier sites.
+
+On `func_s30_800241D4` the boost-free spelling
+(`w = (t % 4) * 8; ... w += 0x3F;`, setUV4 expanded) does put the `sll` at word
+103 and measures 283 / 19 against the parked 283 / 2 -- **worse alone, and the
+park's open question is now the second half of the conjunction**: the `+ 0x3F`
+insn needs to be a DISTINCT single-set pseudo so that it IS boosted (the ROM
+has it at word 127, late), tied to the `sll`'s destination by `combine_regs` so
+both get `$v0`. A two-set variable makes both ends one pseudo; a separate temp
+makes the `sll`'s destination single-set again. Unspelled as of 2026-11-26.
+
+## A LOCAL INITIALISED AT ITS DECLARATION BEATS A LOCAL ASSIGNED BY A STATEMENT, WHEN AN ARRAY INITIALISER IS COMPETING FOR THE ENTRY BLOCK'S FIRST SLOT
+
+The last two words of `func_b57_80170A4C`, and a one-line lever with a hard
+reason behind it.
+
+The residue was a transposition of `addu $s3, $s1, $zero` (`w = p`) and
+`addiu $s5, $sp, 0x10` (`&t[0]`) in the entry block -- two independent single
+sets, neither with a consumer in the block, so `sched1`'s choice between them
+falls through to `INSN_LUID`, i.e. RTL order.
+
+**An aggregate's initialiser is expanded with the DECLARATIONS, which in C89
+is before any statement in the block.** `u16 t[8] = {4,5,6,7,0,1,2,3};` creates
+the address pseudo for the block copy right there, so it always has a lower
+LUID than a `w = p;` STATEMENT and always wins the tie. No placement of the
+statement can change that -- and moving it later is actively worse (putting
+`gg = (u8 *)&D_80083160;` before it is 73 aligned rows).
+
+**A declaration initialiser is expanded with the other declarations, so it can
+be ordered against the array's:**
+
+```c
+    u8 *w = p;                                   /* declared BEFORE t */
+    u16 t[8] = {4, 5, 6, 7, 0, 1, 2, 3};
+```
+
+1366 words / 2 aligned rows -> 1366 / **0**. Measured and free in the same
+state: moving the `u16 t[8]` declaration below `gg`'s (still 0).
+
+This is the first entry in this file for which DECLARATION-INITIALISER versus
+ASSIGNMENT-STATEMENT is the whole fact, and it is worth remembering because
+the project's house style declares everything at the top and assigns in the
+body -- which silently forfeits the only lever over this tie.
+
+## A "MEASURED FLAT" READING TAKEN ON A BODY WITH A LARGE OPEN RESIDUE IS NOT A CLOSED AXIS
+
+`func_b57_80170A4C`'s park header carried four spellings for its prologue
+transposition, all recorded as flat at 1366 words / 4 aligned rows, and a
+compiler-source argument for why the axis was closed. Both readings were taken
+while 63 other words were still wrong.
+
+On the finished body one of those same spellings measures **73 aligned rows**.
+Nothing about it changed; what changed is that the rows it moves were no longer
+hidden under a larger residue.
+
+**So a flat reading means "this change does not move THESE rows", not "this
+axis is closed".** Re-measure a park's flat figures after any change that drops
+its residue by a large fraction -- on this body the 2-row state was reached
+from a 95-row state, and the last two rows then fell to a one-line change the
+header had already priced as useless.
