@@ -25,9 +25,32 @@ import dngclone  # noqa: E402
 PROJ = dngclone.PROJ
 
 
-def unsplice(func, keep_dir=None):
-    path = dngclone.unit_path(func)
+def unsplice(func, keep_dir=None, src=None):
+    # `src' IS WHY THIS PARAMETER EXISTS: without it this tool resolved its
+    # path through dngclone.unit_path(), which points at csrc/ -- so an AGENT
+    # told to restore its own stub would have written to the committed tree,
+    # which every brief forbids. One agent read the source, saw that, and
+    # restored both of its stubs by hand instead (shrinking each definition
+    # with edit_function and replacing the remnant). It was right to, and the
+    # tool was the thing at fault. Every sibling tool takes a src path; this
+    # was the only one that did not.
+    path = src if src else dngclone.unit_path(func)
     unit = os.path.basename(path)[:-2]
+    # AND THE BASENAME MUST BE THE UNIT'S OWN NAME, because it is what goes
+    # into the INCLUDE_ASM path. Found by passing a scratch copy named
+    # `uns-test.c': the tool cheerfully wrote
+    # `INCLUDE_ASM("asm/nonmatchings/uns-test", func_b38_80174260)' and
+    # reported success. That stub names a directory that does not exist, so
+    # the next build fails somewhere else entirely. Same rule as ovlverify
+    # and onefunc, which pick the overlay by basename too -- but those two
+    # fail loudly and this one did not.
+    expect = dngclone.unit_of(func)
+    if unit != expect:
+        raise SystemExit(
+            "dngunsplice: --src basename is `%s.c' but %s belongs to `%s'.\n"
+            "  The basename goes into the INCLUDE_ASM path, so it must be\n"
+            "  `%s.c'. Rename the copy rather than passing this one."
+            % (unit, func, expect, expect))
     text = open(path).read()
     body, span = dngclone.definition(text, func)
     if body is None:
@@ -46,6 +69,9 @@ def main():
     ap.add_argument("funcs", nargs="+",
                     help="FUNCTION names, not unit names")
     ap.add_argument("--keep", help="directory to save each removed body in")
+    ap.add_argument("--src", help="the unit .c to edit IN PLACE; defaults to "
+                    "the committed csrc/ copy. AN AGENT MUST PASS ITS OWN "
+                    "COPY HERE -- without it this edits the committed tree.")
     a = ap.parse_args()
     # REFUSE A UNIT NAME. dngclone.unit_of() takes the second `_'-separated
     # field of a FUNCTION name, so handed `ovl_dng_s10' it returns
@@ -61,7 +87,7 @@ def main():
               "and the error is unrecognisable." % ", ".join(bad))
         return 2
     for f in a.funcs:
-        r = unsplice(f, a.keep)
+        r = unsplice(f, a.keep, a.src)
         print(f"{f}: {'removed from ' + r[0] if r else 'not defined -- skipped'}")
     return 0
 
