@@ -109,7 +109,7 @@ void func_800478B8(u8 *);
 void func_8003DB94(void *, void *, s32);
 extern u8 D_800DE870[];
 extern s16 D_8002992E;
-void func_s72_80025800(u8 *, UnkVec *, u8 *);
+void func_s72_80025800(u8 *p, UnkVec *b, u8 *r);
 s32 func_800C9034(u8 *, UnkVec *, UnkSlot *);
 extern u8 D_s72_80024028[];
 extern u8 D_80083498[];
@@ -123,6 +123,30 @@ typedef struct UnkDng25FB0Rot
 {
     s16 m[3][3];
 } UnkDng25FB0Rot;
+
+typedef struct UnkDngS72Poly
+{
+    s16 m[12];
+} UnkDngS72Poly;
+typedef struct UnkDngS72Grid
+{
+    u16 m[3][3][2];
+} UnkDngS72Grid;
+extern u8 D_s72_80024004[];
+extern s16 D_8002992C;
+s32 func_800C77D0(void *, u8 *, s16, s32);
+void func_80040490(void *, RECT *);
+void func_8003F80C(u32, s32, s32, s16);
+void func_800542BC(void);
+extern u8 D_80083780[];
+extern u8 D_8006E8A0[];
+extern u8 D_8006EE50[];
+extern u16 D_80082E94;
+extern s16 D_80082E86;
+extern Unk80083462 D_80083460;
+void func_s72_80025FB0(MATRIX *d, u8 *f);
+void func_s72_80026060(u8 *s, s16 *b, s16 lo, s16 hi);
+void func_s72_8002612C(u8 *s, s16 d);
 
 u8 *func_s72_80024064(s32 x, s32 z, s16 c)
 {
@@ -837,7 +861,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_800251F4);
    func_s72_800251F4's `s16' as `sll'/`sra' -- while `z' and `f' are `s16',
    each sign-extended once.  Nothing here was fought for, so no spelling in
    it is claimed to be load-bearing. */
-void func_s72_80025648(UnkNode *n, u16 x, u16 y, s16 z, s16 f)
+void func_s72_80025648(UnkNode *n, s16 x, s16 y, s16 z, s16 f)
 {
     u8 *q;
     s16 h;
@@ -845,10 +869,10 @@ void func_s72_80025648(UnkNode *n, u16 x, u16 y, s16 z, s16 f)
     q = (u8 *)n + 0x20;
     if (z < 0x200)
     {
-        h = func_800BCB04(x, y, f);
+        h = func_800BCB04((u16)x, (u16)y, f);
         if (h < z && h >= f)
         {
-            func_s72_800251F4(q, (s16)x, (s16)y, z);
+            func_s72_800251F4(q, x, y, z);
             func_800419EC(6, 0xC);
             func_800A56E0(0x50B);
         }
@@ -901,7 +925,187 @@ void func_s72_80025710(u8 *p, u16 x, u16 y, s16 hi, s16 lo)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80025800);
+/* PENDING func_s72_80025800 */
+/* The 0x12 cluster node's step, three states on the payload's +0x2C while it
+   still owns itself, and a three-way follow once it has been given a parent at
+   +0x20.  State 0 counts +0x32 up and +0x30 down, eases the slot's three scales
+   to 0x100 per tick and re-aims the renderable through func_s72_80026060 until
+   +0x32 reaches 0x19, then zeroes both counters and advances; state 1 steps the
+   renderable on every other tick and, once D_800814A8's +0x96 timer reaches
+   zero, parks 0x200000 in +0x50, clears +0x5C and advances; state 2 integrates
+   +0x50 (itself accumulating +0x5C) into the caller's vector height and, for
+   each of the nine compass cells of D_s72_80024004 around the cell the vector
+   now sits in, calls this unit's func_s72_80025710 and func_s72_80025648 --
+   retiring the actor after 0x28 ticks and clearing D_8002992C and D_80028630 as
+   it goes.  With a parent, the node either retires with it or copies its
+   position and its slot's whole dress across.  314 words, 0 differing.
+
+   No twin: dngtwin and dngcallee find nothing at 0.70.  Written from the
+   listing off this unit's own landed func_s72_80025CE8 (which installs this
+   handler and whose D_s72_80024028 grid is the same idiom) and
+   func_s72_80025088.
+
+   LOUD: THIS BODY CORRECTED func_s72_80025648's PROTOTYPE.  Its second and
+   third parameters are `s16', not `u16'.  The callee cannot tell -- its own
+   parameters arrive in registers with no entry extension, so `(u16)x' for
+   func_800BCB04's `s32' is an `andi' and `x' for func_s72_800251F4's `s16' is
+   an `sll'/`sra' either way -- but the CALLER can: this listing sign-extends
+   both arguments with `sll'/`sra' where a `u16' parameter would have made it
+   zero-extend them with `andi'.  func_s72_80025648 re-measured at 50 words /
+   0 differing after the change, and its body now reads
+   `func_800BCB04((u16)x, (u16)y, f)' / `func_s72_800251F4(q, x, y, z)'.
+
+   | spelling                                              | words | rows |
+   | as written below                                       |  314  |   0  |
+   | the two cell divisions into `s32' locals               |  314  |   2  |
+   | no `(s32)' cast on the grid element in the first call  |  314  |   4  |
+   | the grid element written `g.m[i][j][0] + gx'            |  314  |   4  |
+   | the cell address through a `u16 *c = g.m[i][j]' local    |  314  |   5  |
+   | func_s72_80025648's parameters left as `u16'            |  312  |  12  |
+
+   THREE FACTS, all measured here.
+
+   (1) THE TWO CELL DIVISIONS MUST LAND IN 16-BIT LOCALS.  `(*(s16 *)((u8 *)b
+   + 0x2) - 0x20) / 0x40' is a signed divide, so cc1psx emits the
+   `bgez'/`addiu +0x1F' bias and an arithmetic `sra 6' -- but the target has a
+   LOGICAL `srl 6'.  Declaring the result `u16' makes the store to it a
+   HImode truncation, which lets combine's `force_to_mode' narrow the
+   `ashiftrt' to an `lshiftrt' in the same block; with an `s32' local the only
+   use is a masked sum two basic blocks away and combine never gets there.
+   `s16' and `u16' measure identically (314 / 0 both), so only the WIDTH is a
+   fact and the signedness is NOT MEASURABLE.
+
+   (2) THE GRID ELEMENT NEEDS AN EXPLICIT `(s32)' IN THE FIRST CALL, 4 ROWS.
+   `(u16)(gx + (s32)g.m[i][j][0])' emits `addu $a1, $s7, $a1' (the division
+   result first, as the target has it); without the cast BOTH source orders --
+   `gx + g.m[i][j][0]' and `g.m[i][j][0] + gx' -- emit `addu $a1, $a1, $s7'
+   with the array element first.  The cast is what stops the u16 member's
+   promotion being re-ordered into the first operand position.
+
+   (3) THE 0x24-BYTE GRID IS A `u16 m[3][3][2]' STRUCT AND THE SECOND CALL
+   READS ITS TWO HALVES DIFFERENTLY.  `(s16)g.m[i][j][0]' folds into one `lh',
+   while `(s16)g.m[i][j][1]' comes out `lhu' plus `sll 16'/`sra 10' because the
+   first call already loaded that element zero-extended and cse keeps the one
+   load.  36 bytes with alignment 2 is also what gives the target's runtime
+   alignment test and its two block-move loops.
+
+   Measured and FREE, so not why this lands: the `u8 *h = (u8 *)D_800814A8'
+   local at the top (state 1 re-reads the global inline either way, because the
+   payload stores between invalidate cse's entry while the shared `%hi' pseudo
+   survives). */
+void func_s72_80025800(u8 *p, UnkVec *b, u8 *r)
+{
+    UnkDngS72Grid g;
+    u8 *h;
+    u8 *s;
+    UnkVec *v;
+    s16 i;
+    s16 j;
+    s16 gx;
+    s16 gy;
+
+    g = *(UnkDngS72Grid *)D_s72_80024004;
+    D_8002992E = 1;
+    *(s16 *)(r + 0x10) = 0x20;
+    *(u16 *)(r + 0x14) |= 0xC;
+    h = (u8 *)D_800814A8;
+    if (*(UnkNode **)(p + 0x20) == NULL)
+    {
+        switch (*(s16 *)(p + 0x2C))
+        {
+        case 0:
+            *(s16 *)(p + 0x30) -= 1;
+            *(s16 *)(p + 0x32) += 1;
+            if (*(s16 *)(p + 0x32) < 0x19)
+            {
+                *(s16 *)(r + 0x1C) = *(s16 *)(r + 0x1E) = *(s16 *)(r + 0x20) =
+                    *(s16 *)(p + 0x32) * 0x100;
+                *(s16 *)(p + 0x3A) = 0;
+                *(s16 *)(p + 0x38) = 1;
+                *(s16 *)(p + 0x34) = 1;
+                func_s72_80026060(r, (s16 *)(p + 0x34), *(s16 *)(p + 0x3A), *(s16 *)(p + 0x38));
+                func_s72_80025FB0((MATRIX *)p, *(u8 **)r);
+            }
+            else
+            {
+                *(s16 *)(p + 0x30) = 0;
+                *(s16 *)(p + 0x32) = 0;
+                *(s16 *)(p + 0x2C) += 1;
+            }
+            break;
+        case 1:
+            *(s16 *)(p + 0x32) += 1;
+            if ((*(u16 *)(p + 0x32) & 1) != 0)
+            {
+                *(s16 *)(p + 0x3A) = 1;
+                *(s16 *)(p + 0x38) = 0xF;
+                *(s16 *)(p + 0x34) = 1;
+                func_s72_80026060(r, (s16 *)(p + 0x34), *(s16 *)(p + 0x3A), *(s16 *)(p + 0x38));
+                func_s72_80025FB0((MATRIX *)p, *(u8 **)r);
+            }
+            if (*(s16 *)((u8 *)D_800814A8 + 0x96) == 0)
+            {
+                *(s16 *)(p + 0x30) = 0;
+                *(s32 *)(p + 0x50) = 0x200000;
+                *(s32 *)(p + 0x5C) = 0;
+                *(s16 *)(p + 0x2C) += 1;
+            }
+            break;
+        case 2:
+            b->unk_14 = b->unk_08;
+            *(s32 *)(p + 0x50) += *(s32 *)(p + 0x5C);
+            b->unk_08 += *(s32 *)(p + 0x50);
+            gx = (*(s16 *)((u8 *)b + 0x2) - 0x20) / 0x40;
+            gy = (*(s16 *)((u8 *)b + 0x6) - 0x20) / 0x40;
+            for (j = 0; j < 3; j++)
+            {
+                for (i = 0; i < 3; i++)
+                {
+                    func_s72_80025710(h, (u16)(gx + (s32)g.m[i][j][0]), (u16)(gy + (s32)g.m[i][j][1]),
+                                      *(s16 *)((u8 *)b + 0xA),
+                                      (s16)(*(u16 *)((u8 *)b + 0xA) - 0x40));
+                    func_s72_80025648((UnkNode *)(p - 0x20),
+                                      (s16)(*(u16 *)((u8 *)b + 0x2) + (s16)g.m[i][j][0] * 0x40),
+                                      (s16)(*(u16 *)((u8 *)b + 0x6) + (s16)g.m[i][j][1] * 0x40),
+                                      *(s16 *)((u8 *)b + 0xA), *(s16 *)((u8 *)b + 0x16));
+                }
+            }
+            *(s16 *)(p + 0x30) += 1;
+            if (*(s16 *)(p + 0x30) >= 0x28)
+            {
+                D_8002992C = 0;
+                D_80028630 = 0;
+                *(u16 *)(p - 0x2) |= 0x8000;
+                D_800814A0 |= 0x8000;
+            }
+            break;
+        }
+    }
+    else if (((*(UnkNode **)(p + 0x20))->unk_1E & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    else
+    {
+        v = (*(UnkNode **)(p + 0x20))->unk_08;
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)v + 0x2);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)v + 0x6);
+        *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)v + 0xA);
+        s = (u8 *)(*(UnkNode **)(p + 0x20))->unk_0C;
+        *(u16 *)(r + 0x14) |= 0xC;
+        *(s16 *)(r + 0x10) = 0x20;
+        func_s72_8002612C(r, *(s8 *)(s + 0x4));
+        func_s72_80025FB0((MATRIX *)p, *(u8 **)r);
+        *(s16 *)(r + 0x1C) = *(u16 *)(s + 0x1C);
+        *(s16 *)(r + 0x1E) = *(u16 *)(s + 0x1E);
+        *(s16 *)(r + 0x20) = *(u16 *)(s + 0x20);
+        *(s32 *)(r + 0xC) = *(s32 *)(s + 0xC);
+        *(s16 *)(r + 0x16) = *(u16 *)(s + 0x16);
+        *(s16 *)(r + 0x18) = *(u16 *)(s + 0x18);
+        *(s16 *)(r + 0x1A) = *(u16 *)(s + 0x1A);
+    }
+}
 
 /* Spawn the 0x12 cluster: twenty-one nodes stepped by this unit's
    func_s72_80025800, each offset from (x, y, z) by 0x80 times the compass row
@@ -953,7 +1157,7 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80025800);
    node's +0x1E store in the unwind; and either row halfword read as `*(s16
    *)' or as `(s16) * (u16 *)' at either offset -- all four combinations are
    178 / 0. */
-UnkNode *func_s72_80025CE8(u16 x, u16 y, u16 z, u16 h)
+UnkNode *func_s72_80025CE8(s16 x, s16 y, s16 z, s16 h)
 {
     UnkNode *arr[0x15];
     UnkDngS72Dirs dd;
@@ -1232,4 +1436,239 @@ void func_s72_8002626C(u8 *p, s16 i, s32 col, s32 d, s32 dx, s32 dy, s32 dz, s32
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s72", func_s72_80026418);
+/* PENDING func_s72_80026418 */
+/* The cutscene director's seven-state script on the payload's +0xA.  State 0
+   opens the scene -- func_800C77D0 over D_80083780, a func_80040490 RECT, the
+   func_8003F80C cue, this unit's func_s72_80024BA0 ring clear, D_800814A8's
+   +0xF4 cleared and its +0x96 timer set to 0x1E -- and falls THROUGH into
+   state 1, which waits for bit 0x80 of the first word's owner and then fires
+   func_800A56E0(0x300) and func_800542BC.  State 2 runs the burst: after 0x52
+   ticks it drops D_800814A8's +0xA6 counter, publishes the payload's +0x8 byte
+   at +0xA8 and takes a compass row out of D_800814A8's +0x2A; on tick 0x4A it
+   spawns this unit's func_s72_80025CE8 cluster; and every tick it fires two
+   func_s72_8002626C sparks jittered by three rand draws and offset by that row
+   out of D_s72_80024028, easing D_80083160's three colour bytes down by 2.
+   State 3 falls through into state 4, which eases the colour down and runs a
+   0x3C-tick countdown; state 5 eases it back UP by 0xA and waits on D_80082E94
+   or the countdown before clearing D_8002992E; state 6 slams the colour to 0x80
+   after four ticks, clears D_80083460's +0xC and D_80082E86, drops its +0xA
+   counter and retires the actor.  334 words, 0 differing.
+
+   THIS FUNCTION OWNS jtbl_s72_80024048.  jtcheck.py: 7 words = 7 cases + 0
+   pad, dispatch bound 7, 7 distinct targets, and the range-check `beqz' goes
+   to the function exit, so there is no `default'.  Entries in table order:
+
+       case 0 -> .Ls72_800264FC     case 4 -> .Ls72_800267C8
+       case 1 -> .Ls72_8002659C     case 5 -> .Ls72_80026820
+       case 2 -> .Ls72_800265D0     case 6 -> .Ls72_800268B4
+       case 3 -> .Ls72_800267B8
+
+   The seven entry addresses are strictly ascending, so the arms are written
+   ascending 0..6, which is their source order.  ARM ORDER SETTLED BY A
+   STANDALONE COMPILE, because neither ovlverify nor aligndiff can see it:
+   `tools/cdkgcc -O2 -G0 -S' on this unit emits
+   `.word $L209, $L210, $L212, $L221, $L222, $L225, $L231' and those seven
+   labels appear in the emitted text in that same order with no trailing pad
+   word, so substituting address order for label gives the ROM's sequence
+   entry for entry.  Cases 0 and 3 have no `break' -- they fall through into
+   cases 1 and 4 -- and that is visible in the listing, not inferred.
+
+   DONOR: csrc/ovl_dng_s69.c's landed func_s69_80024020, the same
+   `switch (*(s16 *)(p + 0xA))' director with the same `g = (u8 *)&D_80083160'
+   taken once before the switch, the same `arr[2]' RECT idiom, the same
+   `**(u16 **)(p + 0x4) & 0x80' gate and the same `h = (u8 *)&D_80083460'
+   teardown.  Both of its transferable facts HOLD here:
+     - the `+0xA' state bumps are u16 ARRAY REFS, `((u16 *)p)[5] =
+       ((u16 *)p)[5] + 1';
+     - D_800814A8 is a pointer local PER ARM, assigned BEFORE the store that
+       fills its load delay, while the one remaining use in that arm stays
+       inline (which is what makes the target load it twice in state 2).
+
+   | spelling                                              | words | rows |
+   | as written below                                       |  334  |   0  |
+   | `*(s16 *)(p + 0x1C) = 0' as a plain cast in state 5     |  335  |   4  |
+   | the state-2 tail written BUMP, p[0x24], p[0x28]         |  334  |   6  |
+   | the state-2 tail written BUMP, p[0x28], p[0x24]         |  335  |  23  |
+   | `d = dd.unk_00' in the preheader, not in the loop        |  334  |   2  |
+   | the `for' init left in the `for' statement              |  334  |   4  |
+   | `vp' assigned before the p[0x24] store                  |  334  |   2  |
+   | no `d' local, `dd.unk_00 + i * 4' inline                |  333  |  10  |
+   | no `d' local, `&dd.unk_00[i * 4]'                       |  330  |  22  |
+   | D_80083780 inline in the 0x4A arm (no second local)     |  335  |  25  |
+   | a shared `u16 t' for the two post-increment states      |  338  |  50  |
+   | `dd' declared before `arr'                              |  338  |  50  |
+
+   THREE FACTS WORTH CARRYING.
+
+   (1) THE SCALED ROW INDEX MUST BE A MULTI-SET PSEUDO, 2 ROWS.  The target's
+   row address is `addu $v0, $s4, $v0' -- base first -- and NO spelling of the
+   sum reaches that while the shift feeding it is a single-set pseudo:
+   `d + i * 4', `i * 4 + (s32)d', `(u8 *)&dd + i * 4', an `s16 *' or an
+   `s16 (*)[2]' base and a real ARRAY_REF all emit `addu $v0, $v0, $s4'.  The
+   mechanism is combine.c's `gen_binary', which for a commutative code swaps
+   the operands when the first is class `o' and the second is not: combine
+   substitutes the `sll' into the `addu', builds `(plus (reg) (ashift ...))',
+   swaps it, fails to recognise it and splits it back into the two insns IN THE
+   SWAPPED ORDER.  Assigning the product to a local inside the address --
+   `d + (ix = *(s16 *)(p + 0x24) * 4)', twice, so `ix' has two sets -- makes
+   `can_combine_p' refuse the substitution and the order survives.  Probably
+   macro residue (an offset macro writing a scratch variable); it is annotated
+   at the site.
+
+   (2) STATE 5's `+0x1C' CLEAR MUST BE AN ARRAY REF, ONE WORD.  `((s16 *)p)[0xE]
+   = 0' lets reorg move the store into the D_8002992E branch's delay slot; as
+   the plain cast `*(s16 *)(p + 0x1C) = 0' true_dependence cannot excuse the
+   anonymous store against the fixed-address `lh', the store cannot cross the
+   load, and the delay slot becomes a `nop'.  Same MEM_IN_STRUCT_P polarity as
+   the donor's fact (1).
+
+   (3) THE LOOP COUNTER'S INIT MUST BE HOISTED OUT OF THE `for', 4 ROWS.
+   `k = 0;' written as its own statement ahead of `vp' and the +0x24 store puts
+   it first in the preheader's RTL, which is what lets reorg lift it into the
+   `bne' delay slot of the `p[0x28] == 0x4A' test the way the target does.
+   Left inside `for (k = 0; ...)' it is emitted in the preheader instead.
+
+   Measured and FREE, so not why this lands: `(s32)d' on the base; `s16' or
+   `u16' for the two post-increment reads; and either source order for the
+   row index sum. */
+void func_s72_80026418(u8 *p)
+{
+    s32 arr[2];
+    UnkDngS72Dirs dd;
+    u8 *g;
+    u8 *h;
+    u8 *n;
+    u8 *w;
+    u8 *vp;
+    u8 *d;
+    s16 k;
+    s32 ix;
+    u8 c;
+
+    dd = *(UnkDngS72Dirs *)D_s72_80024028;
+    g = (u8 *)&D_80083160;
+    switch (*(s16 *)(p + 0xA))
+    {
+    case 0:
+        func_800C77D0((u8 *)D_800814A8 - 0x20, D_80083780, 8, 0x400);
+        *(u8 *)((u8 *)D_800814A8 + 0x102) = 1;
+        arr[0] = 0x10003A0;
+        arr[1] = 0x400020;
+        func_80040490(D_8006E8A0, (RECT *)arr);
+        func_8003F80C((u32)D_8006EE50, 0x7AC0, 1, 2);
+        func_s72_80024BA0();
+        ((s32 *)(u8 *)D_800814A8)[0x3D] = 0;
+        *(s16 *)((u8 *)D_800814A8 + 0x96) = 0x1E;
+        D_8002992E = 1;
+        *(s16 *)(p + 0x2A) = 0;
+        ((u16 *)p)[5] = ((u16 *)p)[5] + 1;
+    case 1:
+        if ((**(u16 **)(p + 0x4) & 0x80) != 0)
+        {
+            func_800A56E0(0x300);
+            func_800542BC();
+            *(s16 *)(p + 0x28) = 0;
+            ((u16 *)p)[5] = ((u16 *)p)[5] + 1;
+        }
+        break;
+    case 2:
+        if ((s16)(*(u16 *)(p + 0x28))++ >= 0x52)
+        {
+            n = (u8 *)D_800814A8;
+            *(s16 *)(p + 0x1C) = 0x21;
+            *(s16 *)(n + 0xA6) -= 1;
+            *(u8 *)(n + 0xA8) = p[0x8];
+            *(s16 *)(p + 0x24) = (*(u16 *)((u8 *)D_800814A8 + 0x2A) >> 9) & 0x7;
+            ((u16 *)p)[5] = ((u16 *)p)[5] + 1;
+            *(s16 *)(p + 0x28) = 0;
+        }
+        if (*(s16 *)(p + 0x28) == 0x4A)
+        {
+            w = (u8 *)D_80083780;
+            func_s72_80025CE8(*(s16 *)(w + 0x2), *(s16 *)(w + 0x6), *(s16 *)(w + 0xA),
+                              *(s16 *)((u8 *)D_800814A8 + 0x2A));
+        }
+        k = 0;
+        *(s16 *)(p + 0x24) = (*(u16 *)((u8 *)D_800814A8 + 0x2A) >> 9) & 0x7;
+        vp = (u8 *)D_80083780;
+        for (; k < 2; k++)
+        {
+            d = dd.unk_00;
+            /* MACRO RESIDUE: the row offset is assigned into `ix' inside each
+               address so that the product is a MULTI-SET pseudo.  combine's
+               `gen_binary' otherwise swaps `(plus base (ashift idx 2))' and the
+               split emits the index first -- 2 aligned rows.  See the header. */
+            func_s72_8002626C(p - 0x20, *(s16 *)(p + 0x24), 0xC0C0C0, 0x28,
+                              (s16)((rand() & 0x7F) - 0x40), (s16)((rand() & 0x7F) - 0x40),
+                              (s16)((rand() & 0x7F) - 0x40),
+                              (s16)(*(u16 *)(vp + 0x2) +
+                                    *(s16 *)(d + (ix = *(s16 *)(p + 0x24) * 4)) * 0x80),
+                              (s16)(*(u16 *)(vp + 0x6) +
+                                    (s16)(u32) * (u16 *)(d + (ix = *(s16 *)(p + 0x24) * 4) + 2) * 0x80),
+                              (s16)(*(u16 *)(vp + 0xA) - 0x74));
+        }
+        if (g[0xA8] >= 0x3D)
+        {
+            g[0xA8] -= 2;
+            g[0xA9] -= 2;
+            g[0xAA] -= 2;
+        }
+        break;
+    case 3:
+        *(s16 *)(p + 0x28) = 0;
+        ((u16 *)p)[5] = ((u16 *)p)[5] + 1;
+    case 4:
+        if (g[0xA8] >= 0x3D)
+        {
+            g[0xA8] -= 2;
+            g[0xA9] -= 2;
+            g[0xAA] -= 2;
+        }
+        if ((*(s16 *)(p + 0x1C) -= 1) <= 0)
+        {
+            *(s16 *)(p + 0x1C) = 0x3C;
+            ((u16 *)p)[5] = ((u16 *)p)[5] + 1;
+        }
+        break;
+    case 5:
+        c = g[0xA8];
+        if (c < 0x80)
+        {
+            g[0xA8] = c + 0xA;
+            g[0xA9] += 0xA;
+            g[0xAA] += 0xA;
+        }
+        if ((D_80082E94 & 0x8000) == 0)
+        {
+            if ((*(s16 *)(p + 0x1C) -= 1) >= 0)
+            {
+                break;
+            }
+        }
+        ((s16 *)p)[0xE] = 0;
+        if (D_8002992E == 0)
+        {
+            *(s16 *)(p + 0x28) = 0;
+            ((u16 *)p)[5] = ((u16 *)p)[5] + 1;
+        }
+        else
+        {
+            D_8002992E = 0;
+        }
+        break;
+    case 6:
+        if ((s16)(*(u16 *)(p + 0x28))++ >= 0x4)
+        {
+            g[0xAA] = 0x80;
+            g[0xA9] = 0x80;
+            g[0xA8] = 0x80;
+            h = (u8 *)&D_80083460;
+            *(s32 *)(h + 0xC) = 0;
+            D_80082E86 = 0;
+            *(s16 *)(h + 0xA) -= 1;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+}
