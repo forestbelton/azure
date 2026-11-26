@@ -245,6 +245,38 @@ unit copy is ever replaced by a pristine one, say so in your next status
 message** -- it is a dispatcher bug and worth knowing about immediately.
 
 
+## PRICE FROM A BODY AT ZERO, AND PROTECT WHAT THE VERIFIER CANNOT SEE
+
+**Every figure you quote must come from the finished body, one change at a time.
+Keep a reference copy, restore it after each pricing edit, and `diff` back to
+byte-identical before you write a number down.** On 2026-11-26 one agent
+re-priced five of its own facts from a body at 0: **four moved and one inverted**
+-- a row that read 5 was 59. Mid-fight figures have lied five distinct ways:
+
+* an improvement that is **free** from the clean body, because it was
+  compensating for another live fault;
+* two orders that read **equal**, where one costs 2 rows;
+* a figure whose **prologue reading corroborated it** -- and both were artefacts
+  of the same fault, so the corroboration was not independent;
+* an assertion read straight off the listing that measured **free both ways**;
+* **the wrong spelling simply scoring better** -- a wrong `s16` width read
+  612/174 against the correct `s32`'s 613/190, and twice a wrong placement beat
+  the right one. Those were decided on OPCODE evidence, which was the only thing
+  that could decide them.
+
+> **SAVE THE REFERENCE COPY *AFTER* YOU WRITE THE HEADER COMMENTS, or re-grep
+> for them after the last restore.** One agent's pricing loop silently DELETED a
+> 350-word body's header comment, because the reference predated the comment and
+> every restore put the file back without it. **The body still measured 0, so no
+> check in this project could catch it** -- a comment is not code. It was found
+> only by grepping for it before reporting.
+>
+> That is the "a crashed restore left edits spliced in" hazard running the other
+> way: **a restore can REMOVE work the verifier is blind to.** Anything not
+> compiled -- a header comment, a priced table, a park's `DECLARATIONS` block --
+> sits outside every gate, so a restore-based workflow must protect it
+> explicitly.
+
 ## WHAT BATCH 34 ADDED -- A PARKS BATCH, AND IT CHANGED HOW TO PRICE
 
 Read this first. Batch 34 took 11 parked functions -- the hardest bodies in the
