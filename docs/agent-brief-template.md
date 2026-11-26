@@ -96,6 +96,15 @@ docs/matching-levers.md. Do not infer arm order from a word count.
 `tools/cdkgcc -O2 -G0 -I... -S <copy> -o out.s` is the working order; the reverse
 produces no output and no error.
 
+**DO NOT PASS A NAME LIST THROUGH A SHELL VARIABLE, AND "QUOTE IT" IS NOT THE
+FIX.** This brief used to say to quote such a list; that advice was wrong. The
+Bash tool runs **zsh**, which does not word-split an unquoted parameter at all,
+so `ovlverify.py <copy> $NAMES` passes 33 names as ONE argument whether or not
+you quote it. It prints "is in none of the split overlays" and exits 1 -- loud
+enough -- but **`grep -c` over that output reports 0 rows and 0 zeros rather
+than an error**, which is the plausible-wrong-number shape: an agent nearly
+logged a clean sweep of nothing. Write the names literally on the command line.
+
 **A WHOLE-UNIT `-da` COMPILE DUMPS ONLY THE FIRST FUNCTION IN THE FILE.** To
 read `.greg`, `.lreg`, `.loop` or `.sched` for any other body you must build a
 single-function probe. One agent lost a detour to this. And when you do read
@@ -125,10 +134,9 @@ same agent's anchor -- a local assignment plus its following line -- matched
 TWICE, the second hit being an already-landed neighbour that shares those two
 lines, which would have silently edited a finished body. Slice the span
 `describe_function' reports and substitute inside it; assert the match is
-unique; and re-measure the neighbour. Relatedly, quote your name list:
-`ovlverify $NAMES' unquoted under zsh becomes ONE argument and reports "is in
-none of the split overlays" -- loud here, but a sweep built that way is
-worthless.
+unique; and re-measure the neighbour. Relatedly, do NOT pass a name list through a shell
+variable at all -- see the note above; quoting is not the fix, because zsh never
+word-splits one.
 
 **Do not hand-roll a Python script for any of these.** And **if `parkcheck` crashes,
 report your park as UNCHECKED rather than assuming it is clean** -- it takes a

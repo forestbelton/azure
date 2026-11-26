@@ -178,6 +178,14 @@ void func_b19_80170BFC(u8 *p, UnkVec *v);
 extern u8 D_801742E0[];
 extern u8 D_801742E8[];
 
+extern s32 D_8008346C;
+s32 func_8003F270(void);
+s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n);
+s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e);
+s32 func_800A56E0(s32);
+u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
+extern u8 D_801742F0[];
+
 s32 func_b19_80170884(u8 *p, UnkVec *v)
 {
     UnkDng708A4SP *sp = (UnkDng708A4SP *)0x1F800000;
@@ -1756,9 +1764,416 @@ void func_b19_80172DA0(u8 *p, void *b, void *c, void *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b19", func_b19_80172E04);
+/* The actor's +0x9B five-state hand-off at the end of a carry, the relinked
+   twin of func_b31_80172F94 (csrc/ovl_dng_b31.c, dngtwin 0.852, dngcallee 7 of
+   8 symbols) which owns the SAME table address: state 0 waits for c + 0x14's
+   0x8000 and either jumps straight to state 4 with 0x6000 raised and
+   func_8009C12C called, or zeroes the UnkVec's three words and steps on;
+   state 1 dresses c from this bank's D_801742F0 facing table on the fourth
+   frame, raises 0x800, clears it again on the seventh; state 2 raises 0x800 on
+   the second frame and on the eighth rings func_800A56E0(0x808); state 3 calls
+   func_8009C12C on its second frame and FALLS THROUGH into state 4, which arms
+   func_b19_80171650 as the +0x8C continuation. 157 words, 0 differing,
+   0 aligned differences. Landed on the first compile.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b19", func_b19_80173078);
+   OWNS A JUMP TABLE: jtbl_b19_80170838, 6 ROM words = 5 entries + one pad.
+   minval 0 -- the dispatch is a bare `sltiu $v0, $v1, 0x5' on the `lbu' with
+   NO subtraction, so the cases are 0..4. The range-check `beqz' at 80172E2C
+   targets .Lb19_8017305C, which is the EPILOGUE (`lw $ra, 0x1C($sp)', word
+   150 of 157) and NOT a table entry, so there is NO `default:' in the source.
+   The sixth ROM word 0x00000000 at 8017084C is gcc's `.align 3' pad before
+   jtbl_b19_80170850, not a sixth arm; a standalone compile emits FIVE words
+   because asmlib does not expand the following INCLUDE_RODATA.
+
+   TABLE VERIFIED POSITIONALLY by `tools/cdkgcc -O2 -G0 -S' on this unit, not
+   by ovlverify, which cannot see .rodata at all. Emitted entries
+   [$L258, $L260, $L265, $L269, $L271] at strictly ascending block addresses
+   (.s lines 3910 < 3946 < 4007 < 4049 < 4076) against the ROM's five strictly
+   ascending arm labels 80172E54 < 80172EA4 < 80172F58 < 80172FD4 < 80173014,
+   so the substitution is 1:1 and the arms are written 0,1,2,3,4 in entry
+   order.
+
+   TWO SPELLINGS MEASURED, BOTH LOAD-BEARING (this landed first compile, so
+   everything else in it is UNMEASURED and must not be read as a lever):
+
+   | spelling                                       | words | aligned |
+   | as written below                               |  157  |    0    |
+   | state 2's `c + 0x14 &= 0xF7FF' AFTER the       |  155  |   15    |
+   |   func_800A56E0(0x808) call rather than before |       |         |
+   | the UnkVec zeroes written 0x0C, 0x10, 0x14     |  157  |    2    |
+   |   instead of 0x14, 0x10, 0x0C                  |       |         |
+
+   The first is the sched1 delay-slot case: written store-then-call, sched
+   sinks the `sh' into the `jal's slot and the `andi' pairs with it; written
+   call-then-store it cannot, and two words go.
+
+   The second parameter `b' is read ONLY in state 0's else arm and stays in
+   $a1 the whole way there -- its live range crosses no call on that path, so
+   global.c's allocno_calls_crossed is 0 and no callee-saved register is
+   needed. Do not introduce a local for it. */
+void func_b19_80172E04(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 4;
+            *(u16 *)(c + 0x14) |= 0x6000;
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        p[0x9B]++;
+        *(s16 *)(p + 0x96) = 0;
+        return;
+    case 1:
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) + 1;
+        if (*(s16 *)(p + 0x96) == 4 || (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u8 **)(c + 0x2C) = D_801742F0;
+            func_80047784(c, D_801742F0[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            *(u16 *)(c + 0x14) |= 0x800;
+        }
+        if (*(s16 *)(p + 0x96) == 7 || (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+            p[0x9B]++;
+            *(s16 *)(p + 0x96) = 0;
+        }
+        return;
+    case 2:
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) + 1;
+        if (*(s16 *)(p + 0x96) == 2)
+        {
+            *(u16 *)(c + 0x14) |= 0x800;
+        }
+        if (*(s16 *)(p + 0x96) == 8 || (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+            func_800A56E0(0x808);
+            p[0x9B]++;
+            *(s16 *)(p + 0x96) = 0;
+        }
+        return;
+    case 3:
+        *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) + 1;
+        if (*(s16 *)(p + 0x96) == 2)
+        {
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            p[0x9B]++;
+        }
+        /* fall through */
+    case 4:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        func_800AD594(d, 0x100);
+        *(u32 *)(p + 0x8C) = (u32)func_b19_80171650;
+        D_8008346C = 0;
+        func_800A4ACC(d);
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        return;
+    }
+}
+
+/* The actor's +0x9B five-state despawn sequence, the relinked twin of
+   func_b15_801732C4 (csrc/ovl_dng_b15.c) which owns the SAME TWO TABLE
+   ADDRESSES: state 0 picks the slot triple out of (d + 0x46) & 0x3FFF and
+   hands it to func_800A94A0, state 1 waits on func_8003F270 and falls into
+   state 2's +0x96 countdown, which sprays five 0xC0C0C0 func_b19_80170D28
+   sparks per frame, state 3 sprays twenty func_b19_80170F2C sparks and FALLS
+   THROUGH into state 4, which waits out D_80083460's +0xC, does the
+   D_801742C8 re-dress, drops D_80083460's +0xA live count, re-installs
+   func_b19_80171650 and rings func_800A56E0(0xB4). 383 words, 0 differing,
+   0 aligned differences. Landed on the first compile.
+
+   HOW IT WAS FOUND, because dngtwin ranked it fourth: dngtwin's top row was
+   func_b34_801737B0 at 0.859 and this is func_b15_801732C4 at 0.830 -- the
+   PROLOGUE picked it, not the ratio. -0x40 with six callee-saved registers and
+   the save order s4, s5, s2, ?, ra, s3, ? matches b15's s4, s5, s2, s0, ra,
+   s3, s1 in its first three slots where b34 is -0x38 with five. b15's table
+   addresses then confirmed it.
+
+   WHERE IT DIVERGES FROM b15 -- b15 has SIX states, this has five, by merging:
+   b15's state 2 continues past the five-spark loop into a 0x212-node spawn,
+   which this body does not have at all (state 2 `break's after the loop); and
+   b15's state 4 countdown and state 5 re-dress are ONE arm here. Also
+   `== 4' where b15's state 3 tests `== 5', `p + 0x96 = 0x20' where b15 sets
+   0x14, func_80047784's third argument 0 where b15 passes 2, and no
+   `c[0x5] = 1' / `p + 0xA8' group in the re-dress.
+
+   OWNS TWO JUMP TABLES.
+
+   jtbl_b19_80170850 -- 6 ROM words = 5 entries + one pad. minval 0, a bare
+   `sltiu $v0, $v1, 0x5' on the `lbu' with NO subtraction, cases 0..4. The
+   range-check `beqz' at 801730B4 targets .Lb19_8017364C, the EPILOGUE
+   (`lw $ra, 0x38($sp)', word 373 of 383), NOT a table entry, so there is NO
+   `default:'. The sixth word at 80170864 is gcc's `.align 3' pad before
+   jtbl_b19_80170868; a standalone compile emits FIVE words.
+   Verified positionally: emitted [$L279, $L306, $L308, $L319, $L328] at
+   .s lines 4163 < 4436 < 4470 < 4600 < 4658 against the ROM's ascending
+   801730DC < 8017330C < 80173354 < 8017348C < 80173534 -- 1:1, arms written
+   0,1,2,3,4.
+
+   jtbl_b19_80170868 -- 7 ROM words, SEVEN REAL CASES AND NO PAD. minval 1:
+   the dispatch IS subtracted, `addiu $v1, $v0, -0x1' then
+   `sltiu $v0, $v1, 0x7' on (d + 0x46) & 0x3FFF, so the cases are 1..7. There
+   is no pad because the table ends at 80170884, which is where this unit's
+   .rodata ends -- func_b19_80170884 is the next symbol and it is .text -- so
+   nothing follows it to align against, and the standalone compile emits
+   seven words too. The range-check `beqz' at 80173104 targets
+   .Lb19_80173194, which IS table entry 3 (`case 4'), so case 4 shares the
+   `default:' arm's label and there IS a real `default:' in the source.
+
+   AND ITS ARM ORDER IS NOT MEASURABLE -- this is the second independent
+   measurement of that, after b15's. Writing the three paired arms ASCENDING
+   (5/1, 6/2, 7/3) instead of DESCENDING (7/3, 6/2, 5/1) measures 383 words,
+   0 differing under ovlverify AND 0 aligned differences under aligndiff --
+   and emits the table's last three entries REVERSED, so the table that ships
+   is wrong:
+
+       descending (below)  resolved [8017318C, 80173184, 8017317C, 80173194,
+                                     80173138, 80173130, 80173128] == the ROM
+       ascending           resolved [8017318C, 80173184, 8017317C, 80173194,
+                                     80173128, 80173130, 80173138]
+
+   The three `k = 1' stub blocks land at the IDENTICAL .s addresses either way
+   (4197, 4205, 4213); only the `j' inside each and the table entries move,
+   and both tools mask a `j's R_MIPS_26 field. So the descending order is
+   settled off this listing's own table and the standalone compile, never off
+   a score.
+
+   THREE SPELLINGS MEASURED (this landed first compile, so nothing else in it
+   is a lever):
+
+   | spelling                                       | words | aligned |
+   | as written below                               |  383  |    0    |
+   | `D_8008346C = 0' AFTER the +0xA6 decrement     |  384  |    8    |
+   | state 3 given an explicit `break' instead of   |  383  |   77    |
+   |   falling through into state 4                 |       |         |
+   | the inner switch written 5/1, 6/2, 7/3         |  383  |    0    |
+   |   -- FREE to both tools, WRONG in the table    |       |         |
+
+   The D_8008346C figure is b15's fact transferring exactly: +1 word and 8
+   aligned rows there (469/8 on a 468-word body) and +1 word and 8 aligned
+   rows here. The state-3 row is the one to remember: the WORD COUNT AGREES at
+   383 while 77 rows move, because jump2 absorbs the extra `j' into a delay
+   slot, so a count that matches is no evidence the fall-through is right. */
+void func_b19_80173078(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    Unk8006DE24 *tbl;
+    u8 *g;
+    u8 *e;
+    u8 *q;
+    u8 *g2;
+    u8 *dr;
+    s16 k;
+    s32 i;
+    s32 x;
+    s32 y;
+    u16 cnt;
+
+    k = 0;
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u32 *)(d + 0x1C) & 0x2000) != 0)
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 7:
+                k = 1;
+            case 3:
+                g = d + 0xE;
+                break;
+            case 6:
+                k = 1;
+            case 2:
+                g = d + 0xB;
+                break;
+            case 5:
+                k = 1;
+            case 1:
+                g = d + 0x8;
+                break;
+            default:
+                g = NULL;
+                break;
+            }
+        }
+        else
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 3:
+                g = d + 0xE;
+                break;
+            case 2:
+                g = d + 0xB;
+                break;
+            case 1:
+                g = d + 0x8;
+                break;
+            default:
+                g = NULL;
+                break;
+            }
+        }
+        if (g[0] != 0)
+        {
+            *(u16 *)(p + 0x98) &= 0xFF7F;
+            if (k != 0)
+            {
+                e = (u8 *)D_800814A8;
+                *(s32 *)(d + 0x60) = (s32)e;
+                q = *(u8 **)(e - 0x14);
+                d[0x72] = q[0x24];
+                d[0x73] = q[0x25];
+            }
+            else
+            {
+                tbl = D_8006DE24;
+                i = g[0];
+                e = (u8 *)&tbl[i];
+                if (e[0x12] == 2)
+                {
+                    e = *(u8 **)(d + 0x60);
+                    if (e != NULL)
+                    {
+                        q = *(u8 **)(e - 0x14);
+                        d[0x72] = q[0x24];
+                        d[0x73] = q[0x25];
+                    }
+                }
+                else
+                {
+                    *(s32 *)(d + 0x60) = func_800A05A4(d, c[0x24], c[0x25], *(s16 *)(d + 0x2A), 0x10);
+                    x = *(s8 *)(d + 0x72);
+                    y = *(s8 *)(d + 0x73);
+                    d[0x72] = __builtin_abs(x);
+                    d[0x73] = __builtin_abs(y);
+                }
+            }
+            if (func_800A94A0(d, g, k, p + 0x98) != 0)
+            {
+                p[0x9B]++;
+            }
+        }
+        else
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            D_8008346C = 0;
+            *(u16 *)(D_800814A8 + 0xA6) -= 1;
+            func_800A4ACC(d);
+            d[0x6D] -= 1;
+            *(s32 *)(p + 0x8C) = (s32)func_b19_80171650;
+            d[0x73] = 0;
+            d[0x72] = 0;
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+        break;
+    case 1:
+        if (func_8003F270() != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x800;
+            break;
+        }
+        *(u16 *)(c + 0x14) &= 0xF7FF;
+        p[0x9B]++;
+        func_800A56E0(0x703);
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B]++;
+            break;
+        }
+        if (*(s8 *)(c + 0x4) == 2 && (*(u16 *)(c + 0x14) & 0x1000) != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x800;
+            *(s16 *)(p + 0x96) = 0x16;
+        }
+        if (*(s8 *)(c + 0x4) < 2)
+        {
+            break;
+        }
+        if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B]++;
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+        }
+        if (*(s16 *)(p + 0x96) >= 7)
+        {
+            for (cnt = 0; cnt < 5; cnt++)
+            {
+                func_b19_80170D28((UnkNode *)(p - 0x20), 0, 0xC0C0C0, (rand() & 0xFF) | 0x80,
+                                  (rand() & 0x7F) - 0x40, (rand() & 0x7F) - 0x40,
+                                  (rand() & 0x7F) - 0x40);
+            }
+        }
+        break;
+    case 3:
+        if ((*(s8 *)(c + 0x4) == 4 && (*(u16 *)(c + 0x14) & 0x1000) != 0) ||
+            (*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x800;
+            *(s16 *)(p + 0x96) = 0x20;
+            *(u16 *)(p + 0x98) |= 0x80;
+            p[0x9B]++;
+            for (cnt = 0; cnt < 0x14; cnt++)
+            {
+                func_b19_80170F2C((UnkNode *)(p - 0x20), 0, 0xC0C0C0, (rand() & 0xFF) | 0x80, 0, 0,
+                                  0);
+            }
+        }
+    case 4:
+        g2 = (u8 *)&D_80083460;
+        if (*(s32 *)(g2 + 0xC) == 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+        }
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        dr = D_801742C8;
+        if (*(u8 **)(c + 0x2C) != dr)
+        {
+            *(u8 **)(c + 0x2C) = dr;
+            func_80047784(c, dr[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        if (*(s32 *)(g2 + 0xC) != 0)
+        {
+            break;
+        }
+        *(u16 *)(g2 + 0xA) -= 1;
+        *(s32 *)(p + 0x8C) = (s32)func_b19_80171650;
+        func_800A4ACC(d);
+        d[0x73] = 0;
+        d[0x72] = 0;
+        d[0x6D] -= 1;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        func_800A56E0(0xB4);
+        break;
+    }
+}
 
 /* The banked room script's three-state glide, switching on p + 0x9B:
    state 0 seeds the velocity from the D_8006CCD8 / D_8006CCE8 facing pair,
