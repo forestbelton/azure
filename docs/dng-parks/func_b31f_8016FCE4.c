@@ -1,15 +1,101 @@
 /* PARK: func_b31f_8016FCE4 (ovl_dng_b31f) -- 332 words / 332 words /
-   3 ALIGNED DIFFERENCES.  Agent h186, batch 35.  One-member family.
-   OWNS NO JUMP TABLE.
+   3 ALIGNED DIFFERENCES.  Agent h186, batch 35; agent h230, 2026-11-26.
+   One-member family.  OWNS NO JUMP TABLE.
 
    THE WORD COUNT IS EXACT AND THE ONLY RESIDUE IS ONE REGISTER, three rows:
 
-     173 80016FF98  lh a0,42(s2)   against  lh $v1, 0x2A($s2)
+     173 8016FF98   lh a0,42(s2)   against  lh $v1, 0x2A($s2)
      179 8016FFB0   subu s0,a0,v0  against  subu $s0, $v1, $v0
      182 8016FFBC   addu s0,a0,v0  against  addu $s0, $v1, $v0
 
    The loop's heading value lands in $a0 where the target has $v1.  Nothing
    else in 332 words differs.
+
+   h230: THE CAUSE IS NOW MEASURED END TO END, AND IT IS A CONFLICT, NOT A
+   PREFERENCE-BREAK. Four facts, each read off a `-da' dump of a standalone
+   onefunc probe (0.1 s a candidate):
+
+   1. `e' is allocno 86 (`;; 86 conflicts: 80 82 83 86 89 90 98 380 2 29'
+      plus `;; 86 preferences: 4'), and it is the FIRST allocno allocated
+      (`;; 23 regs to allocate: 86 134 ...'), so allocation ORDER and
+      priority are not levers -- nothing else can take $a0 first.
+   2. THE $a0 PREFERENCE IS SEEDED BY LOCAL-ALLOC, NOT BY GLOBAL. `.lreg'
+      says `;; Register 273 in 4': 273 is the `sll' temp of `(s16)s', tied
+      to the hard $a0 of `(set (reg:SI 4 a0) (ashiftrt (reg 273) 16))' by
+      combine_regs. global.c:1545 `set_preference' then runs on
+      `(set (reg 273) (ashift (reg 92) 16))', and because
+      `GET_RTX_FORMAT(code)[0] == 'e'' it takes the FIRST OPERAND of the
+      expression (`src = XEXP (src, 0)', copy = 0), so `s' (allocno 92) gets
+      hard_reg_preferences bit 4 from a reg whose hard number comes out of
+      `reg_renumber' -- i.e. out of local-alloc's result.
+   3. global.c:783 `expand_preferences' then copies it to `e', because `e'
+      dies in the insn that sets `s' (insns 517 and 536,
+      `REG_DEAD (reg/v:SI 86)') and the two do not conflict.
+      global.c:836 `prune_preferences' strips bit 4 from `s' (it crosses a
+      call, so $a0 is in its conflicts) and KEEPS it on `e' (which crosses
+      none). global.c:1038 then overrides the scan's $v1 with $a0.
+   4. SO EVERY SPELLING OF THE ARGUMENT RE-SEEDS IT. The target's own
+      listing has `sll $a0, $s0, 16 / sra $a0, $a0, 16' at 8016FFC0, so the
+      $a0-tied shift temp exists in the ORIGINAL too and `s' has the
+      preference there as well. The park's "WHAT I WOULD TRY NEXT -- break
+      `s's $a0 preference" axis is therefore CLOSED: the seed is the
+      instruction stream, which is already byte-correct.
+
+   AND THE `regs_someone_prefers' ROUTE IS CLOSED BY SOURCE. It would let a
+   conflicting allocno's preference push $a0 out of `used' in pass 0, but
+   prune_preferences does `AND_COMPL (temp, hard_reg_full_preferences
+   [allocno])' when the other allocno's size is <= this one's -- and `e'
+   prefers $a0 itself, at the same size, so $a0 can never enter
+   regs_someone_prefers[86].
+
+   WHAT IS LEFT IS THE ONE THING THE LANDED TWIN HAS: a hard-register
+   CONFLICT with $a0, which makes prune_preferences delete the preference
+   outright. Measured on the twin func_b31f_8016BF74 (landed, 457 words, 0
+   differing) by compiling it standalone: it emits `lh $3, 42($18)' -- $v1,
+   our target -- and its heading allocno reads
+   `;; 87 conflicts: 80 82 83 87 91 92 101 499 2 4 5 29' WITH NO
+   PREFERENCES LINE AT ALL. The twin gets 4 and 5 into that list because its
+   `e' is shared with TWO pre-loop actor lookups whose ranges are live while
+   $a0/$a1 are being loaded. The twin also PAYS a `move $3,$2' for that
+   sharing (visible in its own compile) and its target has that word; this
+   body's target has none, which is why the park's e2-sharing row is 333.
+
+   h230's NEW LEVER, AND IT IS THE FIRST THING THAT HAS EVER MOVED THESE
+   THREE ROWS: share `e' with `t' -- the `*(u8 **)(e2 - 0x14)' pointer in the
+   0x400 arm, which is live across func_800A0818's argument setup.
+
+       spelling                                            words | aligned
+       the body below (separate `e', `e2', `t')              332  |   3
+       `e' used for `t': e = (s32)*(u8 **)(e2 - 0x14), then
+         *(u8 *)(e + 0x24) / *(u8 *)(e + 0x25) as the args   332  |   5
+       `e' used for the 5th argument, (u16 *)e               331  |   7
+
+   THE t-SHARING ROW IS WORTH READING EVEN THOUGH 5 > 3. All three heading
+   rows are GONE -- `lh $v1, 0x2A($s2)', `subu $s0, $v1, $v0' and
+   `addu $s0, $v1, $v0' all match -- and `;; 86 conflicts: ... 2 4 5 6 29'
+   with NO preferences line confirms the mechanism transferred. The five rows
+   it leaves are all one register, in the arm:
+
+     -        47 8016FDA0                       lbu $a0, 0x24($s3)
+     R   47   48 lw v1,-20(v0)                  lw $v0, -0x14($v0)
+     +   48      lbu a0,36(s3)
+     R   50   50 lbu a2,36(v1)                  lbu $a2, 0x24($v0)
+     R   51   51 lbu a3,37(v1)                  lbu $a3, 0x25($v0)
+
+   i.e. the target wants `t' in $v0 (reusing the dying call result) while the
+   merged allocno has to be $v1 for the loop. ONE allocno cannot be both, so
+   `t' is not the final partner -- but a partner that conflicts with $a0 and
+   whose own range the target ALSO holds in $v1 would land this body.
+
+   SO THE NEXT MOVE IS A PARTNER SEARCH WITH A STATED TEST, not a spelling
+   sweep: a local whose live range (a) overlaps some call's argument setup,
+   so $a0 enters hard_reg_conflicts, and (b) is held in $v1 in the target
+   listing. I read the target listing for $v1 and the only pre-loop locals
+   there are `v' (`lw $v1, 0x1C($s2)', which does NOT overlap an argument
+   setup -- hence the park's 7 rows) and `k' (`lbu $v1, 0x45($s2)' ...
+   `addu $a0, $v1, $a0', which DOES, and is the park's 331/35 row). Neither
+   works as written, which leaves the possibility that the original carries a
+   local this body does not have.
 
    WHAT IT DOES: the bank's walk step -- a 332-word REDUCTION of the landed
    func_b31f_8016BF74 in this same file (457 words; READ THAT COMMENT AND
@@ -43,15 +129,7 @@
    that costs a word (`move v1,v0') because this body has only ONE pre-loop
    lookup, so the shared local is long-lived where the target's is not.
 
-   THE REMAINING THREE ROWS ARE func_b01_80171C34'S DOCUMENTED CASE AND I
-   COULD NOT CLOSE IT.  That comment states: the heading value "in its own
-   local of any type or spelling is 3 differing -- the `lh' of d + 0x2A
-   lands in $a0 where the target has $v1 -- because global.c's
-   expand_preferences gives it `s's hard-register preference (it dies in the
-   insn that sets `s') and `s' prefers $a0 ... Sharing `e', whose other live
-   range is in the pre-loop arms, gives the allocno the hard-register
-   conflicts that put $a0 out of reach".  On THIS body every candidate
-   partner was tried and none reaches 0:
+   EVERY CANDIDATE PARTNER TRIED BY h186 (and none reaches 0):
    | the heading value shares...                         | words | aligned |
    | its own `e' local (as written below)                |  332  |    3    |
    | `cc2'                                               |  332  |    5    |
@@ -64,21 +142,22 @@
    | `k'                                                 |  331  |   35    |
    | `s' itself (s = load; s = s -/+ tbl[i])             |  332  |    3    |
    | `f' (the s16 flag)                                  |  329  |  128    |
+   | `t' (h230)                                          |  332  |    5    |
+   | the 5th argument pointer (h230)                     |  331  |    7    |
    And off the SET/shape side, all still 3: `u32 e' (3), `s16 e' (333/12),
    the gate inverted with the arms swapped (4), `s16 s' with no (s16) cast
    at the func_8009A66C call (3), the ternary form (3), `e' moved to any of
    eight declaration positions (3, 3, 3, 3, 3, 3, 3, 3 -- FLAT, so
-   allocation priority is ruled out), the heading read inline in both arms
+   allocation priority is ruled out, which fact 1 above now explains: `e' is
+   allocated first in every variant), the heading read inline in both arms
    (334/7), an explicit `s16 *tbl' local (333/22), a do { } while (0) round
    the heading read (333/9), and `&& e == e' after the call (3).
 
-   WHAT I WOULD TRY NEXT: the permuter.  Three rows with the word count
-   exact, one register, and a FLAT 3 across every declaration permutation is
-   exactly its shape.  The other untried idea is to break `s's $a0
-   preference rather than give `e' a conflict -- the preference comes from
-   `(s16)s' being func_8009A66C's first argument, so routing that argument
-   through a second local, or through a cast chain that is not a copy, has
-   not been priced.
+   NOT WORTH RE-RUNNING: the permuter. h186 put it next, but the residue is
+   which hard register an existing pseudo gets, decided by a preference
+   seeded in local-alloc off a byte-correct instruction stream; a spelling
+   search cannot address it (and a 376,000-candidate run on exactly this
+   shape moved nothing elsewhere in the project).
 
    DECLARATIONS
    extern u16 D_80083462;

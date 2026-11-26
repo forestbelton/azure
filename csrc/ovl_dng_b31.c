@@ -212,7 +212,7 @@ s32 func_800644B8(s32);
 
 s16 func_800A45D8(u16, u16, s32);
 s32 func_8004491C(UnkNode *, u32);
-s32 func_b31_801745B4(u8 *, u8 *);
+s32 func_b31_801745B4(u8 *p, u8 *q);
 u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
 extern u8 D_80175584[];
 extern u8 D_801755BC[];
@@ -224,6 +224,8 @@ typedef struct UnkDngB31Name4
 extern s16 D_801755E0[][2];
 s32 func_800A7A7C(s16 x, s16 y, s16 z, s32 u, u8 *w);
 s32 func_800A7234(s16 x, s16 y, s16 z, s16 *ox, s16 *oy, s16 *oz);
+
+s32 func_800A6DA4(u32, u32);
 
 void func_b31_801708A0(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
@@ -2943,7 +2945,101 @@ s32 func_b31_801744E0(u8 *p)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31", func_b31_801745B4);
+s32 func_b31_801745B4(u8 *p, u8 *q)
+{
+    Unk80073414 *tb;
+    Unk80073414 *e;
+    s32 base;
+    s32 ok;
+    s32 r;
+    s32 r2;
+    s32 i;
+    s32 v;
+
+    ok = 0;
+    i = 0xF;
+    base = *(u16 *)(D_80073414[p[1]].unk_0C + p[0] * 20) & 0x3000;
+    tb = D_80073414;
+again:
+    r = func_800A6DA4(1, 0x13);
+    e = (Unk80073414 *)((u8 *)0 + (u8)r * 20 + (s32)tb);
+    if (e->unk_02 == 1 || (u8)r == 0x12 || (u8)r == 0xE)
+    {
+        goto next;
+    }
+    r2 = func_800A6DA4(1, (u16)(e->unk_02 - 1));
+    if ((*(u16 *)(e->unk_0C + (u8)r2 * 20) & 0x10) != 0)
+    {
+        goto next;
+    }
+    if (i >= 0xC)
+    {
+        if (base == (*(u16 *)(tb[p[1]].unk_0C + p[0] * 20) & 0x3000))
+        {
+            ok = 1;
+        }
+        v = ok;
+    }
+    else
+    {
+        if ((*(u16 *)(tb[p[1]].unk_0C + p[0] * 20) & 0x3000) <= base)
+        {
+            ok = 1;
+        }
+        v = ok;
+    }
+    /* DEVICE: `| (base & 0x4000)' is a REFERENCE BUMP on `base' that is NOT a
+       loop, and it costs nothing. `base' is masked to 0x3000 at its only
+       assignment, so combine's simplify_and_const_int reduces
+       `(and base 0x4000)' to 0 (nonzero_bits(base) & 0x4000 == 0, and `base'
+       is set once so combine.c's set_nonzero_bits_and_sign_copies records
+       that globally), then `(ior v 0)' to `v' -- both insns are deleted and
+       the body is still 143 words. The test is therefore exactly `v == 0'.
+       What it buys: flow.c:2122 counts the reference before combine runs, so
+       `base' has 4 references instead of 3, and global.c's
+       floor_log2(n)*n/live_length puts it at 2*4/71 = 0.1127, above `tb''s
+       2*4/144 = 0.0556 and just below `ok''s 2*5/88 = 0.1136, which is the
+       target's order r, i, ok, base, tb. Measured: 143 words / 0 aligned
+       differences. The earlier route to the same 4 references was a
+       `do { } while (0)' around the head, which also reaches the right
+       registers but costs 4 rows -- sched.c's loop-note arm sets
+       `reg_pending_sets_all' on the insn after the note, pinning the
+       `lui/addiu %hi/%lo(D_80073414)' pair to the start of the loop body so
+       it can no longer be interleaved with the prologue saves. A SECOND mask
+       as a statement (`base &= 0x3000;') is also free in words but adds TWO
+       references (a set and a use) and lands base in $s3: 143 / 16.
+       Warns under -Wall? No. */
+    if ((v | (base & 0x4000)) == 0)
+    {
+        goto next;
+    }
+    do
+    {
+        p[1] = r;
+        p[0] = r2;
+        p[2] = 0;
+        p[3] = 0;
+        if ((u8)r == 4)
+        {
+            p[3] = 0x80;
+            if ((u8)r2 == 0x11)
+            {
+                p[2] = 1;
+            }
+            else
+            {
+                p[2] = (q[0x25] + 0xF) / 16;
+            }
+        }
+    } while (0);
+    return 1;
+next:
+    if (--i >= 0)
+    {
+        goto again;
+    }
+    return 0;
+}
 
 /* The three-state hop machine for this bank's grid-walking actor, and the
    relinked twin of func_b31f_8016E528 (csrc/ovl_dng_b31f.c, dngtwin 0.945)

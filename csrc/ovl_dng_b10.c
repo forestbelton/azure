@@ -218,6 +218,10 @@ s32 func_800A9E70(u8 *, void *, u8 *, u8 *);
 void func_800A020C(s32, u8 *);
 s32 rand(void);
 
+extern u8 D_80175A0C[];
+extern const u8 D_b10_80170874[];
+void *memcpy(void *, const void *, u32);
+
 s32 func_b10_8017092C(u8 *p, UnkVec *v)
 {
     UnkDng708A4SP *sp = (UnkDng708A4SP *)0x1F800000;
@@ -3316,7 +3320,80 @@ void func_b10_80174C70(u8 *p, UnkVec *b, u8 *c, u8 *d)
     b->unk_04 = b->unk_04 + b->unk_10;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b10", func_b10_80174F24);
+void func_b10_80174F24(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 e[2];
+    UnkDngB09A28Tbl t;
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *q;
+    u8 *g;
+    u8 *g2;
+    s32 k;
+    s16 i;
+
+    t = *(UnkDngB09A28Tbl *)D_b10_80170874;
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        q = (u8 *)n + 0x20;
+        *(s16 *)(q + 0x1A) = 0;
+        for (i = 0; i < 0x1000; i += 0x200)
+        {
+            if ((((D_80083160.unk_C8 + i + 0x100) >> 9) & 7) == 2)
+            {
+                *(s16 *)(q + 0x18) = i;
+            }
+        }
+        n->unk_10 = (u32)func_b10_80174C70;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_14 |= 0xC;
+        r->unk_10 = 0x20;
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)b + 0x2) + ((rand() & 0x1F) - 0x10);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)b + 0x6) + ((rand() & 0x1F) - 0x10);
+        k = (rand() & 0x1F) - 0x70;
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)b + 0xA) + k;
+        g = (u8 *)&t;
+        e[0] = *(u16 *)(g + (((*(s16 *)(q + 0x18) - 0x400) >> 7) & 0x1C));
+        /* DEVICE: the `do { } while (0)' is a REFERENCE BUMP on `g', with the
+           bumped reference SPLIT OUT INTO ITS OWN STATEMENT so the note lands
+           in a harmless place. flow.c:2122 counts a reference once per
+           enclosing loop, so the `g' inside this one counts twice and the
+           quantity local-alloc builds from it wins $v1 over the e[0]
+           lhu/sll chain (local-alloc.c:1693 QTY_CMP_PRI). Measured: 167
+           words / 0 aligned differences here; with the whole e[1] read
+           inside the do-while instead, 168 / 3 -- a `nop' where the target
+           has `sll $a0, $a0, 19', because sched.c:2088 makes the insn AFTER
+           a loop note depend on every insn before it, and with the read
+           inside, the insn after the note is the `lhu' and the `sll' can no
+           longer be hoisted into its load-delay slot. Splitting the `addu'
+           into this statement puts the note between the `addu' and the
+           `lhu', where that barrier costs nothing. With no do-while at all:
+           168 / 10. Warns under -Wall? No. */
+        do
+        {
+            g2 = g + (((*(s16 *)(q + 0x18) - 0x400) >> 7) & 0x1C);
+        } while (0);
+        e[1] = *(u16 *)(g2 + 0x2);
+        m->unk_0C = e[0] << 19;
+        m->unk_10 = e[1] << 19;
+        m->unk_00 = m->unk_00 + m->unk_0C;
+        m->unk_04 = m->unk_04 + m->unk_10;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x200;
+        r->unk_1C = 0x200;
+        *((u8 *)r + 0xE) = 0x20;
+        *((u8 *)r + 0xD) = 0x20;
+        *((u8 *)r + 0xC) = 0x20;
+        r->unk_12 = 0x7DCF;
+        r->unk_14 |= 0x100;
+        memcpy(q + 0x28, D_80175A0C, 0xC);
+        r->unk_08 = (u32)(q + 0x28);
+    }
+}
 
 /* State 0x18's entry: clear the node's +0x71 top bit and +0x6D, install
    ITSELF in the slot's +0x8C handler slot and mark state 0x18/0; then, unless
