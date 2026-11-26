@@ -8,6 +8,42 @@ Numbers here rot. Run the tools; they are the authority.
     python3 tools/decomp/parkstats.py --check      # park headers current?
     python3 tools/decomp/triage.py --easy --fresh  # what to work next
 
+## AS OF 2026-11-26: THE DUNGEON.BIN SWEEP IS AT 90.5%
+
+**6,634 of 6,824 functions, 491,889 of 543,606 words, 190 stubs, five
+containers byte-identical, 87 parks clean.** Everything below this section
+predates the carve and describes a denominator that no longer exists -- read it
+for mechanism, not for position.
+
+    python3 tools/decomp/progress.py                      # the only authority on position
+    python3 tools/decomp/provision_batch.py --dry-run     # the only authority on what is LEFT
+    python3 tools/decomp/parkcheck.py                     # park headers current?
+
+**Ask the dry-run, not a stub count.** On 2026-11-26 I told three consecutive
+agents there was no fresh code left, from a stub count and two units completing
+in a row. There were **25 provisionable functions and 3,647 words** sitting
+unclaimed at that moment, and a full sweep of 36 units found **87 functions and
+24,586 words**. A bare stub count OVERSTATES the work (one unit's 33 stubs are
+all fragments) and a park count UNDERSTATES it (a fresh stub has no park file).
+Only the provisioner knows which stubs have a body an agent can be handed. A
+dry-run over a unit with a LIVE AGENT prints `0 fn 0w` after refusing to
+overwrite its copy, so read the refusal lines and dry-run the units nobody is
+in.
+
+**The remaining 190 stubs are 87 parks and 103 bare stubs.** The parks are
+bodies already correct in shape and stuck on a small residue, each carrying a
+priced table of rejected spellings -- **never re-run a priced cell**. Twelve of
+them had a baseline that no longer reproduced, and three could not be spliced at
+all, until 2026-11-26; `docs/dng-endgame.md` has that story and the two tool
+fixes it took.
+
+**The working procedure is `scratch/azure-dng/BRIEF-TEMPLATE.md`** (versioned
+copy at `docs/agent-brief-template.md`), and `docs/matching-levers.md` is at
+**1,814 entries**. Five agents at a time, one unit each, integrated with
+`dngland.py` and gated on `make check` plus `make containers` -- five
+byte-identical lines, which is the only authority on rodata placement and the
+only check that sees a constant-pool duplicate.
+
 **As of 2026-11-01 the resident executable is DONE: 1052 of 1052 functions,
 41767 of 41767 words, 100%.** `make check` is byte-identical, `guard.py`
 reports 0 asm stubs, `docs/near-misses/` is empty, and every jump table in the
