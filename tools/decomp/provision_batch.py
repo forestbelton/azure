@@ -44,9 +44,38 @@ def fragments(tag):
 LAST_BATCH={"h181":("lo16",16),"h182":("s29",13),"h183":("s30",11),
             "h184":("s43",10),"h185":("b02",10)}
 
+def _next_free_agent():
+    """The lowest hNNN with no directory yet.
+
+    THE DEFAULT USED TO BE THE LITERAL "h186", and that was a data-loss bug.
+    Every agent that ran `provision_batch --units X' without --first-agent
+    landed in scratch/azure-dng/agent-h186/ -- so they shared one directory,
+    and the second one through OVERWROTE the first's FUNCS.txt, JTCHECK.txt,
+    MYTABLES.txt, TINY.txt and TYPES.txt. The unit .c had a refuse-to-overwrite
+    guard; the metadata files had none, and one agent lost all five.
+    Three separate agents reported "the directory it printed already held
+    another agent's work" before one of them read the source and found why.
+
+    Allocating the next unused id removes the collision rather than reporting
+    it, which is the right shape: an agent should never have to pass a flag to
+    avoid clobbering a stranger.
+    """
+    base = os.path.join(PROJ, "scratch/azure-dng")
+    used = set()
+    if os.path.isdir(base):
+        for n in os.listdir(base):
+            m = re.match(r"^agent-h(\d+)$", n)
+            if m:
+                used.add(int(m.group(1)))
+    n = 186
+    while n in used:
+        n += 1
+    return "h%d" % n
+
+
 def _picks_from_argv(argv):
     """-> {agent: (tag, count)}; count 0 means "every stub in the unit"."""
-    first = "h186"
+    first = _next_free_agent()
     tags = []
     i = 0
     while i < len(argv):
@@ -95,6 +124,21 @@ for ag,(tag,n) in PICKS.items():
                      __import__("time").localtime(os.path.getmtime(dst)))))
     else:
         subprocess.run(["cp",os.path.join(PROJ,"csrc","%s.c"%unit),dst],check=True)
+    # AND THE METADATA FILES GET THE SAME GUARD AS THE UNIT .c. They had none,
+    # which is how one agent's five .txt files were destroyed: the unit copy
+    # refused to be clobbered and the metadata beside it was rewritten without
+    # a word. The auto-allocated agent id above should make this unreachable,
+    # so this is a backstop for an explicit --first-agent that collides.
+    meta = ("FUNCS.txt", "JTCHECK.txt", "MYTABLES.txt", "TINY.txt", "TYPES.txt")
+    held = [m for m in meta
+            if os.path.exists(os.path.join(d, m)) and "--force" not in sys.argv]
+    if held:
+        print("  REFUSING to overwrite %d metadata file(s) in %s -- another "
+              "agent's: %s. Pass --first-agent with an unused id (the default "
+              "now picks one), or --force."
+              % (len(held), d, ", ".join(held)))
+        continue    # a module-level `for', not a function -- `return' here is
+                    # a SyntaxError, which is how I found out
     with open(os.path.join(d,"FUNCS.txt"),"w") as fh:
         for w,f in rows: fh.write("%-30s %4dw\n"%(f,w))
     for name,cmd in (("JTCHECK",["python3","tools/decomp/jtcheck.py","--unit",unit]),
