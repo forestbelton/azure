@@ -491,6 +491,91 @@
        R  57  addu a0,a0,a1    / addu $a0, $a0, $v1
        R  58  lh a1,2(s4)      / lh $v0, 0x2($s7)
 
+   AGENT-h282, 2026-11-26, BATCH 35.  STILL 5 ALIGNED DIFFERENCES -- FOURTH
+   REPRODUCTION, AND THE SECOND ON THE s20 MEMBER.  I was dispatched on
+   func_s20_80026010, translated the body below through the s20 relink map
+   above and measured 170 words / 5 aligned differences with THE SAME FIVE
+   ROWS AT THE SAME TARGET WORDS (32, 33, 34, 40, 41, every one `$v0' where
+   the target has `$v1').  I agree with the ACCEPT verdict.  I add one
+   CORRECTION to this file's compiler model, one sharpening of its central
+   negative into arithmetic, one new figure and one widening of the search
+   object.  I re-priced nothing else, and I contradict nothing in this file.
+
+   THE RELINK MAP ABOVE IS NOW ONE ITEM SHORTER.  It says ovl_dng_s20 needs
+   forward declarations for func_s20_80025A58 and func_s20_80025E4C "which
+   are DEFINED LOWER in that file".  They are no longer: both are landed and
+   both sit ABOVE the func_s20_80026010 stub in csrc/ovl_dng_s20.c as of
+   batch 35, so the only declaration the s20 translation needs is
+   `extern UnkDng26478 D_800264F8[];'.  Everything else in that map held.
+
+   CORRECTION -- ROUND 2 IS ORDERED BY PRIORITY, NOT BY DECREASING LIFE
+   LENGTH.  agent-h146's round-1/round-2 reading is otherwise right and is
+   the best thing in this file, but its round-2 sentence is wrong:
+   `qty_compare' and `qty_compare_1' (local-alloc.c:1697-1716) both rank on
+
+     QTY_CMP_PRI(q) = (int) (((double) (floor_log2 (qty_n_refs[q])
+                              * qty_n_refs[q] * qty_size[q])
+                             / (qty_death[q] - qty_birth[q])) * 10000)
+
+   which is the same shape as global.c's `allocno_compare' -- references
+   weighted by their own log and DIVIDED by life length, so a longer life
+   makes a quantity rank WORSE, not better.  The phrase "decreasing length of
+   life" is gcc's OWN comment at local-alloc.c:1586-1588, immediately above
+   the sort that contradicts it, so this file inherited a stale compiler
+   comment rather than misreading the code.  NOT A NEW FINDING, and I am
+   saying so rather than claiming one: docs/matching-levers.md already records
+   that gcc's "decreasing length of life" comment is stale and that the sort
+   is the refs-weighted priority (two places, in the pass-order section and in
+   the allocation-priority section).  Only THIS FILE was still wrong, which is
+   why the correction belongs here and not there.
+
+   AND WHY THAT OPENS NO DOOR -- THE CENTRAL NEGATIVE IS ARITHMETIC, NOT AN
+   EXHAUSTED SEARCH.  `find_free_reg' seeds its exclusion set at
+   local-alloc.c:2170-2175:
+
+     if (accept_call_clobbered)      used = call_fixed_reg_set;
+     else if (qty_n_calls_crossed[qty] == 0)  used = fixed_reg_set;
+     else                            used = call_used_reg_set;
+
+   For a quantity that crosses a call that is a HARD EXCLUSION of every
+   call-used register -- $v0 and $v1 alike -- before any ranking happens, not
+   a preference.  agent-h130 enumerated every quantity born inside the index
+   window (107/108, 111/112/84, 83, 92) and showed each one feeds a value the
+   target reads AFTER the five rand() calls, so every one of them crosses
+   those calls.  Therefore no round-2 rival for $v0 can exist in that window
+   AT ANY PRIORITY, and the correction above cannot be turned into a lever.
+   h130's conclusion stands and its reason is right for the wrong reason:
+   priority is not irrelevant here, it is unreachable.
+
+   NEW FIGURE, and it corrects what h136's 35-row row is evidence OF.  A
+   separate local `id' for `i + 0x10' assigned BEFORE `ia', with `b' written
+   `(id << 3) + (u32)D_80026478' -- h136's shape, on the s20 member:
+
+     170 words, 7 ALIGNED DIFFERENCES
+
+   and the five index rows are UNCHANGED.  The whole of the 7 is those five
+   plus two rows for the hoisted `addiu $s2, $s5, 0x10' moving from target
+   word 37 up to word 30.  h136 records 35 for what it describes as this
+   shape on the s21 member; I am recording mine rather than reconciling them,
+   since the two placements may not be identical.  What matters is the same
+   either way and is now explicit: the rival was emitted in $s2, a
+   CALLEE-SAVED register, because `b' is read after the calls -- so it was
+   never a candidate for $v0 at all.  h136's note says "a rival that OVERLAPS
+   the chain does take a call-used register, but it takes it at the cost of
+   displacing the `b' block"; the first half of that is not what the rival
+   does, and the 35 rows are not evidence for it.
+
+   ONE WIDENING OF THE SEARCH OBJECT, nobody has stated it.  This file hunts
+   for a PSEUDO holding $v0 across the window.  It need not be a pseudo:
+   local-alloc.c:1525-1526 ORs `regs_live' -- the RTL's own HARD-register
+   liveness, recomputed per insn -- into `regs_live_at' at every insn, and
+   `find_free_reg' reads that same array.  So a hard $v0 live range running
+   from a call's return to a later copy blocks the chain just as an allocated
+   quantity would.  That does not change h146's verdict -- such a copy still
+   needs a use the target emits, and h146's forward walk shows words 42..47
+   supply none -- but it means the thing to look for is "$v0 live", not "a
+   pseudo assigned $v0", and the two are not the same object.
+
 DECLARATIONS
 ==== THE PERMUTER HAS NOW BEEN SPENT ON THIS PARK, 2026-11-25, dispatcher.
 

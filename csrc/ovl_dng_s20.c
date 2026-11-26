@@ -252,6 +252,9 @@ s32 func_s20_80024EF4(void);
    is never read.
 
    488 words, 0 differing; relcand ok (15 data symbols, 13 calls). */
+void func_s20_8002596C(s16 x, s16 y, s16 z);
+void func_s20_80026010(void);
+
 void func_s20_80024064(u8 *p, UnkVec *v, u8 *c)
 {
     u16 out[3];
@@ -476,7 +479,248 @@ void func_s20_80024064(u8 *p, UnkVec *v, u8 *c)
     *(s16 *)(p + 0x18) = f + 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s20", func_s20_80024804);
+/* The +0x10 step of the trail-ring node func_s20_80024C80 above parks, and IT
+   OWNS A JUMP TABLE.  jtbl_s20_80024050: 5 `.word's, dispatch bound
+   `sltiu $v0, $a0, 0x5' with no minval subtraction, 5 DISTINCT targets, so
+   there are five real arms written 0, 1, 2, 3, 4 with no `default:' and no pad
+   word (an ODD case count never has one).  Case 0 falls through into case 1.
+   The entry list in table order is .Ls20_8002485C, .Ls20_80024884,
+   .Ls20_80024924, .Ls20_800249F4, .Ls20_80024AA8 -- ascending, so ascending
+   case order is also ENTRY-ADDRESS order; a standalone `tools/cdkgcc -S' of
+   this body emits $L3, $L4, $L9, $L16, $L18 in that same sequence.  The five
+   arms differ in length and in which functions they call, so the order is
+   genuinely measurable here rather than masked by a cross-join.
+
+   WHAT IT IS.  Every frame it steps this bank's D_s20_80026326 counter, then
+   dispatches on its own +0xA state.  0 raises 0x10000000 in the caster
+   payload's +0x1C and falls into 1; 1 walks the renderable's three colour
+   bytes at +0xC..+0xE one step towards 0x40/0x40/0xC0 and advances the state
+   only once D_s20_80026328 is set; 2 steps the +0x18 frame counter, writes the
+   six colour bytes of D_80026470/D_80026474 as small multiples of it (2, 4,
+   14 and 10, 11, 14), spawns four func_s20_8002596C puffs at the mover's
+   position and, past +0x18 >= 0x10, parks +0x18 at 0xA0 and advances; 3
+   jitters D_80026474's first two bytes by `rand() % 63 - 0x80' a frame, draws
+   the +0x18 budget down by D_80080A87 and, when it runs out, fires
+   func_s20_80026010's ring spawn, re-arms +0x18 at 0x10 and advances; 4 eases
+   all six colour bytes to zero and the renderable's three to 0x80 by one
+   1/(+0x18) step each and, when +0x18 runs out, snaps them, drops
+   D_s20_80026324, clears 0x10000000 again and raises 0x8000 in the node's
+   -0x2 and in D_800814A0.  The +0x1A frame counter is bumped on every path,
+   including the out-of-range one.
+
+   NO TWIN AND NO DONOR WAS NEEDED.  dngfam reports 1 member.  The whole body
+   came off IN-UNIT SIBLINGS plus one resident family: func_s20_80024064's
+   `o = *(u8 **)p' / `e = *(u8 **)(o - 0x14)' / array-ref switch idioms, and
+   csrc/ovl_dungeon_800A4B88.c's func_800ACE34 / func_800ACBE4 for the ease
+   (`(0x80 - v) / d' and the NEGATE-then-divide) with csrc/ovl_dng_b10.c's
+   func_b10_8017526C for the `(s16)(--*(u16 *)(p + 0x18)) <= 0' countdown and
+   the -0x2 / D_800814A0 teardown.  First draft was 287 words / 73 rows.
+
+   EVERY SPELLING MEASURED, all re-priced FROM THE BODY AT 0 (the mid-fight
+   figures in my working notes are void and are not reproduced here).
+   aligndiff, and the R rows are included in every count:
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | as written below                                KEPT   |  287  |   0  |
+   | the switch value as a plain cast,                      |       |      |
+   |   `switch (*(s16 *)(p + 0xA))'                         |  288  |   7  |
+   | case 4's +0x1C clear as a plain cast,                  |       |      |
+   |   `*(u32 *)(w + 0x1C) &= 0xEFFFFFFF'                   |  287  |  31  |
+   | case 1's `e' and case 4's as TWO separate locals       |  287  |  10  |
+   | case 3's two bytes through a POINTER LOCAL             |  287  |   3  |
+   | case 4's six eases as `k[0] -= k[0] / x'               |  286  |  27  |
+   | the three 0x80 snaps in +0xE..+0xC order               |  287  |   4  |
+   | case 2's multiplies written as the listing's           |       |      |
+   |   `sll'/`subu'/`sll' decomposition                     |  288  |   7  |
+   | MEASURED AND FREE, so NOT reasons this lands:          |       |      |
+   |   case 2's two pointer locals inlined at every site    |  287  |   0  |
+   |   case 4's two pointer locals inlined at every site    |  287  |   0  |
+   |   case 0's +0x1C set as an array ref `((u32 *)o)[0x7]' |  287  |   0  |
+   |   case 3's compound countdown split into two           |       |      |
+   |     statements (`-=' then a separate `if')             |  287  |   0  |
+
+   THE THREE FACTS THAT MATTER, AND THEY ARE ALL ONE MECHANISM EACH.
+
+   (1) `MEM_IN_STRUCT_P' IS NEEDED AT EXACTLY THE SITES WHERE A LOAD MUST HOP
+   A FIXED-ADDRESS STORE, AND NOWHERE ELSE -- three sites in this body and the
+   three verdicts differ.  The switch value must be the array ref
+   `((s16 *)p)[0x5]' so sched1 can lift its `lh' ABOVE the
+   `sh %lo(D_s20_80026326)' of the counter bump; spelled as a plain cast the
+   load stays below the store, its load delay has nothing to fill and the body
+   is one word LONG with a `nop' the target has not got (288/7).  Case 4's
+   +0x1C clear needs the same exemption against the `sh %lo(D_s20_80026324)'
+   beside it (plain cast 287/31: the `lw 0x1C' sinks below the `sh' and drags
+   the `ori' of 0xEFFFFFFF ten words with it).  Case 0's +0x1C set has NOTHING
+   to hoist over -- the target leaves a `nop' there -- and is FREE either way.
+   So the rule is per site and the discriminator is readable before compiling:
+   is there a store to a file-scope scalar between the load and its use?
+
+   (2) CASE 1'S AND CASE 4'S `e' MUST BE ONE LOCAL, worth 10 rows, and the
+   mechanism is a global allocno's HARD-REGISTER CONFLICT SET, not an
+   arm-sharing argument.  Two separate locals are each BLOCK-LOCAL, so
+   local-alloc takes them, and `find_free_reg' scans plain ascending
+   hard-register order (cdk-gcc's mips.h defines no `REG_ALLOC_ORDER'), which
+   hands case 1's `e' $v1 -- the first register the byte values have not
+   already taken.  The target has $a1 at all ten sites.  One local spanning
+   both arms is a GLOBAL allocno instead, and global-alloc runs AFTER
+   local-alloc: `mark_reg_store' renumbers an already-allocated pseudo to its
+   hard register (global.c:1362) so it enters `hard_regs_live', and
+   `record_one_conflict' then puts that hard register into
+   `hard_reg_conflicts[allocno]' for every live allocno, which `find_reg' ORs
+   into its exclusion set.  So the merged `e' conflicts with every register
+   local-alloc already filled over its range -- $v0, $v1 and $a0 here -- and
+   is pushed onto $a1, which local-alloc used in neither block.  Pass 0 of
+   `find_reg' additionally considers only registers in `regs_used_so_far'
+   ("we never allocate a register for the first time in pass 0").  The two
+   arms are disjoint, so nothing is paid for the longer range.  This is the
+   "merge two of yours" rung of the register ladder reached from the other
+   end: the residue was caller-saved against caller-saved, i.e. wrong register
+   WITHIN a class, not a missing merge across one.
+
+   RETRACTION, same run: I first wrote that `find_reg' "prefers a hard
+   register that NO local allocno uses".  That is wrong.  `local_reg_n_refs'
+   (global.c:430-448, read at :1125-1145) is consulted only in the
+   LAST-RESORT path that runs when `best_reg < 0' -- when global-alloc has
+   found nothing and is deciding whether to KICK OUT local-alloc's assignment
+   -- and it is zeroed outright for any register in `regs_ever_live'.  It
+   plays no part here.  The measurement (10 rows) never moved; only my
+   explanation of it did.
+
+   (3) THE SAME POINTER-LOCAL QUESTION HAS OPPOSITE ANSWERS IN CASE 3 AND IN
+   CASES 2 AND 4, and the discriminator is the CALL between the two stores.
+   Cases 2 and 4 touch three bytes of each symbol with nothing between them,
+   and a pointer local is FREE there (a `symbol_ref' costs no insn at expand
+   time, so both spellings are the same tree after cse).  Case 3 stores two
+   bytes with a `rand()' call between them, and there the pointer local costs
+   3 rows: the `lo_sum' that completes the address is the only insn left for
+   reorg to put in the second `jal's delay slot, and with a local it schedules
+   AFTER the call so reorg takes the first `sb' instead -- the two
+   instructions come out transposed around the call.  Written inline at both
+   sites the `lo_sum' lands immediately before the `jal' and reorg takes it,
+   which is the target.  NOTE this says nothing about naturalness: the inline
+   form is also the plainer C.
+
+   READ 0x82082083 AS A DIVISOR, NOT A CONSTANT.  `lui 0x8208'/`ori 0x2083'
+   with `mfhi', an add-back of the dividend, `sra 5' and a `sra 31' correction
+   is ceil(2^37 / 63) = 2181570691, and the `sll 6'/`subu' that follows
+   multiplies the quotient back by 63 -- so case 3 is `rand() % 63', signed.
+   The magic is materialised ONCE in $s1 and reused by the second division;
+   that is cse hoisting it, not source.  Equally, case 4's `div' instructions
+   are real divisions by a VARIABLE (+0x18), which is why they survive at all.
+
+   SIGNATURE RE-DERIVED, AND IT IS STILL NOT WITNESSED.  The declaration above
+   was a guess and I have kept it unchanged: this body reads $a0 (`p') and $a1
+   (`v') only, $a2 and $a3 are written-only, and the only reference anywhere is
+   `(u32)func_s20_80024804' in func_s20_80024C80, so no call site constrains
+   the arity.  `c' is unused here.  func_s20_8002596C and func_s20_80026010
+   are both DEFINED/stubbed LOWER in this file, so both needed forward
+   declarations added to the block -- without them K&R would have given each
+   `int (...)' and this body would still have measured 0 differing.
+
+   287 words, 0 differing; relcand ok (7 data symbols, 4 calls); declcheck
+   clean apart from the unit's 29 pre-existing RotTransPers/RotTransSV/
+   RotTransPers4 pointer warnings, which the committed file reports too. */
+void func_s20_80024804(u8 *p, UnkVec *v, u8 *c)
+{
+    u8 *o;
+    u8 *e;
+    u8 *b;
+    u8 *d;
+    u8 *k;
+    u8 *t;
+    u8 *w;
+    s32 i;
+
+    D_s20_80026326 += 1;
+    switch (((s16 *)p)[0x5])
+    {
+    case 0:
+        o = *(u8 **)p;
+        *(u32 *)(o + 0x1C) |= 0x10000000;
+        *(u16 *)(p + 0xA) += 1;
+        /* fallthrough */
+    case 1:
+        e = *(u8 **)(*(u8 **)p - 0x14);
+        e[0xC] -= 1;
+        if (e[0xC] < 0x40)
+        {
+            e[0xC] = 0x40;
+        }
+        e[0xD] -= 1;
+        if (e[0xD] < 0x40)
+        {
+            e[0xD] = 0x40;
+        }
+        e[0xE] += 1;
+        if (e[0xE] > 0xC0)
+        {
+            e[0xE] = 0xC0;
+        }
+        if (D_s20_80026328 != 0)
+        {
+            *(u16 *)(p + 0xA) += 1;
+        }
+        break;
+    case 2:
+        *(u16 *)(p + 0x18) += 1;
+        b = (u8 *)&D_80026470;
+        b[0] = *(s16 *)(p + 0x18) * 2;
+        b[1] = *(s16 *)(p + 0x18) * 4;
+        b[2] = *(s16 *)(p + 0x18) * 14;
+        d = (u8 *)&D_80026474;
+        d[0] = *(s16 *)(p + 0x18) * 10;
+        d[1] = *(s16 *)(p + 0x18) * 11;
+        d[2] = *(s16 *)(p + 0x18) * 14;
+        for (i = 0; i < 4; i++)
+        {
+            func_s20_8002596C(*(s16 *)((u8 *)v + 0x2), *(s16 *)((u8 *)v + 0x6),
+                              *(s16 *)((u8 *)v + 0xA));
+        }
+        if (*(s16 *)(p + 0x18) >= 0x10)
+        {
+            *(s16 *)(p + 0x18) = 0xA0;
+            *(u16 *)(p + 0xA) += 1;
+        }
+        break;
+    case 3:
+        ((u8 *)&D_80026474)[0] = rand() % 63 - 0x80;
+        ((u8 *)&D_80026474)[1] = rand() % 63 - 0x80;
+        if ((s16)(*(u16 *)(p + 0x18) -= D_80080A87) <= 0)
+        {
+            func_s20_80026010();
+            *(s16 *)(p + 0x18) = 0x10;
+            *(u16 *)(p + 0xA) += 1;
+        }
+        break;
+    case 4:
+        k = (u8 *)&D_80026470;
+        k[0] += -k[0] / *(s16 *)(p + 0x18);
+        k[1] += -k[1] / *(s16 *)(p + 0x18);
+        k[2] += -k[2] / *(s16 *)(p + 0x18);
+        t = (u8 *)&D_80026474;
+        t[0] += -t[0] / *(s16 *)(p + 0x18);
+        t[1] += -t[1] / *(s16 *)(p + 0x18);
+        t[2] += -t[2] / *(s16 *)(p + 0x18);
+        e = *(u8 **)(*(u8 **)p - 0x14);
+        e[0xC] += (0x80 - e[0xC]) / *(s16 *)(p + 0x18);
+        e[0xD] += (0x80 - e[0xD]) / *(s16 *)(p + 0x18);
+        e[0xE] += (0x80 - e[0xE]) / *(s16 *)(p + 0x18);
+        if ((s16)(*(u16 *)(p + 0x18) -= 1) <= 0)
+        {
+            e[0xC] = 0x80;
+            e[0xD] = 0x80;
+            e[0xE] = 0x80;
+            w = *(u8 **)p;
+            D_s20_80026324 -= 1;
+            ((u32 *)w)[0x7] &= 0xEFFFFFFF;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+    *(u16 *)(p + 0x1A) += 1;
+}
 
 /* The 0x202 spawner for the ring of sixteen trail nodes, called from case 3
    of func_s20_80024064 above: take a node off func_8003FD64 with this
