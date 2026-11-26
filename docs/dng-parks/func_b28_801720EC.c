@@ -42,12 +42,35 @@
        result assigned into `w' first
      a THIRD copy of each c byte (`x3 = x2; y3 = y2') to raise pressure
      `k = 0' before the gates and reassigned after them
-   WHAT I WOULD TRY NEXT: the pseudo has to survive cse's constant
-   propagation, so it needs a definition cse cannot see through. The two
-   candidates left are (a) a value cse proves zero only through
-   `record_jump_equiv' -- some test earlier in the body whose failing arm
-   makes a local provably 0 -- and (b) a permuter run, which is 24 rows on a
-   body whose every other property already matches.
+   ROUTE (a) IS NOW RUN AND IT IS FLAT (dispatcher, 2026-11-26).  The idea was
+   a value cse proves zero only through `record_jump_equiv', so that the
+   pseudo holds a CALL RESULT rather than a constant and cse has nothing to
+   fold.  The body has the ideal site for it: the `func_800A44E0' gate at
+   word ~38 returns on non-zero, so on the FALL-THROUGH edge its result is
+   provably 0, and the zero uses at `p[0x9B]' and `p + 0x8C' are downstream of
+   it.  Measured:
+
+       the result in `s32 r0', both zero uses written `r0'   160 w / 24 rows
+       the same with only `p[0x9B] = r0'                      160     / 24
+       the same plus the five `return 0' written `return r0'  160     / 26
+
+   So cse folds the uses to `$zero' before allocation even when the value's
+   definition is a call, the pseudo never reaches the allocator, and the
+   register pressure that costs the 22 downstream rows is still absent.  That
+   is NINE shapes now, and the source-level space for creating this pseudo
+   looks genuinely closed.
+
+   ROUTE (b), THE PERMUTER, IS STILL WORTH IT -- and that is not the default
+   answer.  A separate finding on 2026-11-26 is that the permuter cannot crack
+   a residue which is WHICH REGISTER an existing pseudo got, because a register
+   follows the live ranges and the permuter only permutes spellings; a
+   376,000-candidate run on such a park moved nothing.  **This park is the other
+   kind.** Its residue needs a pseudo to EXIST that nine hand-written spellings
+   do not create, and whether a pseudo exists IS a property of the source
+   structure -- which is exactly what the permuter explores.  So the triage rule
+   points the opposite way here, and a run is justified on a body whose word
+   count, frame, save list, save order, every save offset, every relocation and
+   every call already match.
 
    THE FRAME NEEDED 0x28 BYTES BELOW THE SAVES AND THE SPLIT IS A GUESS. The
    target is `addiu $sp, $sp, -0x50' with ten saves at 0x28..0x4C, so
