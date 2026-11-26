@@ -2063,11 +2063,144 @@ void func_b39_801743EC(u8 *p)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80174424);
+/* The CLUT cross-fade step of the 0x10 node that the parked
+   func_b39_8017382C spawns: bump the +0x96 frame counter, retire the node
+   once it passes +0xA8, then StoreImage the node's own RECT at +0xA0 into a
+   0x100-entry scratch buffer and interpolate four rows of the 16x16 CLUT at
+   (0x340, 0x100) or (0x340, 0x102) towards the row three below, by
+   +0x96 / +0xA8 of the way, before LoadImage-ing it back.  145 words,
+   0 differing.  No new declarations: RECT, StoreImage, LoadImage and
+   DrawSync come from common.h and D_800814A0 from structs.h.
+   func_8006733C, func_80067014 and func_800672D8 are StoreImage, DrawSync
+   and LoadImage out of splat/common_syms.txt, so no address is spelled as a
+   number; `--raw' is 9 differing and all 9 are those relocations plus two
+   local labels.
+
+   THE ONE THING THAT MATTERS IS THAT THE BUFFER INDEX IS WRITTEN INLINE AT
+   ALL THREE REFERENCES.  Through a `k = (i << 4) + n' local it is 144 words
+   and 13 aligned differences, because loop.c then sees ONE DEST_REG giv
+   whose benefit is `rtx_cost(plus) - add_cost * biv_count' = 0 and prints
+   `giv of insn 154 not worth while, 0 vs 92': the index is recomputed from
+   the biv inside the loop instead of being strength-reduced to the
+   decrementing register the target has.  Written inline the same value is
+   three memory givs, combine_givs merges their benefits, and the reduction
+   happens.  A `base = i * 16' local in the outer loop makes the giv
+   RECOGNISED (the dump names it) and still not worth reducing, so it is
+   13 rows as well.
+
+   ALSO LOAD-BEARING, each measured both ways:
+   | spelling                                        | words | aligned |
+   | as written below                                 |  145  |    0    |
+   | `(v >> 5)' without the `(s16)' cast              |  144  |    6    |
+   | `s32 t' instead of `s16 t'                       |  143  |    9    |
+   | `cr[0] + (cg[0] << 5) + (cb[0] << 10)'           |  145  |   10    |
+   | `for (n = 0; n < 0x10; n++)' counting up         |  145  |    8    |
+   | a `k' local for the index, any spelling          |  144  |   13    |
+   MEASURED AND FREE, so NOT the reason this lands: `cr[2]'/`cg[2]'/`cb[2]'
+   instead of the `[4]' below (145 / 0), and `s16 v' instead of `s32 v'
+   (145 / 0).  The three 4-element arrays are written that way because the
+   target's three scratch slots are 8 bytes apart, not because it was
+   priced. */
+void func_b39_80174424(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    RECT r;
+    u16 buf[0x100];
+    s16 cr[4];
+    s16 cg[4];
+    s16 cb[4];
+    s32 i;
+    s32 j;
+    s32 n;
+    s16 t;
+    s32 v;
+
+    *(s16 *)(p + 0x96) = *(u16 *)(p + 0x96) + 1;
+    if (*(s16 *)(p + 0xA8) < *(s16 *)(p + 0x96))
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    StoreImage((RECT *)(p + 0xA0), (u_long *)buf);
+    r.x = 0x340;
+    r.w = 0x80;
+    r.h = 2;
+    if (*(s16 *)(p + 0x9E) == 0)
+    {
+        r.y = 0x100;
+        t = *(u16 *)(p + 0x96);
+    }
+    else
+    {
+        r.y = 0x102;
+        t = *(u16 *)(p + 0xA8) - *(u16 *)(p + 0x96);
+    }
+    DrawSync(0);
+    for (i = 0xC; i >= 0; i -= 4)
+    {
+        for (n = 0xF; n >= 0; n--)
+        {
+            for (j = 0; j < 2; j++)
+            {
+                v = buf[(i << 4) + n + j * 0x30];
+                cr[j] = v & 0x1F;
+                cg[j] = ((s16)v >> 5) & 0x1F;
+                cb[j] = ((s16)v >> 10) & 0x1F;
+            }
+            cr[0] += (cr[1] - cr[0]) * t / *(s16 *)(p + 0xA8);
+            cg[0] += (cg[1] - cg[0]) * t / *(s16 *)(p + 0xA8);
+            cb[0] += (cb[1] - cb[0]) * t / *(s16 *)(p + 0xA8);
+            buf[(i << 4) + n] &= 0x8000;
+            buf[(i << 4) + n] += (cb[0] << 10) + (cg[0] << 5) + cr[0];
+        }
+    }
+    LoadImage(&r, (u_long *)buf);
+    DrawSync(0);
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80174668);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80174B20);
+/* The 0x201 node's own step function, spawned by the parked
+   func_b39_80174668: ease the renderable's three colour bytes up from the
+   +0x96 counter while it is under 0x10, hold them at 0x808080 above that,
+   and when the counter runs out raise 0x8000 in the node's -0x2 and in
+   D_800814A0 -- the same teardown the landed func_b39_80175174 two listings
+   below already carries.  30 words, 0 differing, first compile.
+   No new declarations.  `--raw' is 4 differing: one local label and the
+   three D_800814A0 halves.
+
+   FOUR SPELLINGS PRICED AFTER THE FACT, since a first-compile landing proves
+   nothing about any of them:
+   | spelling                                          | words | aligned |
+   | as written below                                   |   30  |    0    |
+   | the three colour stores as 0xC, 0xD, 0xE           |   30  |    2    |
+   | no `v' local, the product at each of the 3 stores  |   38  |    9    |
+   | the two arms of the 0x10 gate exchanged            |   30  |    9    |
+   | `(s16)(*(u16 *)(p + 0x96) - 1) <= 0' as one test   |   29  |    1    |
+   MEASURED AND FREE: `*(s16 *)(p + 0x96) * 2 + *(s16 *)(p + 0x96)' instead
+   of the `* 3' below (30 / 0), so the multiply spelling is not a lever. */
+void func_b39_80174B20(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 v;
+
+    if (*(s16 *)(p + 0x96) < 0x10)
+    {
+        v = *(s16 *)(p + 0x96) * 3;
+        c[0xE] = v;
+        c[0xD] = v;
+        c[0xC] = v;
+    }
+    else
+    {
+        *(u32 *)(c + 0xC) = 0x808080;
+    }
+    *(s16 *)(p + 0x96) -= 1;
+    if (*(s16 *)(p + 0x96) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_80174B98);
 
