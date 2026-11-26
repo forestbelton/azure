@@ -55,7 +55,12 @@ void func_s69_80025840(u8 *s, s16 *b, s16 lo, s16 hi);
 void func_s69_8002590C(u8 *s, s16 d);
 void func_s69_800257D0(u8 *d, u8 *s);
 void func_s69_8002593C(u8 *p, UnkVec *b, u8 *r);
-void func_s69_80025B78(u8 *, UnkVec *, u8 *);
+UnkNode *func_s69_80025B78(u8 *, UnkVec *, u8 *);
+void func_800C9088(u8 *, UnkVec *, UnkSlot *, s16);
+typedef struct UnkDngS58Blk32
+{
+    u8 b[0x20];
+} UnkDngS58Blk32;
 UnkNode *func_s69_80025FCC(s16 x, s16 y, s16 z, s16 a);
 s16 func_800A07D0(s16, s16, s16, s16);
 s16 func_800A45D8(u16, u16, s32);
@@ -1431,9 +1436,191 @@ void func_s69_80025A34(u8 *p, UnkVec *v, UnkSlot *s)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s69", func_s69_80025AAC);
+/* The 0x202 trail node's func_8004491C record: walk the node chain from `p'
+   and, for each node, draw its slot twelve times -- once per 0x10-byte row of
+   this bank's D_800274C0 table, published into the slot's +0x08 -- re-pointing
+   the slot's +0x00 element at the current sheet frame through
+   func_s69_8002590C, re-dressing the 0x20-byte record at the payload through
+   func_s69_800257D0, and handing the whole thing to the engine's
+   func_800C9088 at the slot's own +0x06 depth. Always returns 0.
+   51 words, 0 differing. One-member family (dngfam), no jump table.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s69", func_s69_80025B78);
+   THE DONOR IS THE RESIDENT func_800C9034 (csrc/ovl_dungeon_800C2824.c),
+   named by dngcallee at 1 of 2 symbols; dngtwin finds nothing carved at 0.70
+   and xsibs was not needed. The outer loop is that function VERBATIM -- the
+   `*(UnkNode **)(p - 8)' chain read, the NULL return, the `n + 0x20' /
+   `n->unk_08' / `n->unk_0C' rebind -- with its single func_800C9088 call
+   replaced by this bank's twelve-row inner loop. Note the frames disagree
+   completely (donor -0x18 with s0,ra; this -0x30 with s0..s5,ra), so only its
+   SHAPE was taken and none of its allocation. The in-unit sibling
+   func_s69_800255B8 nine listings up supplied the row-address spelling and
+   the slot's field meanings.
+
+   THE ONE FACT, worth 4 aligned rows, and it is counter-intuitive: the row
+   address must be the INDEX EXPRESSION and NOT a hand-written pointer cursor,
+   even though the listing shows exactly the `addiu $s1, $s1, 0x10' a cursor
+   would give you. Measured, each a single change from this body at 0:
+
+     s->unk_08 = i * 0x10 + (u32)D_800274C0  (as written)     51 /  0
+     (u32)(D_800274C0 + i * 0x10), pointer sum                51 /  0  FREE
+     (i << 4) + (u32)D_800274C0                               51 /  0  FREE
+     every slot access as a plain cast off `u8 *s' instead
+     of the UnkSlot fields used here                          51 /  0  FREE
+     `u8 *base = D_800274C0' plus `u8 *row', written
+     `for (i = 0, row = base; i < 0xC; i++)' with
+     `row += 0x10' after the store                            51 /  4
+     the same cursor with `row = base;' as its own
+     statement before the `for'                               51 / 11
+     the same cursor with no `base' local at all          48 words / 13
+     the same cursor with neither the `base' local nor
+     the comma initialiser                                48 words / 21
+
+   THAT IS A COMPLETE 2x2 AND NEITHER AXIS REACHES 0, which is the signal the
+   brief names for a second fault: the `base' local is worth ~8 rows and the
+   comma initialiser ~8 rows, they are additive, and the cursor ITSELF was the
+   remaining 4. A one-at-a-time sweep inside the cursor shape would have
+   bottomed out at 4 and read as a floor.
+
+   WHY: with the index expression loop.c strength-reduces it and puts the giv
+   UPDATE at the loop BOTTOM, beside the biv increment (`.loop' insns 135 and
+   77 adjacent), so the +0x08 store and the `addu $a0, $s0, $zero' argument
+   copy are the only two insns ready for the block's first two slots --
+   whereupon `.sched' prints `insn 38 has a greater potential hazard' and
+   schedule_select awards the STORE the second slot, leaving the register copy
+   in the FIRST. reorg then steals that copy into the back branch's delay slot
+   and redirects the branch past it, which is why `addu $a0, $s0, $zero'
+   appears twice in the listing from one statement. A cursor's `row += 0x10'
+   is an anti-dependence pinned immediately after the store at a lower LUID
+   than the argument copy, so the first three slots are store / increment /
+   copy, the copy never competes for slot one, a STORE is not stealable (it is
+   not harmless on the untaken path), and the delay slot takes a `nop'.
+   See docs/matching-levers.md, the reorg loop-head-copy entry.
+
+   The 3-word deficit of the last row is the symbol's `lui'/`addiu' plus one
+   save/restore pair: with no named local nothing holds D_800274C0 across the
+   outer loop, so $s5 is never allocated.
+
+   relcand: ok (1 data symbol, 3 calls). The three `jal' targets were also
+   read off the listing by hand. */
+s32 func_s69_80025AAC(u8 *p, UnkVec *v, UnkSlot *s)
+{
+    UnkNode *n;
+    s32 i;
+
+    for (;;)
+    {
+        for (i = 0; i < 0xC; i++)
+        {
+            s->unk_08 = i * 0x10 + (u32)D_800274C0;
+            func_s69_8002590C((u8 *)s, s->unk_04);
+            func_s69_800257D0(p, (u8 *)s->unk_00);
+            func_800C9088(p, v, s, s->unk_06);
+        }
+        n = *(UnkNode **)(p - 8);
+        if (n == NULL)
+        {
+            return 0;
+        }
+        p = (u8 *)n + 0x20;
+        v = n->unk_08;
+        s = (UnkSlot *)n->unk_0C;
+    }
+}
+
+/* Spawn the 0x202 trail node func_s69_8002501C hands off to: allocate it,
+   give it func_s69_80025A34 as its +0x10 step and func_s69_80025AAC as its
+   func_8004491C record, seed the new node's mover from the caller's own
+   position triple and its slot from twelve of the caller's slot fields, then
+   copy the caller's whole 0x20-byte payload into the new node's payload.
+   Returns the node, or NULL when the allocator refuses.
+   108 words, 0 differing, FIRST COMPILE. One-member family, no jump table.
+
+   NO DONOR WAS USED. dngtwin finds nothing carved at 0.70; dngcallee is NOISE
+   here -- func_8003FC64 + func_8004491C is 2 of 2 symbols reached by 231
+   functions, which is exactly the 2-symbol noise floor the brief warns about.
+   Written from the listing on the in-unit idioms: func_s69_800255B8's spawner
+   skeleton (`n->unk_10 = (u32)step; func_8004491C(n, (u32)record);') and
+   func_s69_8002501C's attached arm, which copies the same +0x16..+0x20
+   rotation block and +0xC colour word between a lender's slot and its own.
+
+   *** PROTOTYPE CHANGE: this was declared `void' in the committed unit and is
+   now `UnkNode *'. THAT IS LOAD-BEARING, NOT COSMETIC. As `void' the body is
+   107 words / 38 aligned differences: the missing `addu $v0, $s0, $zero' at
+   the join is one word, and without it `n' is dead at the join so the whole
+   tail reallocates. Its one caller, the landed func_s69_8002501C, discards
+   the value and re-measured at 359 words / 0 differing afterwards. ***
+
+   MEASURED, each a single change from this body at 0 differing:
+
+     as written                                               108 /  0
+     `void' return instead of `UnkNode *'                 107 words / 38
+     the six rotation stores ascending 0x16..0x20 instead
+     of 0x1C,0x1E,0x20 then 0x16,0x18,0x1A                    108 / 18
+     the six slot-tail stores in ascending offset order
+     (0x0, 0x4, 0x8, 0xC, 0x10, 0x14) instead of
+     0xC, 0x14, 0x0, 0x8, 0x10, 0x4                           108 / 24
+     `n->unk_10 = ...' AFTER the func_8004491C call
+     instead of before it                                     108 /  9
+     a 32-byte type of alignment FOUR (`MATRIX') for the
+     payload copy                                          92 words / 33
+     `s16 h[0x10]' (alignment 2) for UnkDngS58Blk32            108 /  0  FREE
+     `*(s8 *)(c + 0x4) = *(s8 *)(r + 0x4)' instead of
+     reading the byte through `u8 *'                           108 /  0  FREE
+     `(u8 *)n + 0x20' instead of `n->payload'                  108 /  0  FREE
+
+   SO THE STORE ORDER IS THE EXPENSIVE HALF, 18 and 24 rows, and it is
+   READABLE off the listing rather than something to sweep: every `lhu'/`sh'
+   pair here carries its own load-delay `nop', because a store through `c' may
+   alias a load through `r' and `true_dependence' refuses to reorder them. A
+   group of copies with no nop filled is emitted in SOURCE order, which is the
+   opposite of the usual warning about independent adjacent stores.
+
+   THE ALIGNMENT IS THE OTHER FACT: the payload copy must go through a type
+   whose alignment is BELOW four, which is what makes expand_block_move emit
+   two sixteen-byte groups of `lwl'/`lwr' + `swl'/`swr' (32 words) rather than
+   eight aligned `lw'/`sw' (16 words). Alignment 1 and alignment 2 are not
+   distinguishable at this size -- 32 bytes is eight whole words, so there is
+   no trailing halfword for the aligned tail that func_s69_800257D0's comment
+   describes to show up in.
+
+   NOT MEASURABLE, which is not the same as free: whether the two function
+   addresses are passed as `(u32)' casts or through a function-pointer type.
+   relcand reads `ok (0 data symbols, 2 calls)' and does NOT audit the two
+   `%hi'/`%lo' pairs that name func_s69_80025A34 and func_s69_80025AAC, so
+   those two were checked against the listing by hand: +0x10 takes 80025A34
+   and the func_8004491C argument takes 80025AAC, not the other way round. */
+UnkNode *func_s69_80025B78(u8 *p, UnkVec *v, u8 *r)
+{
+    UnkNode *n;
+    u8 *m;
+    u8 *c;
+
+    n = func_8003FC64(0x202);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s69_80025A34;
+        func_8004491C(n, (u32)func_s69_80025AAC);
+        m = (u8 *)n->unk_08;
+        *(s16 *)(m + 0x2) = *(u16 *)((u8 *)v + 0x2);
+        *(s16 *)(m + 0x6) = *(u16 *)((u8 *)v + 0x6);
+        *(s16 *)(m + 0xA) = *(u16 *)((u8 *)v + 0xA);
+        c = (u8 *)n->unk_0C;
+        *(s16 *)(c + 0x1C) = *(u16 *)(r + 0x1C);
+        *(s16 *)(c + 0x1E) = *(u16 *)(r + 0x1E);
+        *(s16 *)(c + 0x20) = *(u16 *)(r + 0x20);
+        *(s16 *)(c + 0x16) = *(u16 *)(r + 0x16);
+        *(s16 *)(c + 0x18) = *(u16 *)(r + 0x18);
+        *(s16 *)(c + 0x1A) = *(u16 *)(r + 0x1A);
+        *(s32 *)(c + 0xC) = *(s32 *)(r + 0xC);
+        *(s16 *)(c + 0x14) = *(u16 *)(r + 0x14);
+        *(s32 *)(c + 0x0) = *(s32 *)(r + 0x0);
+        *(s32 *)(c + 0x8) = *(s32 *)(r + 0x8);
+        *(s16 *)(c + 0x10) = *(u16 *)(r + 0x10);
+        *(s8 *)(c + 0x4) = *(u8 *)(r + 0x4);
+        *(UnkDngS58Blk32 *)n->payload = *(UnkDngS58Blk32 *)p;
+    }
+    return n;
+}
 
 /* The 0x202 node's +0x10 step: bump this bank's D_80027452 counter, then
    rebuild the mover's six words from the payload's angle triple -- p+0x38 as
