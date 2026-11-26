@@ -181,6 +181,15 @@ s16 func_800A4E2C(u8 *, u8 *);
 void func_800AA53C(u8 *);
 void func_800D6DC0(u8 *a, u8 *m, void *src, u8 *e);
 
+typedef struct UnkDngB25Dirs
+{
+    u8 unk_00[0x20];
+} UnkDngB25Dirs;
+extern u8 D_800E2398[];
+s32 func_800A05A4(u8 *p, s32 x, s32 y, s16 dir, s32 n);
+s32 func_8003F270(void);
+s32 func_800A94A0(u8 *a, u8 *q, s32 c, u8 *e);
+
 void func_b25_80170A44(void *a, u8 *b, void *src, u8 *e)
 {
     UnkNode *n;
@@ -2328,7 +2337,349 @@ void func_b25_801737F8(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80173B08);
+/* OWNS TWO JUMP TABLES, and the second one is the first in this unit with a
+   NON-ZERO MINVAL and a REAL DEFAULT, so read both lines carefully.
+
+   jtbl_b25_80170850: 8 .words = 8 CASES + 0 PAD, minval 0
+   (`sltiu $v0, $v1, 0x8' with no subtraction), cases 0..7, eight distinct
+   targets, NO default among the entries -- the range check's `beqz $v0' goes
+   to .Lb25_80174210, the EPILOGUE. Entry order: .Lb25_80173B6C /
+   .Lb25_80173DA4 / .Lb25_80173DEC / .Lb25_80173E38 / .Lb25_80173ECC /
+   .Lb25_80173F6C / .Lb25_801740D8 / .Lb25_80174104. Cases 1, 2 and 3 are a
+   FALL-THROUGH CHAIN (1 into 2 into 3) and case 6 falls through into case 7;
+   each is read off the listing as an arm whose last word sits one word above
+   the next arm's own table entry with no `j' between them.
+
+   jtbl_b25_80170870: 7 .words = 7 CASES + 0 PAD, MINVAL 1, cases 1..7, and
+   only SEVEN of them because `andi $v0, $v0, 0x3FFF' is followed by
+   `addiu $v1, $v0, -0x1' BEFORE the `sltiu $v0, $v1, 0x7' -- that subtraction
+   is the minval. It has a REAL DEFAULT: the range check's
+   `beqz $v0, .Lb25_80173C24' goes to a block (`addu $s0, $zero, $zero') that
+   NO table entry points at, so `default:' is written out. Entry list by
+   VALUE, not by index:
+       1 -> .Lb25_80173C1C      5 -> .Lb25_80173BC8
+       2 -> .Lb25_80173C14      6 -> .Lb25_80173BC0
+       3 -> .Lb25_80173C0C      7 -> .Lb25_80173BB8
+       4 -> .Lb25_80173C24   <- THE DEFAULT LABEL
+   Case 4 is ABSENT FROM THE SOURCE: gcc pads a table to maxval with the
+   default label, and .Lb25_80173C24 is also the `beqz' target, which is the
+   brief's discriminator. Writing `case 4: break;' would be a phantom arm.
+
+   And the function holds a THIRD switch, a COMPARE CHAIN on the same
+   `*(u16 *)(d + 0x46) & 0x3FFF' in the `else' arm of the same gate, with only
+   cases 1, 2, 3 and a default -- four arms, below gcc 2.7.2's
+   case_values_threshold, so no table. ITS arms are the blocks the table
+   switch's cases 1, 2 and 3 were cross-joined INTO, which is why the table
+   entries for 1, 2 and 3 point at .Lb25_80173C1C/.C14/.C0C, blocks that
+   belong textually to the else switch.
+
+   The bank's eight-state "fetch and carry" handler on p[0x9B]: pick a slot
+   pointer out of d + 0x8 / 0xB / 0xE by the 0x3FFF field (with the 5/6/7
+   range also setting a flag), hand it to func_800A94A0 or tear down through
+   func_800A4ACC, run the 0x703 cue, clear the mover and set up the 0x20
+   scale, wait for the actor to reach the func_800BCB04 floor and swap in
+   D_800E2398, burst func_b25_801711DC three times, run the long state 5 with
+   its func_b25_8017145C sweep over eight headings and the D_800E2388 swap,
+   drift +0x92 down, and finally restore D_800E2348 and hand the actor back to
+   func_b25_80171F1C. 460 words, 0 differing.
+
+   | spelling                                       | words | aligned |
+   | as written below                               |  460  |    0    |
+   | cases 5/6/7 with their OWN `q =' instead of    |       |         |
+   |   falling through into 1/2/3                   |  456  |  120    |
+   | `s32 k'                                        |  459  |    6    |
+   | `u32 k'                                        |  459  |    6    |
+   | `u16 k'                                        |  460  |    1    |
+   | `u8 k'                                         |  460  |    1    |
+   | `s8 k'                                         |  460  |    0    |
+   | `if (k > 0)' instead of `if (k != 0)'          |  459  |    5    |
+   | a `kk = k' alias before the test               |  459  |    6    |
+   | `*((u8 *)&D_8006DE24[q[0]] + 0x12)'            |  459  |    1    |
+   | table arms ascending (1,2,3,5,6,7)             |  456  |  120    |
+   | else-switch arms ascending (1,2,3)             |  456  |  120    |
+
+   THE BIG ONE IS THE FALL-THROUGH, AND ITS RESIDUE LIES ABOUT ITS CAUSE --
+   113 of the 120 rows were a CLEAN p/d EXCHANGE across the whole body, $s3
+   against $s4, with nothing moved and no word gained. That is the textbook
+   allocation-priority residue and it is NOT an allocation fault: writing
+   `case 5: k = 1;' falling through into `case 1: q = d + 0x8; break;' fixes
+   both the four missing words AND the exchange at once. The mechanism is
+   references: an arm that carries its own `q = d + 0x8' adds a `d' reference
+   that the fall-through form does not, and three such arms is enough to lift
+   `d' past `p' in `allocno_compare'. **A whole-body two-register exchange on
+   a switch with duplicate arm bodies is a FALL-THROUGH question before it is
+   an allocation question** -- and the arm ORDER, swept both ways on both
+   switches, is NOT MEASURABLE here because cross-joining makes every order
+   emit the same blocks.
+
+   `s16 k' IS THE LAST WORD, and it is the narrow-and-signed lever again:
+   the target has `addu $v0, $s2, $zero' before the `beqz' that tests the
+   flag, and that copy only survives when the test needs a HImode-to-SImode
+   widening cse's `canon_reg' cannot equate. `s8' is 0 as well, `u16' and
+   `u8' are 1 (the widening becomes an `andi'), and `s32'/`u32' are 6 -- the
+   copy disappears and the 0x98 store falls into the `beqz' delay slot. The
+   fact is "narrow AND signed", not "s16", exactly as func_b25_80172E80's
+   comment records for its own `r'.
+
+   The +0x12 byte of D_8006DE24's 20-byte rows must stay in the LOAD's offset
+   field: `D_8006DE24[q[0]].pad_11[1]' gives `lbu $v1, 0x12($v0)' where
+   `*((u8 *)&D_8006DE24[q[0]] + 0x12)' lets fold float the 0x12 into the
+   symbol and emits `lbu $v1, 0x0($v0)', one word short.
+
+   THE SHARED BLOCKS ARE ALL jump2's WORK AND NEED NO DEVICE: the
+   `r = *(u8 **)(*(s32 *)(d + 0x60) - 0x14)' pair is written out TWICE (once
+   under the flag, once under the D_8006DE24 test), the D_800E2398 and
+   D_800E2388 facing-table swaps are written out in their own arms, and the
+   default `q = NULL' is written in both switches. Every one of those is
+   cross-joined in the output. */
+void func_b25_80173B08(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *q;
+    u8 *r;
+    u8 *g;
+    u8 *w;
+    s16 k;
+    s16 i;
+    s16 j;
+
+    k = 0;
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(s32 *)(d + 0x1C) & 0x2000) != 0)
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 7:
+                k = 1;
+            case 3:
+                q = d + 0xE;
+                break;
+            case 6:
+                k = 1;
+            case 2:
+                q = d + 0xB;
+                break;
+            case 5:
+                k = 1;
+            case 1:
+                q = d + 0x8;
+                break;
+            default:
+                q = NULL;
+                break;
+            }
+        }
+        else
+        {
+            switch (*(u16 *)(d + 0x46) & 0x3FFF)
+            {
+            case 3:
+                q = d + 0xE;
+                break;
+            case 2:
+                q = d + 0xB;
+                break;
+            case 1:
+                q = d + 0x8;
+                break;
+            default:
+                q = NULL;
+                break;
+            }
+        }
+        if (q[0] != 0)
+        {
+            *(u16 *)(p + 0x98) &= 0xFF7F;
+            if (k != 0)
+            {
+                *(s32 *)(d + 0x60) = D_800814A8;
+                r = *(u8 **)(*(s32 *)(d + 0x60) - 0x14);
+                d[0x72] = r[0x24];
+                d[0x73] = r[0x25];
+            }
+            else if (D_8006DE24[q[0]].pad_11[1] == 2)
+            {
+                if (*(s32 *)(d + 0x60) != 0)
+                {
+                    r = *(u8 **)(*(s32 *)(d + 0x60) - 0x14);
+                    d[0x72] = r[0x24];
+                    d[0x73] = r[0x25];
+                }
+            }
+            else
+            {
+                *(s32 *)(d + 0x60) = func_800A05A4(d, c[0x24], c[0x25], *(s16 *)(d + 0x2A), 0x10);
+                d[0x72] = __builtin_abs(*(s8 *)(d + 0x72));
+                d[0x73] = __builtin_abs(*(s8 *)(d + 0x73));
+            }
+            if (func_800A94A0(d, q, k, p + 0x98) != 0)
+            {
+                p[0x9B] += 1;
+            }
+            break;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        w = (u8 *)D_800814A8;
+        D_8008346C = 0;
+        *(u16 *)(w + 0xA6) -= 1;
+        func_800A4ACC(d);
+        d[0x6D] -= 1;
+        *(u32 *)(p + 0x8C) = (u32)func_b25_80171F1C;
+        d[0x73] = 0;
+        d[0x72] = 0;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        break;
+    case 1:
+        if (func_8003F270() != 0)
+        {
+            *(u16 *)(c + 0x14) |= 0x800;
+            break;
+        }
+        *(u16 *)(c + 0x14) &= 0xF7FF;
+        p[0x9B] += 1;
+        func_800A56E0(0x703);
+        /* fallthrough */
+    case 2:
+        p[0x9B] += 1;
+        *(u16 *)(p + 0x98) &= 0xFFF7;
+        *(s32 *)(d + 0x1C) &= 0xFFFBFFFF;
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        *(s16 *)(c + 0x10) = 0x20;
+        *(u16 *)(c + 0x14) |= 0xC;
+        /* fallthrough */
+    case 3:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 7;
+            *(u16 *)(c + 0x14) |= 0x6000;
+            *(u16 *)(p + 0x98) |= 0x80;
+            break;
+        }
+        if (*(s16 *)(p + 0x92) ==
+            (s16)(func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6),
+                                (s16)(*(u16 *)(d + 0x88) - 0x20)) -
+                  *(u16 *)(d + 0x88)))
+        {
+            u8 *t;
+
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] += 1;
+            t = D_800E2398;
+            *(u8 **)(c + 0x2C) = t;
+            func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        break;
+    case 4:
+        if ((*(s16 *)(p + 0x96))++ < 0xC)
+        {
+            if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+            {
+                break;
+            }
+        }
+        *(u16 *)(p + 0x98) |= 0x80;
+        *(u16 *)(c + 0x14) |= 0x800;
+        *(s16 *)(p + 0x96) = 0x12;
+        p[0x9B] += 1;
+        for (i = 0; i < 3; i++)
+        {
+            func_b25_801711DC((UnkNode *)(p - 0x20), *(s16 *)(d + 0x2A), (u8 *)0xE0E0E0);
+        }
+        break;
+    case 5:
+        if (D_8008346C == 0)
+        {
+            *(s16 *)(p + 0x96) = 0;
+        }
+        if (*(s16 *)(p + 0x96) >= 0xA)
+        {
+            for (i = 0; i < 3; i++)
+            {
+                func_b25_801711DC((UnkNode *)(p - 0x20), *(s16 *)(d + 0x2A), (u8 *)0xE0E0E0);
+            }
+        }
+        if (*(u16 *)(p + 0x96) >= 0xA && *(u16 *)(p + 0x96) < 0x11)
+        {
+            for (j = 0; j < 0x1000; j += 0x200)
+            {
+                if (j != *(s16 *)(d + 0x2A))
+                {
+                    for (i = 0; i < 1; i++)
+                    {
+                        func_b25_8017145C((UnkNode *)(p - 0x20), j);
+                    }
+                }
+            }
+        }
+        if (--*(s16 *)(p + 0x96) > 0)
+        {
+            if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+            {
+                break;
+            }
+        }
+        {
+            u8 *t;
+
+            *(s16 *)(p + 0x96) = 0;
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+            p[0x9B] += 1;
+            *(u16 *)(p + 0x98) |= 0x8;
+            t = D_800E2388;
+            *(u8 **)(c + 0x2C) = t;
+            func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        }
+        break;
+    case 6:
+        if (*(s16 *)(p + 0x92) >= -0x1F)
+        {
+            *(u16 *)(p + 0x92) -= 0x4;
+            break;
+        }
+        p[0x9B] += 1;
+        /* fallthrough */
+    case 7:
+        if ((*(u16 *)(c + 0x14) & 0xE000) != 0)
+        {
+            u8 *t;
+
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            func_800A2B04(b, c[0x24], c[0x25]);
+            t = D_800E2348;
+            if (*(u8 **)(c + 0x2C) != t)
+            {
+                *(u8 **)(c + 0x2C) = t;
+                func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+                *(s16 *)(p + 0x9E) = 0;
+                *(u16 *)(p + 0x98) |= 0x8;
+                *(s32 *)(d + 0x1C) |= 0x40000;
+                *(s16 *)(p + 0x92) = -0x20;
+                *(u16 *)(c + 0x14) &= 0xFFF3;
+            }
+            g = (u8 *)&D_80083460;
+            if (*(s32 *)(g + 0xC) == 0)
+            {
+                *(u16 *)(g + 0xA) -= 1;
+                *(u32 *)(p + 0x8C) = (u32)func_b25_80171F1C;
+                func_800A4ACC(d);
+                d[0x73] = 0;
+                d[0x72] = 0;
+                d[0x6D] -= 1;
+                *(u16 *)(d + 0x46) &= 0x7FFF;
+                func_800A56E0(0xB4);
+            }
+        }
+        break;
+    }
+}
 
 /* The banked room script's three-state glide, switching on p + 0x9B:
    state 0 seeds the velocity from the D_8006CCD8 / D_8006CCE8 facing pair,
