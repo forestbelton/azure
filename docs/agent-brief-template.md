@@ -980,12 +980,20 @@ that agent itself spawned -- so twelve batches were asked for something they
 had no channel for, and one agent finally said so instead of quietly
 skipping it.
 
-A file serves the same two purposes and is checkable. Those lines are what
-survives if your run is cut off: a usage limit once killed thirteen agents at
-once, and recovering their work meant reading their unit copies and guessing
-what was finished. And they let me start integrating before you finish. Keep it
-in your own agent directory -- `/tmp` is **not durable** and a cleanup once
-wiped five agents' work.
+A file serves the purpose and is checkable. Those lines are what survives if
+your run is cut off: a usage limit once killed thirteen agents at once, and
+recovering their work meant reading their unit copies and guessing what was
+finished. Keep it in your own agent directory -- `/tmp` is **not durable** and a
+cleanup once wiped five agents' work.
+
+**It does NOT let me integrate before you finish, and I said otherwise in two
+briefs on 2026-11-26 before watching it work.** Integrating means reading your
+unit copy, and your copy is being written while you run -- taking a body out of
+it mid-run is exactly the thing every other rule here forbids, because a
+half-written definition measures as whatever it happens to be. What the file
+actually buys is **visibility**: I can see the sweep is healthy, and which
+functions are already closed, without interrupting you or guessing from
+silence. That is worth having on its own, and it is what the file is for.
 
 
 ## EVERY FUNCTION ON YOUR LIST IS A FEW INSTRUCTIONS FROM EXISTING C
