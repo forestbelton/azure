@@ -374,13 +374,31 @@ A sweep for a comment in one unit naming another unit's function as an
     ovl_dng_s09   func_s12_80024020's spawn loops ...   <- FIXED 2026-11-26
     ovl_dng_s68   func_s12_80024020 case ...
 
-**The other five are NOT yet verified and must not be mass-edited**, because
-some may be legitimate: a comment can correctly say "this is a replica of X,
-which that unit installs from Y". The check is one grep per case -- does the
-LOCAL unit install the body? -- and it is the same check that settled s09:
+**ALL FIVE CHECKED OUT AS LEGITIMATE. The sweep found ONE defect, not six, and
+the caution above was the thing that mattered.** Verified one at a time:
 
-    grep -nE "func_<unit>_<addr>" csrc/ovl_dng_<unit>.c
+    b08   "THE TWIN IS THE LANDED func_b09_80172BAC (csrc/ovl_dng_b09.c)"
+          -- correctly names a twin, with its file. Not an installer claim.
+    s08   "func_s09_80024020 (itself the relink of func_s12_80024020)"
+          -- correctly names the donor CHAIN, explicitly.
+    s68   "func_s12_80024020 (the same skeleton, the same dress block ...)"
+          -- correctly names the donor.
+    b19   my pattern matched inside a function BODY, not a comment sentence.
+    b55   same -- a definition, not an installer claim.
 
-If the local unit installs it, the comment's cross-unit name is residue. If
-nothing local installs it, the comment may be describing the donor correctly and
-should say so explicitly instead.
+So two of the six hits were my regex matching code rather than prose, and three
+were comments doing exactly the right thing: naming the donor and saying it is
+the donor. **Only `ovl_dng_s09` actually claimed a foreign function as its
+installer**, and the difference is one word -- those three say "the twin is" or
+"the relink of", and s09 said "installed by".
+
+> **The lesson is about my sweep, not about the comments.** A pattern for
+> `func_<other>_<addr>'s case` or `... installs` cannot tell a donor
+> ATTRIBUTION from an installer CLAIM, because both name a foreign function in
+> the same grammatical position. I reported six and hedged that some might be
+> legitimate; the hedge was load-bearing, and mass-editing would have replaced
+> five true sentences with false ones.
+
+**If you sweep for this again, match on the CLAIM and not the name:** `installed
+.{0,40}by func_<other>_` is the shape that is wrong, and `the twin is`, `the
+relink of`, `the donor` are the shapes that are right.
