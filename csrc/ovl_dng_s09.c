@@ -494,9 +494,18 @@ s32 func_s09_80024868(u8 *p)
     return 0;
 }
 
-/* The 0x312 smoke node's per-frame step, installed as the +0x10 step by
-   func_s12_80024020's spawn loops and by its case 4, so the four-argument
-   signature is fixed by those call sites. Sets bit 0x8000 in the +0x52
+/* The 0x312 smoke node's per-frame step, installed as the +0x10 step at TWO
+   sites in THIS unit by func_s09_80024020, so the four-argument signature is
+   fixed by those call sites.
+
+   *** THE NAME IN THIS SENTENCE WAS WRONG UNTIL 2026-11-26: it read
+   "func_s12_80024020's spawn loops and by its case 4". This body is a dngclone
+   replica of the s12 original, and the clone carried the DONOR unit's symbol
+   names into its prose as though they were local. Nothing in ovl_dng_s12
+   installs this function -- func_s09_80024020 does, at lines 117 and 242.
+   An agent read the sentence as naming the real caller; it happened to point
+   at the right DONOR, so the residue helped rather than hurt that time, which
+   is exactly why it survived this long. Sets bit 0x8000 in the +0x52
    halfword of the record at the actor's +0x0, decays the caller's +0x14
    velocity component by 0x20000 unless it has already reached zero, advances
    the vector by its own velocity half, then runs a two-case compare chain on

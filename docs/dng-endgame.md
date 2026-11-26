@@ -350,3 +350,37 @@ gets its own slot:
 
 **Do it as one pass with nothing else in flight**, unit by unit, re-verifying
 each unit's bodies and gating once at the end.
+
+## dngclone CARRIES THE DONOR'S SYMBOL NAMES INTO THE REPLICA'S PROSE -- SIX INSTANCES
+
+A replicated body's comment can name the DONOR unit's functions as though they
+were local. `csrc/ovl_dng_s09.c` said the body was "installed as the +0x10 step
+by **func_s12_80024020's** spawn loops and by its case 4" -- and nothing in
+`ovl_dng_s12` installs it. `func_s09_80024020` does, at lines 117 and 242 of the
+same file.
+
+**An agent read that sentence as naming the real caller.** It happened to point
+at the right DONOR, so the residue helped rather than hurt that time, which is
+exactly why it survived this long -- a wrong comment that gives the right answer
+by accident does not get reported.
+
+A sweep for a comment in one unit naming another unit's function as an
+*installer* finds **six**:
+
+    ovl_dng_b08   func_b09_80172BAC's case ...
+    ovl_dng_b19   func_b15_80170D28 installs ...
+    ovl_dng_b55   func_b01_80170A44 installs ...
+    ovl_dng_s08   func_s09_80024020's case ...
+    ovl_dng_s09   func_s12_80024020's spawn loops ...   <- FIXED 2026-11-26
+    ovl_dng_s68   func_s12_80024020 case ...
+
+**The other five are NOT yet verified and must not be mass-edited**, because
+some may be legitimate: a comment can correctly say "this is a replica of X,
+which that unit installs from Y". The check is one grep per case -- does the
+LOCAL unit install the body? -- and it is the same check that settled s09:
+
+    grep -nE "func_<unit>_<addr>" csrc/ovl_dng_<unit>.c
+
+If the local unit installs it, the comment's cross-unit name is residue. If
+nothing local installs it, the comment may be describing the donor correctly and
+should say so explicitly instead.
