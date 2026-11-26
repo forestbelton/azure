@@ -309,3 +309,44 @@ this large is noise that hides the one warning that matters.
 copying a landed body's spelling copies its warnings verbatim; one reported
 inheriting six that way and fixing them in its own copy for free. So the count
 grows with replication unless a donor is cleaned.
+
+## THE REMAINING FRESH WORK, AS OF 2026-11-26 EVENING
+
+**15 units, 24 functions, roughly 6,900 words**, from a `provision_batch
+--dry-run` over every unclaimed unit (not from a stub count -- see the entry
+above about the day I got that wrong):
+
+    s51  1 fn  746w     s11  2 fn  605w     b18  2 fn  386w
+    b17  2 fn  722w     b24  1 fn  530w     s13  2 fn  386w
+    s04  2 fn  676w     s35  2 fn  474w     b04  1 fn  377w
+    s60  2 fn  623w     s20  2 fn  457w     s69  2 fn  159w
+                        b37  1 fn  451w     b09  1 fn  150w
+                                            b40  1 fn  105w
+
+Plus whatever the five units in flight hand back. **Re-run the dry-run rather
+than trusting this table** -- it is a snapshot and the file says so.
+
+> **The small units at the bottom are not filler.** `b09` at 150 words and
+> `b40` at 105 are one body each, and a one-body unit with a landed sibling has
+> been the cheapest landing in this sweep all day.
+
+## AND THE 290-WARNING CLEANUP IS STILL DEFERRED, DELIBERATELY
+
+Three independent bodies have now measured the fix FREE (122/0, 153/0, and one
+agent spelling `RotTransPers`'s out-parameters `(long *)` with `declcheck` going
+3 warnings to 0 at an unchanged 153/0). So the cost is known to be zero.
+
+I looked at starting it while five agents held unrelated units, and stopped:
+the top eight units are ~20 careful cast edits each, every one needs its body
+re-verified and the whole thing needs a container gate, and **a half-done pass
+is worse than none** because the remaining warnings still hide the one that
+matters. The shape of the fix is now recorded, so the batch is cheap when it
+gets its own slot:
+
+    arg 2 of RotTransSV wants `SVECTOR *', arg 3 wants `long *'
+    (the sites pass scratchpad addresses cast `(s32 *)`)
+    RotTransPers / SetDrawArea / LoadImage out-parameters want `long *'
+    against libgte.h, where the bodies declare `s32 *' and cast to match
+
+**Do it as one pass with nothing else in flight**, unit by unit, re-verifying
+each unit's bodies and gating once at the end.
