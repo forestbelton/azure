@@ -13,9 +13,9 @@ void func_s27_80024050(u8 *p, u8 k);
 void func_s27_800240EC(void);
 void func_s27_8002417C(u8 *p, UnkVec *b, u8 *c, u8 *d);
 UnkNode *func_s27_800241F8(u8 *v, UnkVec *q);
-void func_s27_800249B4(u8 *, UnkVec *, u8 *);
-void func_s27_80024B34(u8 *, UnkVec *, u8 *);
-void func_s27_80024C84(u8 *, UnkVec *, u8 *);
+s32 func_s27_800249B4(u8 *p, UnkVec *b, u8 *c);
+s32 func_s27_80024B34(u8 *p, UnkVec *b, u8 *c);
+s32 func_s27_80024C84(u8 *p, UnkVec *b, u8 *c);
 s32 func_s27_80024DF4(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern u8 D_80045340[];
 extern u32 D_800814A0;
@@ -51,6 +51,11 @@ extern u8 D_800DEC70[];
      `s16 t; s32 u;' with a two-armed if/else                 40 w, 29 (11 aligned)
      `s16 t; s32 u;' with `u = t + (t >> 2)' in a two-armed
        if/else -- the extra sign extension of the addend      42 w, 30 (15 aligned) */
+s32 func_s27_80024610(u8 *p, UnkVec *b, u8 *c, s16 w, s32 e, s32 *t, u8 g, s16 h);
+s32 rand(void);
+s32 func_800644B8(s32);
+s32 func_80064584(s32);
+
 void func_s27_80024050(u8 *p, u8 k)
 {
     s16 t;
@@ -178,17 +183,278 @@ UnkNode *func_s27_800241F8(u8 *v, UnkVec *q)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s27", func_s27_800242E0);
+/* The step function func_s27_8002443C registers on each of the effect's ten
+   0x212 sprite nodes: bump the owning node's +0x14 frame counter, add the
+   per-sprite drift at the payload's +0x6 to its +0x4 sweep, and once that
+   sweep has fallen below -0x80 re-seed the sprite -- a fresh rand()%4096
+   angle puts the mover's x/z on the unit circle around the payload's
+   +0x8/+0xA centre, the sweep climbs back by 0x80 and the drift is re-rolled
+   as -6 - rand()%5. Then publish the vertical as +0xC plus the sweep, hand
+   the renderable to func_800478B8, and when its +0x14 reports either 0x6000
+   bit re-dress it from D_800DEC70. 87 words, 0 differing, FIRST COMPILE.
+
+   Written from the listing plus the landed func_s27_8002417C in this unit --
+   the `*(s16 *)(*(u8 **)(p + 0x0) + 0x14)' counter bump is that body's front
+   four words verbatim. No twin: dngtwin.py --unit ovl_dng_s27 reports
+   nothing above 0.62 for any function in this object and xsibs.py at
+   --min-words 18 --ratio 0.70 finds nothing.
+
+   THREE SPELLINGS PRICED ON THIS BODY, all against 87 words / 0 differing:
+     `(func_800644B8(r) >> 7)' for `((func_800644B8(r) << 1) >> 8)'
+       -- arithmetically the same shift for these magnitudes, but gcc emits
+       ONE `sra 7' for it where the target has `sll 1' / `sra 8'
+                                                 85 words, 53 differing
+     the b+0xA publish moved AFTER func_800478B8  88 words, 24 differing
+     the 0x80 sweep bump written after the drift
+       re-roll instead of before it               87 words,  9 differing
+   MEASURED AND FREE, so NOT the reason this lands: spelling the gate
+   `(s16)*(u16 *)(p + 0x4) < -0x80' instead of reading the field back as
+   `*(s16 *)(p + 0x4)' -- cse serves both from the just-stored register and
+   both give the `sll 16' / `sra 16' / `slti -0x80'. */
+void func_s27_800242E0(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s32 r;
+
+    *(s16 *)(*(u8 **)(p + 0x0) + 0x14) = *(u16 *)(*(u8 **)(p + 0x0) + 0x14) + 1;
+    *(s16 *)(p + 0x4) = *(u16 *)(p + 0x4) + *(u16 *)(p + 0x6);
+    if (*(s16 *)(p + 0x4) < -0x80)
+    {
+        r = rand() % 4096;
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)(p + 0x8) + ((func_800644B8(r) << 1) >> 8);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)(p + 0xA) + ((func_80064584(r) << 1) >> 8);
+        *(s16 *)(p + 0x4) = *(u16 *)(p + 0x4) + 0x80;
+        *(s16 *)(p + 0x6) = -6 - rand() % 5;
+    }
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(p + 0xC) + *(u16 *)(p + 0x4);
+    func_800478B8(c);
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        func_8003DB94(c, D_800DEC70, 0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s27", func_s27_8002443C);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s27", func_s27_80024610);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s27", func_s27_800249B4);
+/* The first of the effect's three dresser arms, reached from
+   func_s27_80024DF4's jump table case 4. Builds a 17-entry sine and a
+   17-entry cosine table on the stack at 1/16-turn steps, each scaled down by
+   4, then calls func_s27_80024610 once per live sprite with a 1/16-turn sine of the payload's +0x10
+   phase minus the sprite index as its radius, for as many sprites as the
+   payload's +0x16 allows -- its quarter, capped at 8.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s27", func_s27_80024B34);
+   96 words, 0 differing.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s27", func_s27_80024C84);
+   FOUR SPELLING FACTS, each measured on this body (every price below is this
+   body's own):
+
+   * THE TWO TRIG TABLES ARE ONE `s32 v[34]' ARRAY, NOT TWO OF 17. The target
+     walks a single induction variable and reads the cosine half at a `0x44'
+     displacement off it, which only happens if gcc knows the two halves are
+     0x44 apart. Two separate `s32 v[17]' / `s32 cs[17]' arrays are
+     96 words / 21 differing.
+
+   * THE ARRAY BASE IS A POINTER LOCAL ASSIGNED BEFORE THE FIRST LOOP.
+     `vp = v;' there gives the target's `addiu $s6, $sp, 0x20' in the
+     prologue and one callee-saved register to hold it; passing `v' directly
+     to func_s27_80024610 is 94 words / 88 differing, because gcc then
+     rematerialises `addiu $sp, 0x20' inside the second loop instead of
+     keeping it live, and assigning `vp' AFTER the first loop rather than
+     before it is 96 words / 27 differing.
+
+   * func_s27_80024610's EIGHTH PARAMETER IS `s16', NOT `u16'. The callee
+     cannot tell you -- a plain HImode load is `lhu' there whatever the sign
+     -- but the caller promotes, and `u16' gives `andi $a1, $a1, 0xFFFF'
+     where the target has `sll 17' / `sra 16'. All three dressers are 2 words
+     short with `u16'.
+
+   * THE COS CALL WHOSE RESULT IS DISCARDED IS REAL. `func_80064584(i << 9);'
+     stands between the sine that feeds the 4th argument and the
+     func_s27_80024610 call, and its return value is dead in the target too
+     ($v0 is overwritten by `li 0xFF' two words later). Written as a bare
+     statement it is the `jal' plus its argument, and the body is short
+     without it.
+
+   * THE SPRITE COUNT NEEDS TWO LOCALS. `m = *(s16 *)(p + 0x16) >> 2;
+     n = 8; if (m < 9) { n = m; }' gives the target's two registers and the
+     `li $s3, 8' in the `beqz' delay slot; the one-variable
+     `n = ... >> 2; if (n > 8) { n = 8; }' is 96 words / 5 differing.
+     MEASURED AND FREE: `(s16)*(u16 *)(p + 0x16) >> 2' for
+     `*(s16 *)(p + 0x16) >> 2' -- both emit `lhu' / `sll 16' / `sra 18'.
+
+   NO TWIN for any of the three; they were written from the listings, and
+   func_s27_80024610's eight-parameter list was read off the three call
+   sites' stack-argument stores before any of them compiled. */
+s32 func_s27_800249B4(u8 *p, UnkVec *b, u8 *c)
+{
+    s32 n;
+    s32 m;
+    s32 v[34];
+    s32 *vp;
+    s32 i;
+    s32 k;
+    s32 t;
+
+    vp = v;
+    for (i = 0x10; i >= 0; i--)
+    {
+        k = (i % 16) << 8;
+        v[i] = func_800644B8(k) >> 4;
+        v[i + 17] = func_80064584(k) >> 4;
+    }
+    m = *(s16 *)(p + 0x16) >> 2;
+    n = 8;
+    if (m < 9)
+    {
+        n = m;
+    }
+    for (i = 0; i < n; i++)
+    {
+        t = (func_800644B8(((*(s16 *)(p + 0x10) - i) % 16) << 9) >> 9) + 0x20;
+        func_80064584(i << 9);
+        func_s27_80024610(p, b, c, t,
+                          (s16)(*(u16 *)((u8 *)b + 0xA) - *(u16 *)(p + 0x1A + i * 2)), vp, 0xFF,
+                          i * 2);
+    }
+    return 0;
+}
+
+/* The second of the effect's three dresser arms, reached from
+   func_s27_80024DF4's jump table case 5. Builds a 17-entry sine and a
+   17-entry cosine table on the stack at 1/16-turn steps, each scaled down by
+   4, then calls func_s27_80024610 once per live sprite with a fixed count of eight sprites and a
+   doubled index into the per-sprite cosine argument (`i << 10' where the
+   other two arms use `i << 9').
+
+   84 words, 0 differing.
+
+   FOUR SPELLING FACTS, each measured on this body (every price below is this
+   body's own):
+
+   * THE TWO TRIG TABLES ARE ONE `s32 v[34]' ARRAY, NOT TWO OF 17. The target
+     walks a single induction variable and reads the cosine half at a `0x44'
+     displacement off it, which only happens if gcc knows the two halves are
+     0x44 apart. Two separate `s32 v[17]' / `s32 cs[17]' arrays are
+     84 words / 19 differing.
+
+   * THE ARRAY BASE IS A POINTER LOCAL ASSIGNED BEFORE THE FIRST LOOP.
+     `vp = v;' there gives the target's `addiu $s5, $sp, 0x20' in the
+     prologue and one callee-saved register to hold it; passing `v' directly
+     to func_s27_80024610 is 82 words / 75 differing, because gcc then
+     rematerialises `addiu $sp, 0x20' inside the second loop instead of
+     keeping it live, and assigning `vp' AFTER the first loop rather than
+     before it is 84 words / 25 differing.
+
+   * func_s27_80024610's EIGHTH PARAMETER IS `s16', NOT `u16'. The callee
+     cannot tell you -- a plain HImode load is `lhu' there whatever the sign
+     -- but the caller promotes, and `u16' gives `andi $a1, $a1, 0xFFFF'
+     where the target has `sll 17' / `sra 16'. All three dressers are 2 words
+     short with `u16'.
+
+   * THE COS CALL WHOSE RESULT IS DISCARDED IS REAL. `func_80064584(i << 10);'
+     stands between the sine that feeds the 4th argument and the
+     func_s27_80024610 call, and its return value is dead in the target too
+     ($v0 is overwritten by `li 0xFF' two words later). Written as a bare
+     statement it is the `jal' plus its argument, and the body is short
+     without it.
+
+   NO TWIN for any of the three; they were written from the listings, and
+   func_s27_80024610's eight-parameter list was read off the three call
+   sites' stack-argument stores before any of them compiled. */
+s32 func_s27_80024B34(u8 *p, UnkVec *b, u8 *c)
+{
+    s32 v[34];
+    s32 *vp;
+    s32 i;
+    s32 k;
+    s32 t;
+
+    vp = v;
+    for (i = 0x10; i >= 0; i--)
+    {
+        k = (i % 16) << 8;
+        v[i] = func_800644B8(k) >> 4;
+        v[i + 17] = func_80064584(k) >> 4;
+    }
+    for (i = 0; i < 8; i++)
+    {
+        t = (func_800644B8(((*(s16 *)(p + 0x10) - i) % 16) << 9) >> 9) + 0x20;
+        func_80064584(i << 10);
+        func_s27_80024610(p, b, c, t,
+                          (s16)(*(u16 *)((u8 *)b + 0xA) - *(u16 *)(p + 0x1A + i * 2)), vp, 0xFF,
+                          i * 2);
+    }
+    return 0;
+}
+
+/* The third of the effect's three dresser arms, reached from
+   func_s27_80024DF4's jump table case 6. Builds a 17-entry sine and a
+   17-entry cosine table on the stack at 1/16-turn steps, each scaled down by
+   4, then calls func_s27_80024610 once per live sprite with the sprites the first arm has NOT yet
+   reached -- the loop starts at the payload's +0x16 quarter plus one and
+   runs to 8, so it is the fade-out of the same ring.
+
+   92 words, 0 differing.
+
+   FOUR SPELLING FACTS, each measured on this body (every price below is this
+   body's own):
+
+   * THE TWO TRIG TABLES ARE ONE `s32 v[34]' ARRAY, NOT TWO OF 17. The target
+     walks a single induction variable and reads the cosine half at a `0x44'
+     displacement off it, which only happens if gcc knows the two halves are
+     0x44 apart. Two separate `s32 v[17]' / `s32 cs[17]' arrays are
+     92 words / 19 differing.
+
+   * THE ARRAY BASE IS A POINTER LOCAL ASSIGNED BEFORE THE FIRST LOOP.
+     `vp = v;' there gives the target's `addiu $s5, $sp, 0x20' in the
+     prologue and one callee-saved register to hold it; passing `v' directly
+     to func_s27_80024610 is 90 words / 83 differing, because gcc then
+     rematerialises `addiu $sp, 0x20' inside the second loop instead of
+     keeping it live, and assigning `vp' AFTER the first loop rather than
+     before it is 92 words / 32 differing.
+
+   * func_s27_80024610's EIGHTH PARAMETER IS `s16', NOT `u16'. The callee
+     cannot tell you -- a plain HImode load is `lhu' there whatever the sign
+     -- but the caller promotes, and `u16' gives `andi $a1, $a1, 0xFFFF'
+     where the target has `sll 17' / `sra 16'. All three dressers are 2 words
+     short with `u16'.
+
+   * THE COS CALL WHOSE RESULT IS DISCARDED IS REAL. `func_80064584(i << 9);'
+     stands between the sine that feeds the 4th argument and the
+     func_s27_80024610 call, and its return value is dead in the target too
+     ($v0 is overwritten by `li 0xFF' two words later). Written as a bare
+     statement it is the `jal' plus its argument, and the body is short
+     without it.
+
+   NO TWIN for any of the three; they were written from the listings, and
+   func_s27_80024610's eight-parameter list was read off the three call
+   sites' stack-argument stores before any of them compiled. */
+s32 func_s27_80024C84(u8 *p, UnkVec *b, u8 *c)
+{
+    s32 v[34];
+    s32 *vp;
+    s32 i;
+    s32 k;
+    s32 t;
+
+    vp = v;
+    for (i = 0x10; i >= 0; i--)
+    {
+        k = (i % 16) << 8;
+        v[i] = func_800644B8(k) >> 4;
+        v[i + 17] = func_80064584(k) >> 4;
+    }
+    for (i = (*(s16 *)(p + 0x16) >> 2) + 1; i < 8; i++)
+    {
+        t = (func_800644B8(((*(s16 *)(p + 0x10) - i) % 16) << 9) >> 9) + 0x20;
+        func_80064584(i << 9);
+        func_s27_80024610(p, b, c, t,
+                          (s16)(*(u16 *)((u8 *)b + 0xA) - *(u16 *)(p + 0x1A + i * 2)), vp, 0xFF,
+                          i * 2);
+    }
+    return 0;
+}
 
 /* The effect's dresser callback: states 4, 5 and 6 of the node's +0xA hand
    the three arguments straight through to func_s27_800249B4 /

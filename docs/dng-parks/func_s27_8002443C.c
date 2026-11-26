@@ -71,6 +71,7 @@
 
    DECLARATIONS
    void func_s27_800242E0(u8 *p, UnkVec *b, u8 *c, u8 *d);
+   s32 rand(void);
    s32 func_800644B8(s32);
    s32 func_80064584(s32);
    END DECLARATIONS
