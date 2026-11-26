@@ -115,6 +115,23 @@ def drop_known(decls, unit, func="", quiet=False):
             fn = m.group(1)
             um = re.search(r"(?m)^\s*[A-Za-z_][\w \*]*?\b%s\s*\(([^;{]*)\)\s*;"
                            % re.escape(fn), unit)
+            # OR THE UNIT DEFINES IT, which is the case this missed entirely.
+            # A sibling landing turns a stub into a DEFINITION, and a
+            # definition's head does not end in `;', so the declaration
+            # pattern above never matched it -- the park's prototype survived
+            # and the splice died on `conflicting types'. THREE PARKS COULD NOT
+            # BE MEASURED AT ALL for this reason (func_b29_80172FC0,
+            # func_lo20_80026EC0, func_lo20_80027A20), which no park inventory
+            # showed because their recorded figures were taken when the sibling
+            # was still asm.
+            #
+            # The definition is the strongest possible statement of the truth,
+            # so the park's prototype goes -- and loudly, because a parameter's
+            # width changes promotion at the call.
+            if not um:
+                um = re.search(
+                    r"(?m)^\s*[A-Za-z_][\w \*]*?\b%s\s*\(([^;{]*)\)\s*\{"
+                    % re.escape(fn), unit)
             if um:
                 protos.append((fn, " ".join(t.split()),
                                " ".join(um.group(0).split())))
@@ -230,6 +247,50 @@ def main():
     # not needed, so dropping it is safe in every case and silent when there is
     # nothing to drop.
     decls, _dropped = drop_known(decls, unit, func)
+
+    # AND THE REVERSE DIRECTION, for a MULTI-BODY park. A park that joins
+    # fragments carries several DEFINITIONS, and the unit's own preamble may
+    # declare one of them with a different signature -- which is
+    # `conflicting types' with nothing in the PARK to drop. Two parks in
+    # ovl_dng_lo20 could not be measured at all for this
+    # (func_lo20_80026EC0, func_lo20_80027A20), which no inventory showed
+    # because their figures were recorded before the sibling landed.
+    #
+    # The park's definition is what we are measuring, so the unit's prototype
+    # for that same function is what gives way -- IN THE SPLICED COPY ONLY,
+    # never in csrc/. A prototype the definition follows is redundant; one it
+    # contradicts cannot both be present.
+    extra_defs = re.findall(
+        r"(?m)^[A-Za-z_][\w \*]*?\b(%s_[0-9A-Fa-f]{8})\s*\([^;{]*\)\s*\{"
+        % re.escape("func_" + pr.unit_of(func)[1].replace("ovl_dng_", "")),
+        body)   # THE PARK'S BODIES, not its declarations -- my first attempt
+                # searched `decls' and found nothing, because a multi-body
+                # park's extra DEFINITIONS live in the body section.
+    shadowed = []
+    for fn in sorted(set(extra_defs)) :
+        if fn == func:
+            continue
+        pat = re.compile(r"(?m)^[A-Za-z_][\w \*]*?\b%s\s*\([^;{]*\)\s*;[ \t]*\n"
+                         % re.escape(fn))
+        hit = False
+        if pat.search(unit):
+            unit = pat.sub("", unit, count=1)
+            hit = True
+        # AND ITS STUB. A function the park DEFINES must not also be an
+        # INCLUDE_ASM in the unit, or the assembler reports `symbol is already
+        # defined' from include/labels.inc -- which names the symbol but not
+        # the fact that two files are providing it.
+        es = 'INCLUDE_ASM("asm/nonmatchings/%s", %s);\n' % (
+            pr.unit_of(func)[1], fn)
+        if es in unit:
+            unit = unit.replace(es, "", 1)
+            hit = True
+        if hit:
+            shadowed.append(fn)
+    if shadowed:
+        print("%s: dropped the UNIT's prototype for %d function(s) this "
+              "multi-body park DEFINES, in the spliced copy only: %s"
+              % (func, len(shadowed), ", ".join(shadowed)))
 
     # THE SYNTHESISED SELF-PROTOTYPE IS A MEASUREMENT AID THAT CAN BREAK A
     # LANDED FUNCTION, SO SAY SO BEFORE ANYONE MERGES THIS FILE.

@@ -242,3 +242,40 @@ present -- so this is not a bug to fix away, it is a fact to surface.
 corpus-wide sweep, not just a per-invocation print. This is the same failure as
 the masked `ovlverify` count and the OK-without-write `dngland` -- a check that
 passes wrongly, or warns where nobody is reading.
+
+## THREE PARKS COULD NOT BE MEASURED AT ALL, AND NO INVENTORY SHOWED IT
+
+Beyond the twelve parks with a corrupted baseline, three could not be spliced at
+all -- so their recorded figures were simply unreachable. Each failed for a
+different reason and all three were invisible, because a park's figures are
+recorded when it compiles and nothing re-checks them afterwards.
+
+**1. The unit DEFINES a function the park declares.** `drop_known` matched the
+unit's declarations only, and a definition's head does not end in `;`, so when a
+sibling landing turned a stub into a definition the park's prototype survived and
+the splice died on `conflicting types`. Fixed by matching a definition too -- the
+definition is the strongest statement of the truth, so the park's prototype goes,
+loudly. **`func_b29_80172FC0` went from unmeasurable to 492 words / 7 rows.**
+
+**2. A MULTI-BODY park's definition against the UNIT's prototype.** A park that
+joins fragments carries several definitions, and the unit's preamble may declare
+one of them differently -- `conflicting types` with nothing in the PARK to drop.
+The reverse direction is now handled: the unit's prototype for a function the
+park defines is removed **in the spliced copy only, never in `csrc/`**, together
+with that function's `INCLUDE_ASM` (or the assembler reports `symbol is already
+defined` from `include/labels.inc`, which names the symbol but not the fact that
+two files are providing it). **`func_lo20_80026EC0` now measures** -- at 17 words,
+which is its HEAD FRAGMENT, so that park needs `pairverify`, not `ovlverify`.
+
+**3. A genuinely broken DECLARATIONS block.** `func_lo20_80027A20` still fails on
+undeclared identifiers. That is the park's own content, not a tool fault, and it
+needs an agent to repair the block before any figure in it means anything.
+
+> **Two of the three were tool faults and one is park content.** The pattern
+> worth keeping: when a park will not splice, read WHICH error -- `conflicting
+> types` is a declaration reconciliation the tool should do, `symbol is already
+> defined` is a stub the tool should remove, and an undeclared identifier is the
+> park's own block.
+
+Regression-checked after all three changes: `func_s25_800244A0` 117/2,
+`func_s29_80024088` 81/3, `func_b31f_8016FCE4` 332/3 -- all unchanged.
