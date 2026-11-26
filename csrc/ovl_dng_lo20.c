@@ -1360,9 +1360,29 @@ u8 *func_lo20_80027FF4(u8 *p, s32 v)
     return p;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80028050);
+void func_lo20_80028050(u8 *p, u8 *b, u8 *c, u8 *d)
+{
+    u32 *s1 = D_8002E5D8;
+    u32 *s2 = D_8002E5E8;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800280F4);
+    ((u32 *)c)[0] = s1[0];
+    ((u32 *)c)[1] = s1[1];
+    ((u32 *)c)[2] = s1[2];
+    ((u32 *)c)[3] = s1[3];
+    ((u32 *)d)[0] = s2[0];
+    ((u32 *)d)[1] = s2[1];
+    ((u32 *)d)[2] = s2[2];
+    *(u8 **)(b + 0x4) = c;
+    *(u8 **)(b + 0x8) = d;
+    *(s32 *)b = 0;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0x8) = -0x58;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0xA) = -0x40;
+    *(s16 *)(*(u8 **)(b + 0x4) + 0xC) = 0x200;
+    *(s16 *)(*(u8 **)(b + 0x8) + 0x2) = 0x400;
+    *(s16 *)(*(u8 **)(b + 0x8) + 0x6) = -0x50;
+    (*(u8 **)(b + 0x4))[0xF] = 4;
+}
+
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800280FC);
 

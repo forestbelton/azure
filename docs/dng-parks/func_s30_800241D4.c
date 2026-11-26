@@ -6,6 +6,65 @@
    one fault -- aligndiff is the number of PLACES wrong). This function owns NO
    jump table: its listing has no .section .rodata.
 
+   AGENT-H232, 2026-11-26: THE CAUSE IS NOW NAMED AND THE RESIDUE HAS BEEN
+   MOVED, BUT NOT YET AT A PROFIT.  Read this before anything below it.
+
+   THE MECHANISM, read out of the compiler and confirmed by measurement.
+   sched.c's `adjust_priority' is called the moment an insn becomes ready.
+   Because the `??? This code has no effect' loop over REG_DEAD notes always
+   counts n_deaths == 0 (the notes are gone by then), EVERY ready insn falls
+   into `case 0:' and is passed to `birthing_insn_p'.  That returns
+   `reg_n_sets[i] == 1' for an insn whose destination pseudo is live, and the
+   insn's priority is then raised to `max_priority', which
+   (sched.c, `max_priority = MAX (INSN_PRIORITY (ready[0]), ...)') is the
+   current frontier's best -- so a boosted insn is picked immediately by the
+   backward scan and therefore lands LATE in the emitted block.  The `sll3'
+   that computes w times 8 is exactly such an insn here, and that is why it
+   sits at word 123 instead of 103.
+
+   REMOVING THE BOOST PUTS THE sll3 AT WORD 103.  The gate is ONE SET versus
+   TWO SURVIVING SETS of the destination pseudo.  Two spellings do it:
+
+     w = (t % 4) * 8; ... ; w += 0x3F; with setUV4 expanded
+       to its eight field stores                         283 w, 19 rows
+       -- sll3 at 103, CORRECT.  What breaks instead: the `addiu w + 0x3F'
+          lands at 104 instead of 127, and the mod-4 chain's registers rotate
+          to $a0/$t6/$v1 where the ROM has $v1/$v0/$v0
+     d = (t % 4) * 8; reusing `d', which this body already sets twice
+                                                          283 w, 36 rows
+       -- sll3 at 103, CORRECT, but in $t5, which rotates the whole $t
+          register wall AND rotates `d's two earlier uses (rows 25..46)
+
+   SO THIS IS THE BRIEF'S "worse alone, necessary in combination" SHAPE: the
+   change that fixes the park's one stated fault measures 19 rows against 2.
+   What is still missing is a shape in which the sll3's destination has TWO
+   sets (no boost, so it lands at 103) while the `+ 0x3F' destination is a
+   DISTINCT SINGLE-set pseudo (so it IS boosted and lands at 127) that
+   combine_regs then ties to the sll3's destination, giving both $v0 -- which
+   is exactly what the ROM's `sll $v0,$v0,3' ... `addiu $v0,$v0,0x3F' pair is.
+   I could not spell that: a two-set `w' makes both sets the same pseudo, and
+   a separate temp for the `+ 0x3F' makes `w' single-set again.
+
+   FOUR THINGS MEASURED ALONG THE WAY, two of them corrections to this header:
+
+   * THE "two sets of w" ROW BELOW IS WRONG.  `w = t % 4; w = w * 8;'
+     measures 283 words / 2 aligned rows with the SAME `sll3 at 123' residue
+     as the one-set form, NOT the `sb zero, 0xC(q) at 104' residue recorded
+     below.  It is not a two-set form at all: the first value has a single
+     use, so combine merges the two sets into one and reg_n_sets is 1 again.
+     Any "give it two sets" remedy has to put a READ of the first value
+     between the two sets, or combine undoes it.
+   * `w += 0x3F' and `w = w + 0x3F' are identical (19 rows each), and the
+     addiu's emitted position is INSENSITIVE to where the statement is written
+     in source -- before or after `q->u2 = 0x3F' is 19 rows either way.  The
+     position is sched's, not the source's.
+   * A DEAD SECOND SET DOES NOT WORK.  `w = (t % 4) * 8;' plus a trailing
+     `w = 0;' just before the `return 0;' measures 283 / 8 -- identical to
+     `w = (t % 4) * 8;' on its own -- because flow deletes the dead insn
+     before reg_n_sets is what birthing_insn_p reads.
+   * Expanding setUV4 into its eight field stores in source order remains
+     free, as the 2x2 below found: 283 / 2 with the one-set `w'.
+
    WHAT IT DOES. Builds one semi-transparent POLY_GT4 billboard quad for the
    caller's UnkVec in the 0x1F800000 scratchpad: the four SVECTORs at +0x64 are
    two columns at b+0x2 -+ d and two rows at b+0x6 +- e, where
@@ -48,6 +107,8 @@
        the one row is `sll v0,v0,3' at 123 not 103
      w = t % 4; w = w * 8;  two sets of w             283 w, 2
        the one row is `sb zero,0xC(q)' at 104 not 128
+       -- REFUTED above by agent-h232: this is NOT a two-set form, combine
+          merges it, and it re-measures as the sll3-at-123 residue, not this
      do { w = (t % 4) * 8; } while (0);               283 w, 2
        same residue as the two-set form
      w = (t % 4) * 8;  one set, no device             283 w, 8

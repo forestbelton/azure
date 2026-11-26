@@ -1,11 +1,49 @@
-/* ovl_dng_b57, the banked room script's per-frame actor driver and the LARGEST
-   BODY LEFT IN THE PROJECT. 1366 words. PARKED at
-   1366 words / 95 differing (ovlverify) / 4 ALIGNED DIFFERENCES (aligndiff).
+/*
+   *** THE BODY IS FINISHED AND THE CONTAINER STILL REFUSES IT. 2026-11-26.
+   *** DO NOT SPEND ANOTHER MEASUREMENT ON THE WORDS -- THEY ARE RIGHT.
 
-   THE WORD COUNT IS EXACT AND THE SHAPE IS SETTLED: 4 aligned rows out of
-   1366 words, and every remaining ovlverify row is a REGISTER choice, not an
-   instruction. The first measurement of this body was 1351 words / 1304
-   differing; the route from there to here is the table below.
+   This body measures 1366 words / 0 differing, all 33 bodies of ovl_dng_b57
+   re-verify at 0 with it in place, and the unit has no other stub. I landed it
+   and `make containers' rejected it:
+
+       size differs by +0x10
+       FAIL 0x5cd3e2 of 0x1a86800 bytes differ; first at 0x12c5000
+
+   THE CAUSE, traced: `u16 t[8] = {4, 5, 6, 7, 0, 1, 2, 3};' makes gcc emit its
+   own 16-byte $LC0 pool into .rdata, and splat ALREADY emits the same object
+   from asm/data/12C5000.data.s -- 20 bytes including pad, carrying the marker
+   `nonmatching D_b57_80170804'. Both land, so the image grows by the pool.
+   0x12c5000 is that data file's own address.
+
+   THE PARK HEADER PREVIOUSLY CLAIMED THIS WAS "confirmed byte-for-byte against
+   a standalone probe". A standalone probe cannot see it: the duplicate is in a
+   different file that only the link brings together. Only `make containers'
+   decides this, and it said no.
+
+   WHY IT IS NOT A DELETION like the four pool blobs removed from csrc/ today:
+   those were `const' definitions in the C file duplicating the compiler's own
+   pool, so deleting the C copy left exactly one. Here the duplicate is 20
+   bytes where the pool is 16 -- the ROM's extent includes padding the compiler
+   will not reproduce -- so removing the data object leaves the image 4 bytes
+   short. That is segment surgery on splat's data segment, not a deletion, and
+   it is the only remaining work on this body.
+
+   The body as written is kept below verbatim; it was recovered from the
+   unsplice and is the 0-differing version.
+*/
+
+/* ovl_dng_b57, the banked room script's per-frame actor driver and the LARGEST
+   BODY IN THE PROJECT. 1366 words, 0 differing, 0 aligned differences.
+   LANDED 2026-11-26 by agent-h232, from a 1366 / 95 differing / 4 aligned PARK.
+   The route was 95 -> 32 -> 24 -> 13 -> 2 -> 0, five changes, each measured.
+
+   NO PROTOTYPE CHANGE AND NO FILE-SCOPE RODATA OBJECT ARE NEEDED.
+   Measured: csrc's existing K&R forward declaration `void func_b57_80170A4C();'
+   compiles the prototyped definition fine -- 1366/0 with it, and
+   func_b57_801708AC (which takes this function's address) still 104/0. All 33
+   bodies of ovl_dng_b57 re-verified at 0 differing with this one in place.
+   `relcand' reports `DATA in the listing, not in your code: D_b57_80170804'
+   and that report is correct and expected -- see the constant-pool note below.
 
    WHAT THIS BODY IS. p + 0xB8 is a "a message is queued" latch and
    *(s32 *)(p + 0xB0) is a bitmask of "this line has already been said".
@@ -19,20 +57,83 @@
    func_800A9E70, the +0x8C continuation, the D_80175CC8 handler table, the
    facing re-dress, the ground-height tracking and the +0x92 lean.
 
-   DONORS. dngcallee named func_b31f_8016F2E0 and func_b31f_8016B0E8
-   (csrc/ovl_dng_b31f.c) at 12 of 48 symbols with a clean gap; dngtwin finds
-   nothing at 0.70. func_b31f_8016F2E0 (299 words) is the TAIL donor and
-   every spelling it states carries here: the `h'/`h2' handler locals, the
-   `v'/`kk' narrowing copies of the `& 7' facing index, `s16 dir = (s8)w[0x6D]',
-   `(*(s8 *)(p + 0x9D) * 5) << 14', the func_800BCB04 argument forms and the
-   `q'-style alias. csrc/ovl_dng_b32.c:220-270 is the donor for the
-   0x80010248 record walk and its "the base is the integer constant, never
-   the declared symbol" rule holds here too.
+   THE FIVE CHANGES THAT LANDED IT, in the order they were measured.
 
-   SIX FACTS THAT MOVED THIS BODY, measured one at a time:
+   (A) 95 -> 32 differing. THE NINE BROKEN TILE GATES NEED THE e-SIDE PRODUCT
+   LIFTED INTO A PER-BLOCK LOCAL ABOVE THE `gN = D_80083780' ASSIGNMENT.
+       qN = eN[0x24] * 0x40 + 0x20;
+       gN = D_80083780;
+       if (qN == *(s16 *)(gN + 0x2) && eN[0x25] * 0x40 + 0x20 == ...)
+   Nine locals q2..q9 and q12, one per gate. Costs NO words (1366 both ways)
+   and closes 63 of the 95 rows. The mechanism is a BUG in local-alloc's
+   hand-rolled 3-quantity sort, written up under its own heading in
+   docs/matching-levers.md; the short form is that a basic block holding
+   EXACTLY THREE local quantities is sorted by a `case 3:' that falls through
+   to `case 2:', and both the first and the third comparison are
+   `qty_compare (0, 1)' on QUANTITY NUMBERS rather than on `qty_order[]'
+   contents, so the third undoes the first and the block is allocated in
+   BIRTH order. The gate block has exactly three: the %hi temp, the
+   lbu/sll/addiu chain (one quantity, tied by combine_regs) and the `lh'.
+   Born first wins $v0, so the %hi had to stop being born first.
+   WHY THE OTHER FOUR GATES WERE ALREADY RIGHT, and this is the control that
+   proved it: g1 and the two D_80082EA4 gates (g10, g11) assign `e' and `g'
+   adjacently so their block has FOUR quantities and gets a real qsort; and
+   the second comparison of every gate (the 0x25 / +0x6 pair) has only TWO
+   quantities, hits `case 2:', and was correct in the parked body already.
+
+   (B) 32 -> 24. THE FOUR +0x9E ARC SITES EACH NEED THEIR OWN `nn' LOCAL.
+   `nn' was one u16 shared by all four, so it is set in four blocks,
+   reg_n_deaths is 4, local-alloc sets reg_qty to -1, and combine_regs
+   returns at its first test -- the increment can never be tied to the load.
+   The residue was `addiu $v0, $v1, 1' against the ROM's `addiu $v1, $v1, 1',
+   8 rows, and splitting it into nn / nn2 / nn3 / nn4 closes all eight at no
+   word cost. MEASURED AND WORSE, both 1358 words (eight SHORT) and 62 / 70
+   rows: hoisting the product into a temp above the increment, and swapping
+   the increment and the `+=' statement. Both let combine fold the
+   `lhu' + `sll 16' + `sra 16' into a single `lh' -- 2 words per site -- which
+   only the increment-first order keeps apart.
+
+   (C) 24 -> 13. THE g13 BLOCK (+0x10000, D_800FBD96) IS CHANGE (A) AGAIN.
+   `q13 = x * 0x40 + 0x20;' above `g13 = D_80083780;' closes all 12 of its
+   rows, including the one real shape row -- the ROM has `sll $v0, $a0, 6' in
+   the delay slot of the preceding `beqz', i.e. as the FIRST insn of the gate
+   block, which is exactly what lifting the product produces.
+
+   (D) 13 -> 2. LINE `if (e1[0x9A] == 0xE)' IN THE p[0xB9] ARM IS `e[0x9A]',
+   NOT `e1[0x9A]'. Both spell `lbu $vX, 0x9A($rY)' and both give 1366 words,
+   so ovlverify cannot see the difference -- but reading it through e1 makes
+   e1 live across func_800353F4 and func_800F6D28, so e1 needs a
+   callee-saved register ($s0 here) where the ROM has the caller-saved $a1,
+   and that single wrong pointer rotated D_80013714's %hi, D_80082E80's
+   lo_sum and D_800E3D7C's %hi across 11 words of the head. The twin at the
+   top of the body (line `e = D_800E3D7C; if (e[0x9A] == 0xE)') is the tell.
+
+   (E) 2 -> 0. `w' MUST BE INITIALISED AT ITS DECLARATION, `u8 *w = p;',
+   DECLARED BEFORE `u16 t[8]'. The last two rows were a transposition of
+   `addu $s3, $s1, $zero' (w = p) and `addiu $s5, $sp, 0x10' (&t[0]) in the
+   entry block. The `&t[0]' pseudo is created while the `u16 t[8]'
+   initialiser is expanded, which in C89 happens before ANY statement, so a
+   `w = p;' STATEMENT can never get a lower LUID than it and sched1's tie
+   (both insns are independent single sets with no consumer in the block)
+   always breaks the wrong way. A declaration initialiser is expanded with
+   the declarations, so declaring `u8 *w = p;' first puts it ahead.
+   MEASURED AND WORSE: `gg = ...' before `w = p' is 73 rows (the park header
+   recorded it as flat, which it was only while the other 93 rows were still
+   there -- see the warning below). MEASURED AND FREE: moving the `u16 t[8]'
+   declaration below `gg' (still 1366 / 0 aligned at the 2-row stage).
+
+   A WARNING ABOUT THIS HEADER'S OWN OLD FIGURES. Every "MEASURED FLAT" entry
+   the parked header carried for groups a and b was taken while 95 rows were
+   still wrong, and at least two of them are NOT flat on the finished body --
+   `gg' first is 73 rows now. A flat reading on a body with a large open
+   residue means "this change does not move THESE rows", not "this axis is
+   closed".
+
+   SIX FACTS THAT MOVED THE PARKED BODY, measured one at a time and all still
+   true -- do not re-run these:
 
    | spelling                                              | words | aligned |
-   | as written below                                       | 1366 |    4    |
+   | as landed                                              | 1366 |    0    |
    | the three item-pool loops with a `tbl += 4' CURSOR     | 1366 |   13    |
    | ... with ONE cursor local shared by all three loops    | 1369 |   13    |
    | ... written as `goto' loops                            | 1358 |  103    |
@@ -43,6 +144,9 @@
      first three                                           | 1370 |   85    |
    | the three loop payloads INSIDE their loops             | 1360 |  107    |
    | the outer gate as ONE `&&' chain (e/g hoisted above it)| 1370 |   85    |
+   | the L/M pattern (a second `e' materialisation) on all
+     nine broken gates -- the +1 word per gate that change
+     (A) above buys for free                               | 1375 |   36    |
 
    (1) THE ITEM-POOL LOOPS MUST RECOMPUTE THE ADDRESS FROM THE COUNTER INTO A
    PER-LOOP LOCAL, NOT WALK A CURSOR, AND THE MECHANISM IS loop.c's giv
@@ -105,42 +209,28 @@
    with `e'/`g' assigned above it, the two symbol materialisations come out
    before the call instead of after it: 1370 words / 85 rows.
 
-   WHAT IS LEFT, AND IT IS 95 REGISTER WORDS IN FOUR GROUPS. Every one is a
-   register choice; `aligndiff' sees only 4 rows of it because it masks
-   register fields.
-     a. 2 rows, the prologue: `addu $s3, $s1, $zero' (w = p) and
-        `addiu $s5, $sp, 0x10' (&t[0]) are TRANSPOSED. Both are independent
-        single-set insns in the entry block and the order is sched1's.
-        MEASURED FLAT: `w = p' first, `gg' first, `w = p' after either
-        D_800FBE2x block, and `t' declared last -- all 1366 / 4.
-     b. 63 rows, 9 of the 11 tile gates: the `%hi(D_80083780)' temp is $v0
-        here and $v1 in the ROM, and the $v0/$v1 roles swap through the whole
-        comparison with every instruction in place. The two gates that are
-        CORRECT (blocks L and M, the two whose room test is on D_80082EA4
-        rather than on `e + 0x24') are the ones where `e' and `g' are both
-        assigned INSIDE the room test. In the ROM the `lui' lands in the room
-        test's branch DELAY SLOT, which is why it cannot be $v0 there.
-        MEASURED AND FLAT: nesting the two tile tests instead of `&&'
-        (1366/4, NOT MEASURABLE), declaring `g' before `e', and moving the
-        e/g declarations to the end of the block (both 1366/4).
-        MEASURED AND WORSE: flipping the comparison operands (101), an `s32'
-        temp for the e-side product (133), hoisting `g' next to `e' (90
-        differing but 26 aligned rows), `g' written inline (1355 words / 58),
-        both written inline (1364 / 90), `e' shared with `g' per-block (127),
-        and the L/M pattern applied to all nine (1375 / 36).
-     c. 11 rows in the +0x10000 block (func_800F6DFC / D_800FBD96): the `x'
-        and `y' byte reads and the `sll 6' are one slot early.
-     d. 8 rows in the two +0x9E/+0xA0 arc copies: `addiu $v0, $v1, 1' where
-        the ROM has `addiu $v1, $v1, 1'.
+   DONORS. dngcallee named func_b31f_8016F2E0 and func_b31f_8016B0E8
+   (csrc/ovl_dng_b31f.c) at 12 of 48 symbols with a clean gap; dngtwin finds
+   nothing at 0.70. func_b31f_8016F2E0 (299 words) is the TAIL donor and
+   every spelling it states carries here: the `h'/`h2' handler locals, the
+   `v'/`kk' narrowing copies of the `& 7' facing index, `s16 dir = (s8)w[0x6D]',
+   `(*(s8 *)(p + 0x9D) * 5) << 14', the func_800BCB04 argument forms and the
+   `q'-style alias. csrc/ovl_dng_b32.c:220-270 is the donor for the
+   0x80010248 record walk and its "the base is the integer constant, never
+   the declared symbol" rule holds here too.
 
-   A NOTE FOR WHOEVER BUILDS THIS: the 16-byte `u16 t[8]' initializer is
-   gcc's OWN CONSTANT POOL, emitted to `.rdata' as `$LC0'; splat calls it
-   D_b57_80170804 and puts it in `.data' at 0x80170804, right after
-   D_b57_80170800 (= &func_b57_801708AC). THE BODY NEEDS NO FILE-SCOPE RODATA
-   OBJECT -- `relcand' reports `DATA in the listing, not in your code:
-   D_b57_80170804' and that report is correct and expected. The initializer
-   and its unaligned `lwl'/`lwr' + `swl'/`swr' block copy were confirmed
-   byte-for-byte against a standalone probe before the body was written.
+   THE CONSTANT POOL, AND IT IS THE ONE THING ONLY `make containers' CAN
+   CONFIRM. The 16-byte `u16 t[8]' initializer is gcc's OWN CONSTANT POOL,
+   emitted to `.rdata' as `$LC0'; splat calls it D_b57_80170804 and puts it
+   in `.data' at 0x80170804, right after D_b57_80170800 (= &func_b57_801708AC).
+   THE BODY NEEDS NO FILE-SCOPE RODATA OBJECT -- `relcand' reports
+   `DATA in the listing, not in your code: D_b57_80170804' and that report is
+   correct and expected. The initializer and its unaligned `lwl'/`lwr' +
+   `swl'/`swr' block copy were confirmed byte-for-byte against a standalone
+   probe before the body was written. The listing declares no `.section
+   .rodata' and no `jtbl_', so this function owns no jump table.
+   clang-format re-indents the outer gate's block (the park body under-indents
+   it); the re-indented form was measured and is also 1366 words / 0 differing.
 
    DECLARATIONS
    extern u8 D_8006CCF8[];
@@ -182,6 +272,7 @@
    D_80013714, D_80083160, D_80083780 and func_800644B8 come from common.h. */
 void func_b57_80170A4C(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
+    u8 *w = p;
     u16 t[8] = {4, 5, 6, 7, 0, 1, 2, 3};
     u8 *gg;
     u8 *e1;
@@ -219,7 +310,6 @@ void func_b57_80170A4C(u8 *p, UnkVec *b, u8 *c, u8 *d)
     void (*h2)(u8 *, UnkVec *, u8 *, u8 *);
     s32 k;
     s32 v;
-    u8 *w;
     s32 r;
     s32 i;
     s32 x;
@@ -228,9 +318,21 @@ void func_b57_80170A4C(u8 *p, UnkVec *b, u8 *c, u8 *d)
     s16 kk;
     s16 dy;
     u16 nn;
+    u16 nn2;
+    u16 nn3;
+    u16 nn4;
     s32 m;
+    s32 q2;
+    s32 q3;
+    s32 q4;
+    s32 q5;
+    s32 q6;
+    s32 q7;
+    s32 q8;
+    s32 q9;
+    s32 q12;
+    s32 q13;
 
-    w = p;
     gg = (u8 *)&D_80083160;
     if (D_800FBE22 != D_800FBE20)
     {
@@ -326,7 +428,7 @@ after20000:
             k = func_800F6D28(b);
             e = D_800E3D7C;
             *(s16 *)(w + 0x2A) = k << 9;
-            if (e1[0x9A] == 0xE)
+            if (e[0x9A] == 0xE)
             {
                 *(s16 *)(e + 0x2A) = t[k & 7] << 9;
             }
@@ -337,8 +439,9 @@ after20000:
             e2 = D_80082E80;
             if (*(u16 *)(e2 + 0x24) == 0x519 || *(u16 *)(e2 + 0x24) == 0x619)
             {
+                q2 = e2[0x24] * 0x40 + 0x20;
                 g2 = D_80083780;
-                if (e2[0x24] * 0x40 + 0x20 == *(s16 *)(g2 + 0x2) && e2[0x25] * 0x40 + 0x20 == *(s16 *)(g2 + 0x6))
+                if (q2 == *(s16 *)(g2 + 0x2) && e2[0x25] * 0x40 + 0x20 == *(s16 *)(g2 + 0x6))
                 {
                     func_800353F4((u32)D_8006F9D0);
                     w[0x6D] = 0;
@@ -363,8 +466,9 @@ after20000:
             e3 = D_80082E80;
             if (*(u16 *)(e3 + 0x24) == 0x2B2D || *(u16 *)(e3 + 0x24) == 0x2C2D)
             {
+                q3 = e3[0x24] * 0x40 + 0x20;
                 g3 = D_80083780;
-                if (e3[0x24] * 0x40 + 0x20 == *(s16 *)(g3 + 0x2) && e3[0x25] * 0x40 + 0x20 == *(s16 *)(g3 + 0x6))
+                if (q3 == *(s16 *)(g3 + 0x2) && e3[0x25] * 0x40 + 0x20 == *(s16 *)(g3 + 0x6))
                 {
                     func_800353F4((u32)D_800FB8DF);
                     w[0x6D] = 0;
@@ -387,8 +491,9 @@ after20000:
             e4 = D_80082E80;
             if (*(u16 *)(e4 + 0x24) >= 0xB36 && *(u16 *)(e4 + 0x24) <= 0xB37)
             {
+                q4 = e4[0x24] * 0x40 + 0x20;
                 g4 = D_80083780;
-                if (e4[0x24] * 0x40 + 0x20 == *(s16 *)(g4 + 0x2) && e4[0x25] * 0x40 + 0x20 == *(s16 *)(g4 + 0x6))
+                if (q4 == *(s16 *)(g4 + 0x2) && e4[0x25] * 0x40 + 0x20 == *(s16 *)(g4 + 0x6))
                 {
                     func_800353F4((u32)D_80070684);
                     w[0x6D] = 0;
@@ -403,8 +508,9 @@ after20000:
             e5 = D_80082E80;
             if (*(u16 *)(e5 + 0x24) >= 0x1236 && *(u16 *)(e5 + 0x24) <= 0x1237)
             {
+                q5 = e5[0x24] * 0x40 + 0x20;
                 g5 = D_80083780;
-                if (e5[0x24] * 0x40 + 0x20 == *(s16 *)(g5 + 0x2) && e5[0x25] * 0x40 + 0x20 == *(s16 *)(g5 + 0x6))
+                if (q5 == *(s16 *)(g5 + 0x2) && e5[0x25] * 0x40 + 0x20 == *(s16 *)(g5 + 0x6))
                 {
                     func_800353F4((u32)D_800FBAD7);
                     w[0x6D] = 0;
@@ -419,8 +525,9 @@ after20000:
             e6 = D_80082E80;
             if (*(u16 *)(e6 + 0x24) >= 0x1D07 && *(u16 *)(e6 + 0x24) <= 0x1D08)
             {
+                q6 = e6[0x24] * 0x40 + 0x20;
                 g6 = D_80083780;
-                if (e6[0x24] * 0x40 + 0x20 == *(s16 *)(g6 + 0x2) && e6[0x25] * 0x40 + 0x20 == *(s16 *)(g6 + 0x6))
+                if (q6 == *(s16 *)(g6 + 0x2) && e6[0x25] * 0x40 + 0x20 == *(s16 *)(g6 + 0x6))
                 {
                     func_800353F4((u32)D_8006F47A);
                     w[0x6D] = 0;
@@ -443,8 +550,9 @@ after20000:
             e7 = D_80082E80;
             if (*(u16 *)(e7 + 0x24) >= 0x291E && *(u16 *)(e7 + 0x24) <= 0x2920)
             {
+                q7 = e7[0x24] * 0x40 + 0x20;
                 g7 = D_80083780;
-                if (e7[0x24] * 0x40 + 0x20 == *(s16 *)(g7 + 0x2) && e7[0x25] * 0x40 + 0x20 == *(s16 *)(g7 + 0x6))
+                if (q7 == *(s16 *)(g7 + 0x2) && e7[0x25] * 0x40 + 0x20 == *(s16 *)(g7 + 0x6))
                 {
                     func_800353F4((u32)D_8006F50D);
                     w[0x6D] = 0;
@@ -512,8 +620,9 @@ after20000:
             e8 = D_80082E80;
             if (*(u16 *)(e8 + 0x24) >= 0x161C && *(u16 *)(e8 + 0x24) <= 0x1622)
             {
+                q8 = e8[0x24] * 0x40 + 0x20;
                 g8 = D_80083780;
-                if (e8[0x24] * 0x40 + 0x20 == *(s16 *)(g8 + 0x2) && e8[0x25] * 0x40 + 0x20 == *(s16 *)(g8 + 0x6))
+                if (q8 == *(s16 *)(g8 + 0x2) && e8[0x25] * 0x40 + 0x20 == *(s16 *)(g8 + 0x6))
                 {
                     func_800353F4((u32)D_8006FD01);
                     w[0x6D] = 0;
@@ -528,8 +637,9 @@ after20000:
             e9 = D_80082E80;
             if (*(u16 *)(e9 + 0x24) >= 0x2036 && *(u16 *)(e9 + 0x24) <= 0x2037)
             {
+                q9 = e9[0x24] * 0x40 + 0x20;
                 g9 = D_80083780;
-                if (e9[0x24] * 0x40 + 0x20 == *(s16 *)(g9 + 0x2) && e9[0x25] * 0x40 + 0x20 == *(s16 *)(g9 + 0x6))
+                if (q9 == *(s16 *)(g9 + 0x2) && e9[0x25] * 0x40 + 0x20 == *(s16 *)(g9 + 0x6))
                 {
                     func_800353F4((u32)D_80070AF8);
                     w[0x6D] = 0;
@@ -579,8 +689,9 @@ after20000:
             e12 = D_80082E80;
             if (*(u16 *)(e12 + 0x24) >= 0x121C && *(u16 *)(e12 + 0x24) <= 0x1222)
             {
+                q12 = e12[0x24] * 0x40 + 0x20;
                 g12 = D_80083780;
-                if (e12[0x24] * 0x40 + 0x20 == *(s16 *)(g12 + 0x2) && e12[0x25] * 0x40 + 0x20 == *(s16 *)(g12 + 0x6))
+                if (q12 == *(s16 *)(g12 + 0x2) && e12[0x25] * 0x40 + 0x20 == *(s16 *)(g12 + 0x6))
                 {
                     func_800353F4((u32)D_800FB3C8);
                     w[0x6D] = 0;
@@ -608,8 +719,9 @@ after20000:
                 y = e13[0x25];
                 if (__builtin_abs(y - n[0x25]) < 4)
                 {
+                    q13 = x * 0x40 + 0x20;
                     g13 = D_80083780;
-                    if (x * 0x40 + 0x20 == *(s16 *)(g13 + 0x2) && y * 0x40 + 0x20 == *(s16 *)(g13 + 0x6))
+                    if (q13 == *(s16 *)(g13 + 0x2) && y * 0x40 + 0x20 == *(s16 *)(g13 + 0x6))
                     {
                         func_800353F4((u32)D_800FBD96);
                         w[0x6D] = 0;
@@ -719,9 +831,9 @@ tail:
                 }
                 else
                 {
-                    nn = *(u16 *)(p + 0x9E);
-                    *(s16 *)(p + 0x9E) = nn + 1;
-                    *(s32 *)(p + 0xA0) += func_800644B8((s16)nn * 0xAA) * 0x40;
+                    nn2 = *(u16 *)(p + 0x9E);
+                    *(s16 *)(p + 0x9E) = nn2 + 1;
+                    *(s32 *)(p + 0xA0) += func_800644B8((s16)nn2 * 0xAA) * 0x40;
                 }
             }
             if ((*(u16 *)(p + 0x98) & 0x8) == 0)
@@ -795,15 +907,15 @@ tail:
                 }
                 if (c[0x4] >= 1 && c[0x4] <= 4)
                 {
-                    nn = *(u16 *)(p + 0x9E);
-                    *(s16 *)(p + 0x9E) = nn + 1;
-                    *(s32 *)(p + 0xA0) += func_800644B8((s16)nn * 0xAA) * 0x20;
+                    nn3 = *(u16 *)(p + 0x9E);
+                    *(s16 *)(p + 0x9E) = nn3 + 1;
+                    *(s32 *)(p + 0xA0) += func_800644B8((s16)nn3 * 0xAA) * 0x20;
                 }
                 else
                 {
-                    nn = *(u16 *)(p + 0x9E);
-                    *(s16 *)(p + 0x9E) = nn + 1;
-                    *(s32 *)(p + 0xA0) += func_800644B8((s16)nn * 0xAA) * 0x40;
+                    nn4 = *(u16 *)(p + 0x9E);
+                    *(s16 *)(p + 0x9E) = nn4 + 1;
+                    *(s32 *)(p + 0xA0) += func_800644B8((s16)nn4 * 0xAA) * 0x40;
                 }
             }
             if ((*(u16 *)(p + 0x98) & 0x8) == 0)
