@@ -146,6 +146,20 @@ def written(copy_path, csrc_path):
 
 
 def main():
+    # A PATH THAT DOES NOT EXIST USED TO GIVE A BARE TRACEBACK, and an agent
+    # reported the symptom as "relative paths return empty output" -- because
+    # the traceback's message is easy to lose in a pipeline and the exit code
+    # read through `head' is head's. Both are the same underlying problem: this
+    # tool is usually invoked with a `cwd' other than the repo root, where a
+    # relative path means something different than the caller expects. Say so.
+    for a in sys.argv[1:]:
+        if a.startswith("-") or not (a.endswith(".c") or a.endswith(".h")):
+            continue
+        if not os.path.exists(a):
+            raise SystemExit(
+                "cfuncs: %r does not exist (cwd is %s).\n"
+                "         Pass an ABSOLUTE path -- this tool is normally run "
+                "with a cwd other than the repo root." % (a, os.getcwd()))
     if len(sys.argv) < 2:
         raise SystemExit("usage: cfuncs.py FILE.c [NAME] | --stubs FILE.c "
                          "| --written COPY.c CSRC.c")
