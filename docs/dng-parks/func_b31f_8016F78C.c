@@ -28,9 +28,15 @@
    fifth argument.  That whole tail -- the D_800E2970 / 0x430 /
    func_8009FD7C / func_800A0818 block -- is ABSENT from this relink's
    listing, so if x survived in the source it survived as dead code, which
-   is not something this body can show.  WHAT I WOULD TRY NEXT: look for a
-   sibling relink of func_800D8C64 in another bank whose listing is 190
-   words AND frame -0x30, and read which call it gives five arguments.
+   is not something this body can show.  WHAT I WOULD TRY NEXT, and it is a
+   strong lead: func_b31f_8016B778, LANDED in this same unit by the same
+   agent at 359/0, is the fuller relink of the SAME resident twin and it DOES
+   carry both constructs -- a `u16 x' whose address goes to func_800A0818 as
+   a fifth argument at two sites, and a five-argument func_800AAF00 call --
+   and its frame is -0x38 with the same six saves.  Read its body beside
+   this listing and look for the arm this relink kept in a form I read as
+   something else; a func_800AAF00(p, b, c, table, (u32)handler) call is
+   five arguments and would reserve exactly the missing 24 bytes.
 
    WHAT IT DOES: the bank's pre-walk gate, a 190-word relink of the resident
    func_800D8C64 with its d[0x25] arm, its 0x200/func_800AA924 arm, its

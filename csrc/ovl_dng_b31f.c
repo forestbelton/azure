@@ -280,6 +280,17 @@ extern u8 D_800DF45C[];
 s32 func_800BBA40(s16 x, s16 y, s16 ang, void *d, s16 e, s32 g, void *h);
 s32 func_b31f_8016EF10(u8 *p, void *b, u8 *c);
 
+extern u8 D_b31f_8017469C[];
+void func_b31f_8016BF74(u8 *p, void *b, void *c, u8 *d);
+void func_b31f_8016C8AC(u8 *p, UnkVec *b, u8 *c, u8 *d);
+s32 func_b31f_8016C98C(u8 *a, void *b, void *c, s32 d);
+extern u8 D_b31f_801746BC[];
+s32 func_800AA924(u8 *, UnkVec *, u8 *, u8 *);
+s32 func_800AAF00(u8 *, UnkVec *, u8 *, u8 *, u32);
+s32 func_800A1C58(u8 *);
+void func_b31f_8016BD14_0(void) __asm__("func_b31f_8016BD14");
+s16 func_8009FB34(u16 x, u16 y);
+
 void func_b31f_8016A908(u8 *p)
 {
     p[0x6D] = 0;
@@ -680,7 +691,186 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016AEDC);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016B0E8);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016B778);
+/* h186:BEGIN func_b31f_8016B778 */
+void func_b31f_8016B778(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *t80;
+    s16 n;
+    s32 v;
+    u16 x;
+
+    if ((D_80083462 & 0x1000) != 0)
+    {
+        p[0x9A] = 0xE;
+        func_b31f_8016BD14_0();
+        return;
+    }
+    if ((*(s32 *)(d + 0x1C) & 0x200) != 0)
+    {
+        if (*(u8 **)(c + 0x2C) == D_b31f_801746A4)
+        {
+            p[0x9A] = 0xD;
+            p[0x9B] = 1;
+            *(u32 *)(p + 0x8C) = 0;
+            *(s32 *)(d + 0x1C) &= 0xFFFBFFFF;
+            return;
+        }
+        if (func_800AA924(p, b, c, D_b31f_8017469C) != 0)
+        {
+            return;
+        }
+    }
+    if ((D_80083462 & 0x2000) == 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x100) != 0)
+        {
+            func_800AA258(p, b, c, d);
+            return;
+        }
+        if (p[0x9A] != 0xE)
+        {
+            if (p[0xB3] == 0)
+            {
+                if (*(u8 **)(c + 0x2C) != D_b31f_8017467C)
+                {
+                    *(u8 **)(c + 0x2C) = D_b31f_8017467C;
+                    func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) + (s32)D_b31f_8017467C), 0);
+                }
+            }
+            else
+            {
+                if (*(u8 **)(c + 0x2C) != D_b31f_80174684)
+                {
+                    *(u8 **)(c + 0x2C) = D_b31f_80174684;
+                    func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) + (s32)D_b31f_80174684), 0);
+                }
+            }
+            p[0x9A] = 0xE;
+        }
+        *(u16 *)(p + 0x98) &= 0xFFF3;
+        if (p[0xB4] == 0 && (*(u16 *)0x80013714 & 8) == 0)
+        {
+            if (*(s16 *)(d + 0x64) != 0 && func_800AA6B4(p, b, c, D_b31f_801746C4) != 0)
+            {
+                return;
+            }
+        }
+        else if (*(s16 *)(d + 0x64) != 0)
+        {
+            g = (u8 *)&D_80083460;
+            if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+            {
+                *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+            }
+        }
+        if ((*(s32 *)(d + 0x1C) & 0x80000) != 0)
+        {
+            func_800AA888(p, b, c, d);
+            func_b31f_8016DAA4(p, b, c, d);
+            *(u8 **)(c + 0x2C) = D_b31f_8017467C;
+            func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) + (s32)D_b31f_8017467C), 0);
+            *(s32 *)(p + 0x90) = 0;
+            return;
+        }
+        if ((s16)func_800A1C58(d) != 0)
+        {
+            *(s32 *)(d + 0x18) = 0;
+            D_8008346C = 0;
+        }
+    }
+    n = func_8009FB34(c[0x24], c[0x25]);
+    c[0x26] = n;
+    if (*(s8 *)(d + 0x6D) > 0)
+    {
+        if ((*(s32 *)(d + 0x1C) & 0x20) != 0)
+        {
+            func_800A9A0C(d);
+            return;
+        }
+        if (*(u16 *)(c + 0x24) == D_80082EA4)
+        {
+            func_b31f_8016BF74(p, b, c, d);
+            return;
+        }
+        if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+        {
+            if ((D_80083462 & 0x2000) != 0)
+            {
+                if ((s16)func_8009A180(d, *(u8 **)(D_800814A8 + 0x58) + 0x20) != 0)
+                {
+                    return;
+                }
+            }
+            if ((*(u16 *)0x80013714 & 8) != 0)
+            {
+                func_b31f_8016EF10(p, b, c);
+                d[0x71] &= 0x7F;
+                func_800A9A0C(d);
+                *(u16 *)(d + 0x46) &= 0x7FFF;
+                return;
+            }
+            if ((s16)func_b31f_8016C98C(p, b, c, 0) == 0)
+            {
+                return;
+            }
+            *(u16 *)(d + 0x46) |= 0x4000;
+            if ((*(u16 *)(d + 0x46) & 0x8000) == 0)
+            {
+                func_b31f_8016BF74(p, b, c, d);
+                return;
+            }
+        }
+        switch (*(u16 *)(d + 0x46) & 0x3FFF)
+        {
+        case 8:
+        case 9:
+            if ((s16)func_b31f_8016C720(p, b, c, d) == 0)
+            {
+                func_b31f_8016C8AC(p, b, c, d);
+            }
+            return;
+        case 5:
+        case 6:
+        case 7:
+            ((UnkDngB09A28 *)(d + 0x28))->unk_02 = func_800A0818(c[0x24], c[0x25], D_80082E80[0x24], D_80082E80[0x25], &x);
+            if (*(u8 *)(D_800814A8 + 0x9A) == 0x11)
+            {
+                func_800AAF00(p, b, c, D_b31f_801746BC, (u32)func_b31f_8016B778);
+                return;
+            }
+        case 12:
+            func_800A9A0C(d);
+            return;
+        case 1:
+        case 2:
+        case 3:
+            func_800AAF00(p, b, c, D_b31f_801746BC, (u32)func_b31f_8016B778);
+            return;
+        default:
+            func_b31f_8016BF74(p, b, c, d);
+            return;
+        }
+    }
+    v = *(s32 *)(d + 0x1C);
+    if ((v & 0x2000) == 0)
+    {
+        if ((*(u16 *)0x80013714 & 8) == 0)
+        {
+            if ((s8)n < 0 || (D_800E2970_s[(s8)n].unk_0C & 2) == 0)
+            {
+                if ((v & 0x430) == 0)
+                {
+                    t80 = D_80082E80;
+                    if ((s16)func_8009FD7C(c[0x24], c[0x25], t80[0x24], t80[0x25]) != 0)
+                    {
+                        *(s16 *)(d + 0x2A) = func_800A0818(c[0x24], c[0x25], t80[0x24], t80[0x25], &x);
+                    }
+                }
+            }
+        }
+    }
+}
 
 /* Advance the record one step along its stored 0x74/0x7C trail: the 0.956
    relink of the landed func_b25_801724B0 (csrc/ovl_dng_b25.c, 143 words).
