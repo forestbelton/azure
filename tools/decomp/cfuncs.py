@@ -76,9 +76,29 @@ def strip_comments(text):
 _STUB = re.compile(r'INCLUDE_ASM\s*\(\s*"[^"]*"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)')
 
 
+# THE PARSER'S API HAS BEEN RENAMED ONCE, AND IT BROKE THIS GATE SILENTLY FOR
+# EVERY AGENT. `list_functions' became `describe_functions' on 2026-11-25 and
+# parkcheck -- which agents run before every hand-back -- started dying with
+# "AttributeError: module 'func' has no attribute 'list_functions'" deep in a
+# call chain. One agent's park went unchecked because of it. So resolve the
+# entry point by NAME ONCE, at import, and fail with the available names rather
+# than an AttributeError at the call site.
+_LIST = None
+for _n in ("describe_functions", "list_functions"):
+    if hasattr(_func, _n):
+        _LIST = getattr(_func, _n)
+        break
+if _LIST is None:                                     # pragma: no cover
+    raise SystemExit(
+        "cfuncs: tools/c/func.py exports neither describe_functions nor "
+        "list_functions. It has: %s"
+        % ", ".join(sorted(n for n in dir(_func)
+                           if not n.startswith("_") and callable(getattr(_func, n)))))
+
+
 def functions(path):
     """-> list of tools/c/func.Function for every DEFINITION in the file."""
-    return _func.list_functions(path)
+    return _LIST(path)
 
 
 def names(path):
@@ -86,8 +106,13 @@ def names(path):
     return {f.name for f in functions(path)}
 
 
+_FIND = getattr(_func, "describe_function", None)
+
+
 def find(path, name):
     """-> the Function named `name', or None. Never a forward declaration."""
+    if _FIND is not None:
+        return _FIND(path, name)
     for f in functions(path):
         if f.name == name:
             return f
