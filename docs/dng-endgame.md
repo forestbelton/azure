@@ -279,3 +279,33 @@ needs an agent to repair the block before any figure in it means anything.
 
 Regression-checked after all three changes: `func_s25_800244A0` 117/2,
 `func_s29_80024088` 81/3, `func_b31f_8016FCE4` 332/3 -- all unchanged.
+
+## A BACKLOG ITEM, MEASURED AND DEFERRED: 290 `incompatible pointer type` WARNINGS
+
+`declcheck` reports **290** of them across the tree, concentrated in a few
+units:
+
+    ovl_dng_s21  29    ovl_dng_s41  13
+    ovl_dng_s20  29    ovl_dng_s37  13
+    ovl_dng_b23  27    ovl_dng_b42  12
+    ovl_dng_s18  18    ovl_dng_b31  12
+
+Almost all are the same class: a body declares `RotTransPers`,
+`SetDrawArea` or `LoadImage`'s out-parameters as `s32 *` and casts to match,
+where `psyq/include/libgte.h` declares them `long *`.
+
+> **An agent measured the fix as FREE on one body: spelled `long`/`(long *)`
+> it is 122 words / 0 differing, byte-identical output, and `declcheck` goes
+> clean.** So this is a real cleanup with a known-zero cost, not a risk.
+
+**Why it is not being done piecemeal:** it touches committed units, and every
+one needs re-verification plus a container gate afterwards. Doing it while
+agents hold those units is how a good landing gets reverted by mistake -- which
+happened once today for exactly this reason. **It wants one dedicated batch
+with no other work in flight**, and it is worth doing because a warning class
+this large is noise that hides the one warning that matters.
+
+**And the inheritance path is worth knowing:** these spread by DONOR. An agent
+copying a landed body's spelling copies its warnings verbatim; one reported
+inheriting six that way and fixing them in its own copy for free. So the count
+grows with replication unless a donor is cleaned.
