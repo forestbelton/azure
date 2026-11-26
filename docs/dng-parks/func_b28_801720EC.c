@@ -60,6 +60,24 @@
    is NINE shapes now, and the source-level space for creating this pseudo
    looks genuinely closed.
 
+   ROUTE (b) IS NOW RUN: 75 minutes, 532,033 candidates at 118/s,
+   base 1405 -> best 740, roughly 250 saved improvements spread across the
+   whole range.  IT DID NOT REACH 0 and 740 is not a landing.  The best
+   candidate is kept at nonmatchings/func_b28_801720EC/output-740-1/ (the
+   other 270 were superseded and deleted; they were 32M).
+
+   The run's SHAPE is the informative part, and it is what the triage rule
+   predicted.  A register-residue park on a different body went base 65 ->
+   best 30 in its first TWO minutes and then found nothing in 88 more, with 2
+   saved candidates out of 376,116.  This one improved steadily for the whole
+   75 minutes with 250 saved.  So the permuter's moves CAN express what this
+   park needs -- it simply did not arrive.  A longer run is the obvious next
+   step and is the cheapest thing left on this body, since nine hand-written
+   spellings and the whole record below are already spent.
+
+   Note the output is preprocessed C, so cleaning a 740 candidate up into
+   source is real work and only worth doing from a 0.
+
    ROUTE (b), THE PERMUTER, IS STILL WORTH IT -- and that is not the default
    answer.  A separate finding on 2026-11-26 is that the permuter cannot crack
    a residue which is WHICH REGISTER an existing pseudo got, because a register
