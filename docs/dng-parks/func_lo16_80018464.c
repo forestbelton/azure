@@ -1,4 +1,50 @@
 /* func_lo16_80018464 -- ovl_dng_lo16, 387 target words.
+
+   NOW AT 6 ALIGNED ROWS, 387/387 WORDS, and the body below IS the 6-row
+   version -- start from it, not from the 13-row one this header used to
+   describe.  Dispatcher, 2026-11-25.
+
+   This park was UNMEASURABLE for most of its life: parkresidue printed SKIP
+   because the body uses `D_800E36C8[i].unk_02' and the unit's
+   UnkDungeonSpotA had `u8 pad_02[0x2]' there.  The park's own prose said so
+   -- "UnkDungeonSpotA's `u8 pad_02[0x2]' must become `u16 unk_02'" -- and the
+   change had never been made.  Naming a pad at the same offset and size is
+   layout-neutral and the five containers stay byte-identical, so it is done
+   now, IN csrc/ovl_dng_lo16.c.  Note the unit defines its OWN
+   UnkDungeonSpotA, incompatible with the one in csrc/ovl_dungeon_decls.h
+   (same 12 bytes, different breakdown) and does not include that header, so
+   editing the header does nothing -- patch the unit.
+
+   WHAT TOOK IT FROM 13 TO 6, and it is ONE SHAPE APPLIED TWICE.  The target
+   materialises the `q = p + 8' cursor EARLY and keeps it in $s0, reading
+   `0x0($s0)', `0x4($s0)' and `$s0 + 1'; the 13-row body let gcc fold the
+   cursor into its first use, read `8($a2)' instead, and then needed a
+   `move a2,s0'.  Writing the cursor assignment TWICE forces it out:
+
+       as parked                                          387 w / 13 rows
+       `q = p;' before the FIRST `q = p + 8;'              387   /  8
+       ... and before the SECOND one as well               387   /  6  <- kept
+       first cursor assigned LAST, after the room stores   387   / 13
+       the room stores read through `q - 8' etc            387   / 15
+       `room = ...' before the cursor                      387   / 13
+       second cursor AFTER the `D_8008146E = n' store      387   /  8
+       second cursor two-set AND moved after that store    387   /  6  (same)
+
+   I DO NOT KNOW THE MECHANISM AND THE OBVIOUS ONE IS WRONG.  My first
+   reading was `birthing_insn_p' -- a single-set pseudo boosted to
+   max_priority -- but `q' already has six sets in this function, so
+   `reg_n_sets' was never 1 and that explanation cannot hold.  The 13-to-6 is
+   measured and reproducible; the cause is open.  Do not write the
+   birthing_insn_p story into anything.
+
+   THE REMAINING 6 ROWS ARE PURE STATEMENT ORDER in one loop, at target words
+   105..111.  The target emits `addiu $a1, $a1, 0x14' then `addiu $s3, $s3,
+   0x1' then `lhu $v0, 0x4($s0)' then `addu $a2, $s0, $zero'; this body emits
+   `move a2,s0', `addiu a1,a1,20', `lhu v0,4(a2)', `addiu s3,s3,1'.  So the
+   target increments the counter BEFORE the read and copies the cursor AFTER,
+   and this body does the reverse.  That is a counter-increment position
+   question inside the `while (*q != 0)' scan, and it is the one axis left.
+
    PARKED by its own sub-agent, batch 35, 2026-11-25, at 25 aligned rows.
    THAT AGENT THEN GOT IT TO 13 AND WAS KILLED BY A WEEKLY API LIMIT BEFORE IT
    COULD REWRITE THIS HEADER.  Agent h181 has recovered the 13-row body from
@@ -197,6 +243,7 @@ void func_lo16_80018464(s16 r)
     n = 0;
     while (*(u16 *)(p + 4) != 0)
     {
+        q = p;
         q = p + 8;
         room = &D_800E2970_s[n];
         room->unk_0A = 1;
@@ -219,6 +266,7 @@ void func_lo16_80018464(s16 r)
         p = q;
         n++;
     }
+    q = p;
     q = p + 8;
     D_8008146E = n;
     n = 0;
