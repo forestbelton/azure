@@ -269,10 +269,19 @@ PROJ=/home/case/projects/azure
 
 **The dumps land in the CWD named after the input** -- `f.c.rtl`, `f.c.jump`
 and so on -- one per pass, in pass order:
-`.rtl`, `.jump`, `.cse`, `.loop`, `.flow`, `.combine`, `.regmove`, `.sched`,
-`.lreg`, `.greg`, `.cse2`, `.bp`, `.sched2`, `.jump2`, `.shorten`, `.dbr` --
+`.rtl`, `.jump`, `.cse`, `.loop`, `.cse2`, `.flow`, `.combine`, `.regmove`,
+`.sched`, `.lreg`, `.greg`, `.bp`, `.sched2`, `.jump2`, `.shorten`, `.dbr` --
 note `.jump2` runs AFTER `.sched2`, which is why a reordering done to break a
-cross-jump merge is also the order that gets emitted. Verified 2026-11-01
+cross-jump merge is also the order that gets emitted.
+
+> **`.cse2` WAS LISTED IN THE WRONG PLACE HERE until 2026-11-26** -- after
+> `.greg`, where its name suggests it belongs. `toplev.c:3365-3380` puts
+> `rerun_cse_after_loop` immediately after `loop`, BEFORE `flow` and
+> `combine`, and two agents' dumps confirm it. That matters whenever you argue
+> about what a later pass can still undo: an agent proved a cse1 substitution
+> could be defeated by a free block-split device and then found **cse2 redoes
+> it**, which is only a coherent story with cse2 in its real position. Three
+> of that agent's conclusions depended on reading the order correctly. Verified 2026-11-01
 under wine, where the dumps arrived as `PQ2.*` in the wine prefix's `Temp`;
 re-verified 2026-11-02 natively, where they are named after the input.
 

@@ -126,6 +126,13 @@ def preamble_end(text):
     raise SystemExit("onefunc: no function definition or INCLUDE_ASM found")
 
 
+def preamble_end_char(text):
+    """preamble_end() as a CHARACTER offset, for bounding a walk-back."""
+    lines = text.split("\n")
+    n = preamble_end(text)
+    return len("\n".join(lines[:n])) + (1 if n else 0)
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0].startswith("-"):
@@ -153,6 +160,44 @@ def main():
     body = text[start:end]
     pre = "\n".join(text.split("\n")[:preamble_end(text)])
 
+    # AND THE DECLARATIONS A PARK SPLICE PUT *AFTER* THE PREAMBLE.
+    # parksplice.py places a park's own DECLARATIONS block immediately before
+    # the definition it splices -- which is past preamble_end, because that
+    # stops at the first INCLUDE_ASM or definition. Dropping them did not
+    # merely fail to compile; on func_lo16_80018E80 the standalone BUILT and
+    # read 399 words / 5 rows where the real unit reads 401 / 1, because the
+    # missing prototype was `func_lo16_80019684(s16, ...)' and without it the
+    # sll/sra sign-extension of the argument disappears. A plausible wrong
+    # answer is the dangerous kind, and two agents were told to use this tool
+    # on parks before it was found.
+    #
+    # Walk back from the definition to the end of the previous body (or the
+    # preamble) and keep the declaration-shaped lines.
+    head = text[:start]
+    cut = head.rfind("\n}\n")          # end of the previous function body
+    pstart = max(cut + 3, 0) if cut != -1 else 0
+    if pstart < preamble_end_char(text):
+        pstart = preamble_end_char(text)
+    extra = []
+    for l in head[pstart:].split("\n"):
+        t = l.strip()
+        if not t or t.startswith("/*") or t.startswith("*") or t.startswith("//"):
+            continue
+        # NOT an INCLUDE_ASM: it looks exactly like a prototype to the
+        # pattern below (an identifier, parens, a semicolon), and carrying one
+        # pulls another function's assembly into a file that is supposed to
+        # hold exactly one body.
+        if t.startswith("INCLUDE_ASM") or t.startswith("INCLUDE_RODATA"):
+            continue
+        # a prototype, an extern, a typedef, or a struct/union member line
+        if re.match(r"^(extern|typedef|static|const)\b", t) \
+                or re.match(r"^[A-Za-z_][\w \t*]*\**\w+\s*\(.*\)\s*;$", t) \
+                or re.match(r"^[\w]+\s*\**\s*\w+(\[[^\]]*\])?\s*;$", t) \
+                or t in ("{", "}", "};") or t.startswith("}"):
+            extra.append(l)
+    if extra:
+        pre = pre + "\n\n/* carried from the park splice: */\n" + "\n".join(extra)
+
     # Which callees does the preamble NOT declare?
     # Any mention, not just a call: an address-taken handler like
     # `n->unk_10 = (u32)func_800B14FC;` is an undeclared identifier too, and
@@ -173,7 +218,14 @@ def main():
                 with open(_cand) as _fh:
                     declared += "\n" + _fh.read()
                 break
-    called = sorted(set(re.findall(r"\b(func_[0-9A-Fa-f]{8})\b", body)) - {func})
+    # THE CARVED-NAME BUG AGAIN, in a second place. `func_[0-9A-Fa-f]{8}'
+    # matches the resident `func_80174F24' and never `func_b10_80174F24',
+    # whose tag holds an underscore and a non-hex letter -- so every CARVED
+    # callee went undetected and no prototype was ever synthesised for one.
+    # Found while fixing the park-declarations bug above; same root cause as
+    # the preamble_end pattern, one function apart.
+    called = sorted(set(re.findall(r"\b(func_(?:[a-z0-9]+_)?[0-9A-Fa-f]{8})\b",
+                                   body)) - {func})
     undeclared_earlier, undeclared_other = [], []
     for c in called:
         if re.search(r"(?m)^[A-Za-z_][^\n;]*\b" + c + r"\s*\([^;]*;", declared):
