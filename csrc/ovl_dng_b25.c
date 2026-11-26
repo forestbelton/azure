@@ -175,6 +175,12 @@ u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
 void func_8003DB94(void *, void *, s32);
 void func_b25_80170D34(u8 *p, UnkVec *v, u8 *c);
 
+extern u8 D_800E23B8[];
+extern u8 D_800E23C0[];
+s16 func_800A4E2C(u8 *, u8 *);
+void func_800AA53C(u8 *);
+void func_800D6DC0(u8 *a, u8 *m, void *src, u8 *e);
+
 void func_b25_80170A44(void *a, u8 *b, void *src, u8 *e)
 {
     UnkNode *n;
@@ -2911,7 +2917,253 @@ void func_b25_801754F0(u8 *p, UnkVec *b, u8 *c, u8 *d)
     d[0x6D] -= 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b25", func_b25_80175594);
+/* OWNS A JUMP TABLE: jtbl_b25_80170920, 8 .words = 8 CASES + 0 PAD, cases
+   0..7 in that order, eight distinct targets, NO default among the entries.
+   `sltiu $v0, $v1, 0x8' with no subtraction, so minval 0; the range check's
+   `beqz $v0' goes to .Lb25_80175BB0, the EPILOGUE, so nothing falls to a
+   default. Entry order: .Lb25_801755FC / .Lb25_801756A0 / .Lb25_801756E4 /
+   .Lb25_80175748 / .Lb25_80175770 / .Lb25_8017581C / .Lb25_801759A0 /
+   .Lb25_801759C0. It also contains a SECOND, COMPARE-CHAIN switch inside
+   case 5 on *(s16 *)(p + 0x96) with cases 0, 6 and 12 -- three arms, below
+   gcc 2.7.2's case_values_threshold, so no table and the arms emit in SOURCE
+   order (0, 6, 12 is what the listing's block order reads).
+
+   The bank's long summon: zero the mover and wait on +0xA0 passing 0x6FFFF,
+   swap in D_800E23B8, hold nine frames and swap in D_800E23C0, hold three,
+   hold eleven and then spawn six func_b25_80171010 bursts with
+   func_b25_8017165C(0x2C) jitter plus func_800D6DC0, then the long state 5 --
+   a per-frame vertical impulse from the inner switch, four more rand-jittered
+   bursts while +0x96 < 2, cue calls at frames 1, 2 and 6, and a 0x2E-frame
+   wait -- then put the mover back where state 0 remembered it in +0xB6, and
+   finally state 7: pick a free cell near D_80082E80 by retrying
+   func_800A4E2C up to 0x21 times, drop the actor there, and hand it back to
+   func_b25_80171F1C. 403 words, 0 differing.
+
+   FIVE ARMS SHARE ONE TAIL. Cases 1, 2, 3 and 5 all `j .Lb25_801759AC',
+   which is the last two statements of case 6's arm -- jump2 cross-joined
+   them, so `*(s16 *)(p + 0x96) = 0; p[0x9B] += 1;' is written out in each
+   arm and no `goto' is needed.
+
+   | spelling                                      | words | aligned |
+   | as written below                              |  403  |    0    |
+   | ONE `e' local for all three facing tables     |  403  |    4    |
+   | ONE counter local for all three loops         |  403  |    6    |
+   | case 7's restore AFTER the loop, not inside   |  403  |   28    |
+   | `--n' as the loop's own `for' decrement       |  404  |   46    |
+   | case 7's countdown as `while (--n >= 0)'      |  404  |   18    |
+   | `__builtin_abs' as two `x < 0 ? -x : x'       |  406  |   57    |
+   | `s16 n'                                       |  405  |   39    |
+   | `s32 x' and `s32 y' instead of `u8'           |  403  |    0    |
+   | no `g' local, D_80082E80 inline               |  403  |    0    |
+   | literal -0x200 for the 2nd func_800BCB04 arg  |  403  |    0    |
+   | swapped `g'/`i' declaration order             |  403  |    0    |
+
+   THE LAST FACT IS THE ONE WORTH HAVING: THE +0x24/+0x25 RESTORE MUST BE
+   INSIDE THE LOOP, AND IT IS A REFERENCE-COUNT FACT, NOT A CONTROL-FLOW ONE.
+   Both spellings emit the identical 403 words -- same instructions, same
+   order -- but with the restore after the loop the whole frame rotates:
+   `d' takes $s5 where the target has $s7, and the saved bytes and the 0x1E
+   constant each shift up one. `flow.c:2122' adds `loop_depth' per reference,
+   so moving the two `sb's inside the loop body takes each saved byte from 2
+   weighted references to 3; `floor_log2(3) * 3 = 3' against
+   `floor_log2(2) * 2 = 2' lifts both above `d' in `allocno_compare' and the
+   eight callee-saved names fall into the target's order. 28 rows for two
+   braces.
+
+   Getting there took the brief's own procedure in the stated order and it
+   paid twice: splitting case 7's countdown off the two `for' counters was 6
+   rows (one local with THREE SETS loses `adjust_priority's single-set boost,
+   and it is also what put `i' and `g' in each other's registers), and ONLY
+   after that set change did the position sweep stop reading flat. Four
+   spellings measured FLAT at 34 rows before the split -- declaration order,
+   the `g' local, the `s32' widths, the -0x200 literal -- and three of those
+   four are still free at 0, so they were never the fault.
+
+   The loop's `n--' must also sit BEFORE the distance test, not be the loop's
+   own decrement: reorg fills the `beqz's delay slot from the PRECEDING
+   independent insn, so the decrement has to be emitted above the test even
+   though the listing shows it below. Written as a `for (n = 0x20; n >= 0;
+   n--)' the body is one word long with a `nop' in that slot. */
+void func_b25_80175594(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *e;
+    u8 *g;
+    s32 i;
+    s32 n;
+    u8 x;
+    u8 y;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            p[0x9B] = 7;
+            *(u16 *)(c + 0x14) |= 0x6000;
+            break;
+        }
+        if (*(s32 *)(p + 0xA0) > 0x6FFFF)
+        {
+            *(u16 *)(p + 0x98) |= 0x8;
+            *(s32 *)(d + 0x1C) &= 0xFFFBFFFF;
+            *(s32 *)(p + 0xA0) = 0;
+            *(u16 *)(p + 0x92) -= 0x8;
+            p[0x9B] += 1;
+            *(u16 *)(p + 0xB6) = *(u16 *)((u8 *)b + 0xA) + *(u16 *)(p + 0x92);
+        }
+        break;
+    case 1:
+    {
+        u8 *t;
+
+        t = D_800E23B8;
+        *(u8 **)(c + 0x2C) = t;
+        func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        *(s16 *)(p + 0x96) = 0;
+        p[0x9B] += 1;
+        break;
+    }
+    case 2:
+        if (++*(s16 *)(p + 0x96) >= 9)
+        {
+            u8 *t;
+
+            t = D_800E23C0;
+            *(u8 **)(c + 0x2C) = t;
+            func_80047784(c, t[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] += 1;
+        }
+        break;
+    case 3:
+        if ((*(s16 *)(p + 0x96))++ >= 3)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] += 1;
+        }
+        break;
+    case 4:
+        if ((*(s16 *)(p + 0x96))++ >= 0xB)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] += 1;
+            b->unk_14 = 0;
+            *(s32 *)(p + 0xAC) = 0;
+            for (i = 0; i < 6; i++)
+            {
+                func_b25_80171010(p, b, c, func_b25_8017165C(0x2C) - 0x16,
+                                  func_b25_8017165C(0x2C) - 0x16, 0x1E);
+            }
+            func_800D6DC0(p, (u8 *)b, c, d);
+        }
+        break;
+    case 5:
+        switch (*(s16 *)(p + 0x96))
+        {
+        case 0:
+            b->unk_14 = 0xFFEC0000;
+            *(s32 *)(p + 0xAC) = 0x30000;
+            break;
+        case 6:
+            b->unk_14 = 0xFFE80000;
+            *(s32 *)(p + 0xAC) = 0xFFFF0000;
+            break;
+        case 12:
+            *(s32 *)(p + 0xAC) = 0xFFFE0000;
+            break;
+        }
+        b->unk_14 += *(s32 *)(p + 0xAC);
+        if (*(s16 *)(p + 0x96) < 2)
+        {
+            for (i = 0; i < 4; i++)
+            {
+                func_b25_80171010(p, b, c, (rand() & 0x1F) - 0x10, (rand() & 0x1F) - 0x10, 0x1E);
+            }
+        }
+        if (*(s16 *)(p + 0x96) == 1)
+        {
+            func_b25_80170BB8(p, (u8 *)b, c, d, 1);
+            func_800A56E0(0x80A);
+        }
+        if (*(s16 *)(p + 0x96) == 2)
+        {
+            func_b25_80170A44(p, (u8 *)b, c, d);
+        }
+        if (*(s16 *)(p + 0x96) == 6)
+        {
+            func_b25_80170BB8(p, (u8 *)b, c, d, 0x1A);
+            func_800A56E0(0x705);
+        }
+        if ((*(s16 *)(p + 0x96))++ >= 0x2E)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] += 1;
+        }
+        break;
+    case 6:
+        *(s16 *)((u8 *)b + 0xA) = *(u16 *)(p + 0xB6);
+        *(s16 *)(p + 0x96) = 0;
+        p[0x9B] += 1;
+        break;
+    case 7:
+        func_8009A3D0(c[0x24], c[0x25], (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        g = D_80082E80;
+        x = c[0x24];
+        y = c[0x25];
+        n = 0x20;
+        while (1)
+        {
+            while (func_800A4E2C(c + 0x24, c + 0x25) < 0)
+            {
+            }
+            n--;
+            if (__builtin_abs(g[0x24] - c[0x24]) + __builtin_abs(g[0x25] - c[0x25]) >= 0x21)
+            {
+                break;
+            }
+            if (n < 0)
+            {
+                c[0x24] = x;
+                c[0x25] = y;
+                break;
+            }
+        }
+        *(s16 *)((u8 *)b + 0x2) = (c[0x24] << 6) + 0x20;
+        *(s16 *)((u8 *)b + 0x6) = (c[0x25] << 6) + 0x20;
+        *(s16 *)((u8 *)b + 0xA) =
+            func_800BCB04(*(u16 *)((u8 *)b + 0x2), *(u16 *)((u8 *)b + 0x6), -0x200) - 0x11;
+        *(s16 *)(p + 0x92) = -0x20;
+        *(s32 *)(p + 0xA0) = 0;
+        *(s16 *)(d + 0x88) = -0x200;
+        *(s16 *)(d + 0x88) =
+            func_800BCB04((c[0x24] << 6) | 0x20, (c[0x25] << 6) | 0x20, *(s16 *)(d + 0x88));
+        func_8009A21C(c[0x24], c[0x25], (*(s32 *)(d + 0x1C) & 0x2000) ? 0x300 : 0x3000);
+        func_800AA53C(d);
+        func_800AD594(d, 0x1000);
+        *(u32 *)(p + 0x8C) = (u32)func_b25_80171F1C;
+        D_8008346C = 0;
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        *(s16 *)(p + 0x92) = -0x20;
+        *(s32 *)(d + 0x1C) |= 0x40000;
+        *(u16 *)(p + 0x98) |= 0x8;
+        e = D_800E2348;
+        if (*(u8 **)(c + 0x2C) != e)
+        {
+            *(u8 **)(c + 0x2C) = e;
+            func_80047784(c, e[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            c[0x5] = 1;
+            *(s16 *)(p + 0xA2) = 0;
+            *(s16 *)(p + 0x9E) = 0;
+        }
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        break;
+    }
+}
 
 /* The same entry one state up: as func_b25_801754F0 but with the
    func_800C7930 push between the two func_800A2B5C tests, state 0x18, the
