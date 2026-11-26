@@ -313,6 +313,30 @@ def main():
                                utxt)
                 if dm:
                     decls.append(" ".join(dm.group(1).split()) + ";")
+            # AND THE SAME FOR DATA SYMBOLS, which this loop did not cover.
+            # A park's body routinely names a `D_' the UNIT declares at its
+            # head, and the park's own DECLARATIONS block does not repeat it
+            # because the park was written to be spliced INTO that unit. The
+            # permuter compiles the park ALONE, so the symbol is undeclared
+            # and base.c fails -- which `permrun' then reports as `base=?',
+            # indistinguishable from the park being broken. Cost two setups
+            # before it was fixed here (func_b05_801728C4 and
+            # func_b28_801720EC, both on 2026-11-26).
+            for sym in sorted(set(re.findall(
+                    r"\b(D_(?:[a-z0-9]+_)?[0-9A-Fa-f]{8})\b", body_txt))):
+                if re.search(r"(?m)^\s*extern\b[^;\n]*\b" + sym + r"\b", declared):
+                    continue
+                um = re.search(r"(?m)^(\s*extern\b[^;\n]*\b" + sym
+                               + r"\b[^;\n]*);", utxt)
+                if um:
+                    decls.append(" ".join(um.group(1).split()) + ";")
+                    continue
+                # defined in the unit rather than declared: take the
+                # definition's head and make it an extern
+                dm2 = re.search(r"(?m)^((?:const\s+)?[A-Za-z_][\w \*]*\b" + sym
+                                + r"\b(?:\[[^\]]*\])?)\s*=", utxt)
+                if dm2:
+                    decls.append("extern " + " ".join(dm2.group(1).split()) + ";")
         synth = os.path.join(d, "permsrc.c")
         with io.open(synth, "w", encoding="utf-8") as f:
             f.write("\n".join(pre + [""] + decls + ["", raw[cut:]]))
