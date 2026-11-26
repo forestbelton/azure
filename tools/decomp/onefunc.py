@@ -105,13 +105,23 @@ def find_definition(text, func):
 
 
 def preamble_end(text):
-    """Index one past the unit's declaration block."""
+    """Index one past the unit's declaration block.
+
+    The definition pattern must accept a CARVED name. It used to read
+    `func_[0-9A-Fa-f]+`, which matches the resident `func_80174F24` and NOT
+    `func_b10_80174F24` -- the tag has an underscore and a `b`/`s` that is not
+    a hex digit. On a carved unit with no INCLUDE_ASM left (ovl_dng_b10 is one:
+    its only "INCLUDE_ASM" text is inside a comment) neither arm matched and
+    the tool exited "no function definition or INCLUDE_ASM found", so no
+    standalone probe could be built for any park in the whole dng block.
+    Fixed 2026-11-26.
+    """
     lines = text.split("\n")
     for i, l in enumerate(lines):
         if l.startswith("INCLUDE_ASM("):
             return i
         if i > 20 and re.match(r"^[A-Za-z_][^;]*\)\s*$", l) \
-                and re.search(r"\bfunc_[0-9A-Fa-f]+\s*\(", l):
+                and re.search(r"\bfunc_[0-9A-Za-z_]+\s*\(", l):
             return i
     raise SystemExit("onefunc: no function definition or INCLUDE_ASM found")
 
