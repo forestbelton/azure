@@ -121,7 +121,35 @@ PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 # that distinguishes two symbols in one page -- and it still catches the defect
 # this tool was built for: D_80175554 and D_8017555C differ in their `%lo'
 # (0x5554 against 0x555C) even though their `%hi' is identical.
-SYM = re.compile(r"%lo\((D_(?:[a-z0-9]+_)?8[0-9A-Fa-f]{7})\)")
+#
+# AND THE BUILD SPELLS SOME ADDRESS LOADS `la', WHICH THIS PATTERN MISSED.
+# gcc emits `la $8,D_800DEC28' -- one macro the assembler expands into the very
+# `lui %hi' / `addiu %lo' pair this tool is looking for -- so a symbol reached
+# that way carried NO `%lo' occurrence on the build side while the listing (which
+# is always expanded) had one. That is a FALSE MISMATCH: the reference exists and
+# is correct.
+#
+# Found 2026-11-26 on `func_b04_80172790', a body at 377/377 words, 0 differing,
+# in five byte-identical containers -- which is itself the proof the relocation
+# was right, since a wrong symbol cannot produce a byte-identical container. I
+# came within one commit of treating a correct landing as defective, and the
+# agent's own claim to have matched all twelve of its symbols by hand was
+# accurate; this tool was not.
+#
+# Scope when fixed: 120 `la' references across 36 built units, every one a
+# latent false positive. It had not fired before because it needs the listing to
+# use `%lo' where the build uses `la'.
+#
+# A tool that reports a mismatch on correct input is worse than one that is
+# silent, because the first thing it costs is trust in the landing.
+# NOTE THE SHAPE: ONE capture group, with the alternation on the PREFIX. Both
+# consumers below read `m.group(1)', so a two-branch alternation with a group in
+# each branch would hand them None whenever the second branch matched -- and None
+# would go straight into a Counter and a set as if it were a symbol name. That is
+# the plausible-wrong-answer failure this project keeps paying for, so the prefix
+# alternation is not a style choice.
+SYM = re.compile(r"(?:%lo\(|\bla\s+\$[0-9a-z]+,\s*)"
+                 r"(D_(?:[a-z0-9]+_)?8[0-9A-Fa-f]{7})")
 # Call targets: `jal <name>' on either side. Bank-local (func_b38_8017...) and
 # plain address forms (func_80069ef8) both match; so do real names.
 CALL = re.compile(r"\bjal\s+([A-Za-z_][A-Za-z0-9_]*)")
