@@ -250,7 +250,21 @@ def main():
     for unit in units:
         r = check(unit)
         if r is None:
-            print("%-22s NOT BUILT -- run make check first" % unit)
+            # A FUNCTION NAME GETS ITS OWN MESSAGE. This tool takes UNIT
+            # names, and handed `func_s42_80024AD0' it printed
+            # "func_s42_80024AD0 NOT BUILT -- run make check first" -- after a
+            # make check that had just succeeded. I did that on 2026-11-26,
+            # one hour after fixing the identical confusion in declcheck for
+            # an agent, and spent four commands looking for a build problem
+            # that did not exist. The message was true (there is no unit by
+            # that name, so nothing is built for it) and useless.
+            if unit.startswith("func_"):
+                parts = unit.split("_")
+                guess = ("ovl_dng_" + parts[1]) if len(parts) > 2 else "<unit>"
+                print("%-22s is a FUNCTION name; this tool takes UNIT names "
+                      "-- try `%s'" % (unit, guess))
+            else:
+                print("%-22s NOT BUILT -- run make check first" % unit)
             nskip += 1
             continue
         n, rows = r
