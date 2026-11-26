@@ -168,7 +168,7 @@ s32 func_8003F270(void);
 s32 func_800A05A4(u8 *, s32, s32, s16, s32);
 s32 func_800A94A0(u8 *, u8 *, s32, u8 *);
 s32 func_b27_80170FD8(u8 *p, UnkVec *v, UnkSlot *s);
-void func_b27_80170874(u8 *, UnkVec *, UnkSlot *, s16);
+void func_b27_80170874(u8 *p, UnkVec *v, UnkSlot *s, s16 arg3);
 void func_b27_80171284();
 typedef struct UnkDngB27Name12
 {
@@ -179,12 +179,363 @@ extern u8 D_801753DC[];
 s32 func_800644B8(s32);
 
 extern u32 D_800814A0;
+s32 rand(void);
 s16 func_800A45D8(u16, u16, s32);
 s32 func_80042900(s8 *, s8);
 void func_80042B68(s8 *, s8);
 s16 func_8009FD40(u8 *, u8 *);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b27", func_b27_80170874);
+typedef struct UnkDngB27SP874
+{
+    u8 pad_00[0x4];
+    s16 unk_04;
+    s16 unk_06;
+    s16 unk_08;
+    u8 pad_0A[0x2];
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    Unk3DBD0W unk_18;
+    u8 *unk_1C;
+    u8 pad_20[0x4];
+    u8 *unk_24;
+    u16 unk_28;
+    u8 pad_2A[0xA];
+    Unk3DBD0W unk_34;
+    Unk3DBD0W unk_38;
+    Unk3DBD0W unk_3C;
+    u8 pad_40[0x34];
+    s32 unk_74;
+    u8 pad_78[0x10];
+    s32 unk_88;
+    s32 unk_8C;
+    s32 unk_90;
+    u16 unk_94;
+    u16 unk_96;
+    u16 unk_98;
+    u16 unk_9A;
+    u16 unk_9C;
+    u16 unk_9E;
+    u16 unk_A0;
+    u16 unk_A2;
+    s16 unk_A4;
+    s16 unk_A6;
+    s16 unk_A8;
+    u8 pad_AA[0x2];
+    u16 unk_AC;
+    u16 unk_AE;
+    s16 unk_B0;
+    s16 unk_B2;
+    s16 unk_B4;
+    u8 pad_B6[0x2];
+    s16 unk_B8;
+    s16 unk_BA;
+    s16 unk_BC;
+    u8 pad_BE[0x2];
+    s16 unk_C0;
+    s16 unk_C2;
+    s16 unk_C4;
+    u8 pad_C6[0x2];
+    s16 unk_C8;
+    s16 unk_CA;
+    s16 unk_CC;
+    u8 pad_CE[0x2];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x20];
+    u16 unk_F8;
+    u16 unk_FA;
+    u8 pad_FC[0x4];
+    s32 unk_100;
+} UnkDngB27SP874;
+
+/* Emits one slot's primitives for this bank: projects the slot origin, derives
+   an OT index from the averaged z, builds the matrix in the 0x1F800000
+   scratchpad, then per 0xC-byte element either calls the element's own callback
+   or clips, projects and links one 0x28-byte primitive into the OT.
+   473 words, 0 differing.
+
+   The donor is the resident original func_800453E0 (csrc/gprel_18B40.c), whose
+   long header carries the mechanism for the two OT-linking statements: they are
+   BITFIELD stores through Unk453E0T (u32 addr:24; u32 len:8), libgpu's P_TAG,
+   i.e. an addPrim expansion, and no hand-written mask can match them. That
+   carried here verbatim, including loop.c hoisting 0xFFFFFF into $s6 while
+   0xFF000000 stays inline.
+
+   THE LAYOUT IS PERMUTED AGAINST THE DONOR, NOT SHIFTED, which is why this body
+   gets its own UnkDngB27SP874 rather than the donor's Unk453E0SP: donor
+   0x00..0x54 is at +0x04 here, donor 0x70..0x94 and 0xB8..0xC0 at +0x40, and
+   donor 0xD0..0x10A at -0x5C. So the donor's RotTransPers(0, 0xB8, 0x90, 0x94)
+   is (4, 0xF8, 0xD0, 0xD4) here and its RotMatrix(0x100, 0xD0) is (0xA4, 0x74).
+
+   What this bank drops from the donor, all additive: the four element-byte
+   stores have no x+y wrap adjustments, there is no unk_13C term in the vertical
+   flip, the two 0x1800 matrix tests are gone, and the OT link has no
+   D_80081510 tilt term and no second range gate. What it adds: a -1 and a
+   0x100 wrap correction on each of the two sums, and the half-size comes from
+   the node at p + 0x4E / p + 0x50 instead of the element bytes.
+
+   FOUR MEASURED FACTS, all priced from this body at 0 differing.
+
+   1. EACH OF THE FOUR FLIP ARMS NEEDS ITS OWN `a', 24 aligned rows. The donor
+   declares one `s16 a' in the enclosing block and lands; here one shared local
+   is 473 words / 24 rows, every row a $v0/$v1 exchange with nothing moved and
+   rows 152..159 of the chain already identical. `a' is a read-modify-write
+   local (a = a - w) written in four duplicated arms, so it is not local to any
+   one block, local-alloc.c's combine_regs will not tie the subu's output to its
+   dying input, and it falls through to global alloc, which gives it $v1. Per
+   arm it ties to the chain result and gets $v0. This is the duplicated-arm rule
+   in the brief, confirmed on a four-copy block rather than two.
+
+   2. fold-const.c:4257 DECIDES WHICH OPERAND CARRIES THE LITERAL, 8 rows.
+   `sp->unk_14.w = sp->unk_14.w - 1 + sp->unk_0C.w' is 8 aligned rows: its tree
+   is PLUS(MINUS(unk_14,1), unk_0C), fold's first associate branch
+   (fold-const.c:4220, `(VAR+CON) +- ARG1 -> VAR +- (ARG1 +- CON)') moves the
+   literal onto the OTHER addend, and the addu comes out with unk_14 as operand
+   0. Writing the parenthesis the other way,
+   `sp->unk_14.w + (sp->unk_0C.w - 1)', hits the SECOND branch
+   (fold-const.c:4257, `ARG0 +- (CON +- VAR) -> (ARG0 +- CON) +- VAR'), which
+   moves the literal back onto unk_14 and lands. The two source forms are each
+   other's images under fold, so the grouping you write is inverted in the
+   output and reading the emitted addu operand order as the source's is wrong.
+   Both faults were additive: 32 rows with 1 and 2 both wrong, 24 and 8 alone.
+
+   3. THE DOUBLE NEGATION ROUND THE HALF-WIDTH IS REAL, 3 words / 20 rows.
+   `-(-*(s16 *)(p + 0x4E) / 2)' emits negu / srl 31 / addu / sra 1 / negu;
+   the arithmetically equal `*(s16 *)(p + 0x4E) / 2' is 476 words / 20 rows,
+   because gcc folds NEGATE of NEGATE but will not distribute a negation
+   through a signed division. The vertical arm's `-(-h)' IS folded, which is
+   why that arm has no negu at all.
+
+   4. THE FOUR ELEMENT-BYTE STORES MUST BE ASCENDING, 6 rows. e[8], e[9],
+   e[0xA], e[0xB] into unk_0C, unk_10, unk_14, unk_18 in that order; the donor's
+   interleaved 8, 0xA, 9, 0xB order is 473 words / 6 rows. Independent adjacent
+   stores are schedulable, so this had to be priced rather than read.
+
+   MEASURED AND FREE, so NOT the reason this lands: the width of `a'. `s16 a'
+   in all four arms is also 473 words / 0 differing, so the absence of any
+   sll/sra extension pair in the listing does not discriminate the two, and
+   `s32' was chosen only because it needs no extension to be elided.
+
+   ONE SOURCE CURSOR, NOT TWO. The listing runs two pointers 0xC apart, $s3 at
+   the element and $s0 at element + 8, with e->unk_06, e->unk_04 and e->unk_01
+   reached as -0x2, -0x4 and -0x7 off $s0. That is loop.c's combine_givs
+   choosing one giv as the representative, not a second source local: a single
+   `e' reproduces it. */
+void func_b27_80170874(u8 *p, UnkVec *v, UnkSlot *s, s16 arg3)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkDngB27SP874 *sp = (UnkDngB27SP874 *)0x1F800000;
+    u8 *base = D_80083160.unk_00;
+    Unk453E0P *q;
+    Unk44D24E *e;
+    s32 w;
+    s32 h;
+
+    sp->unk_90 = 0;
+    sp->unk_CC = 0;
+    sp->unk_C4 = 0;
+    sp->unk_BC = 0;
+    sp->unk_B4 = 0;
+    sp->unk_24 = base + 0xB0;
+    sp->unk_04 = ((u16 *)v)[1];
+    sp->unk_06 = ((u16 *)v)[3];
+    sp->unk_08 = ((u16 *)v)[5];
+    q = *(Unk453E0P **)(base + 0x8D0);
+    sp->unk_100 = RotTransPers((void *)0x1F800004, (void *)0x1F8000F8,
+                               (void *)0x1F8000D0, (void *)0x1F8000D4);
+    s->unk_14 |= 0x8000;
+    w = sp->unk_100 - 0xA;
+    D_8006CD30.unk_1C = sp->unk_100 * 4;
+    sp->unk_100 = w - arg3;
+    if ((u32)sp->unk_100 < 0x1D6)
+    {
+        PushMatrix();
+        sp->unk_F8 = sp->unk_F8 - 0xA0;
+        sp->unk_FA = sp->unk_FA - 0x78;
+        sp->unk_34.w = g->unk_C4;
+        sp->unk_38.w = g->unk_C6;
+        sp->unk_3C.w = g->unk_C8;
+        sp->unk_A4 = s->unk_16;
+        sp->unk_A8 = g->unk_B8 + (s->unk_1A - sp->unk_38.h);
+        h = s->unk_18 - 0x100;
+        sp->unk_A6 = h + ((sp->unk_3C.h + 0x100) & 0x1FF);
+        sp->unk_AC = sp->unk_88 = s->unk_20;
+        sp->unk_AE = sp->unk_8C = s->unk_22;
+        RotMatrix((void *)0x1F8000A4, (void *)0x1F800074);
+        sp->unk_34.w = s->unk_1C;
+        sp->unk_38.w = s->unk_1E;
+        sp->unk_3C.w = 0x1000;
+        ScaleMatrix((void *)0x1F800074, (void *)0x1F800034);
+        CompMatrix(&D_8006CD30, (void *)0x1F800074, (void *)0x1F800054);
+        SetTransMatrix((void *)0x1F800054);
+        SetRotMatrix((void *)0x1F800054);
+        e = (Unk44D24E *)s->unk_08;
+        sp->unk_28 = s->unk_14;
+        for (;;)
+        {
+            if ((e->unk_00 & 0x20) == 0)
+            {
+                sp->unk_0C.w = e->unk_08;
+                sp->unk_10.w = e->unk_09;
+                sp->unk_14.w = e->unk_0A;
+                sp->unk_18.w = e->unk_0B;
+                if ((e->unk_00 ^ sp->unk_28) & 1)
+                {
+                    s32 a;
+
+                    a = -(-*(s16 *)(p + 0x4E) / 2) - sp->unk_AC;
+                    sp->unk_C0 = a;
+                    sp->unk_B0 = a;
+                    a = a - *(u16 *)(p + 0x4E);
+                    sp->unk_C8 = a;
+                    sp->unk_B8 = a;
+                }
+                else
+                {
+                    s32 a;
+
+                    a = -*(s16 *)(p + 0x4E) / 2 - sp->unk_AC;
+                    sp->unk_C0 = a;
+                    sp->unk_B0 = a;
+                    a = a + *(u16 *)(p + 0x4E);
+                    sp->unk_C8 = a;
+                    sp->unk_B8 = a;
+                }
+                if ((e->unk_00 ^ sp->unk_28) & 2)
+                {
+                    s32 a;
+
+                    a = *(u16 *)(p + 0x50) - sp->unk_AE;
+                    sp->unk_BA = a;
+                    sp->unk_B2 = a;
+                    a = a - *(u16 *)(p + 0x50);
+                    sp->unk_CA = a;
+                    sp->unk_C2 = a;
+                }
+                else
+                {
+                    s32 a;
+
+                    a = -*(u16 *)(p + 0x50) - sp->unk_AE;
+                    sp->unk_BA = a;
+                    sp->unk_B2 = a;
+                    a = a + *(u16 *)(p + 0x50);
+                    sp->unk_CA = a;
+                    sp->unk_C2 = a;
+                }
+                RotTransPers4(&sp->unk_B0, &sp->unk_B8, &sp->unk_C0, &sp->unk_C8,
+                              &sp->unk_94, &sp->unk_98, &sp->unk_9C, &sp->unk_A0,
+                              &sp->unk_D0, &sp->unk_D4);
+                q->unk_08 = sp->unk_94 + sp->unk_F8;
+                q->unk_0A = sp->unk_96 + sp->unk_FA;
+                q->unk_10 = sp->unk_98 + sp->unk_F8;
+                q->unk_12 = sp->unk_9A + sp->unk_FA;
+                q->unk_18 = sp->unk_9C + sp->unk_F8;
+                q->unk_1A = sp->unk_9E + sp->unk_FA;
+                q->unk_20 = sp->unk_A0 + sp->unk_F8;
+                q->unk_22 = sp->unk_A2 + sp->unk_FA;
+                if ((((u16)(q->unk_08 + 0x20) < 0x181 &&
+                      (u16)(q->unk_0A + 0x20) < 0x121) |
+                     ((u16)(q->unk_10 + 0x20) < 0x181 &&
+                      (u16)(q->unk_12 + 0x20) < 0x121) |
+                     ((u16)(q->unk_18 + 0x20) < 0x181 &&
+                      (u16)(q->unk_1A + 0x20) < 0x121) |
+                     ((u16)(q->unk_20 + 0x20) < 0x181 &&
+                      (u16)(q->unk_22 + 0x20) < 0x121)) != 0)
+                {
+                    u8 t;
+                    u8 f;
+
+                    ((u8 *)&q->unk_00)[3] = 9;
+                    s->unk_14 &= 0x7FFF;
+                    sp->unk_14.w = sp->unk_14.w + (sp->unk_0C.w - 1);
+                    if (sp->unk_14.w & 0x100)
+                    {
+                        sp->unk_14.w = sp->unk_14.w - 1;
+                    }
+                    sp->unk_18.w = sp->unk_18.w + (sp->unk_10.w - 1);
+                    if (sp->unk_18.w & 0x100)
+                    {
+                        sp->unk_18.w = sp->unk_18.w - 1;
+                    }
+                    sp->unk_18.w = sp->unk_18.w << 8;
+                    sp->unk_10.w = sp->unk_10.w << 8;
+                    if (sp->unk_28 & 0x100)
+                    {
+                        q->unk_0E = s->unk_12;
+                    }
+                    else
+                    {
+                        q->unk_0E = s->unk_12 + e->unk_06;
+                    }
+                    q->unk_0C = sp->unk_10.h + sp->unk_0C.h;
+                    q->unk_14.h = sp->unk_10.h + sp->unk_14.h;
+                    if (s->unk_10 != 0)
+                    {
+                        q->unk_16 = s->unk_10 + (e->unk_04 & 0xFF9F);
+                    }
+                    else
+                    {
+                        q->unk_16 = e->unk_04;
+                    }
+                    q->unk_1C.h = sp->unk_18.h | sp->unk_0C.h;
+                    q->unk_24.h = sp->unk_18.h | sp->unk_14.h;
+                    if ((s16)q->unk_08 > (s16)q->unk_20)
+                    {
+                        t = q->unk_24.b[0];
+                        q->unk_24.b[0] = t + 0xFF;
+                        q->unk_14.b[0] = t;
+                    }
+                    if ((s16)q->unk_0A > (s16)q->unk_22)
+                    {
+                        t = q->unk_24.b[1];
+                        q->unk_24.b[1] = t + 0xFF;
+                        q->unk_1C.b[1] = t;
+                    }
+                    f = e->unk_01;
+                    s->unk_0C[3] = f;
+                    if (sp->unk_28 & 8)
+                    {
+                        if (sp->unk_28 & 4)
+                        {
+                            s->unk_0C[3] = f | 2;
+                        }
+                        else
+                        {
+                            s->unk_0C[3] = f & 0xFD;
+                        }
+                    }
+                    q->unk_04 = *(u32 *)s->unk_0C;
+                    ((Unk453E0T *)q)->addr =
+                        ((Unk453E0T *)(sp->unk_24 + sp->unk_100 * 4))->addr;
+                    ((Unk453E0T *)(sp->unk_24 + sp->unk_100 * 4))->addr = (u32)q;
+                    q++;
+                }
+            }
+            else
+            {
+                Unk453E0P *(*f)(u8 *, UnkVec *, UnkSlot *, Unk44D24E *,
+                                Unk453E0P *);
+
+                f = *(Unk453E0P * (**)(u8 *, UnkVec *, UnkSlot *, Unk44D24E *,
+                                       Unk453E0P *)) &
+                    e->unk_08;
+                if (f != NULL)
+                {
+                    q = f(p, v, s, e, q);
+                }
+            }
+            if ((s8)e->unk_00 < 0)
+            {
+                break;
+            }
+            e++;
+        }
+        PopMatrix();
+    }
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 /* The engine's node walk -- func_80046398 of csrc/unk_19434.c -- relinked
    here with func_b27_80170874 as the visitor and a (slot + 0x14) & 0x80 gate
