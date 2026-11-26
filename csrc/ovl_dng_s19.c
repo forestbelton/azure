@@ -101,10 +101,10 @@ s32 func_8003DF74(u8 *, UnkSlot *, s16 *, s16);
 s32 func_800A56E0(s32);
 s32 func_8009FCF0w(u8, u8, u8, u8) __asm__("func_8009FCF0");
 s32 func_800A45D8w(s32, s32, s32) __asm__("func_800A45D8");
-u8 *func_s19_80024968(u8 *, UnkVec *, s16, u8 *);
+u8 *func_s19_80024968(u8 *p, UnkVec *b, s16 i, u8 *q);
 void func_s19_80025760_3(u8 *, u8, u8 *) __asm__("func_s19_80025760");
 extern s16 D_s19_800257CC;
-void func_s19_80024A98(u8 *);
+UnkNode *func_s19_80024A98(u8 *v);
 void func_800478B8(u8 *);
 
 /* The unit's root state machine, and it OWNS A JUMP TABLE.
@@ -236,6 +236,11 @@ UnkNode *func_s19_80024FD8(UnkVec *v, s16 a, s16 i);
 void func_s19_80024EE0(u8 *p, UnkVec *v, u8 *c);
 void func_s19_800250E8(u8 *p, UnkVec *v, u8 *c);
 void func_s19_800254C4(UnkVec *v, s16 a, s16 b, s16 d);
+
+extern u8 D_800DE938[];
+s32 rand(void);
+UnkNode *func_8003FD64(s32, void *);
+UnkNode *func_s19_80024D90(UnkVec *v, s16 a);
 
 void func_s19_80024050(u8 *p, UnkVec *b, u8 *c)
 {
@@ -544,7 +549,53 @@ void func_s19_80024728(u8 *p, UnkVec *b, u8 *c)
     *(s16 *)(p + 0x1C) = *(u16 *)(p + 0x1C) + 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024968);
+/* The ring spawner's front door, called from case 3 of this unit's landed
+   root state machine func_s19_80024050: allocate a kind-2 node PARENTED on
+   the caller's own node (`func_8003FD64(0x2, p - 0x20)'), step it with the
+   landed func_s19_80024728, seed its mover from the caller's, park the
+   fourth argument's pointer at payload +0x20, and hand the new mover to
+   func_s19_80024D90 -- the sixteen-spoke spawner, which is the one function
+   of this unit still PARKED.
+   DONOR: docs/dng-parks/func_s19_80024D90.c for the callee's `(UnkVec *,
+   s16)' signature; the four-argument call site is already priced at 2 rows
+   in func_s19_80024050's own comment above. Landed on the FIRST COMPILE.
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | the +0x20 pointer store BEFORE the call        KEPT   |   38  |   0  |
+   |   ... after the call                                  |   38  |   2  |
+   |   ... first of all, before `m = n->unk_08'            |   38  |   3  |
+   | an `m' local for `n->unk_08'                   KEPT   |   38  |   0  |
+   |   ... `n->unk_08' written out at all four sites       |   42  |  11  |
+
+   MEASURED AND FREE, so neither is why this lands (both 38 / 0):
+   `n->unk_10 = ...' before `m = n->unk_08' rather than after, and
+   `(u8 *)((UnkNode *)p - 1)' for `p - 0x20'.
+
+   The 2-row row is the useful one: the pointer store lands in the CALL'S
+   DELAY SLOT (`sw $s3, 0x20($s0)' under the `jal'), so it has to be the
+   statement before the call -- reorg will sink it there, but it will not
+   lift it back over one.
+
+   38 words, 0 differing; relcand ok (0 data symbols, 2 calls). */
+u8 *func_s19_80024968(u8 *p, UnkVec *b, s16 i, u8 *q)
+{
+    UnkNode *n;
+    UnkVec *m;
+
+    n = func_8003FD64(0x2, p - 0x20);
+    if (n != NULL)
+    {
+        m = n->unk_08;
+        n->unk_10 = (u32)func_s19_80024728;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)b + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)b + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)b + 0xA);
+        *(u32 *)((u8 *)n + 0x20) = (u32)q;
+        func_s19_80024D90(m, i);
+    }
+    return (u8 *)n;
+}
 
 /* The per-frame step for this unit's +0x1C-gated hit effect: bump
    D_s19_800257CE, and on the low bit of the payload's own +0x1C counter hand
@@ -595,11 +646,283 @@ void func_s19_80024A00(u8 *p, UnkVec *v, u8 *c)
     ((u16 *)p)[0xE] = ((u16 *)p)[0xE] + 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024A98);
+/* The flash-and-scatter spawner, and the one body here the LANDED
+   func_s19_80024728 already calls: one 0x202 node stepped by this unit's
+   landed func_s19_80024A00 and dressed from D_800DE938 at 0x1000 scale with
+   0xC raised in its +0x14 flags, seeded at the caller's mover, plus SIXTEEN
+   func_s19_800254C4 scatter nodes fanned out from one rand() seed 0x100 apart.
+   Returns the node.
+   DONOR: func_s19_800254C4 below, landed first -- its `s16' second parameter
+   is why the loop's `sll 16'/`sra 16' is a prototype truncation and not a
+   cast, and csrc/ovl_dng_s19.c's own func_s19_80024FD8 is the
+   allocate/install/dress skeleton. Landed on the FIRST COMPILE, so every row
+   below was priced afterwards by flipping it.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024B98);
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | +0x1E stored BEFORE +0x1C (both 0x1000)        KEPT   |   64  |   0  |
+   |   ... the two swapped                                 |   64  |   2  |
+   | the +0xC colour word stored AFTER both          KEPT  |   64  |   0  |
+   |   ... the word store written first                    |   64  |   6  |
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024D90);
+   MEASURED AND FREE, so none of these is why this lands (all 64 / 0):
+   `*(u16 *)(r + 0x14) |= 0xC' before the +0x10 store rather than after;
+   `for (i = 0, k = rand(); ...)' for the separate `k = rand();' statement;
+   `k += 0x100' in the for-increment rather than the body; and the loop as a
+   `while'.
+
+   Both non-free rows are the same thing -- two INDEPENDENT adjacent stores
+   whose emitted order sched1 chooses, so the order has to be priced and
+   cannot be read off the listing. Here it happens to be readable because
+   both 0x1000 stores share one `addiu $v0, $zero, 0x1000'.
+
+   PROTOTYPE NOTE: this body RETURNS the node (`addu $v0, $s3, $zero' at the
+   shared exit), and the forward declaration in this unit's block said `void'
+   because the landed func_s19_80024728's only call site discards the result.
+   It is now `UnkNode *'. func_s19_80024728's listing has been consumed by a
+   previous landing, so this could not be re-measured -- but a discarded
+   return value creates no pseudo in `expand_call' and the emitted code at
+   that call site is identical either way.
+
+   64 words, 0 differing; relcand ok (2 data symbols, 5 calls). */
+UnkNode *func_s19_80024A98(u8 *v)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    s32 i;
+    s32 k;
+
+    n = func_8003FC64(0x202);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s19_80024A00;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)(v + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)(v + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)(v + 0xA);
+        r = (u8 *)n->unk_0C;
+        *(s16 *)(r + 0x1E) = 0x1000;
+        *(s16 *)(r + 0x1C) = 0x1000;
+        *(u32 *)(r + 0xC) = 0x808080;
+        func_8003DB94(r, D_800DE938, 0);
+        *(s16 *)(r + 0x10) = 0x20;
+        *(u16 *)(r + 0x14) |= 0xC;
+        k = rand();
+        for (i = 0; i < 0x10; i++)
+        {
+            func_s19_800254C4(m, k, 0x10, 1);
+            k += 0x100;
+        }
+    }
+    return n;
+}
+
+/* The per-frame step for the SIXTEEN spokes docs/dng-parks/func_s19_80024D90.c
+   spawns -- the one body in this unit that drives all three of the others.
+   State 0 is a per-spoke `-0x400 + i * 0x100' delay at payload +0x1E; state 1
+   counts +0x1C up and flips to state 2 past 0x40; state 2 fades the
+   renderable's RGB word by 0x40404 a frame and retires the node (dropping
+   D_s19_800257CC) once the red byte is under 4. Every surviving path then
+   rises by the mover's own +0x14, brightens by 0x20202, shrinks +0x1E by a
+   32nd of rcos of the +0x1C counter, clamps the colour at 0x404040, re-dresses
+   through func_800478B8, and on the counter's low bits spawns a single spoke
+   (func_s19_80024FD8, every 0x20 frames) and a scatter node
+   (func_s19_800254C4, every 4).
+   DONORS: all three callees were landed first, so no payload offset was
+   guessed -- the park above writes +0x1E/+0x24, func_s19_80024FD8 reads them.
+   The `v->unk_08 += v->unk_14' / `v->unk_14 += K' pair is this unit's landed
+   func_s19_80024728's idiom verbatim. No dngtwin or xsibs lead.
+
+   IT IS NOT A SWITCH. The dispatch is `beq 2' then `bnez', which no three-case
+   `expand_end_case' tree produces -- gcc balances on VALUE and would test 1
+   first, as the landed func_s19_80024728 forty lines up does. It is a nested
+   if/else, and which arm is the `then' is worth 50 rows and a word.
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | `if (x != 2) { if (x == 0) A; B } else { C }'   KEPT   |  126  |   0  |
+   |   ... `if (x == 2) { C } else { if (x == 0) A; B }'    |  125  |  50  |
+   |   ... a switch, `case 0:' / `default:' / `case 2:'     |  128  |  14  |
+   | the +0x1E rcos statement BEFORE the +0x20202    KEPT   |  126  |   0  |
+   |   ... the two in the other order                      |  126  |  10  |
+   | `if (v->unk_0A > *(s16 *)(p + 0x14))'           KEPT   |  126  |   0  |
+   |   ... `if (*(s16 *)(p + 0x14) < v->unk_0A)'           |  126  |   2  |
+   | `*(s16 *)(p + 0x24) * 0x100' at the 254C4 call  KEPT   |  126  |   0  |
+   |   ... `<< 8', and `(s8)... << 8'                      |  126  |   1  |
+   | `>> 5' on the rcos result                       KEPT   |  126  |   0  |
+   |   ... `/ 0x20'                                        |  129  |  16  |
+
+   MEASURED AND FREE, so none of these is why this lands (all 126 / 0):
+   `- 0x40404' against `+ 0xFFFBFBFC'; `(s32)' on the `c[0xC] < 4' byte test;
+   the +0x1E countdown written as an assignment inside its own `if'; and the
+   two `c + 0xC' word accesses as array refs rather than plain casts.
+
+   THE 50-ROW ROW IS THE ARM-ORDER DIAGNOSTIC AND IT COMES OUT A WORD SHORT,
+   which is the tell: with the arms the wrong way round jump.c folds the
+   then-arm's trailing `j' into the common exit and the body loses the word
+   that in the ROM is state 1's own `j .Ls19_80024C90'.
+
+   THE 2-ROW ROW IS THE COMPARISON-OPERAND-ORDER LEVER and its residue is NOT
+   a register exchange here: it is the `lh $v1, 0xA($s2)' failing to hoist
+   above the `sw $v0, 0x14($s2)' two slots up. Writing the mover's field on
+   the LEFT gives it the earlier LUID and the hoist. Seven MEM_IN_STRUCT_P
+   spellings of that load and that store -- array refs, plain casts and all
+   four crosses -- measure the identical 2 rows, so the dependence is NOT the
+   cause and only the operand order is.
+
+   `>> 5' versus `/ 0x20' is three words because the rcos result is SIGNED:
+   the divide needs the `sra 31'/`srl 27'/`addu'/`sra' rounding correction and
+   the ROM has the bare `sra 5'.
+
+   126 words, 0 differing; relcand ok (3 data symbols, 4 calls). */
+void func_s19_80024B98(u8 *p, UnkVec *v, u8 *c)
+{
+    D_s19_800257CE++;
+    if (*(s16 *)(p + 0xA) != 2)
+    {
+        if (*(s16 *)(p + 0xA) == 0)
+        {
+            *(s16 *)(p + 0x1E) = *(u16 *)(p + 0x1E) - 1;
+            if (*(s16 *)(p + 0x1E) > 0)
+            {
+                return;
+            }
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        }
+        *(s16 *)(p + 0x1C) = *(u16 *)(p + 0x1C) + 1;
+        if (*(s16 *)(p + 0x1C) > 0x40)
+        {
+            *(s16 *)(p + 0xA) = 2;
+        }
+    }
+    else
+    {
+        *(u32 *)(c + 0xC) = *(u32 *)(c + 0xC) - 0x40404;
+        if (c[0xC] < 4)
+        {
+            D_s19_800257CC--;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+            return;
+        }
+    }
+    v->unk_08 = v->unk_08 + v->unk_14;
+    v->unk_14 = v->unk_14 + 0x10000;
+    if (*(s16 *)((u8 *)v + 0xA) > *(s16 *)(p + 0x14))
+    {
+        *(s16 *)((u8 *)v + 0xA) = *(u16 *)(p + 0x14);
+    }
+    *(s16 *)(c + 0x1E) = *(u16 *)(c + 0x1E) - (func_800644B8(*(s16 *)(p + 0x1C) << 6) >> 5);
+    *(u32 *)(c + 0xC) = *(u32 *)(c + 0xC) + 0x20202;
+    if (c[0xC] >= 0x41)
+    {
+        *(u32 *)(c + 0xC) = 0x404040;
+    }
+    func_800478B8(c);
+    if ((*(u16 *)(p + 0x1C) & 0x1F) == 0)
+    {
+        func_s19_80024FD8(v, *(s16 *)(p + 0x14), *(s16 *)(p + 0x24));
+    }
+    if ((*(u16 *)(p + 0x1C) & 0x3) == 0)
+    {
+        func_s19_800254C4(v, *(s16 *)(p + 0x24) * 0x100, 0x10, 0);
+    }
+}
+
+/* THE SIXTEEN-SPOKE SPAWNER, AND IT WAS THE UNIT'S PARK --
+   docs/dng-parks/func_s19_80024D90.c, 84 words / 7 aligned differences,
+   written by one agent and re-measured by a second, both of whom concluded
+   that no source spelling could reach it. That park file is now obsolete and
+   its conclusion is WRONG; everything else in it is right and worth keeping
+   as the record of how it was reached.
+
+   WHAT IT IS: sixteen 0x202 nodes off func_8003FC64, each stepped by
+   func_s19_80024B98 through func_80045C34, placed on a circle of radius
+   (rsin/rcos of `i << 8') >> 7 around the caller's mover and 0x100 below it,
+   dressed from D_80025854 with 0x800/0x1CCC scales, a 0x400 at +0x16 and a
+   per-spoke `i * 0x100 - 0x400' at +0x18, and given the spoke index at
+   payload +0x24, the caller's s16 at +0x14 and `i * 2' at +0x1E. Each spawn
+   bumps D_s19_800257CC. Returns the LAST node allocated.
+
+   THE PARK'S DIAGNOSIS WAS EXACT AND ITS REMEDY WAS THE WRONG LAYER. Its
+   seven rows are a clean two-register exchange -- the payload pointer wants
+   $a0 and the counter $v1, and the park got them the other way round -- and
+   it proved with `-da' that local-alloc's `qty_compare' ranks the pointer
+   first (48000 against 8000 on loop-weighted reference counts) and that no
+   reference bump can reach a tie. All of that is true and none of it was the
+   cause. The cause is that the counter's `lhu' and `sh' cannot cross the
+   PAYLOAD STORES at all while those stores are plain casts: `true_dependence'
+   will not excuse a varying plain-cast MEM against a fixed-address scalar, so
+   the counter's live range is pinned around the pointer's instead of being
+   free to start after it. Spelled as ARRAY REFS the MEMs are `in_struct', the
+   dependence goes, and both registers fall out with no device at all.
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | the five +0x16/+0x18/+0x24/+0x14/+0x1E stores  KEPT   |       |      |
+   |   as ARRAY REFS, counter as a plain `++'              |   84  |   0  |
+   |   ... `*(s16 *)(q + 0x1E)' plain                      |   84  |   9  |
+   |   ... `*(s16 *)(q + 0x14)' plain                      |   84  |   6  |
+   |   ... `*(s16 *)(q + 0x24)' plain                      |   84  |   4  |
+   |   ... `*(s16 *)(r + 0x16)' plain                      |   84  |   2  |
+   |   ... `*(s16 *)(r + 0x18)' plain                      |   84  |   2  |
+   |   ... the three payload stores array refs, the two    |       |      |
+   |       renderable stores plain (the park's half-way)   |   84  |   7  |
+   |   ... all five plain -- THE PARK AS PARKED            |   84  |   7  |
+   |   ... all five plain, counter as a plain `++'         |   85  |  11  |
+   | the counter as a plain `D_s19_800257CC++'      KEPT   |   84  |   0  |
+   |   ... the park's split `cc = D; ...; D = cc + 1'      |   84  |   0  |
+
+   THE LAST ROW IS THE POINT. The park's split counter was its one
+   device-shaped construct and it was BOUGHT TO FIX A SYMPTOM OF THE
+   DEPENDENCE: with plain casts the single `++' is 85 words / 11 rows and the
+   split is 84 / 7, so the split looks load-bearing and is priced in the park
+   as the thing that makes the schedule exact. Once the array refs are in,
+   both spellings measure 0 and the device is FREE -- so the natural C lands
+   and the park's device was never needed. A fix that is necessary ONLY in the
+   presence of another fault reads exactly like a fact.
+
+   `i * 2' and `i << 1' are the same tree, 0 either way; the park measured the
+   same. Every other row in the park file re-measures as it recorded.
+
+   84 words, 0 differing; relcand ok (2 data symbols, 5 calls). */
+UnkNode *func_s19_80024D90(UnkVec *v, s16 a)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+    s32 i;
+
+    for (i = 0; i < 0x10; i++)
+    {
+        n = func_8003FC64(0x202);
+        if (n != NULL)
+        {
+            n->unk_10 = (u32)func_s19_80024B98;
+            func_8004491C(n, (u32)func_80045C34);
+            m = n->unk_08;
+            *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)v + 0x2) + (func_80064584(i << 8) >> 7);
+            *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)v + 0x6) + (func_800644B8(i << 8) >> 7);
+            *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)v + 0xA) - 0x100;
+            r = (u8 *)n->unk_0C;
+            *(s16 *)(r + 0x1C) = 0x800;
+            *(s16 *)(r + 0x1E) = 0x1CCC;
+            *(u32 *)(r + 0xC) = 0;
+            func_8003DB94(r, D_80025854, 0);
+            ((s16 *)r)[0xB] = 0x400;
+            ((s16 *)r)[0xC] = i * 0x100 - 0x400;
+            q = (u8 *)n + 0x20;
+            ((s16 *)q)[0x12] = i;
+            ((s16 *)q)[0xA] = a;
+            ((s16 *)q)[0xF] = i * 2;
+            D_s19_800257CC++;
+        }
+    }
+    return n;
+}
 
 /* The per-frame step for the single spoke func_s19_80024FD8 above spawns:
    bump D_s19_800257CE, drive the mover's x/y by rsin/rcos of the payload's
