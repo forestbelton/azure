@@ -37,6 +37,34 @@
    measured and reproducible; the cause is open.  Do not write the
    birthing_insn_p story into anything.
 
+   THE INSN-COUNT HYPOTHESIS IS NOW REFUTED, AND THE REAL EFFECT IS NARROWED
+   TO ONE SENTENCE.  I ran the test below.  Compiling both versions standalone
+   (`tools/cdkgcc -O2 -G0 -Iinclude -Ipsyq/include -Icsrc -S') and comparing
+   the function's instruction streams:
+
+       instruction lines                 364 in BOTH versions
+       `addu $16,$6,8' (the cursor)      2 occurrences in BOTH
+       `lbu $2,8($6)'  (via the base)    2 -> 0
+       `lbu $2,0($16)' (via the cursor)  21 -> 23
+
+   So the dead `q = p;' adds NO instruction and does not change how many times
+   the cursor is materialised.  What it changes is that TWO LOADS SWITCH
+   ADDRESSING FORM, from base-plus-displacement to cursor-relative.  Ten diff
+   lines in total, all of them position or addressing, none of them count.
+
+   That kills both stories.  It is not the block's insn count, because the
+   count is identical.  It is not `birthing_insn_p', because `q' has six sets
+   either way and the cursor's own insn does not move in or out.
+
+   WHAT IT LOOKS LIKE INSTEAD, stated narrowly because it rests on one body:
+   the extra assignment stops the compiler folding `q''s value back into a
+   displacement off `p' at those two sites, so they use the register that
+   already holds `p + 8' rather than recomputing the address inline.  That is
+   a propagation/addressing-selection effect, not a scheduling one.  I have
+   NOT confirmed it on a second body and this project's own rule is that a
+   mechanism needs two, so do not promote it to docs/matching-levers.md on
+   this evidence.
+
    A CANDIDATE MECHANISM TO TEST, FROM A DIFFERENT BODY (not verified here).
    An agent on ovl_dng_b34 established that the cure for a sched1 priority
    fault is THE NUMBER OF INSNS COMPETING IN THE BLOCK, not any property of
