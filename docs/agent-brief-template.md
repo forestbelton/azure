@@ -74,6 +74,25 @@ the old outside-the-repo refusal is gone. Your copy's path is given below.
     --written COPY CSRC   which stubs your copy has landed
     FILE NAME             one function's exact span
 
+**A HEADER'S WORD COUNTS ARE MOSTLY REJECTED SPELLINGS -- do not compare them
+to the tool and report a contradiction.** A landed body's comment prices every
+alternative it measured, so most "N words" figures in it belong to spellings
+that were NOT kept. One agent read `this body is 426 words with 124 aligned
+differences' -- a priced rejected inline form -- as a stale figure contradicting
+`ovlverify''s 425, when the same header states 425 twice as the landed result.
+If you think a header disagrees with the tool, find the sentence that says what
+was KEPT before reporting it.
+
+**AND MAKE EVERY PRICING EDIT ANCHOR ON THE FUNCTION'S OWN BYTE SPAN.** The
+same agent's anchor -- a local assignment plus its following line -- matched
+TWICE, the second hit being an already-landed neighbour that shares those two
+lines, which would have silently edited a finished body. Slice the span
+`describe_function' reports and substitute inside it; assert the match is
+unique; and re-measure the neighbour. Relatedly, quote your name list:
+`ovlverify $NAMES' unquoted under zsh becomes ONE argument and reports "is in
+none of the split overlays" -- loud here, but a sweep built that way is
+worthless.
+
 **Do not hand-roll a Python script for any of these.** And **if `parkcheck` crashes,
 report your park as UNCHECKED rather than assuming it is clean** -- it takes a
 path argument, but that does not make it independent of the shared parser, and
