@@ -967,10 +967,25 @@ Those numbers must come from the final all-at-once `ovlverify` run. Then:
 Confirm in the report: your copy's path, that `csrc/` is unmodified, and that
 clang-format leaves your copy untouched.
 
-**Send a one-line interim message the moment EACH function lands**, before you
-write anything else up. With several functions in flight those lines are what
-survives if your run is cut off, and they are how I start integrating before
-you finish.
+**APPEND ONE LINE TO `<your dir>/PROGRESS.txt` THE MOMENT EACH FUNCTION
+LANDS**, before you write anything else up -- the function name, its target
+words, its candidate words and its differing count, one line, nothing else.
+
+    echo "func_s32_800245C8 200 200 0 LANDED" >> <your dir>/PROGRESS.txt
+
+**This replaces an instruction that was impossible and sat in every brief
+until 2026-11-26: "send a one-line interim message as each function lands".**
+An agent cannot message the dispatcher -- `SendMessage` reaches only agents
+that agent itself spawned -- so twelve batches were asked for something they
+had no channel for, and one agent finally said so instead of quietly
+skipping it.
+
+A file serves the same two purposes and is checkable. Those lines are what
+survives if your run is cut off: a usage limit once killed thirteen agents at
+once, and recovering their work meant reading their unit copies and guessing
+what was finished. And they let me start integrating before you finish. Keep it
+in your own agent directory -- `/tmp` is **not durable** and a cleanup once
+wiped five agents' work.
 
 
 ## EVERY FUNCTION ON YOUR LIST IS A FEW INSTRUCTIONS FROM EXISTING C
