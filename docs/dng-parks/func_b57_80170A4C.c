@@ -43,9 +43,8 @@
 
    The body as written is kept below verbatim; it was recovered from the
    unsplice and is the 0-differing version.
-*/
 
-/* ovl_dng_b57, the banked room script's per-frame actor driver and the LARGEST
+   ovl_dng_b57, the banked room script's per-frame actor driver and the LARGEST
    BODY IN THE PROJECT. 1366 words, 0 differing, 0 aligned differences.
    LANDED 2026-11-26 by agent-h232, from a 1366 / 95 differing / 4 aligned PARK.
    The route was 95 -> 32 -> 24 -> 13 -> 2 -> 0, five changes, each measured.
@@ -277,6 +276,29 @@
    void func_800A020C(s32, u8 *);
    void func_800478B8(u8 *);
    s32 func_800BCB04w(s32, s32, s16) __asm__("func_800BCB04");
+   extern s16 D_800FBE20;
+   extern s16 D_800FBE22;
+   extern u32 D_800E296C;
+   extern u8 *D_800E3D7C;
+   extern u8 *D_800FBE54;
+   extern u8 D_8006CCF8[];
+   extern u8 D_8006EE9C[];
+   extern u8 D_8006F47A[];
+   extern u8 D_8006F50D[];
+   extern u8 D_8006F6B9[];
+   extern u8 D_8006F9D0[];
+   extern u8 D_8006FD01[];
+   extern u8 D_8006FFB7[];
+   extern u8 D_800703D9[];
+   extern u8 D_80070684[];
+   extern u8 D_80070AF8[];
+   extern u8 D_80070C11[];
+   extern u8 D_80070E63[];
+   extern u8 D_800FB3C8[];
+   extern u8 D_800FB8DF[];
+   extern u8 D_800FBAD7[];
+   extern u8 D_800FBD96[];
+   extern void (*D_80175CC8[])(u8 *, UnkVec *, u8 *, u8 *);
    END DECLARATIONS
    The unit already declares D_80082E80, D_80082EA4, D_80083462, D_8008346C,
    D_80083228, D_80175C30, func_8009C12C, func_80047784, func_800A2B04,

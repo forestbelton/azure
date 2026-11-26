@@ -304,9 +304,22 @@ def main():
     extra_defs = re.findall(
         r"(?m)^[A-Za-z_][\w \*]*?\b(%s_[0-9A-Fa-f]{8})\s*\([^;{]*\)\s*\{"
         % re.escape("func_" + pr.unit_of(func)[1].replace("ovl_dng_", "")),
-        body)   # THE PARK'S BODIES, not its declarations -- my first attempt
-                # searched `decls' and found nothing, because a multi-body
-                # park's extra DEFINITIONS live in the body section.
+        re.sub(r"(?s)/\*.*?\*/", "", body))
+                # THE PARK'S BODIES WITH COMMENTS STRIPPED. Two mistakes here,
+                # both mine, an hour apart:
+                #
+                # 1. My first attempt searched `decls' and found nothing,
+                #    because a multi-body park's extra DEFINITIONS live in the
+                #    body section.
+                # 2. Searching `body' RAW then matched code quoted inside the
+                #    park's header comment -- and park headers quote a lot of
+                #    code. On func_b57_80170A4C a commented-out
+                #    `void func_b57_801755A0(...)' matched, so this stripped
+                #    the UNIT's real prototype for a landed body, and the
+                #    whole park stopped splicing with an error inside that
+                #    other function. Exactly the comment-vs-code confusion I
+                #    had just fixed in onefunc.py, repeated in code written
+                #    the same hour.
     shadowed = []
     for fn in sorted(set(extra_defs)) :
         if fn == func:
