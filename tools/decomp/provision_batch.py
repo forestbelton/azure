@@ -170,4 +170,11 @@ for ag,(tag,n) in PICKS.items():
         if len(t)>2 and t[0].startswith("func_") and t[1].startswith("jtbl_") and t[0] in {f for _,f in rows}:
             mine.append(" ".join(t))
     open(os.path.join(d,"MYTABLES.txt"),"w").write("\n".join(mine) or "none of my functions owns a table\n")
-    print("%s %-5s %2d fn %5dw  tables:%d  fragments:%d  homeless dropped:%d" % (ag,tag,len(rows),sum(w for w,_ in rows),len(mine),len(bad),len(drop)))
+    # PRINT THE DIRECTORY. Two agents have had to `ls scratch/azure-dng/' to
+    # find where their unit copy went, because this line named the agent id and
+    # not the path -- and since the id is now auto-allocated, the agent cannot
+    # predict it either. One of them reported it as a dispatcher nit; it is a
+    # tool nit.
+    print("%s %-5s %2d fn %5dw  tables:%d  fragments:%d  homeless dropped:%d"
+          % (ag,tag,len(rows),sum(w for w,_ in rows),len(mine),len(bad),len(drop)))
+    print("    -> %s" % d)
