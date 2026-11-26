@@ -58135,3 +58135,147 @@ raw hex (`80180300`) settled it as `% 12` in one grep. **A hex-stripped listing
 is fine for structure and wrong for shift counts: the operand that distinguishes
 `% 6` from `% 12` is a single digit, and getting it wrong yields a plausible
 expression rather than an error.**
+
+## A `do { } while (0)` IS A *MEASURING INSTRUMENT* FOR `allocno_compare`, AND ITS THRESHOLD IS PREDICTABLE TO THE DIGIT
+
+`func_s51_80024B38` (ovl_dng_s51, 746 words), 2026-11-26. The entries above use
+a `do { } while (0)` as a *remedy* for a reference count. It is also the
+cheapest **diagnostic** in the register-residue ladder, and used that way it
+answers three questions no dump answers: *is this residue an allocation rank
+question at all*, *which allocno has to move*, and *by how much*.
+
+The mechanism is just `flow.c:2122` (`REG_N_REFS (regno) += loop_depth`) times
+`global.c allocno_compare`
+(`floor_log2 (n_refs) * n_refs / live_length`, `allocno_size` being
+`PSEUDO_REGNO_SIZE` in **words** and therefore 1 for every SImode/QImode
+allocno, so it multiplies nothing). `k` nested wrappers raise a use's weight
+from `1 + loop_depth` to `1 + loop_depth + k` and emit **no instructions**, so
+the word count cannot move and the only thing that can change is the
+allocation. On a body sitting at 746 words / 94 aligned rows with a clean
+`$s2`/`$s3`/`$s4` three-cycle:
+
+    wrappers on the hoisted 0x80's 6 uses   refs  pri    aligned
+    none                                     13   0.406   94
+    1                                        19   0.792   94
+    2                                        25   1.042   94
+    3                                        31   1.292   73
+    wrappers on `q''s 2 uses in case 3
+    none                                     10   0.588   94
+    1                                        12   0.706   79
+    2                                        14   0.824   79
+    3                                        16   1.255   31
+    4                                        18   1.412   31
+
+The competing allocno was `n` at 58 refs / 271 insns, `pri = 5*58/271 = 1.070`.
+**Both columns cross at exactly that value** -- 1.042 does nothing, 1.292 moves
+the body; 0.824 does nothing, 1.255 moves it -- so the arithmetic is not a
+story fitted to the result, it is a prediction the measurement landed on
+twice. That is what licenses calling such a residue ARITHMETIC in a park.
+
+**How to use it.** Take the residue's two or three candidate allocnos off the
+listing, wrap each one's uses in turn at `k = 1, 2, 3`, and read which column
+moves. A column that moves names the allocno; the `k` at which it moves gives
+you `pri` of the allocno you are competing against, to within one step. Then
+compute what reference count a **legal** spelling would have to supply. On this
+body the answer was `r >= 16` against a forced 10, which is how the park could
+say *no legal spelling reaches it* rather than *we did not find one*.
+
+**And the probe is not a candidate.** Three nested wrappers is not macro
+residue and nothing in the emitted stream distinguishes it from its absence,
+so the figure it produces is evidence about the compiler, not a spelling to
+land. On this body the full probe reached 31 rows and never 0, which also said
+up front that a device would not land the function either.
+
+## A LOOP-INVARIANT SYMBOL-ADDRESS LOCAL MUST BE ASSIGNED AT ITS POINT OF USE, NOT AT THE LOOP BODY'S TOP LEVEL
+
+Same body, and it is the opposite of the intuitive direction. `d = D_80083780`
+feeding three `*(s16 *)((u8 *)m + K) += *(u16 *)(d + K)` statements inside a
+four-iteration spawn loop:
+
+    assignment placed                                  words  aligned
+    inside the gate, immediately before its first use    746     94   <- hoisted
+    at the loop body's top level, before the gate        746     82   <- NOT hoisted
+    before the loop entirely                             746    104   <- NOT hoisted
+
+Only the first form gets `loop.c` to move the `lui`/`addiu` pair into the
+preheader, which is where the target has it
+(`lui $v0, %hi(D_80083780)` / `addiu $s6, $v0, %lo(D_80083780)`). In the other
+two the pair stays inside the loop and the two preheader words are simply
+absent from the candidate.
+
+**The trap is that the wrong placement scores BETTER** -- 82 and 77 against 94
+-- because the two missing preheader words happen to realign the stream. The
+discriminator is not the row count: it is whether the preheader's `lui`/`addiu`
+for that symbol is present at all, which `aligndiff` shows as a bare `-` row at
+the preheader's address. Read that before reading the total.
+
+Measured three times in one body (loop 1's `d1`, loop 2's `d2`, case 3's `d3`)
+and the direction held each time; the mechanism inside `move_movables` was NOT
+established, only the figures.
+
+## WHEN THE DECLARATION-ORDER TEST IS RUN, A FULL REVERSAL IS A FALSE SIGNAL
+
+A precondition the existing "permute the declaration order first" entry is
+missing. The test is sound -- if every permutation measures the same, there are
+no `allocno_compare` TIES and the tie-break on allocno number is out -- but it
+must permute only the locals that become PSEUDOS.
+
+    i first / n last / q first / the two stack objects last   746 / 94 (all four)
+    the whole declaration list reversed                       746 / 130
+
+The reversal moved a `RECT` and a `DVECTOR`, which live on the STACK and not in
+registers, so it changed their frame offsets and therefore the code. That 130
+is a layout result wearing a priority result's clothes. **Permute the register
+locals and hold every address-taken or aggregate local in place**, or the one
+row that moves will be the one you cannot interpret.
+
+## ONE LOCAL PER BLOCK FOR A SYMBOL-ADDRESS BASE, RE-PRICED ON A THIRD BODY
+
+`func_s58_80025D68`'s 99-row figure for this reproduced in direction and not in
+magnitude on `func_s51_80024B38`, which is the usual outcome:
+
+    D_80083780 as one local per block (d1, d2, d3)   746 /  94
+    the three merged into ONE local                   741 / 233
+    D_80082E80 as one local per block (h1, h2, h3)   746 /  94
+    the three merged into ONE local                   745 / 208
+
+Note both merges also come out SHORT (-5 and -1 words), so this fault announces
+itself in the word count before the rows are read. The matching split facts on
+the same body -- `i` across 5 loops, `s` across 8 assignments, `m` across 4
+blocks -- all want the OPPOSITE, a single shared local (splitting them is
+744/194, 743/187 and 746/196), while splitting `n` across its 4 blocks is
+746/94 and NOT MEASURABLE. So "one local per block" is a fact about
+SYMBOL-ADDRESS BASES, not about block-local values in general, and the
+loop counter, the slot pointer and the mover pointer are the counter-examples
+in the same function.
+
+## `.flow`'s REFS AND LENGTHS *DO* REPRODUCE THE ALLOCATION ORDER -- EXCEPT FOR THE PARAMETERS
+
+A precondition for the standing caution that `.flow`'s numbers are "the wrong
+numbers to compute allocation priority from" because `global_alloc` runs after
+regmove, sched1 and local-alloc on values that are never dumped. On
+`func_s51_80024B38` (746 words, 24 allocnos) the `.flow` figures reproduce the
+`;; N regs to allocate:` order **exactly** for every allocno except one:
+
+    allocno        .flow            pri      printed position
+    s   (96)       122 / 144        5.083    1
+    m   (95)        82 / 186        2.645    2
+    n   (83)        58 / 271        1.070    4
+    i   (97)        47 / 380        0.618    8
+    q   (84)        10 /  51        0.588   10
+    0x80 (269)      13 /  96        0.406   14
+    p   (80)       118 / 719        0.985   11   <- out of place
+
+Everything but `p` is monotone in `pri`. `p` is the first parameter, and a
+parameter's `.flow` entry is taken before regmove folds its entry copy
+(`(set (reg 80) (reg 4))`) and before sched1 moves the copy, so its 719-insn
+range and 118 refs are measured on a pseudo global-alloc never sees in that
+shape. Two independent `do { } while (0)` probe columns then crossed
+`pri(n) = 1.070` exactly where these numbers predict (see the probe entry
+above), which is the positive evidence.
+
+**So: trust `.flow` for ordinary locals and temps and distrust it for the
+parameters.** The caution was written off a body whose residue was a parameter,
+and that is the case it is right about; for a local-versus-local rank question
+the dump is usable arithmetic and is the difference between a park that states
+a CAUSE and one that states a floor.

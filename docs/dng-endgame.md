@@ -402,3 +402,30 @@ installer**, and the difference is one word -- those three say "the twin is" or
 **If you sweep for this again, match on the CLAIM and not the name:** `installed
 .{0,40}by func_<other>_` is the shape that is wrong, and `the twin is`, `the
 relink of`, `the donor` are the shapes that are right.
+
+## `parkcheck --splice` DOES NOT HAVE THE GAP THAT WAS REPORTED
+
+An agent reported that `--splice` "is not checking against the committed unit's
+own declarations", because its park passed the check while its `DECLARATIONS`
+block still named a typedef the unit already has -- and its own HAND splice into
+a pristine `csrc/` failed with `redefinition of struct UnkDngS58Name12`.
+
+**Checked: the tool is right and the hand splice is the wrong comparison.**
+`parksplice` reconciles a park's declarations against the unit before compiling
+-- that is `drop_known`, which is the whole point of it, and on this park it
+reports `dropped 9 declaration(s) the unit already has`. The splice then
+measures **746 words / 94 aligned differences**, which is exactly the figure the
+park records. A hand splice does not run that reconciliation, so its failure
+says nothing about the check.
+
+> **Worth stating because the instinct was right and the conclusion was not.**
+> Testing a tool against a manual re-implementation of it only works if the
+> manual version does what the tool does. Here the step it skipped IS the
+> feature. If I had taken the report at face value I would have logged a bug in
+> the one check that found five broken parks today, and someone would have
+> "fixed" working code.
+
+**What a park must still satisfy** is that it is self-contained *given* that
+reconciliation: everything the body needs, with duplicates the unit also
+declares being harmlessly dropped. That is what `--splice` verifies and it is
+the right contract.
