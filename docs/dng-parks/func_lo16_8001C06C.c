@@ -131,6 +131,74 @@
    reports every word downstream of a single fault.  Then work the FIRST
    non-register row; the rest are usually its wake.
 
+   AGENT h197, batch 36, 2026-11-25 -- NO FIGURE CHANGE (still 350w / 21),
+   and ONE OF THIS PARK`S DEVICES IS NOW MEASURED FREE.
+
+   THE THREE ADDRESSABLE ARRAYS ARE NOT LOAD-BEARING.  This closes what the
+   killed sub-agent died testing ("whether three 8-byte slots are addressable
+   locals rather than reload spills"): they are RELOAD SPILLS.  Written as
+   plain `s16 tx; s16 ty; s16 dir2;` the body is 350 words / 21 rows,
+   byte-identical to the array form, in every combination:
+       `tx` plain                                           350w / 21
+       `ty` plain                                           350w / 21
+       `tx` and `ty` plain                                  350w / 21
+       `tx`, `ty` and `dir2` all plain                      350w / 21
+       `dir2` plain alone                                   350w / 21
+   So the park`s `[1]` arrays should be read as a notation for "this value is
+   in a stack slot", not as a claim about the source.  (Merging `dir2` away
+   entirely is still 348w / 58, so the TWO VALUES are real; it is only their
+   addressability that is free.)
+
+   THE dir/dir2 CHOICE IS A TWO-SITE QUESTION, not a six-site one.  Sweeping
+   all 16 combinations of (if-arm, else-arm, loop 1, late gate) reading `dir`
+   or `dir2` gives only four distinct scores, and the if/else arms are FREE
+   in every one of them (cse unifies the two names inside those blocks):
+       loop 1 = dir2, gate = dir                       350w / 21   <- kept
+       loop 1 = dir,  gate = dir2                      350w / 31
+       loop 1 = dir2, gate = dir2                      348w / 58
+       loop 1 = dir,  gate = dir                       348w / 58
+   Exactly one of the two must read the stack slot.  The 31-row alternative
+   is not just the register exchange: it PERMUTES THE THREE STACK SLOTS
+   (dir2 lands at 0x10 and tx at 0x18 where the target has tx at 0x10, ty at
+   0x18, dir2 at 0x20), which says reload`s slot order follows the spill
+   order and not the declaration order -- so the kept assignment is right on
+   the slots as well.
+
+   g`s REFERENCE COUNT CANNOT BE LOWERED WITHOUT LOSING WORDS.  h181`s
+   arithmetic wants g at 11 weighted references instead of 13, i.e. one of
+   the six `g->unk_14` reads removed.  The target RE-COMPUTES the whole cell
+   address for both stores in each loop, so every removal costs 8 words:
+       a `UnkDungeonCell *c` local in loop 1 only           342w / 53
+       a `UnkDungeonCell *c` local in loop 2 only           342w / 27
+       a `UnkDungeonCell *c` local in loop 3 only           342w / 28
+       a `UnkDungeonCell *c` local in all three loops       323w / 147
+   THE goto-BACK-EDGE LEVER IS ALSO SHUT, and for the documented reason --
+   each loop`s preheader carries hoisted invariants (loop 1`s is
+   `lui`/`addiu %lo(D_800EA000)` at 8001C2CC and the hoisted
+   `&D_8006CCD8[dir]` at 8001C2E8..8001C2F8), so dropping the loop NOTE
+   costs those words:
+       loop 1 written `l1:` + `goto l1`                     352w / 82
+       loop 2 written `l2:` + `goto l2`                     354w / 54
+       loop 3 written `l3:` + `goto l3`                     358w / 62
+       all three                                            357w / 267
+   FOUR MORE LOCAL-SET AND POSITION POINTS, all flat or worse:
+       `t` and `d` merged into one `s32`                     350w / 21
+       `g` declared last                                     350w / 21
+       `dir` declared first                                  350w / 21
+       `b` dropped, `g` taken off the symbol directly        349w / 33
+       `g` assigned just before loop 1                       348w / 84
+
+   ONE THING THE TARGET SAYS THAT THE PARK DOES NOT.  `dir` is read from the
+   REGISTER in loop 1`s preheader (8001C2E8 `sll $v1, $s7, 16`, feeding the
+   hoisted `&D_8006CCD8[dir]`) and from the STACK SLOT at the late gate
+   (8001C3AC `lhu $t4, 0x20($sp)`) -- the OPPOSITE of the kept body, which
+   reads the slot in the preheader and the register at the gate.  Both are
+   350 words, so the word count cannot choose between them; the 31-row
+   variant is the one with the target`s register/memory split and the wrong
+   slot order.  A spelling that gets the target`s split WITHOUT permuting the
+   slots is the open question, and it is the same question as the $s7/$fp
+   exchange.
+
    DECLARATIONS
    s16 func_800A07D0(s16, s16, s16, s16);
    END DECLARATIONS */

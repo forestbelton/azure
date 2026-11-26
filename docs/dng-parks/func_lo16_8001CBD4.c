@@ -105,6 +105,60 @@
    that.  `s16 nx, ny' locals for the stepped coordinates are what give the
    `sll 16'/`sra 16' pair before each shift, which the target has.
 
+   AGENT h197, batch 36, 2026-11-25 -- NO FIGURE CHANGE (still 70w / 13), but
+   the residue is now ONE INSTRUCTION and four more levers are closed.
+
+   WITH BOTH TABLES AS POINTER LOCALS the body is 69 words / 17 and the ONLY
+   missing instruction is the preheader copy itself:
+
+       -   34  8001CC5C   addu $t0, $t1, $zero        (the (s16)d copy)
+
+   everything else in those 17 rows is the register renaming that follows.
+   So the picture is complete: the target`s three preheader copies are
+   (s16)d, the D_800EA000 base and the D_80083350 shift; the kept
+   dx-bare/dy-local body has dx`s base, the D_800EA000 base and the shift.
+   Making dx a local removes dx`s copy (69 words, 2 copies) and nothing adds
+   d`s, so the two spellings are one word apart in opposite directions.
+
+   WHY d`s COPY DOES NOT APPEAR, measured.  It is NOT that the loop has no
+   sign-extension to hoist: the loop DOES use the entry block`s extended d
+   (`addu $v0, $t0, $a1` at word 65 in both builds).  It is that the hoisted
+   copy is COALESCED, because the entry block`s extended-d pseudo is dead
+   after it.  Every source route to a surviving second pseudo is now priced
+   and flat -- the local is deleted by cse in all of them:
+
+       dxloc+dyloc, no extra local                              69w / 17
+       dxloc+dyloc + `s32 e = d` in the loop                    69w / 17
+       dxloc+dyloc + `s16 e = d` in the loop                    69w / 17
+       dxloc+dyloc + `s32 e = (s16)d` in the loop               69w / 17
+       dxloc+dyloc + `u16 e = d` in the loop                    69w / 22
+       dxloc+dyloc + `s32 e = d & 7` in the loop                69w / 31
+       `s32 dd = d` in the GATE-TAKEN block (the preheader
+         itself), subscripts `(dd + k) & 6`                     69w / 17
+       the same with `dd` as `s16`                              69w / 17
+       the same with `dd` as `u16`                              69w / 22
+       `dd` assigned before the gate (s32 / s16 / u16)   70w/26, 69w/17, 69w/22
+       any of the above with the RETURN also `(dd + k) & 6`   68w/29..34
+       dxloc+dybare (+ the same six locals)                     70w / 14
+       dxbare+dybare (+ the same six locals)                 71w / 12..22
+
+   AND THE LOOP SHAPE IS NOT THE LEVER EITHER, all with dxloc+dyloc:
+       `for` (as parked)                                        69w / 17
+       `while`                                                  69w / 17
+       `k = 2; do { } while (k < 7)`                            69w / 17
+       `again:` + `if (k < 7) goto again;`                      70w / 41
+       the gate inverted to an early `return d`                 70w / 25
+       a shared `out:` label with an `r` result local           68w / 27
+   The goto form is 24 rows WORSE, which confirms today`s precondition on
+   that lever: this loop`s preheader carries hoisted invariants, so the real
+   loop is required.
+
+   NEXT AGENT: do not re-sweep the table locals, the direction-index local,
+   the parameter type, the declaration order or the loop shape -- all five
+   tables are complete.  What is left is why the preheader copy coalesces,
+   i.e. a `-da` `.lreg`/`.greg` pair on the dxloc+dyloc body against the
+   kept one.
+
    DECLARATIONS
    extern s16 D_80083350;
    extern s16 D_8006CCD8[];

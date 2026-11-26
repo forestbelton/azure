@@ -294,6 +294,37 @@ void func_lo16_8001607C(void)
     D_80083478 = D_800DDC7C;
 }
 
+/* 33 words, 0 differing.  Parked by h163 and advanced by h181 to 33 / 9;
+   docs/dng-parks/func_lo16_800161D8.c carried the table.  TWO FACTS, and the
+   second is only reachable on top of the first -- a linear sweep cannot get
+   here, which is why the park sat at 9 rows across roughly eighty measured
+   points.
+   1. `s32 t1' CARRIES THE SECOND 6 (h181's fact, kept): cse unifies identical
+      constants only within ONE machine mode, so `g->unk_14 = 6' (HImode) plus
+      `t1 = 6; g->unk_16 = t1' (SImode) survives as the target's TWO
+      `addiu $v0, $zero, 0x6' insns.  One bare 6 for both stores is 32 words.
+   2. THE 0x3F PAIR IS INTERLEAVED WITH THE 6 PAIR, store order
+      14, 18, 16, 1A, 1C, 1E.  That is what puts `addiu $a1, $zero, 0x3F' in
+      the prologue group at word 7 and keeps 0x3F live in its own register
+      across the 0x180 stores and the D_800EA000 address, which is the fifth
+      live value h163 identified as the whole residue.  ASCENDING order
+      14, 16, 18, 1A, 1C, 1E -- the parked body -- is 33 / 9, and so is every
+      other grouping of the three pairs; it is flat under store order, under
+      an `s32' local for 0x3F or 0x180 or 0x2C808080 (all 33 / 9 or worse),
+      under chained `a = b = const' assignments (32 / 10), and under the
+      MEM_IN_STRUCT_P distinction (all eight combinations of struct refs
+      versus `*(s16 *)((u8 *)g + off)' casts measure 33 / 9).  Interleaving is
+      the one axis that moves it, and h163 priced an interleaving at 32 / 31
+      BEFORE fact 1 existed -- the device that is worse alone and necessary in
+      combination.  Other interleavings measured: 14, 16, 18, 1C, 1A, 1E is
+      33 / 2; 18, 1A, 14, 16, 1C, 1E is 33 / 2; 14, 1C, 16, 1E, 18, 1A is
+      33 / 12.  unk_A8 BEFORE unk_1DC is load-bearing in all of them (the
+      reverse costs 4).
+   The three-insn address shape still needs TWO POINTER LOCALS,
+   `b = (u8 *)&D_80083160' then `g = b + 0x1DC' -- naming 0x1DC inside the
+   address expression folds it into the R_MIPS_LO16 addend and loses a word.
+   That is the unit's central addressing idiom; it also landed
+   func_lo16_80016E6C. */
 void func_lo16_800161D8(void)
 {
     u8 *b;
@@ -814,6 +845,42 @@ void func_lo16_80017294(void)
     D_800DCF5A = 0;
 }
 
+/* 107 words, 0 differing.  Parked by h176 at 107 / 4 aligned differences;
+   docs/dng-parks/func_lo16_800172A0.c carried its measured table and all six
+   of its facts below still hold.  WHAT CLOSED IT was THREE SHORT-LIVED LOCALS
+   HOISTED ABOVE THE REFERENCE-BUMP LOOP, and the mechanism is that a
+   `do { } while (0)' is a sched1 BARRIER as well as an allocation device:
+   the bump is needed (without it the body is 107 / 10, every row the $s4/$s5
+   exchange), but it also stops the three address materialisations the target
+   schedules ABOVE the r + 0xC / r + 0x18 / r + 0x26 stores from crossing it,
+   and those three cannot be reached from any statement order.  Computing them
+   into locals BEFORE the device puts them in the device's own basic block:
+
+       fp = (u32)func_800C7B38;      the %hi/%lo pair, target words 76-77
+       g  = D_80083460h;             the %hi/%lo pair, target words 78, 80
+       c  = *(s16 *)(r + 0x24);      the read-back `lh', target word 79
+
+   All three are LOAD-BEARING and measured: no `fp' is 107 / 7, no `g' is
+   107 / 5, no device at all is 107 / 10, and the device alone (the parked
+   body) is 107 / 4.  `c' MUST BE `s32': as `s16' the read is `lhu' plus a
+   sll/sra pair and the body is 109 / 4.  `c' must also be read AFTER the
+   0xC and 0x18 stores -- read immediately after its own store, cse folds the
+   constant 0x40 and the body is 102 words / 7 with the multiply collapsed to
+   `addiu $v0, $s4, 0x3120'.
+   STATEMENT ORDER, measured: the device must sit after the 0xC/0x18 stores
+   and before the 0xB4 store.  The device before the whole r-record block is
+   107 / 4 with only the 0x26 store misplaced, and at the very END of the
+   if-body it is 107 / 2 -- the best figure reachable without the locals.
+   MEASURED AND FREE, so NOT the reason this lands: writing the r-record
+   stores as array refs (`((s16 *)r)[19] = n' etc.) is 107 / 0 as well, so
+   MEM_IN_STRUCT_P is not involved here.
+   The six facts from the park that this body still relies on: `s32 a' for the
+   angle (as `s16' it is 110 / 52); the b + 0xA8 store BEFORE the b + 0xAC
+   store (the other order is 108 / 14); the 0xB0 sign as a TWO-ARM if/else
+   (the `v = -0x800; if (...) v = 0x800;' form is 110 / 52); the clamp reading
+   q + 0x1C once signed (`lh') and once unsigned (`lhu'); and three pointer
+   locals off ONE `lui' -- b = &D_80083178, q = b + 0x1C4 (the grid descriptor
+   at 0x8008333C, a FIFTH way this unit reaches it) and r = b + 0xB8. */
 void func_lo16_800172A0(u8 *p, s32 n)
 {
     u8 *b;
@@ -1222,7 +1289,59 @@ void func_lo16_8001784C(void)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_80017A9C);
+/* 84 words, 0 differing.  ONE MEASURED FACT, and it is the far-column index
+   in loop 1: it must be `(i << g->unk_14) + (1 << g->unk_14) - 1', NOT
+   `((i + 1) << g->unk_14) - 1'.  Both are the same value and the second is
+   the natural spelling; it is 84 words / 16 aligned differences, every row a
+   register permutation.  Mechanism: with `i + 1' written as an addition, cse
+   unifies it with the loop's own `i = i + 1' increment, so the increment is
+   emitted EARLY (word 26, in the `lh 0x14' load-delay slot) and the far index
+   reuses the incremented biv -- no register ever holds the constant 1 inside
+   the body, so loop.c has no movable to hoist and the 1 appears only at the
+   bottom test, which cse2 materialises AFTER the strength-reduced bases.
+   Distributing the shift puts a `1 << g->unk_14' in the body, the literal 1
+   becomes a loop.c MOVABLE, and the preheader comes out in the target's order
+   `3 / 0x400 / 1 / lui / addiu base / addiu base - 6'.
+   MEASURED AND FREE, so NOT the reason this lands: `((1 + i) << ...) - 1' and
+   `((i + 1) << ...) + -1' are both 84 / 16 like the parked form, and
+   `(i << g->unk_14) + ((1 << g->unk_14) - 1)' -- the same distribution with
+   the constant folded -- is 86 / 13.  MEASURED AND WORSE: the far-edge cell
+   stored first (84 / 40), both cell pointers computed at the top of the body
+   (83 / 35), a function-scope `s32 w = 1' for every literal 1 (82 / 15, it
+   collapses two of the target's four materialisations of 1), `w = 1' assigned
+   inside either loop body (84 / 16..29), and the bound written `(1 <<
+   g->unk_16) > i' (84 / 16, free).  Parked by h172 and h181 at 84 / 16;
+   docs/dng-parks/func_lo16_80017A9C.c has their full table. */
+void func_lo16_80017A9C(void)
+{
+    UnkDngLo16Grid *g;
+    UnkDungeonCell *c;
+    s32 i;
+
+    g = (UnkDngLo16Grid *)D_8008333C;
+    for (i = 0; i < (1 << g->unk_16); i++)
+    {
+        c = &D_800EA000_s[i << g->unk_14];
+        c->unk_00 = 3;
+        c->unk_02 = 0x400;
+        c->unk_04 |= 0x8001;
+        c = &D_800EA000_s[(i << g->unk_14) + (1 << g->unk_14) - 1];
+        c->unk_00 = 3;
+        c->unk_02 = 0x400;
+        c->unk_04 |= 0x8001;
+    }
+    for (i = 0; i < (1 << g->unk_16); i++)
+    {
+        c = &D_800EA000_s[i];
+        c->unk_00 = 3;
+        c->unk_02 = 0x400;
+        c->unk_04 |= 0x8001;
+        c = &D_800EA000_s[(((1 << g->unk_16) - 1) << g->unk_14) + i - 1];
+        c->unk_00 = 3;
+        c->unk_02 = 0x400;
+        c->unk_04 |= 0x8001;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_80017BEC);
 
@@ -2202,7 +2321,8 @@ void func_lo16_8001DE2C(void)
     }
 }
 
-void func_lo16_8001E108(s32 x, s32 y, UnkDungeonCell *c, s32 base, s32 k) {
+void func_lo16_8001E108(s32 x, s32 y, UnkDungeonCell *c, s32 base, s32 k)
+{
 }
 
 /* 31 words, 0 differing.  First compile, off the landed func_800CDE40 in

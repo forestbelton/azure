@@ -115,6 +115,62 @@
       duplicated into both arms is 80 / 27.  The gate is `!=' with the rand
       block as the FALL-THROUGH, which is what gives the target's `beq'.
 
+   AGENT h197, batch 36, 2026-11-25 -- NO FIGURE CHANGE (still 81w / 16), but
+   THE MISSING WORD IS NOW IDENTIFIED AND IT IS A `nop`.
+
+   The target`s word 55 is the `bnez $v0, .Llo16_8001E944` DELAY SLOT and it
+   is EMPTY (8001E900, `nop`).  The candidate fills that slot with the
+   `f = h` copy, which is the whole one-word deficit; the 16 rows are that
+   insn`s displacement plus the $s0/$s1 exchange behind it.
+
+   WHY THE TARGET`S SLOT IS EMPTY, read off the listing.  At reorg time the
+   target`s stream is
+
+       [addiu $v0, -0x80] [or $s1, $s0, $v0] [addu $s0, $s1, $zero] [jal]
+       [andi] [bnez] ...
+
+   so reorg`s backward search from the `bnez` finds the `andi` (the branch`s
+   own condition) and then the `jal` -- a CALL_INSN, which it cannot move --
+   and gives up.  The jal`s own slot takes the copy.  In the candidate the
+   copy is AFTER the call, so the jal`s slot takes the `or` and the bnez`s
+   slot takes the copy.  **THE COPY MUST THEREFORE PRECEDE THE CALL**, which
+   is the sharper statement of h176`s conclusion.
+
+   AND THAT IS EXACTLY WHAT COSTS THE FOURTH CALLEE-SAVED REGISTER, because
+   with the copy before the call cse makes `f` the canonical register of the
+   f/h quantity (`make_regs_eqv`: the NEW register wins when it outlives the
+   old one beyond the cse block, and f is stored at `p[3] = f` after the
+   switch join while h dies at the `ori`), so the arm`s `f = h | 0x40` is
+   rewritten to read f, h`s only remaining use is the copy, h never crosses
+   the call, and the frame drops to -0x20 with three saves.  That is the
+   -3 words of every 79-word spelling: one save, one restore, the copy.
+
+   SO THE RESIDUE IS BIMODAL AND THE TWO MODES ARE NOW BOTH EXPLAINED:
+   call between `h = ...` and `f = h`  -> 81w / 16 (4 registers, no nop)
+   copy before the call                -> 79w / 23 (3 registers)
+
+   TEN MORE SPELLINGS MEASURED AND REJECTED, on top of h176`s nine:
+       copy before the call, call inlined in the gate           79w / 23
+       copy before the call, `t = rand()` separator after it     79w / 23
+       copy before the call, `t = rand() & 7` separator after    79w / 23
+       copy in the ELSE arm, call inlined in the gate            79w / 23
+       copy in the ELSE arm, `t = rand()` separator              79w / 23
+       chained `f = h = f | -0x80;`                              79w / 23
+       `goto out16` in place of the if (arm unchanged)           79w / 23
+       kept order but the arm written `f |= 0x40`                81w / 16
+       kept order, arm `f = h | 0x40` (as parked)                81w / 16
+   AND SEVEN DEAD-STORE SEPARATORS between `h = ...` and `f = h`, which was
+   the obvious candidate for h176`s "an insn a LATER pass removes" -- every
+   one is 79w / 23, so the separator is gone before cse1 even sees it:
+       `t = 0;`  `r = 0;`  `t = h;`  `t = f;`  `t = g;`  `r = h;`
+       `do { f = h; } while (0)`      `if (1) { f = h; }`
+   NEXT AGENT: the separator cannot be a dead store and cannot be a device.
+   What is needed is a spelling in which the ARM`S `h | 0x40` still reads h
+   with the copy before the call -- i.e. something that stops cse making f
+   the canonical register, or that ends the cse path before the arm.  A `-da`
+   `.cse1` pair on the 79-word body against the target`s shape is the cheap
+   next step.
+
    DECLARATIONS
    u16 func_800A6D30();
    END DECLARATIONS

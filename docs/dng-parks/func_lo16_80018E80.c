@@ -1,40 +1,99 @@
 /* func_lo16_80018E80 -- ovl_dng_lo16, 401 target words.
-   RECOVERED by agent h181, batch 35, 2026-11-25.
+   ADVANCED by agent h197, batch 36, 2026-11-25, from 402 words / 17 ALIGNED
+   differences to 401 WORDS -- EXACT -- and ONE ALIGNED DIFFERENCE.
 
-   PROVENANCE -- READ THIS BEFORE TRUSTING ANYTHING BELOW.  This body was
-   written by a dedicated sub-agent that was KILLED MID-RUN by a weekly API
-   limit before it could write a park of its own.  Its working copy survived in
-   sub-8e80; I have re-measured it and preserved it here so the work is not
-   lost.  **THE AGENT'S REASONING AND ITS REJECTED SPELLINGS DIED WITH ITS
-   TRANSCRIPT.**  Nothing in this header is a priced fact except the two
-   figures I measured myself.  Every spelling in the body is therefore
-   UNMEASURED -- do not preserve any of it believing it was fought for, and do
-   not write any of it up as a lever.  Splice markers have been stripped.
+       built 401 words, target 401 words, 1 aligned difference
+       func_lo16_80018E80: target 401 words, candidate 401 words, 1 differing
 
-   MEASURED BY ME, in that copy, just now:
+   THE WHOLE RESIDUE IS NOW ONE INSTRUCTION, and it is a cse canonicalisation:
 
-       built 402 words, target 401 words, 17 aligned differences
-       func_lo16_80018E80: target 401 words, candidate 402 words, 346 differing (masked)
+       R   83   83 80018FCC  bne v1,v0   <->   bne $a1, $v0
 
-   Last thing the agent reported before it died: 399 of 401 words and 98 aligned rows; the copy on disk now measures better than that, so it kept working after its last report.
+   i.e. the `k == 2 test reads q`s register where the target reads k`s.  See
+   WHAT IS LEFT below.
 
-   THE RESIDUE as aligndiff gives it (`R' = register names only, `X' = a
-   differing instruction, `+'/`-' = present on one side only):
+   THREE THINGS THE PREVIOUS BODY HAD WRONG.  All three were found by reading
+   the residue, not by sweeping, and each is a separate mechanism:
 
-       X   34   34 80018F08  lui a3,0x8001                            lui $a2, %hi(D_80012090)
-       X   37   37 80018F14  lui a3,0x8001                            lui $a2, %hi(D_80012090)
-       X   38   38 80018F18  lw a1,8336(a3)                           lw $v1, %lo(D_80012090)($a2)
-       X   56   56 80018F60  li v0,40                                 addu $v1, $a1, $zero
-       -        63 80018F7C                                           addu $v1, $a1, $zero
-       X   76   77 80018FB4  sll v0,a2,0x10                           addiu $v0, $zero, 0x2
-       +   82                sra v0,v0,0x10
-       +   83                li v1,2
-       X   86   85 80018FD4  lw v1,556(a3)                            lw $v1, %lo(D_8001022C)($a2)
+   1. `s32 k`, NOT `s16 k`, and the read is `(s16)(u16)D_8008146C`.
+      D_8008146C is `extern s16` in structs.h, but the target reads it with
+      `lhu` and then `sll 16`/`sra 16` (80018F2C..80018F38), so the source
+      cast is `(s16)(u16)` -- and the SHIFTED value is reused by the signed
+      divide-by-5 (`sra $v1, $v1, 31` at 80018F40 takes the sign bit off
+      `k << 16`).  With `s16 k` every later use of k re-extends it and the
+      `k == 2 compare costs an extra sra`: 402 words / 17.  With `s32 k`:
+      400 words / 16.  This is the same verdict func_lo16_8001E660`s comment
+      in this unit records ("`s32 k`, NOT `s16`"), on a third body.
 
-   NEXT AGENT: re-derive the residue yourself and price with aligndiff, never
-   with ovlverify's masked count -- on a body this size the masked count
-   reports every word downstream of a single fault.  Then work the FIRST
-   non-register row; the rest are usually its wake.
+   2. `q = k` IS ONE STATEMENT AFTER THE GATE, NOT ONE IN EACH ARM, and that
+      is what produces the TARGET`S TWO `addu $v1, $a1, $zero` COPIES.  This
+      inverts what a residue reading suggests.  The target has the copy twice
+      (80018F60 in the branch delay slot and 80018F7C at the end of the if
+      arm) because `q` is in $v1 and the `D_800E296C |= 0x10000000` arm
+      clobbers $v1 between them; reorg steals the else arm`s copy into the
+      delay slot and keeps the if arm`s.  Written in BOTH ARMS the copy
+      survives as a source construct but `q` is then live across the or
+      sequence, so it cannot have $v1, gets $a1, and the second copy is
+      deleted as redundant: 400 words / 16.  Written ONCE after the gate, cse
+      cannot forward it (q is also live into the q != 0 branch), q gets $v1,
+      and the duplication falls out of reorg for free.  Measured, all with
+      `s32 k` and `c` a local:
+          q = k in both arms, copy last in the if arm      400w / 16
+          q = k in both arms, copy first in the if arm     400w / 16
+          q = k in both arms, gate inverted               400w / 16
+          q = k before the gate AND in the if arm         401w / 11
+          q = k ONCE after the gate                       401w /  1   <- kept
+      A SEPARATE SECOND LOCAL for the k-derived value (`w = k`, q kept for
+      the loaded value only) is strictly worse in every arm shape -- 400w/14
+      in both arms, 400w/5 once after the gate -- because cse then forwards
+      the copy into the compares and it disappears.  Do not re-sweep it.
+
+   3. BOTH 0x80010000 BASES ARE `u8 *` POINTER LOCALS AND BOTH ARE NEEDED,
+      and these addresses are CONSTANTS, not the structs.h symbols.  The
+      target materialises the base twice (`$a0` at 80018E90 for the 0x22C/
+      0x2090 group and `$a2` at 80018F08/80018F14 for the second group), so
+      two locals is the right count.  Measured:
+          b and c both `u8 *` locals                      401w /  1   <- kept
+          c dropped, `*(s32 *)0x80012090` written direct   402w /  8
+          b dropped, c kept                                402w / 17
+          both dropped                                     403w / 27
+          b and c MERGED into one local                    399w / 25
+                     (one lui only, and it lands in $s1)
+          the symbols D_8001022C / D_80012090 / D_80010234
+            in place of the constant addresses             405w / 45
+      The last row is the important one: splat renders this body`s listing
+      with `%hi(D_80012090)`/`%lo(D_80012090)`, which LOOKS like a relocation
+      and is not -- the symbol spelling re-materialises the address at every
+      use and costs four words.  A `lui`+`lw` pair cannot be told from a
+      relocation at the byte level, so the listing`s symbol names are splat`s
+      INFERENCE here, and the unit`s own comments on func_lo16_8001784C and
+      func_lo16_8001E660 ("D_80012090 IS THE CONSTANT ADDRESS ... as it is
+      everywhere else in this unit") are the authority.  It is the constant
+      address in this body too.
+
+   WHAT IS LEFT -- ONE INSN, AND IT IS A cse REPRESENTATIVE CHOICE, NOT A
+   STATEMENT POSITION.  After `q = k`, cse puts q and k in one equivalence
+   class.  `make_regs_eqv` makes the NEW register canonical when it outlives
+   the old one beyond the current cse block, and q (used again in the q != 0
+   branch at 80019138/80019190) outlives k (last used at the `== 2 compare`),
+   so every later reference to k is rewritten to q.  `flag_cse_skip_blocks`
+   is what carries the class as far as the `== 2` test: cse follows the
+   forward conditional branches around the 0x28 and `< 2` arms, so the test
+   is still inside one cse path.  The target did NOT make that substitution.
+
+   RULED OUT for that one insn, all at 401 words / 1 (i.e. perfectly flat):
+       `2 == k`, `k - 2 == 0`                                       1
+       `q == 0x28` / `q < 2` rewritten as `k == 0x28` / `k < 2`
+         (either or both)                                           1
+       `q = (s32)k` instead of `q = k`                              1
+       declaration order of q and k, both ways                      1
+       `if (1)` round the two tail arms                             1
+       `m = (s16)(k / 5)` moved after `q = k`                 402w / 33
+       `do { } while (0)` round the two tail arms             399w / 24
+       the `&&` operands of the `== 2` gate swapped           402w / 25
+   NEXT AGENT: the lever is whatever makes k outlive q, or whatever ends the
+   cse path before 80018FCC.  A `-da` `.cse1`/`.cse2` pair on this body is
+   the cheap next step; the statement-order sweep above is closed.
 
    DECLARATIONS
    void func_lo16_80019648(void);
@@ -50,7 +109,7 @@ s32 func_lo16_80018E80(void)
     u8 *c;
     s16 *rp;
     s32 q;
-    s16 k;
+    s32 k;
     s32 m;
     s32 ret;
     s32 flag;
@@ -88,18 +147,14 @@ s32 func_lo16_80018E80(void)
         q = *(s32 *)(c + 0x2090);
         if (q == 0)
         {
-            k = (u16)D_8008146C;
+            k = (s16)(u16)D_8008146C;
             m = (s16)(k / 5);
             if (k >= 0x28)
             {
                 flag = 1;
                 D_800E296C |= 0x10000000;
-                q = k;
             }
-            else
-            {
-                q = k;
-            }
+            q = k;
             if (q == 0x28)
             {
                 ret = 1;

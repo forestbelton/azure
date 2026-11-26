@@ -1,40 +1,68 @@
 /* func_lo16_80017F88 -- ovl_dng_lo16, 121 target words.
-   PARKED by agent h176, batch 35, 2026-11-25.  124 words / 17 ALIGNED
-   DIFFERENCES, and the seventeen are ONE fault plus its rename wake.
+   ADVANCED by agent h197, batch 36, 2026-11-25, from 124 words / 17 ALIGNED
+   differences to 121 WORDS -- EXACT -- and 11 ALIGNED differences.
 
-   WHAT IT IS: func_lo16_8001816C (LANDED this batch at 102/102, 0
-   differing) with a BEST-SO-FAR tracker instead of a first-hit return, and
-   a fourth parameter that gates the 0x300 cell test.  Read that body's
-   comment first; every shape fact carries.
+       built 121 words, target 121 words, 11 aligned differences
+       func_lo16_80017F88: target 121, candidate 121, 21 differing (masked)
 
-   THE ONE REMAINING FAULT, exactly:
+   h176 NAMED THE JOB EXACTLY -- "get `(s16)f` into a callee-saved register
+   with `cb` still spilled" -- AND THE ANSWER IS ONE STATEMENT`S POSITION.
+   The extension must be an explicit local assigned AT THE TOP OF THE OUTER
+   LOOP BODY, not at function scope:
 
-       +   12       sll a3,a3,0x10              (hoisted to depth 0)
-       X   31       sw a3,20(sp)   vs  sra $fp, $v0, 16
-       +   42       lw t0,20(sp)
-       +   43       nop
-       +   44       sra s6,t0,0x10              (sunk to depth 1)
+       for (n = ...; n > 0; n--)
+       {
+           fl = f;                       <<< here, and nowhere else
+           x = D_800E2970_s[r].unk_00;
 
-   The `(s16)f' sign extension is ONE PAIR in the target, `sll $v0,$a3,16' /
-   `sra $fp,$v0,16' at words 30-31, kept in $fp for the whole body.  In the
-   candidate loop.c's move_movables splits the pair -- the `sll' to depth 0
-   and the `sra' into the outer loop's body -- and the `a3 << 16'
-   intermediate is SPILLED between them.  Three extra words and a nine-value
-   register rotation behind them.
+   loop.c then hoists `fl = f` into the outer preheader -- which is where the
+   target`s `sll $v0, $a3, 16` / `sra $fp, $v0, 16` pair sits, words 30-31 --
+   and because `flow.c:2122` counts a reference once per ENCLOSING LOOP the
+   hoisted definition is worth TWO references instead of one.  `fl` then
+   scores 5 weighted references against `cb``s 4 in `allocno_compare`, takes
+   $fp, and `cb` spills to 0x10($sp) exactly as the target does.  At function
+   scope the two allocnos TIE at 4 references each and the tie breaks on
+   allocno number, which `cb` wins because it is declared first -- and that
+   is why h176 measured every declaration order at the same 22 rows.  The
+   position sweep, all with `s32 fl`:
 
-   THE ALLOCATOR IS CHOOSING BETWEEN `cb' AND `(s16)f' FOR THE LAST
-   CALLEE-SAVED REGISTER, and it picks the wrong one:
-     - as written below (no `fl' local) `cb' is SPILLED to 0x10($sp), which
-       is what the target does, and `(s16)f' loses: 124 words / 17.
-     - hoisting the extension into an explicit `s32 fl = f;' swaps them --
-       `cb' takes $s8 and `fl' spills: 122 words / 22.  Closer on length,
-       worse on rows, and it is the same fault with the sign flipped.
-   Both orderings of the two assignments, and `fl' declared first, last and
-   in between, measure 22.  So this is NOT a declaration-order lever.
-   `-da' on the real unit shows 23 allocnos with FOURTEEN crossing the one
-   call against nine callee-saved registers, and a reload spill of $t0 at
-   insn 26 -- so the body is genuinely at the edge and one source statement
-   either way decides it.
+       fl = f at the top of the OUTER loop body        121w / 11   <- kept
+       fl = f just before the outer `for`              122w / 22
+       fl = f after `y = ...`                          122w / 22
+       fl = f as the first statement                   122w / 22
+       fl = f at the top of the INNER loop body        124w / 17
+       no `fl` at all, `f == 0` inlined                124w / 17
+       `s16 fl` (any position)                         124w / 17
+       `s32 fl = (s16)f`                               122w / 22
+
+   WHY THE REFERENCE DEVICES DO NOT WORK HERE, measured, because they are the
+   first thing the brief suggests for an `allocno_compare` residue:
+       `do { } while (0)` round the `f` gate (with fl)  122w / 65
+       `do { } while (0)` round the 0x8400 gate         122w / 65
+       `do { } while (0)` round the `f` gate (bare f)   125w / 73
+   A wrapper inside the inner loop raises BOTH allocnos` counts and adds a
+   sched barrier in the hot block; the hoist raises only one and adds none.
+
+   WHAT IS LEFT -- 11 ROWS, AND THEY ARE ONE REGISTER CHOICE IN THE ENTRY
+   BLOCK.  The target puts `%lo(D_800E2970)` in $a1 and `%hi(D_8008333C)` in
+   $v0; the candidate puts them in $a2 and $a1.  Because the candidate needs
+   an argument register for the SECOND address it spills `ox` ($a1) early,
+   at word 12, where the target`s parameter home store for $a1 is at word 4
+   and `oy` ($a2) at word 21 -- so the two parameter home stores come out in
+   the opposite order and the `lui %hi(D_8008333C)` is scheduled eleven words
+   early.  RULED OUT for it, all at 121 words / 11:
+       `cb = ...` after `y = ...`, before the `for`, or first             11
+       `cb = ...` at the top of the inner loop                     121w / 21
+       `cb = ...` at the top of the outer loop                     122w / 25
+       `if (1)` round the `cb` load, after `y` or first                  11
+       `do { } while (0)` round the `cb` load                      123w / 25
+       `cb` read through a `u8 *` cast instead of `D_8008333C[0]`        11
+       `*ox`/`*oy`/`best` in the orders ox,best,oy and best,ox,oy        11
+       `*oy` before `*ox`                                          121w / 15
+   So the cb load`s source position does not move its schedule, and the
+   residue is below the C level.  NEXT AGENT: a `-da` `.sched`/`.lreg` pair
+   is the only thing left; do not re-sweep the fl position (closed above),
+   the cb position, or the store order.
 
    FACTS MEASURED AND LOAD-BEARING:
 
@@ -74,8 +102,8 @@
       (NOT MEASURABLE here) and writing it as an explicit outer-loop
       statement is 124 / 25.
 
-   NEXT AGENT: the whole job is to get `(s16)f' into a callee-saved register
-   with `cb' still spilled.  Everything else in this body is at 0.
+   (h176's closing note -- "the whole job is to get (s16)f into a callee-saved
+   register with cb still spilled" -- IS DONE; see the top of this header.)
 
    DECLARATIONS
    extern u32 D_8008333C[];
@@ -93,12 +121,14 @@ s32 func_lo16_80017F88(s16 r, s16 *ox, s16 *oy, s16 f)
     s16 best;
     u16 v;
     u16 t;
+    s32 fl;
 
     best = -0x200;
     cb = (s32)D_8008333C[0];
     y = D_800E2970_s[r].unk_02;
     for (n = D_800E2970_s[r].unk_06; n > 0; n--)
     {
+        fl = f;
         x = D_800E2970_s[r].unk_00;
         for (w = D_800E2970_s[r].unk_04; w > 0; w--)
         {
@@ -106,7 +136,7 @@ s32 func_lo16_80017F88(s16 r, s16 *ox, s16 *oy, s16 f)
             v = c->unk_04;
             if ((v & 0x8400) == 0)
             {
-                if (f == 0 || (v & 0x300) == 0x200)
+                if (fl == 0 || (v & 0x300) == 0x200)
                 {
                     t = y * 64 + 0x20;
                     h = func_800BCB04((x * 64 + 0x20) & 0xFFE0, t, -0x400);
