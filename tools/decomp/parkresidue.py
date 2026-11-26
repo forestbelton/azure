@@ -107,7 +107,21 @@ DECL_LINE = re.compile(
     # INSIDE it, one per field, and stopping at the first means the line never
     # matches at all.
     r"^\s*(typedef\s+.+;"
-    r"|extern\s+[\w ]+[\w\*\[\]]+\s*(\[\s*\])?\s*;"
+    # AN `extern' DATA LINE CAN CARRY `__asm__("name")' TOO, and until
+    # 2026-11-26 this alternative could not, while the PROTOTYPE alternative
+    # below could. So `extern Unk80083160 D_80083160_s[] __asm__("D_80083160");'
+    # matched nothing and was dropped from an explicit DECLARATIONS block
+    # SILENTLY -- and func_s27_80024610's own table prices that array alias at
+    # 17 of its 44 rows, so its best figure depended on a line the splicer
+    # could not see.
+    #
+    # The inconsistency was the tell: a SCALAR alias with no `[]' accidentally
+    # matches the prototype alternative and survives, so only the array form
+    # broke. Seven other parks carry an array alias in their block and all
+    # splice today only because their units independently declare the same
+    # alias -- by the self-contained rule they are each one dngland
+    # reconciliation away from the same failure.
+    r"|extern\s+[\w ]+[\w\*\[\]]+\s*(\[\s*\])?\s*(__asm__\s*\([^)]*\))?\s*;"
     r"|\w+[\w \*]*\s+\**\w+\s*\([^;{]*\)\s*(__asm__\s*\([^)]*\))?\s*;)\s*$")
 
 
@@ -173,7 +187,22 @@ def decls_of(path):
                     out.append(block)
                 pending, depth = [], 0
             continue
-        if not DECL_LINE.match(line) or line in out:
+        if not DECL_LINE.match(line):
+            # SAY SO WHEN AN EXPLICIT BLOCK'S LINE MATCHES NOTHING. The
+            # fallback prose-harvest path warns loudly about what it skips;
+            # this path said nothing, so a declaration the park author wrote
+            # deliberately inside DECLARATIONS / END DECLARATIONS was dropped
+            # in silence. That is how func_s27_80024610 lost the array alias
+            # its own table prices at 17 of 44 rows: the splice then failed on
+            # `D_80083160_s undeclared' with no hint that a line had been
+            # discarded.
+            if explicit and line and not line.startswith(("/*", "*", "//")):
+                print("parkresidue: %s: a DECLARATIONS line matched no "
+                      "declaration form and was DROPPED -- fix the line or "
+                      "DECL_LINE:\n    %s"
+                      % (os.path.basename(path), line), file=sys.stderr)
+            continue
+        if line in out:
             continue
         if not line.startswith(("extern", "typedef")) and "(" in line:
             # A prototype is "<type> <name>(" -- two or three tokens before

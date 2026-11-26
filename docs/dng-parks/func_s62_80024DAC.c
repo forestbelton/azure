@@ -184,6 +184,24 @@
    missing +0x16 field spelled as a cast, the two `D_8000001E' symbols read as
    the sign bit, and `rand'.
 
+   REPAIR 2026-11-26, agent-h253 (DECLARATIONS ONLY -- no figure changed).
+   This park could not be spliced at all: `too many arguments to function
+   func_s62_80024938' at both call sites, because the landed definition in
+   csrc/ovl_dng_s62.c:675 is `UnkNode *func_s62_80024938(s16 x, s16 y, s16 z,
+   s16 a)' -- four parameters -- and this body passes five.  Paragraph A says
+   that prototype must be WIDENED; it must not, and nothing in csrc/ was
+   touched.  The arity is now carried by an __asm__ ALIAS in the block below,
+   `func_s62_80024938_5', and the two call sites use that name.  The symbol
+   emitted is identical (`jal func_s62_80024938'), so this is the same body.
+   ARITY AND WIDTHS, read off asm/nonmatchings/ovl_dng_s62/func_s62_80024DAC.s
+   rather than assumed: at 80025758..80025764 and 800259EC..800259F8 the four
+   register arguments are all `lh' (s16, sign-extended loads), and the fifth
+   is `ori $v0, $v0, 0x4' stored whole by `sw $v0, 0x10($sp)' in the jal's
+   delay slot at 80025770 / 80025A04 with NO sll/sra pair before it, which is
+   the 32-bit parameter and not an s16 one.  So (s16, s16, s16, s16, s32).
+   The return value is discarded at both sites, so the alias keeps the landed
+   definition's `UnkNode *' and that choice costs nothing either way.
+
 DECLARATIONS
 extern u8 D_80026BD4[];
 extern u8 D_80082E80[];
@@ -197,6 +215,7 @@ void func_s62_800262F4(u8 *s, s16 *b, s16 lo, s16 hi);
 void func_s62_800263C0(u8 *s, s16 d);
 u8 *func_s62_80026444(u8 *p);
 s32 func_s62_80026694(void *a, u8 *b, s16 c, s32 d);
+UnkNode *func_s62_80024938_5(s16, s16, s16, s16, s32) __asm__("func_s62_80024938");
 typedef struct UnkDngS62Trail
 {
     s16 h[4];
@@ -439,9 +458,9 @@ void func_s62_80024DAC(u8 *p, UnkVec *v, UnkSlot *s)
                             func_8009CE1C(c, 0xC, D_80027C96, 0xA,
                                           (s16)(*(u16 *)(p + 0x44) << 9), (u32)D_80027C98, 2);
                             m = *(UnkVec **)(c - 0x18);
-                            func_s62_80024938(*(s16 *)((u8 *)m + 0x2), *(s16 *)((u8 *)m + 0x6),
-                                              *(s16 *)((u8 *)m + 0xA), *(s16 *)(p + 0x38),
-                                              (rand() & 3) | 4);
+                            func_s62_80024938_5(*(s16 *)((u8 *)m + 0x2), *(s16 *)((u8 *)m + 0x6),
+                                                *(s16 *)((u8 *)m + 0xA), *(s16 *)(p + 0x38),
+                                                (rand() & 3) | 4);
                             *(u16 *)(q + 0x1E) |= 0x2000;
                         }
                     }
@@ -513,9 +532,9 @@ void func_s62_80024DAC(u8 *p, UnkVec *v, UnkSlot *s)
                     func_8009CE1C(*(u8 **)(p + 0x9C), 0xC, D_80027C96, 0xA,
                                   (s16)(*(u16 *)(p + 0x44) << 9), (u32)D_80027C98, 2);
                     func_800A56E0(0x300);
-                    func_s62_80024938(*(s16 *)((u8 *)m + 0x2), *(s16 *)((u8 *)m + 0x6),
-                                      *(s16 *)((u8 *)m + 0xA), *(s16 *)(p + 0x38),
-                                      (rand() & 3) | 4);
+                    func_s62_80024938_5(*(s16 *)((u8 *)m + 0x2), *(s16 *)((u8 *)m + 0x6),
+                                        *(s16 *)((u8 *)m + 0xA), *(s16 *)(p + 0x38),
+                                        (rand() & 3) | 4);
                     *(u16 *)(q + 0x1E) |= 0x2000;
                     *(u32 *)(p + 0x9C) = 0;
                     *(s16 *)(p + 0x8A) = (rand() & 0x1F) + 0x10;

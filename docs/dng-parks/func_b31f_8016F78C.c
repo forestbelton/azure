@@ -74,12 +74,35 @@
      251/106 the other way)                              |  190  |   22    |
    | one call given a fifth argument (the diagnostic)     |  191  |    3    |
 
+   REPAIR 2026-11-26, agent-h253 (DECLARATIONS ONLY -- no figure changed).
+   This park could not be spliced at all.  Its block carried
+   `extern u8 D_800814A8[];' and include/structs.h:1242 has
+   `extern u32 D_800814A8;' -- `conflicting types', and parksplice's
+   `drop_known' consults only the UNIT, which does not declare this symbol at
+   all, so no drop rule could see the clash.  DELETING the park's line is the
+   whole fix and the body then measures its recorded 190 / 22 unchanged.  The
+   unit's own five uses of this symbol (csrc/ovl_dng_b31f.c:1117, 1154, 1408,
+   1458, 1506 and 2395) all take it from structs.h as the u32 SCALAR and read
+   it as a pointer VALUE (`*(u8 **)(D_800814A8 + 0x58)' is value+0x58, not
+   address+0x58), which is what this body's one use at `func_8009A180' does
+   too, so the scalar declaration is the correct one and the park's array
+   spelling was simply stale.
+   WHY THIS LOOKED LIKE A FAULT IN TWO LANDED BODIES AND IS NOT: parksplice
+   prints only the LAST SIX non-empty lines of the compile.  The conflicting-
+   types error is the FIRST line, and ovl_dng_b31f carries twelve pre-existing
+   `RotTransPers ... incompatible pointer type' WARNINGS inside the landed
+   func_b31f_80170A54 and func_b31f_80171704, which are emitted after it.  At
+   the second declaration placement those warnings fill the whole six-line
+   tail, so the visible output names those two functions and nothing else --
+   they are warnings, they are present on a SUCCESSFUL splice too, and they
+   are not the failure.  Re-run with the full compiler output before believing
+   a park's error is in a landed body.
+
    DECLARATIONS
    extern u16 D_80083462;
    extern s16 D_80083228;
    extern u8 D_b31f_80174A2C[];
    extern u8 D_b31f_80174A64[];
-   extern u8 D_800814A8[];
    void func_80047784(u8 *, s32, s32);
    void func_800AA258(u8 *, void *, u8 *, u8 *);
    s32 func_800AA6B4(u8 *, UnkVec *, u8 *, u8 *);

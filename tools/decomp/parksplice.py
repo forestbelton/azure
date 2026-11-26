@@ -430,7 +430,27 @@ def main():
         # and the filter was why.
         raw = (r.stderr or "") + (r.stdout or "")
         tail = [l for l in raw.strip().split("\n") if l.strip()]
-        last = "\n  ".join(tail[-6:])[:900] if tail else "did not compile"
+        # KEEP THE HEAD OF THE BLOCK TOO, NOT JUST THE TAIL. cc1 emits the
+        # decisive error FIRST and then any warnings that follow it, so a unit
+        # with pre-existing warnings pushes the real diagnostic out of a
+        # tail-only window. This produced a WRONG DIAGNOSIS, not merely a
+        # vague one: on func_b31f_8016F78C the single real error is
+        # `conflicting types for D_800814A8', and the six-line tail showed
+        # only `In function func_b31f_80170A54:' and
+        # `In function func_b31f_80171704:' with their RotTransPers warnings.
+        # I read that as "two landed bodies are broken", reverted a fix that
+        # was CORRECT AND COMPLETE, and dispatched an agent to re-find it.
+        # On func_s27_80024610 the window hid the error completely -- six
+        # RotTransPers warnings and nothing else.
+        #
+        # The comment above records the previous version of this same failure,
+        # where the fix was to stop filtering for the word "error". The filter
+        # was not the remaining fault; the WINDOW was. ~290 such warnings exist
+        # tree-wide, so any unit carrying one reproduces this.
+        head = [l for l in tail[:4]]
+        rest = [l for l in tail[-6:] if l not in head]
+        last = "\n  ".join(head + (["  ..."] if rest and len(tail) > 10 else [])
+                           + rest)[:1400] if tail else "did not compile"
     print("%s: NO placement compiles. Last error:\n  %s" % (func, last))
     print("The park needs its DECLARATIONS block repaired before it can be "
           "measured; see docs/dungeon-parks/README.md.")

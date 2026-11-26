@@ -204,11 +204,29 @@
        s32 unk_F4;
        s32 unk_F8;
    } UnkDngS14LineSP;
-   extern Unk80083160 D_80083160_s[] __asm__("D_80083160");
    void func_80067F20(u32 *, s32, s32, s32, s32);
    extern u8 D_s27_8002588C[];
    END DECLARATIONS
+
+   AND THE ARRAY ALIAS IS CARRIED BELOW THE COMMENT, NOT IN THE BLOCK ABOVE.
+   REPAIR 2026-11-26, agent-h253 (DECLARATIONS ONLY -- no figure changed).
+   This park could not be spliced at all: `D_80083160_s' undeclared, which is
+   invisible unless you read past the unit's pre-existing RotTransPers pointer
+   warnings, because parksplice prints only the last six lines of the compile.
+   The cause is in the TOOL, not in the park's content: parkresidue.DECL_LINE
+   accepts an `__asm__' rename on its PROTOTYPE alternative but not on its
+   `extern' DATA alternative, whose character class
+   (`extern\s+[\w ]+[\w\*\[\]]+\s*(\[\s*\])?\s*;') cannot carry the `("...")'.
+   So `extern Unk80083160 D_80083160_s[] __asm__("D_80083160");' matched no
+   alternative and was dropped from the block SILENTLY -- and the alias is
+   worth 17 of this park's rows (see the table above), so the park's own best
+   figure depended on a line the splicer could not see.
+   `preamble_of' takes any top-level text between this comment and the body,
+   so the line lives there instead and the block above says so.  The park's
+   DECLARATIONS are still self-contained within this file.
 */
+extern Unk80083160 D_80083160_s[] __asm__("D_80083160");
+
 s32 func_s27_80024610(u8 *p, UnkVec *b, u8 *c, s16 w, s32 e, s32 *t, u8 g, s16 h)
 {
     UnkDngS14LineSP *sp = (UnkDngS14LineSP *)0x1F800000;
