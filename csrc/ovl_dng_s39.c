@@ -139,7 +139,369 @@ extern UnkDngS39Blk8 D_s39_80024004;
 extern UnkDngS39Blk8 D_s39_8002400C;
 void func_s39_8002405C(u8 *a, u8 *pp, u8 *pp2, u8 *ot, s16 d);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s39", func_s39_8002405C);
+extern Unk6CD30 D_8006CD10;
+s32 func_800644B8(s32);
+void func_80067EF4(void *, s32, s32);
+
+/* This bank's room renderer: the same POLY_FT4-per-cell projection as
+   csrc/ovl_dng_s37.c's func_s37_80024094, through the 0x1F800000
+   scratchpad with RotTransPers4 and the view's +0xB8/+0xBA screen bias,
+   but re-emitted with a RIPPLE THAT RUNS EITHER WAY. 798 words, 0
+   differing, 0 aligned differences.
+
+   TWO DELTAS AGAINST THE s37 TWIN, and they are the whole of the +172
+   words. First, this bank's renderer takes FIVE arguments, not four: the
+   slot and the UnkVec come off `pp2' (arg 3, which is the twin's `pp') and
+   the new `pp' (arg 2) is a second payload that carries only the ripple --
+   the amplitude table at +0x38, the start angle at +0x98, the step at
+   +0x9A and the direction flag at +0x9C. The landed caller
+   func_s39_80024CD4 passes them in that order. Second, the per-row loop
+   exists TWICE under a gate on that flag: the fall-through arm jitters the
+   four X corners and walks `row.y0'/`row.v0' down to `base.y2' (the twin's
+   loop), and the taken arm jitters the four Y corners -- y0 and y2 on one
+   angle, y1 and y3 on the next -- and walks `row.x0'/`row.u0' across to
+   `base.x1'. The `i' amplitude cursor wraps at 0x60 and is shared by both.
+
+   THE ARM ORDER WAS THE ENTIRE RESIDUE AND IT IS ONE CHARACTER. Written
+   `if (*(s16 *)(pp + 0x9C) != 0) { Y arm } else { X arm }' this body is
+   798 words and 321 ALIGNED DIFFERENCES: words 1..413 are already
+   byte-identical, and every one of the 321 rows is the 160-word Y loop
+   emitted where the X loop belongs plus the gate's `beqz' for the target's
+   `bnez'. Spelled `== 0' with the X arm as the `then' it is 0. The
+   discriminator is free to read off the listing: the gate's branch goes to
+   the SECOND block in address order, so the `then' arm is the FIRST one.
+
+   THREE SPELLINGS MEASURED HERE, each a single ablation off the landed
+   body -- not inherited from the twin's comment.
+
+   * `i++; if (i >= 0x60) { i = 0; }' MUST SIT BEFORE THE ROW STORES, not
+     after them. Moved below the `row.v0' bytes it is 800 WORDS and 18
+     aligned differences. The twin has a bare `i++' that the scheduler
+     floats wherever it likes; the wrap test is a branch, so it is a
+     basic-block boundary that nothing can move, and the target's merge
+     label sits immediately above the first `row.y0' store.
+
+   * THE `sp->unk_102' SUM IS TWO NAMED LOCALS, re-measured and the twin's
+     fact HOLDS: as one expression it is 799 words and 6 aligned
+     differences here (the twin prices its own at 20), because fold's
+     associate step moves the -0x100 off the parameter and onto the masked
+     sum.
+
+   * THE AMPLITUDE INDEX IS `*(u8 *)(pp + i + 0x38)', NOT `pp[0x38 + i]'.
+     The subscript form is 2 aligned differences, one per loop -- fold
+     associates the constant next to the pointer and the `addu' operands
+     come out reversed. The twin prices the same sentence at 1 for its
+     single loop.
+
+   Everything else is func_s37_80024094's body with `pp' -> `pp2' and the
+   two offsets moved, and it landed on the first compile once the arms were
+   the right way round, so the REST OF THE SPELLINGS IN HERE ARE UNMEASURED
+   IN THIS BODY: the twin's `q += 0x28' before the second `ang' wrap, its
+   `t20'/`t22' single reads of s->unk_20/0x22, its plain (non-volatile)
+   `u8 *e' and its POLY_FT4 `base'/`row' locals are all carried over on the
+   twin's own figures, not re-priced here.
+
+   NO AGGREGATE INITIALISER and no jump table: `base' and `row' are plain
+   POLY_FT4 locals assigned by statement, so gcc emits no `$LC' pool and
+   this body contributes nothing to .rodata. Its only data relocations are
+   8 on D_80083160 (one direct `%lo' load in the head plus three
+   `lui'/`addiu' pairs) and 2 on D_8006CD10; every other address in it --
+   the 0x1F8000xx scratchpad slots -- is a plain constant built with
+   `lui' + a bare displacement, so no bank-local symbol is named here and
+   there is no relinked-table identity to get wrong. */
+void func_s39_8002405C(u8 *a, u8 *pp, u8 *pp2, u8 *ot, s16 d)
+{
+    Unk80083160 *g = &D_80083160;
+    UnkDng24094SP *sp = (UnkDng24094SP *)0x1F800000;
+    UnkSlot *s;
+    UnkVec *v;
+    u8 *e;
+    u8 *q;
+    POLY_FT4 base;
+    POLY_FT4 row;
+    s32 i;
+    s32 ang;
+    s32 t;
+    s32 t2;
+    s32 u1;
+    s32 u2;
+    s32 c;
+    s32 t20;
+    s32 t22;
+    s32 x18;
+    s32 x38;
+    u8 *(*h)(u8 *, UnkVec *, UnkSlot *, u8 *, u8 *);
+    s16 a1;
+    s16 a2;
+    s16 b1;
+    s16 b2;
+
+    s = (UnkSlot *)*(u32 *)(pp2 - 0x14);
+    v = *(UnkVec **)(pp2 - 0x18);
+    e = (u8 *)*(u32 *)((u8 *)s + 0x8);
+    sp->unk_EC = 0;
+    sp->unk_8C = 0;
+    sp->unk_84 = 0;
+    sp->unk_7C = 0;
+    sp->unk_74 = 0;
+    q = *(u8 **)(D_80083160.unk_00 + 0x8D0);
+    sp->unk_20 = ot;
+    sp->unk_C0 = 0;
+    sp->unk_B8 = *(u16 *)a - 0xA0;
+    sp->unk_BA = *(u16 *)(a + 0x2) - 0x78;
+    if (d != 0)
+    {
+        func_80067EF4(q, 0, 0);
+        addPrim(sp->unk_20, q);
+        q += 0xC;
+    }
+    D_8006CD10.unk_1C = *(s32 *)((u8 *)g + 0xA0);
+    PushMatrix();
+    sp->unk_30.w = g->unk_C4;
+    sp->unk_34.w = g->unk_C6;
+    sp->unk_38.w = g->unk_C8;
+    sp->unk_100 = s->unk_16;
+    x38 = (sp->unk_38.h + 0x100) & 0x1FF;
+    sp->unk_104 = s->unk_1A - sp->unk_34.h;
+    x18 = s->unk_18 - 0x100;
+    sp->unk_102 = x38 + x18;
+    t20 = s->unk_20;
+    sp->unk_E4 = t20;
+    sp->unk_108 = t20;
+    t22 = s->unk_22;
+    sp->unk_E8 = t22;
+    sp->unk_10A = t22;
+    RotMatrix((SVECTOR *)0x1F800100, (MATRIX *)0x1F8000D0);
+    sp->unk_30.w = s->unk_1C;
+    sp->unk_34.w = s->unk_1E;
+    sp->unk_38.w = 0x1000;
+    ScaleMatrix((MATRIX *)0x1F8000D0, (VECTOR *)0x1F800030);
+    CompMatrix((MATRIX *)&D_8006CD10, (MATRIX *)0x1F8000D0, (MATRIX *)0x1F800050);
+    SetTransMatrix((MATRIX *)0x1F800050);
+    SetRotMatrix((MATRIX *)0x1F800050);
+    sp->unk_24 = s->unk_14;
+    do
+    {
+        if ((e[0x0] & 0x20) == 0)
+        {
+            sp->unk_08.w = *(u8 *)(e + 0x8);
+            sp->unk_0C.w = *(u8 *)(e + 0x9);
+            sp->unk_10.w = *(u8 *)(e + 0xA);
+            sp->unk_14.w = *(u8 *)(e + 0xB);
+            if ((e[0x0] ^ sp->unk_24) & 1)
+            {
+                a1 = -(s8)e[0x2] - sp->unk_108;
+                sp->unk_80 = a1;
+                sp->unk_70 = a1;
+                a1 = a1 - sp->unk_10.h;
+                sp->unk_88 = a1;
+                sp->unk_78 = a1;
+            }
+            else
+            {
+                a2 = (s8)e[0x2] - sp->unk_108;
+                sp->unk_80 = a2;
+                sp->unk_70 = a2;
+                a2 = a2 + sp->unk_10.h;
+                sp->unk_88 = a2;
+                sp->unk_78 = a2;
+            }
+            if ((e[0x0] ^ sp->unk_24) & 2)
+            {
+                b1 = -(s8)e[0x3] - sp->unk_10A;
+                sp->unk_7A = b1;
+                sp->unk_72 = b1;
+                b1 = b1 - sp->unk_14.h;
+                sp->unk_8A = b1;
+                sp->unk_82 = b1;
+            }
+            else
+            {
+                b2 = (s8)e[0x3] - sp->unk_10A;
+                sp->unk_7A = b2;
+                sp->unk_72 = b2;
+                b2 = b2 + sp->unk_14.h;
+                sp->unk_8A = b2;
+                sp->unk_82 = b2;
+            }
+            RotTransPers4((SVECTOR *)&sp->unk_70, (SVECTOR *)&sp->unk_78, (SVECTOR *)&sp->unk_80,
+                          (SVECTOR *)&sp->unk_88, (s32 *)&sp->unk_F0, (s32 *)&sp->unk_F4,
+                          (s32 *)&sp->unk_F8, (s32 *)&sp->unk_FC, &sp->unk_90, &sp->unk_94);
+            *(s16 *)(q + 0x8) = sp->unk_F0 + sp->unk_B8;
+            *(s16 *)(q + 0xA) = sp->unk_F2 + sp->unk_BA;
+            *(s16 *)(q + 0x10) = sp->unk_F4 + sp->unk_B8;
+            *(s16 *)(q + 0x12) = sp->unk_F6 + sp->unk_BA;
+            *(s16 *)(q + 0x18) = sp->unk_F8 + sp->unk_B8;
+            *(s16 *)(q + 0x1A) = sp->unk_FA + sp->unk_BA;
+            *(s16 *)(q + 0x20) = sp->unk_FC + sp->unk_B8;
+            *(s16 *)(q + 0x22) = sp->unk_FE + sp->unk_BA;
+            q[0x3] = 9;
+            u1 = sp->unk_10.w - 1;
+            t = u1 + sp->unk_08.w;
+            sp->unk_10.w = t;
+            if ((t & 0x100) != 0)
+            {
+                sp->unk_10.w = t - 1;
+            }
+            u2 = sp->unk_14.w - 1;
+            t2 = u2 + sp->unk_0C.w;
+            sp->unk_14.w = t2;
+            if ((t2 & 0x100) != 0)
+            {
+                sp->unk_14.w = t2 - 1;
+            }
+            sp->unk_14.w = sp->unk_14.w << 8;
+            sp->unk_0C.w = sp->unk_0C.w << 8;
+            if (s->unk_12 != 0)
+            {
+                if ((sp->unk_24 & 0x100) != 0)
+                {
+                    *(s16 *)(q + 0xE) = s->unk_12;
+                }
+                else
+                {
+                    *(s16 *)(q + 0xE) = s->unk_12 + *(u16 *)(e + 0x6);
+                }
+            }
+            else
+            {
+                *(s16 *)(q + 0xE) = *(u16 *)(e + 0x6);
+            }
+            *(s16 *)(q + 0xC) = sp->unk_0C.h + sp->unk_08.h;
+            *(s16 *)(q + 0x14) = sp->unk_0C.h + sp->unk_10.h;
+            if (s->unk_10 != 0)
+            {
+                *(s16 *)(q + 0x16) = s->unk_10 + (*(u16 *)(e + 0x4) & 0xFF9F);
+            }
+            else
+            {
+                *(s16 *)(q + 0x16) = *(u16 *)(e + 0x4);
+            }
+            *(s16 *)(q + 0x1C) = sp->unk_14.h | sp->unk_08.h;
+            *(s16 *)(q + 0x24) = sp->unk_14.h | sp->unk_10.h;
+            if (*(s16 *)(q + 0x8) > *(s16 *)(q + 0x20))
+            {
+                q[0x14] = q[0x24]--;
+            }
+            if (*(s16 *)(q + 0xA) > *(s16 *)(q + 0x22))
+            {
+                q[0x1D] = q[0x25]--;
+            }
+            c = *(u8 *)(e + 0x1);
+            *((u8 *)s + 0xF) = c;
+            if ((sp->unk_24 & 8) != 0)
+            {
+                *((u8 *)s + 0xF) = (sp->unk_24 & 4) ? (c | 2) : (c & 0xFD);
+            }
+            *(u32 *)(q + 0x4) = *(u32 *)((u8 *)s + 0xC);
+            base = *(POLY_FT4 *)q;
+            row = base;
+            i = 0;
+            ang = *(s16 *)(pp + 0x98);
+            if (*(s16 *)(pp + 0x9C) == 0)
+            {
+                do
+                {
+                    q[0x3] = 9;
+                    *(POLY_FT4 *)q = base;
+                    *(s16 *)(q + 0x8) = *(u16 *)(q + 0x8) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    *(s16 *)(q + 0x10) = *(u16 *)(q + 0x10) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    ang += *(s16 *)(pp + 0x9A);
+                    if (ang > 0x1000)
+                    {
+                        ang -= 0x1000;
+                    }
+                    *(s16 *)(q + 0x18) = *(u16 *)(q + 0x18) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    *(s16 *)(q + 0x20) = *(u16 *)(q + 0x20) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    i++;
+                    if (i >= 0x60)
+                    {
+                        i = 0;
+                    }
+                    *(s16 *)(q + 0xA) = row.y0;
+                    *(s16 *)(q + 0x12) = row.y0;
+                    *(s16 *)(q + 0x1A) = row.y0 + 1;
+                    *(s16 *)(q + 0x22) = row.y0 + 1;
+                    q[0xD] = row.v0;
+                    q[0x15] = row.v0;
+                    q[0x1D] = row.v0 + 1;
+                    q[0x25] = row.v0 + 1;
+                    addPrim(sp->unk_20, q);
+                    row = *(POLY_FT4 *)q;
+                    row.y0++;
+                    row.v0++;
+                    q += 0x28;
+                    ang += *(s16 *)(pp + 0x9A);
+                    if (ang > 0x1000)
+                    {
+                        ang -= 0x1000;
+                    }
+                } while (row.y0 < base.y2);
+            }
+            else
+            {
+                do
+                {
+                    q[0x3] = 9;
+                    *(POLY_FT4 *)q = base;
+                    *(s16 *)(q + 0xA) = *(u16 *)(q + 0xA) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    *(s16 *)(q + 0x1A) = *(u16 *)(q + 0x1A) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    ang += *(s16 *)(pp + 0x9A);
+                    if (ang > 0x1000)
+                    {
+                        ang -= 0x1000;
+                    }
+                    *(s16 *)(q + 0x12) = *(u16 *)(q + 0x12) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    *(s16 *)(q + 0x22) = *(u16 *)(q + 0x22) + (func_800644B8(ang) * *(u8 *)(pp + i + 0x38) >> 16);
+                    i++;
+                    if (i >= 0x60)
+                    {
+                        i = 0;
+                    }
+                    *(s16 *)(q + 0x8) = row.x0;
+                    *(s16 *)(q + 0x18) = row.x0;
+                    *(s16 *)(q + 0x10) = row.x0 + 1;
+                    *(s16 *)(q + 0x20) = row.x0 + 1;
+                    q[0xC] = row.u0;
+                    q[0x1C] = row.u0;
+                    q[0x14] = row.u0 + 1;
+                    q[0x24] = row.u0 + 1;
+                    addPrim(sp->unk_20, q);
+                    row = *(POLY_FT4 *)q;
+                    row.x0++;
+                    row.u0++;
+                    q += 0x28;
+                    ang += *(s16 *)(pp + 0x9A);
+                    if (ang > 0x1000)
+                    {
+                        ang -= 0x1000;
+                    }
+                } while (row.x0 < base.x1);
+            }
+        }
+        else
+        {
+            h = *(u8 * (**)(u8 *, UnkVec *, UnkSlot *, u8 *, u8 *))(e + 0x8);
+            if (h != NULL)
+            {
+                q = h(pp2, v, s, e, q);
+            }
+        }
+        if (*(s8 *)e < 0)
+        {
+            break;
+        }
+        e += 0xC;
+    } while (1);
+    if (d != 0)
+    {
+        func_80067EF4(q, 0, 1);
+        addPrim(sp->unk_20, q);
+        q += 0xC;
+    }
+    PopMatrix();
+    *(u32 *)(g->unk_00 + 0x8D0) = (u32)q;
+}
 
 /* The bank's draw bracket for this object, called by func_s39_80025398 and
    func_s39_80025648: SetDrawArea to the caller's RECT, one call of this
