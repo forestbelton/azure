@@ -225,6 +225,18 @@ void func_800478B8(u8 *);
    func_s25_80024028.
 
    438 words, 0 differing; relcand ok (9 data symbols, 10 calls). */
+extern u8 D_80025854[];
+s32 func_8004491C(UnkNode *, u32);
+void func_8003DB94(void *, void *, s32);
+s32 func_80045C34(u8 *, UnkVec *, UnkSlot *);
+s32 func_80064584(s32);
+s32 func_800644B8(s32);
+s32 func_800BCB04(s32, s32, s16);
+UnkNode *func_s19_80024FD8(UnkVec *v, s16 a, s16 i);
+void func_s19_80024EE0(u8 *p, UnkVec *v, u8 *c);
+void func_s19_800250E8(u8 *p, UnkVec *v, u8 *c);
+void func_s19_800254C4(UnkVec *v, s16 a, s16 b, s16 d);
+
 void func_s19_80024050(u8 *p, UnkVec *b, u8 *c)
 {
     u8 *s;
@@ -589,11 +601,245 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024B98);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024D90);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024EE0);
+/* The per-frame step for the single spoke func_s19_80024FD8 above spawns:
+   bump D_s19_800257CE, drive the mover's x/y by rsin/rcos of the payload's
+   own +0x24 angle, fade the renderable's RGB triple to ONE value computed
+   off the green channel, shrink +0x1E by a 128th and grow +0x1C by 8, and
+   when the faded byte drops below 0x20 drop this unit's D_s19_800257CC and
+   raise the kill bit at -0x2 and in D_800814A0.
+   DONOR: func_s19_80024FD8 immediately above -- it writes the +0x24 angle
+   this body reads, so no offset was guessed. No dngtwin or xsibs lead.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_80024FD8);
+   THE ONE FACT IS THE SAME MEM_IN_STRUCT_P DEPENDENCE func_s19_80024FD8
+   needed, and here it runs the other way: the +0x24 ANGLE LOAD has to hoist
+   ABOVE the `sh %lo(D_s19_800257CE)' counter store, which ends up in the
+   first call's delay slot. As a plain cast `true_dependence' keeps the load
+   below the fixed-address store, the whole counter chain is scheduled before
+   the prologue instead of interleaved with it, and all 13 rows are words
+   0..14.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_800250E8);
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | the FIRST `((s16 *)p)[0x12]' as an array ref    KEPT  |   62  |   0  |
+   |   ... `*(s16 *)(p + 0x24)'                            |   62  |  13  |
+   | the SECOND site as an array ref too             KEPT  |   62  |   0  |
+   |   ... the second site plain, the first an array ref   |   62  |   0  |
+
+   The second row is the control: that load is already below the counter
+   store, so its spelling is FREE and the dependence is the whole fact.
+
+   `u8 t' is the fade: the target computes `c[0xE] - 2' ONCE and stores it to
+   all three bytes, then masks with `andi 0xFF' for the `< 0x20' test, which
+   is what a `u8' local gives -- the `sb's need no mask and the comparison
+   does.
+
+   62 words, 0 differing; relcand ok. */
+void func_s19_80024EE0(u8 *p, UnkVec *v, u8 *c)
+{
+    u8 t;
+
+    D_s19_800257CE++;
+    v->unk_00 = v->unk_00 + func_80064584(((s16 *)p)[0x12] << 8) * 8;
+    v->unk_04 = v->unk_04 + func_800644B8(((s16 *)p)[0x12] << 8) * 8;
+    t = c[0xE] - 2;
+    c[0xE] = t;
+    c[0xD] = t;
+    c[0xC] = t;
+    if (t < 0x20)
+    {
+        D_s19_800257CC--;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+    *(s16 *)(c + 0x1E) = *(u16 *)(c + 0x1E) - (*(u16 *)(c + 0x1E) >> 7);
+    *(s16 *)(c + 0x1C) = *(u16 *)(c + 0x1C) + 8;
+}
+
+/* The SINGLE-spoke spawner: one 0x202 node, driven by func_s19_80024EE0
+   through func_80045C34, dressed from D_80025854, seeded at the caller's
+   mover position with a 0x60 at +0x10, 0x400 at +0x16/+0x1C, 0x1CCC at +0x1E
+   and a per-spoke `(i << 8) - 0x400' at +0x18; the payload gets the spoke
+   index at +0x24, the caller's s16 at +0x14 and `i * 2' at +0x1E, and this
+   unit's own D_s19_800257CC is bumped. Returns the node.
+
+   DONOR: docs/dng-parks/func_s19_80024D90.c, the SIXTEEN-spoke spawner of
+   the same effect -- the same allocate/install/dress/payload skeleton with
+   a `for (i = 0; i < 0x10; i++)' round it and func_s19_80024B98 as the step.
+   Its +0x18 giv `i * 0x100 - 0x400' is this body's `(j << 8) - 0x400'. No
+   dngtwin or xsibs lead was needed.
+
+   THE WHOLE FIGHT WAS ONE DEPENDENCE, AND IT IS MEM_IN_STRUCT_P. The
+   D_s19_800257CC load has to hoist ABOVE the +0x16 renderable store and the
+   +0x24/+0x14 payload stores. Through PLAIN CASTS `true_dependence' refuses
+   to excuse a fixed-address scalar against a varying plain-cast MEM, the
+   `lhu' cannot move, and local-alloc then hands the payload pointer $v0
+   (which the 0x60 constant still holds at the point the target computes it)
+   so the pointer and the counter come out in each other's registers. Written
+   as ARRAY REFS the MEMs are `in_struct', the load hoists, and both the
+   schedule and all three registers fall out. Same mechanism as
+   func_s19_80024A00 above, opposite direction: there a store had to SINK.
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | all four stores as array refs                  KEPT   |   68  |   0  |
+   |   ... `*(s16 *)(q + 0x14)' plain                      |   68  |   8  |
+   |   ... `*(s16 *)(q + 0x24)' plain                      |   68  |   4  |
+   |   ... `*(s16 *)(r + 0x16)' plain                      |   68  |   2  |
+   |   ... `*(s16 *)(q + 0x1E)' plain                      |   68  |   0  |
+   |   ... all four plain (the park's idiom)               |   69  |  15  |
+   | `s32 j = i' used by BOTH `j << 8' and `j * 2'  KEPT   |   68  |   0  |
+   |   ... `i << 8' and `i * 2' inline                     |   67  |  13  |
+   | `D_s19_800257CC++' as the last statement       KEPT   |   68  |   0  |
+   |   ... the park's split `cc = D; ...; D = cc + 1'      |   68  |   0  |
+
+   THE THREE ARRAY-REF ROWS ARE ONE FACT AND A CONJUNCTION, not three: with
+   only the two the load must cross (+0x16 and +0x24) converted the residue
+   is 8, and the +0x14 store is the third MEM the `lhu' has to pass. The
+   +0x1E row is the control -- that store is already BELOW the load, so its
+   spelling is free, which is what shows the mechanism is the dependence and
+   not a house style.
+
+   `j' is load-bearing for a reason the listing states: the target
+   sign-extends the s16 index ONCE (`sll 16'/`sra 16') and uses the result
+   for both `<< 8' and `* 2'. Written inline each narrowing store drops its
+   own extension, so the body is a word SHORT. `j * 2' and `j << 1' are the
+   same tree, measured 0 either way.
+
+   FOR THE PARK NEXT DOOR: its 7-row residue is the SAME register pair in
+   the same two roles (payload pointer against counter), and this body says
+   the cause is reachable from the source -- try its payload stores as array
+   refs before spending anything else on local-alloc priority.
+
+   68 words, 0 differing; relcand ok (2 data symbols, 3 calls). */
+UnkNode *func_s19_80024FD8(UnkVec *v, s16 a, s16 i)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+    s32 j;
+
+    n = func_8003FC64(0x202);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s19_80024EE0;
+        func_8004491C(n, (u32)func_80045C34);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)v + 0x2);
+        *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)v + 0x6);
+        *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)v + 0xA);
+        r = (u8 *)n->unk_0C;
+        *(s16 *)(r + 0x1C) = 0x400;
+        *(s16 *)(r + 0x1E) = 0x1CCC;
+        *(u32 *)(r + 0xC) = 0x808080;
+        func_8003DB94(r, D_80025854, 0);
+        j = i;
+        *(s16 *)(r + 0x18) = (j << 8) - 0x400;
+        *(s16 *)(r + 0x10) = 0x60;
+        q = (u8 *)n + 0x20;
+        ((s16 *)r)[0xB] = 0x400;
+        ((s16 *)q)[0x12] = i;
+        ((s16 *)q)[0xA] = a;
+        ((s16 *)q)[0xF] = j * 2;
+        D_s19_800257CC++;
+    }
+    return n;
+}
+
+/* The per-frame step for the scatter node func_s19_800254C4 above spawns:
+   bump D_s19_800257CE, and while the mover is still ABOVE the ground height
+   func_800BCB04 reports for its own x/y, drive it outward along the payload's
+   +0x1A angle at the payload's +0x1C speed -- jittered and falling when the
+   +0x26 flag is clear, and on a smooth 0x6000-per-frame rise when it is set.
+   The +0x1C speed is also the life counter: it is decremented every frame and
+   the node is killed when it runs out or when the renderable's +0x14 comes
+   back with 0x8000 set.
+   DONOR: func_s19_800254C4 immediately above, which writes +0x1A, +0x1C and
+   +0x26; and csrc/ovl_dng_b05.c for the func_800BCB04 signature and call
+   shape (`s32 func_800BCB04(s32, s32, s16)' with the third argument the
+   mover's own height minus a constant). No dngtwin or xsibs lead.
+
+   THREE FAULTS, THREE DIFFERENT MECHANISMS:
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | the three `v' halfword loads as ARRAY REFS     KEPT   |  126  |   0  |
+   |   ... all three as plain casts                        |  126  |  13  |
+   |   ... only the +0x2 load plain                        |  126  |  10  |
+   |   ... only the +0xA load plain                        |  126  |   8  |
+   | each velocity sum GROUPED, `A + (shift + rand)' KEPT  |  126  |   0  |
+   |   ... flat, `A + shift + rand'                        |  126  |   4  |
+   | `v->unk_08 - (0x20000 + (rand() & 0xFFF))'     KEPT   |  126  |   0  |
+   |   ... `- 0x20000 - (rand() & 0xFFF)'                  |  126  |   5  |
+   |   ... `- (rand() & 0xFFF) - 0x20000'                  |  126  |   4  |
+   |   ... `+ -0x20000 -', `+ 0xFFFE0000 -', parenthesised |  126  |   5  |
+   |   ... two statements                                  |  128  |   8  |
+   | `(s16)' on func_800BCB04's s32 result          KEPT   |  126  |   0  |
+   |   ... no cast                                         |  124  |  15  |
+   | MEASURED AND FREE: a redundant `(s16)' round the      |       |      |
+   |   third argument, which the s16 prototype already does |  126  |   0  |
+
+   1. THE ARRAY REFS ARE THE SAME MEM_IN_STRUCT_P DEPENDENCE as the two
+      bodies above, in the func_s19_80024EE0 direction: the three argument
+      loads must hoist ABOVE the `sh %lo(D_s19_800257CE)' that ends up in the
+      first call's delay slot, and a plain-cast MEM cannot pass a
+      fixed-address scalar store. Through plain casts the whole counter chain
+      is scheduled before the prologue instead of interleaved with it.
+
+   2. THE GROUPING IS NOT COSMETIC. `A + B + C' is `(A + B) + C' and emits
+      `addu v1,v1,shift' then `addu v1,v1,rand'; the target emits
+      `addu a0,shift,rand' then `addu v1,v1,a0', which is `A + (B + C)'. fold
+      does not reassociate three variable addends, so the parentheses are the
+      only thing that says which tree. 4 rows, two sites.
+
+   3. `X - (C + K)' IS THE SPELLING THAT GIVES `(X - K) - C'. fold-const.c
+      splits ARG1 as well as ARG0, so the grouped subtraction comes out as
+      `addu' of the NEGATED constant followed by `subu' of the variable --
+      which is the target. Every flat spelling (and the two positive-constant
+      ones) materialises +0x20000 and subtracts it instead, because the
+      variable subtrahend is then the inner operation. This is the
+      `A - B - K - C' lever read backwards and it is the first measured case
+      of the grouped form being the one that LANDS.
+
+   The `(s16)' cast on func_800BCB04 is TWO WORDS -- the `sll 16'/`sra 16'
+   the comparison needs. csrc/ovl_dng_b05.c reaches the same thing through an
+   `s16'-returning `__asm__' alias; the cast on the landed `s32' declaration
+   measures the same and adds no declaration.
+
+   126 words, 0 differing; relcand ok (2 data symbols, 8 calls). */
+void func_s19_800250E8(u8 *p, UnkVec *v, u8 *c)
+{
+    D_s19_800257CE++;
+    if (*(s16 *)((u8 *)v + 0xA) < (s16)func_800BCB04(((u16 *)v)[0x1], ((u16 *)v)[0x3],
+                                                     ((u16 *)v)[0x5] - 0x2))
+    {
+        if (*(s16 *)(p + 0x26) == 0)
+        {
+            v->unk_00 = v->unk_00 +
+                        (((func_80064584(*(s16 *)(p + 0x1A)) * *(s16 *)(p + 0x1C)) >> 4) +
+                         (rand() & 0xFFFF));
+            v->unk_04 = v->unk_04 +
+                        (((func_800644B8(*(s16 *)(p + 0x1A)) * *(s16 *)(p + 0x1C)) >> 4) +
+                         (rand() & 0xFFFF));
+            v->unk_08 = v->unk_08 - (0x20000 + (rand() & 0xFFF));
+        }
+        else
+        {
+            v->unk_00 =
+                v->unk_00 + (func_80064584(*(s16 *)(p + 0x1A)) * *(s16 *)(p + 0x1C)) * 8;
+            v->unk_04 =
+                v->unk_04 + (func_800644B8(*(s16 *)(p + 0x1A)) * *(s16 *)(p + 0x1C)) * 8;
+            v->unk_08 = v->unk_08 + v->unk_14;
+            v->unk_14 = v->unk_14 + 0x6000;
+        }
+    }
+    *(s16 *)(p + 0x1C) = *(u16 *)(p + 0x1C) - 1;
+    if (*(s16 *)(p + 0x1C) <= 0 || (*(u16 *)(c + 0x14) & 0x8000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* The THREE-PARAMETER member of func_800D5AC0's family (csrc/ovl_dungeon_
    800D50FC.c, which carries the long note): one semi-transparent 1x1 TILE_1
@@ -676,7 +922,82 @@ s32 func_s19_800252E0(u8 *p, UnkVec *v, u8 *c)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s19", func_s19_800254C4);
+/* The 0x202 spawner for the scatter effect: one node driven by
+   func_s19_800250E8 and rendered by this unit's landed func_s19_800252E0,
+   seeded at the caller's mover -- EXACTLY there when the fourth argument is
+   nonzero, and jittered by `(rand() & 0x1F) - 0x10' in x and y and lifted
+   0x50 in z when it is zero. The renderable's red byte is forced to 0xF0 and
+   the payload keeps the first two arguments at +0x1A/+0x1C and the fourth at
+   +0x26. Returns nothing -- the exit block has no `addu $v0', which is how
+   this one differs from the unit's other three spawners.
+
+   No donor was needed: csrc/ovl_dng_s19.c's own landed func_s19_80025654
+   (the 0x202 spawner 40 lines below) is the allocate/install/seed skeleton,
+   and func_s19_80024A98 below calls this one sixteen times, which is where
+   the s16 argument widths come from. Landed on the FIRST COMPILE, so the
+   four rows below were priced afterwards by flipping them.
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | `if (d == 0)' with the JITTERED arm first      KEPT   |   70  |   0  |
+   |   ... `if (d != 0)' with the arms swapped             |   71  |  20  |
+   | `+ (rand() & 0x1F) - 0x10'                     KEPT   |   70  |   0  |
+   |   ... `- 0x10 + (rand() & 0x1F)'                      |   72  |  39  |
+   | a `q' local for the payload base               KEPT   |   70  |   0  |
+   |   ... three `(u8 *)n + 0x3A/0x3C/0x46' sites          |   71  |   9  |
+   | MEASURED AND FREE: no `r' local, the store written    |       |      |
+   |   `((u8 *)n->unk_0C)[0xC] = 0xF0' at its one site     |   70  |   0  |
+   | MEASURED AND FREE: the three payload stores as        |       |      |
+   |   array refs rather than plain casts                  |   70  |   0  |
+
+   The 39-row row is the convert.c narrowing trap, and it is worth saying
+   which way round it goes here: the destination is `s16', the first operand
+   is a `u16' load and there are three operands, so putting `- 0x10' NEXT TO
+   the load sends `MINUS(half, 16)' through `trunc1' in unsigned short, 65520
+   is no `addiu' immediate and cc1psx materialises it with an `ori'. With the
+   constant on the far side the subtraction stays SImode and comes out as the
+   `addiu $v1, $v1, -0x10' the target has. TWO words, both sites.
+
+   The array-ref row is the control for the two bodies above: this body has
+   no fixed-address scalar anywhere near the payload stores, so there is no
+   dependence for MEM_IN_STRUCT_P to decide and the spelling is free. That is
+   the precondition the other two facts need, stated from the one body in the
+   unit that lacks it.
+
+   70 words, 0 differing; relcand ok (0 data symbols, 4 calls). */
+void func_s19_800254C4(UnkVec *v, s16 a, s16 b, s16 d)
+{
+    UnkNode *n;
+    UnkVec *m;
+    u8 *r;
+    u8 *q;
+
+    n = func_8003FC64(0x202);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s19_800250E8;
+        func_8004491C(n, (u32)func_s19_800252E0);
+        m = n->unk_08;
+        if (d == 0)
+        {
+            *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)v + 0x2) + (rand() & 0x1F) - 0x10;
+            *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)v + 0x6) + (rand() & 0x1F) - 0x10;
+            *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)v + 0xA) - 0x50;
+        }
+        else
+        {
+            *(s16 *)((u8 *)m + 0x2) = *(u16 *)((u8 *)v + 0x2);
+            *(s16 *)((u8 *)m + 0x6) = *(u16 *)((u8 *)v + 0x6);
+            *(s16 *)((u8 *)m + 0xA) = *(u16 *)((u8 *)v + 0xA);
+        }
+        r = (u8 *)n->unk_0C;
+        r[0xC] = 0xF0;
+        q = (u8 *)n + 0x20;
+        *(s16 *)(q + 0x1A) = a;
+        *(s16 *)(q + 0x1C) = b;
+        *(s16 *)(q + 0x26) = d;
+    }
+}
 
 /* The +0x10 step of the 0x202 node func_s21_8002495C below spawns: bump the
    object's own u16 counter, fade the renderable's RGB triple at +0xC..+0xE by

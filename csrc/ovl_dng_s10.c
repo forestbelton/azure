@@ -36,20 +36,50 @@ void func_800478B8(u8 *);
 void func_8003DB94(void *, void *, s32);
 UnkNode *func_8003FC64(s32);
 s32 func_8004491C(UnkNode *, u32);
-void func_s10_80024048(u8 *, UnkVec *, u8 *, u8 *);
+void func_s10_80024048(u8 *p, UnkVec *b, u8 *c, u8 *d);
 void func_s10_80024224(u8 *p, UnkVec *b, u8 *c, u8 *d);
-void func_s10_80024CFC(u8 *, UnkVec *, u8 *);
-void func_s10_80024E44(u8 *, UnkVec *, u8 *);
-void func_s10_80024EF8(u8 *, UnkVec *, u8 *);
+s32 func_s10_80024CFC(u8 *p, UnkVec *b, u8 *c);
+s32 func_s10_80024E44(u8 *p, UnkVec *b, u8 *c);
+s32 func_s10_80024EF8(u8 *p, UnkVec *b, u8 *c);
 s32 func_800644B8(s32);
 s32 func_80064584(s32);
-void func_s10_800246AC(u8 *, UnkVec *, u8 *, u8 *);
+void func_s10_800246AC(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern u8 D_800DEB28[];
 extern u8 D_80045340[];
 extern u8 D_800DE870[];
 extern u8 D_800DE8E8[];
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80024048);
+void func_s10_800244A4(u8 *p, UnkVec *b, u8 *c, u8 *d);
+s32 func_s10_80024930(u8 *, UnkVec *, u8 *, s16, s32, s16, u8, u8);
+s32 func_800A44E0(u16, u16, s16, u32);
+s32 func_800BCB04(s32, s32, s16);
+s32 func_800A56E0(s32);
+u8 *func_8003DE58(u8 *, UnkSlot *, s16 *, s16);
+void func_8009CE1C(u8 *, s16, s16, s16, s16, u32, s16);
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+extern s32 D_8008346C;
+extern s16 D_80083228;
+
+/* PLACEHOLDER_80024048 */
+void func_s10_80024048(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 n;
+    s16 i;
+
+    *(s16 *)(*(u8 **)(p + 0xC) + 0x16) = *(u16 *)(*(u8 **)(p + 0xC) + 0x16) + 1;
+    *(s16 *)(c + 0x1A) = 0;
+    n = rand() % 4 + 1;
+    for (i = 0; i < n; i++)
+    {
+        func_800478B8(c);
+    }
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* Spawn the 0x212 node that carries this effect's 0x1000-scale sprite with a
    random start phase: D_800DE8E8 as its dresser, D_80045340 through
@@ -265,11 +295,64 @@ UnkNode *func_s10_800243E0(UnkVec *q)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_800244A4);
+/* PLACEHOLDER_800244A4 */
+void func_s10_800244A4(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    *(s16 *)(c + 0x1A) = ((func_80064584(*(s16 *)(p + 0x8) - D_80083228) >> 4) * -256) >> 8;
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) - 8;
+    func_800478B8(c);
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80024550);
+/* PLACEHOLDER_80024550 */
+void func_s10_80024550(UnkVec *q)
+{
+    Unk80083160 *gg = &D_80083160;
+    UnkNode *n;
+    u8 *m;
+    u8 *r;
+    u8 *w;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_800246AC);
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s10_800244A4;
+        m = (u8 *)n + 0x20;
+        *(s16 *)(m + 0x8) = rand() % 0x1000;
+        r = (u8 *)n->unk_0C;
+        r[0xE] = 0x80;
+        r[0xD] = 0x80;
+        r[0xC] = 0x80;
+        func_8003DB94(r, D_800DE870, 0);
+        *(s16 *)(r + 0x1E) = 0x1000;
+        *(s16 *)(r + 0x1C) = 0x1000;
+        *(u16 *)(r + 0x10) |= 0x20;
+        *(u16 *)(r + 0x14) |= 0xC;
+        *(s16 *)(r + 0x1A) = ((func_80064584(*(s16 *)(m + 0x8) - gg->unk_C8) >> 4) * -256) >> 8;
+        func_8004491C(n, (u32)D_80045340);
+        w = (u8 *)n->unk_08;
+        *(s16 *)(w + 0x2) = *(u16 *)((u8 *)q + 0x2) + ((func_800644B8(*(s16 *)(m + 0x8)) << 1) >> 8);
+        *(s16 *)(w + 0x6) = *(u16 *)((u8 *)q + 0x6) + ((func_80064584(*(s16 *)(m + 0x8)) << 1) >> 8);
+        *(s16 *)(w + 0xA) = *(u16 *)((u8 *)q + 0xA);
+    }
+}
+
+/* PLACEHOLDER_800246AC */
+void func_s10_800246AC(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    *(s16 *)(p + 0x8) = (*(s16 *)(p + 0x8) + 0x40) % 0x1000;
+    func_800478B8(c);
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        func_8003DB94(c, D_800DEB28, 0);
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)(p + 0x0) + (((func_800644B8(*(s16 *)(p + 0x8)) >> 4) * 28) >> 8);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)(p + 0x2) + (((func_80064584(*(s16 *)(p + 0x8)) >> 4) * 28) >> 8);
+    }
+}
 
 /* Spawn the 0x212 node for one of the ring's eight frames: the caller's
    position vector into the node payload at +0x20, the frame index's
@@ -353,11 +436,49 @@ UnkNode *func_s10_80024790(UnkVec *q, s16 k)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80024930);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80024CFC);
+/* PLACEHOLDER_80024CFC */
+s32 func_s10_80024CFC(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 h;
+    s16 t1;
+    s16 t2;
+    s16 t3;
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80024E44);
+    h = *(u8 *)(p + 0x10) << 4;
+    if (h != 0)
+    {
+        h = 0xFF;
+    }
+    t1 = ((func_800644B8(*(s16 *)(p + 0x10) << 6) >> 4) * 320) >> 8;
+    t2 = (func_800644B8(*(s16 *)(p + 0x10) << 6) << 1) >> 8;
+    t3 = ((func_800644B8(*(s16 *)(p + 0x10) << 6) >> 4) * 24) >> 8;
+    func_s10_80024930(p, b, c, *(u16 *)(p + 0x14) << 5, t1, t2, 3, 0x40);
+    func_s10_80024930(p, b, c, -(*(u16 *)(p + 0x14) << 6), t1, t3, 1, h);
+    return 0;
+}
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80024EF8);
+/* PLACEHOLDER_80024E44 */
+s32 func_s10_80024E44(u8 *p, UnkVec *b, u8 *c)
+{
+    func_s10_80024930(p, b, c, *(u16 *)(p + 0x14) << 5, 0x140, 0x20, 3, 0x40);
+    func_s10_80024930(p, b, c, -(*(u16 *)(p + 0x14) << 6), 0x140, 0x18, 1, 0xFF);
+    return 0;
+}
+
+/* PLACEHOLDER_80024EF8 */
+s32 func_s10_80024EF8(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 h;
+    s16 t1;
+    s16 t2;
+
+    h = ~(*(u8 *)(p + 0x10) << 4);
+    t1 = (func_800644B8((0x10 - *(s16 *)(p + 0x10)) << 6) << 1) >> 8;
+    t2 = ((func_800644B8((0x10 - *(s16 *)(p + 0x10)) << 6) >> 4) * 24) >> 8;
+    func_s10_80024930(p, b, c, *(u16 *)(p + 0x14) << 5, 0x140, t1, 3, 0x40);
+    func_s10_80024930(p, b, c, -(*(u16 *)(p + 0x14) << 6), 0x140, t2, 1, h);
+    return 0;
+}
 
 /* The effect's dresser callback: states 3, 4 and 5 of the node's +0xA hand
    the first three arguments straight through to func_s10_80024CFC /
@@ -427,4 +548,303 @@ s32 func_s10_80025020(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80025090);
+/* PLACEHOLDER_80025090 */
+void func_s10_80025090(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *s;
+    u8 *o;
+    u8 *w;
+    u8 *q4;
+    UnkVec *v;
+    u16 z;
+    s32 i;
+    s32 h;
+    s32 cx;
+    s32 cy;
+    s16 xx;
+    s16 yy;
+    s16 ox;
+    UnkVec vv;
+    u16 out[4];
+    s16 oy;
+
+    s = *(u8 **)(p + 0x0);
+    *(s16 *)(p + 0x10) = *(u16 *)(p + 0x10) + 1;
+    *(s16 *)(p + 0x14) = *(u16 *)(p + 0x14) + 1;
+    switch (*(s16 *)(p + 0xA))
+    {
+    case 0:
+        *(s16 *)(p + 0x10) = 0;
+        *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        *(s16 *)(p + 0xE) = (*(u16 *)(s + 0x2A) >> 9) & 7;
+        *(s16 *)(p + 0x14) = 0;
+        *(s16 *)(p + 0x16) = 0;
+        *(s32 *)(p + 0x18) = 0;
+        for (i = 0x1F; i >= 0; i--)
+        {
+            *(s32 *)(p + 0x1C + i * 4) = 0;
+        }
+        *(s32 *)(c + 0xC) = 0x808080;
+        /* fall through */
+    case 1:
+        o = s - 0x20;
+        if (func_8003DE58(*(u8 **)(*(u8 **)(o + 0xC) + 0x8), (UnkSlot *)*(u8 **)(o + 0xC),
+                          (s16 *)out, 0) == 0 &&
+            (*(u16 *)(*(u8 **)(o + 0xC) + 0x14) & 0x8000) == 0)
+        {
+            break;
+        }
+        w = *(u8 **)(o + 0x8);
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)(w + 0x2);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)(w + 0x6);
+        z = *(u16 *)(w + 0xA);
+        *(s16 *)((u8 *)b + 0xA) = z;
+        if ((*(u16 *)(*(u8 **)(o + 0xC) + 0x14) & 0x8000) == 0)
+        {
+            *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) + out[0];
+            *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) + out[1];
+            *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) + out[2];
+        }
+        else
+        {
+            *(s16 *)((u8 *)b + 0xA) = z - 0x40;
+        }
+        if ((*(u16 *)(p + 0xC) & 0x1) == 0)
+        {
+            func_8004491C((UnkNode *)(p - 0x20), (u32)func_s10_80025020);
+            *(u16 *)(p + 0xC) |= 0x1;
+        }
+        if ((**(u16 **)(p + 0x4) & 0x80) == 0)
+        {
+            break;
+        }
+        if (*(u8 **)(s + 0x60) != NULL)
+        {
+            v = (UnkVec *)*(u8 **)(*(u8 **)(s + 0x60) - 0x18);
+            out[0] = abs(*(s16 *)((u8 *)v + 0x2) - *(s16 *)((u8 *)b + 0x2));
+            out[1] = abs(*(s16 *)((u8 *)v + 0x6) - *(s16 *)((u8 *)b + 0x6));
+            out[2] = abs(*(s16 *)(*(u8 **)(s + 0x60) + 0x88) - *(s16 *)((u8 *)b + 0xA));
+            *(s16 *)(p + 0x12) = out[0];
+            for (i = 1; i < 3; i++)
+            {
+                if ((s16)out[i] > *(s16 *)(p + 0x12))
+                {
+                    *(s16 *)(p + 0x12) = out[i];
+                }
+            }
+            *(s16 *)(p + 0x12) = (s16) * (u16 *)(p + 0x12) >> 5;
+            if (*(s16 *)(p + 0x12) == 0)
+            {
+                *(s16 *)(p + 0x12) = 1;
+            }
+            *(s16 *)((u8 *)b + 0xE) =
+                (*(s16 *)((u8 *)v + 0x2) - *(s16 *)((u8 *)b + 0x2)) / *(s16 *)(p + 0x12);
+            *(s16 *)((u8 *)b + 0x12) =
+                (*(s16 *)((u8 *)v + 0x6) - *(s16 *)((u8 *)b + 0x6)) / *(s16 *)(p + 0x12);
+            *(s16 *)((u8 *)b + 0x16) =
+                (*(s16 *)(*(u8 **)(s + 0x60) + 0x88) - *(s16 *)((u8 *)b + 0xA)) /
+                *(s16 *)(p + 0x12);
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        }
+        else
+        {
+            q4 = *(u8 **)(o + 0xC);
+            xx = q4[0x24];
+            yy = q4[0x25];
+            ox = xx;
+            oy = yy;
+            for (i = 0; i < 8; i++)
+            {
+                cx = xx;
+                cy = yy;
+                if ((s16)func_800A44E0((cx << 6) & 0xFFFFFFC0, (cy << 6) & 0xFFFFFFC0,
+                                       *(s16 *)(s + 0x88),
+                                       (s16)(*(s16 *)(p + 0xE) << 9)) != 0)
+                {
+                    break;
+                }
+                h = func_800BCB04(((cx + D_8006CCD8[*(s16 *)(p + 0xE)]) << 6) + 0x20 & 0xFFE0,
+                                  ((cy + D_8006CCE8[*(s16 *)(p + 0xE)]) << 6) + 0x20 & 0xFFE0,
+                                  (s16)(*(u16 *)(s + 0x88) - 0x20));
+                if ((s16)h >= 0x201)
+                {
+                    break;
+                }
+                if ((s16)(h - *(u16 *)(s + 0x88)) < -0x3F)
+                {
+                    break;
+                }
+                xx = xx + (D_8006CCD8[*(s16 *)(p + 0xE)] & 0xFFFF);
+                yy = yy + (D_8006CCE8[*(s16 *)(p + 0xE)] & 0xFFFF);
+                oy = yy;
+                ox = xx;
+            }
+            v = &vv;
+            *(s16 *)((u8 *)v + 0x2) = ox * 64 + (D_8006CCD8[*(s16 *)(p + 0xE)] + 1) * 32;
+            *(s16 *)((u8 *)v + 0x6) = oy * 64 + (D_8006CCE8[*(s16 *)(p + 0xE)] + 1) * 32;
+            *(s16 *)((u8 *)v + 0xA) = *(u16 *)((u8 *)b + 0xA) + 0x20;
+            out[0] = abs(*(s16 *)((u8 *)v + 0x2) - *(s16 *)((u8 *)b + 0x2));
+            out[1] = abs(*(s16 *)((u8 *)v + 0x6) - *(s16 *)((u8 *)b + 0x6));
+            out[2] = abs(*(s16 *)((u8 *)v + 0xA) - *(s16 *)((u8 *)b + 0xA));
+            *(s16 *)(p + 0x12) = out[0];
+            for (i = 1; i < 3; i++)
+            {
+                if ((s16)out[i] > *(s16 *)(p + 0x12))
+                {
+                    *(s16 *)(p + 0x12) = out[i];
+                }
+            }
+            *(s16 *)(p + 0x12) = (s16) * (u16 *)(p + 0x12) >> 5;
+            if (*(s16 *)(p + 0x12) == 0)
+            {
+                *(s16 *)(p + 0x12) = 1;
+            }
+            b->unk_0C = (v->unk_00 - b->unk_00) / *(s16 *)(p + 0x12);
+            b->unk_10 = (v->unk_04 - b->unk_04) / *(s16 *)(p + 0x12);
+            b->unk_14 = (v->unk_08 - b->unk_08) / *(s16 *)(p + 0x12);
+            *(s16 *)(p + 0xA) = 7;
+        }
+        *(s16 *)(p + 0x10) = 0;
+        *(s16 *)(p + 0x14) = 0;
+        break;
+    case 2:
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) + *(u16 *)((u8 *)b + 0xE);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) + *(u16 *)((u8 *)b + 0x12);
+        *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) + *(u16 *)((u8 *)b + 0x16);
+        if (*(s16 *)(p + 0x10) >= *(s16 *)(p + 0x12))
+        {
+            *(s16 *)(p + 0x10) = 0;
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+            v = (UnkVec *)*(u8 **)(*(u8 **)(s + 0x60) - 0x18);
+            *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)v + 0x2);
+            *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)v + 0x6);
+            *(s16 *)((u8 *)b + 0xA) = *(u16 *)(*(u8 **)(s + 0x60) + 0x88);
+            *(s32 *)(p + 0x18) = (s32)func_s10_800243E0(b);
+            func_800A56E0(0x300);
+        }
+        else
+        {
+            func_s10_800242A0(p, b);
+        }
+        break;
+    case 3:
+        if (*(s16 *)(p + 0x10) >= 0x10)
+        {
+            for (i = 0x1F; i >= 0; i--)
+            {
+                *(s32 *)(p + 0x1C + i * 4) = (s32)func_s10_80024790(b, i);
+            }
+            *(s16 *)(p + 0x10) = 0;
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        }
+        break;
+    case 4:
+        if ((*(u16 *)(p + 0x10) & 0x3) == 0)
+        {
+            func_s10_80024550(b);
+        }
+        if (*(s16 *)(p + 0x10) >= 0x20)
+        {
+            *(s16 *)(p + 0x10) = 0;
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+            if (*(u8 **)(p + 0x18) != NULL)
+            {
+                (*(UnkNode **)(p + 0x18))->unk_1E |= 0x8000;
+                D_800814A0 |= 0x8000;
+                *(s32 *)(p + 0x18) = 0;
+            }
+            for (i = 0x1F; i >= 0; i--)
+            {
+                if (*(u8 **)(p + 0x1C + i * 4) != NULL)
+                {
+                    (*(UnkNode **)(p + 0x1C + i * 4))->unk_1E |= 0x8000;
+                    D_800814A0 |= 0x8000;
+                    *(s32 *)(p + 0x1C + i * 4) = 0;
+                }
+            }
+        }
+        break;
+    case 5:
+        if (*(s16 *)(p + 0x10) >= 0x10)
+        {
+            func_8009CE1C(*(u8 **)(s + 0x60), 0x13, p[0x9], 1, (s16)(*(u16 *)(p + 0xE) << 9),
+                          (u32)s, 1);
+            *(s16 *)(p + 0x10) = 0;
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        }
+        break;
+    case 6:
+        if (*(s16 *)(p + 0x16) == 0)
+        {
+            D_8008346C = 0;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    case 7:
+        if (*(s16 *)(p + 0x10) < 0x5)
+        {
+            if (*(s16 *)(p + 0x12) >= *(s16 *)(p + 0x10))
+            {
+            *(s16 *)((u8 *)b + 0x2) =
+                *(u16 *)((u8 *)b + 0x2) + *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x10);
+            *(s16 *)((u8 *)b + 0x6) =
+                *(u16 *)((u8 *)b + 0x6) + *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x10);
+            *(s16 *)((u8 *)b + 0xA) =
+                *(u16 *)((u8 *)b + 0xA) + *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x10);
+            func_s10_80024130(p, b);
+            *(s16 *)((u8 *)b + 0x2) =
+                *(u16 *)((u8 *)b + 0x2) - *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x10);
+            *(s16 *)((u8 *)b + 0x6) =
+                *(u16 *)((u8 *)b + 0x6) - *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x10);
+            *(s16 *)((u8 *)b + 0xA) =
+                *(u16 *)((u8 *)b + 0xA) - *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x10);
+            break;
+            }
+        }
+        else if (*(s16 *)(p + 0x12) >= *(s16 *)(p + 0x10))
+        {
+            if (*(s16 *)(p + 0x12) < 0x4)
+            {
+            *(s16 *)((u8 *)b + 0x2) =
+                *(u16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)b + 0xE) * (*(s16 *)(p + 0x12) + 1);
+            *(s16 *)((u8 *)b + 0x6) =
+                *(u16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)b + 0x12) * (*(s16 *)(p + 0x12) + 1);
+            *(s16 *)((u8 *)b + 0xA) =
+                *(u16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)b + 0x16) * (*(s16 *)(p + 0x12) + 1);
+            func_s10_80024130(p, b);
+            *(s16 *)((u8 *)b + 0x2) =
+                *(u16 *)((u8 *)b + 0x2) - *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x12);
+            *(s16 *)((u8 *)b + 0x6) =
+                *(u16 *)((u8 *)b + 0x6) - *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x12);
+            *(s16 *)((u8 *)b + 0xA) =
+                *(u16 *)((u8 *)b + 0xA) - *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x12);
+            }
+            else
+            {
+            *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)b + 0xE) * 5;
+            *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)b + 0x12) * 5;
+            *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)b + 0x16) * 5;
+            func_s10_80024130(p, b);
+            *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) - *(s16 *)((u8 *)b + 0xE) * 4;
+            *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) - *(s16 *)((u8 *)b + 0x12) * 4;
+            *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) - *(s16 *)((u8 *)b + 0x16) * 4;
+            }
+            break;
+        }
+        if (*(s16 *)(p + 0x10) <= *(s16 *)(p + 0x12) + 4 &&
+            *(s16 *)(p + 0x12) * 2 >= *(s16 *)(p + 0x10))
+        {
+            *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) + *(u16 *)((u8 *)b + 0xE);
+            *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) + *(u16 *)((u8 *)b + 0x12);
+            *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) + *(u16 *)((u8 *)b + 0x16);
+        }
+        else
+        {
+            *(s16 *)(p + 0xA) = 6;
+            *(s16 *)(p + 0x10) = 0;
+        }
+        break;
+    }
+    *(s16 *)(p + 0x16) = 0;
+}
