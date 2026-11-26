@@ -42,6 +42,30 @@
         `j' and the 81 words -- but also keeps t's priority above the $v0
         temps, so t stays in $v0.
 
+   THE `w' HALF OF THAT CROSS IS NOW CLOSED (dispatcher, 2026-11-25).  The
+   header below suggests "lowers w's ... priority"; `w' has one set and two
+   references, so the only way to lower it further is to remove it as an
+   allocno entirely, and inlining the shift costs four words because the
+   `sll 11' is then computed in both arms:
+
+       t 5 refs (split arm A) x `w' a local     81 words /  3 rows   KEPT
+       t 3 refs (one expr/arm) x `w' a local    80       / 11        (reproduced
+                                                                      exactly)
+       t 5 refs x `w' INLINED in both arms      85       / 20
+       t 3 refs x `w' INLINED in both arms      85       / 14
+
+   So the full 2x2 is measured and the kept cell is still the best.  The
+   remaining half of the header's suggestion -- RAISING THE COUNTER'S priority
+   -- cannot be reached by latching `*(s16 *)(p + 0x4)' into a local, because
+   the target re-reads it from memory at all nine sites; a latch would change
+   every one of them.  So the next attempt should not look for a spelling at
+   all: it wants a `-da' `.sched' dump to see why reorg declines the `sll' in
+   the three-reference shape.
+
+   (The 80/11 reproduction is also a harness check: anyone re-opening this park
+   should get 80 words / 11 rows from the one-expression-per-arm form before
+   trusting their own numbers.)
+
    So the two halves of the fault are coupled through t's reference count and
    NO ONE-AT-A-TIME SPELLING REACHES BOTH.  The missing piece is a spelling
    that gives t three references AND leaves arm A three instructions long, or
