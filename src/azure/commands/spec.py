@@ -11,20 +11,24 @@ import yaml
 
 from azure.commands import bincue
 
+# A MODE2/FORM1 sector's user data. FORM2 (XA-ADPCM audio) sectors carry 2324
+# instead, so this is the floor on what a sector contributes, not the rule.
+FORM1_DATA_SIZE = 2048
+
 
 class FileType(enum.StrEnum):
-    """What a disc file holds, which decides how it comes off the disc.
+    """What a disc file holds.
 
-    ``data`` is a plain MODE2/FORM1 file -- every sector carries 2048 bytes of
-    user data and the ISO9660 directory records a true byte length, so ``size``
-    drives the extraction and the sector count follows from it.
+    This is descriptive. Extraction does not branch on it: every file comes off
+    the disc the same way -- read the entry's ``sectors`` sectors, keep each
+    one's payload, and truncate to ``size`` if the entry gives one. The type
+    records what those sectors *are*, and selects files for ``--only``.
 
-    ``audio-video`` and ``audio`` are CD-XA streams.  Their sectors are
-    interleaved: FORM1 sectors carry 2048 bytes, FORM2 (XA-ADPCM audio) sectors
-    carry 2324, so a byte length cannot be turned back into a sector count.
-    The on-disc extent in ``sectors`` drives the extraction instead, and every
-    sector's payload is kept -- the audio cannot be separated out without
-    demuxing, and the interleave is the file.
+    ``data``         Plain MODE2/FORM1. Every sector carries 2048 bytes.
+    ``audio-video``  A CD-XA stream: MDEC video in FORM1 sectors interleaved
+                     7:1 with XA-ADPCM audio in FORM2 sectors.
+    ``audio``        A CD-XA stream with no video sectors -- XA-ADPCM audio
+                     padded out with blank FORM1 sectors to pace the drive.
     """
 
     DATA = "data"
@@ -36,28 +40,36 @@ class FileType(enum.StrEnum):
 class SpecFile:
     name: str
     shasum: str
+    # Where the file sits on the disc: first LBA, and the extent in sectors.
+    # The extent is what the spec records rather than a byte length, because a
+    # byte length cannot be turned back into a sector count -- FORM1 sectors
+    # contribute 2048 bytes and FORM2 sectors 2324, so for an interleaved
+    # stream the length depends on the mix.
     sector: int
+    sectors: int
     type: FileType = FileType.DATA
-    # Exactly one of these, picked by `type`: `size` for data, `sectors` for
-    # the XA streams.  See FileType.
+    # Optional: truncate the extracted payload to this many bytes. Only a file
+    # whose real content ends mid-sector needs it (on this disc, just
+    # system.cnf). It cannot recover the sector-aligned filler the mastering
+    # left inside the .BIN containers, because that filler also falls in the
+    # middle of them, not only at the tail.
     size: Optional[int] = None
-    sectors: Optional[int] = None
 
     def __post_init__(self) -> None:
-        if self.type is FileType.DATA:
-            if self.size is None:
-                raise ValueError(f"{self.name}: type '{self.type}' needs 'size'")
-            if self.sectors is not None:
-                raise ValueError(
-                    f"{self.name}: type '{self.type}' takes 'size', not 'sectors'"
-                )
-        else:
-            if self.sectors is None:
-                raise ValueError(f"{self.name}: type '{self.type}' needs 'sectors'")
-            if self.size is not None:
-                raise ValueError(
-                    f"{self.name}: type '{self.type}' takes 'sectors', not 'size'"
-                )
+        if self.sectors < 1:
+            raise ValueError(f"{self.name}: 'sectors' must be at least 1")
+        if self.size is None:
+            return
+        if self.size < 0:
+            raise ValueError(f"{self.name}: 'size' must not be negative")
+        # Every sector yields at least FORM1_DATA_SIZE bytes, so this bound
+        # holds whatever the interleave is, without reading the disc.
+        limit = self.sectors * FORM1_DATA_SIZE
+        if self.size > limit:
+            raise ValueError(
+                f"{self.name}: 'size' {self.size} exceeds {self.sectors} "
+                f"sectors x {FORM1_DATA_SIZE} = {limit} bytes"
+            )
 
 
 @dataclasses.dataclass
@@ -71,36 +83,32 @@ class Spec:
 Path = pathlib.Path | str
 
 
-def extract_file(f: BinaryIO, start_sector: int, file_size: int) -> bytes:
-    """Read a plain data file: sectors until `file_size` bytes are in hand."""
-    data = bytearray()
-    sector_index = start_sector
-    while len(data) < file_size:
-        sector = bincue.extract_sector(f, sector_index)
-        bytes_in_chunk = min(len(sector.data), file_size - len(data))
-        data += sector.data[:bytes_in_chunk]
-        sector_index += 1
-    return bytes(data)
-
-
-def extract_sectors(f: BinaryIO, start_sector: int, num_sectors: int) -> bytes:
-    """Read an XA stream: every payload byte of `num_sectors` sectors.
+def extract_sectors(
+    f: BinaryIO, start_sector: int, num_sectors: int, size: Optional[int] = None
+) -> bytes:
+    """Read `num_sectors` sectors from `start_sector`, keeping every payload byte.
 
     Each sector contributes whatever its own form says -- 2048 bytes for FORM1,
-    2324 for FORM2 -- so the result is as long as the interleave makes it.
+    2324 for FORM2 -- so the result is as long as the interleave makes it. With
+    `size`, the result is truncated to that many bytes.
     """
     data = bytearray()
     for offset in range(num_sectors):
         data += bincue.extract_sector(f, start_sector + offset).data
+    if size is not None:
+        if size > len(data):
+            raise ValueError(
+                f"size {size} exceeds the {len(data)} bytes in "
+                f"{num_sectors} sectors at {start_sector}"
+            )
+        del data[size:]
     return bytes(data)
 
 
 def extract_spec_file(f: BinaryIO, spec_file: SpecFile) -> bytes:
-    if spec_file.type is FileType.DATA:
-        assert spec_file.size is not None
-        return extract_file(f, spec_file.sector, spec_file.size)
-    assert spec_file.sectors is not None
-    return extract_sectors(f, spec_file.sector, spec_file.sectors)
+    return extract_sectors(
+        f, spec_file.sector, spec_file.sectors, spec_file.size
+    )
 
 
 def get_file_shasum(filename: Path) -> str:

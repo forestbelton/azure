@@ -52,17 +52,14 @@ def msf_to_lba(m: str, s: str, f: str) -> int:
 def containers(spec_path: pathlib.Path):
     """Each spec entry's on-disc extent, as (first_lba, last_lba, name).
 
-    A `data` entry records a byte `size`, so its extent is that rounded up to
-    whole sectors.  A CD-XA stream records `sectors` outright, because its
-    FORM1/FORM2 interleave means no byte length maps back to a sector count.
+    Every entry records its extent as `sectors`, so this is a direct read: an
+    entry's optional `size` only truncates the extracted bytes and says nothing
+    about how much of the disc the file occupies.
     """
     spec = yaml.safe_load(spec_path.read_text())
     out = []
     for e in spec["files"]:
-        if e.get("sectors") is not None:
-            n = e["sectors"]
-        else:
-            n = (e["size"] + 2047) // 2048
+        n = e["sectors"]
         out.append((e["sector"], e["sector"] + n - 1, e["name"]))
     return out
 

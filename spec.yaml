@@ -7,53 +7,59 @@
 # blank sectors of post-gap at the tail.  There is nothing hidden outside the
 # filesystem.
 #
-# `type` says what a file holds, and that picks which length field it carries:
+# Each entry gives its position as `sector` (the first lba) and `sectors` (the
+# extent).  The extent is in sectors rather than bytes because a byte length
+# cannot be turned back into a sector count: FORM1 sectors carry 2048 bytes of
+# user data and FORM2 sectors 2324, so for an interleaved stream the length
+# depends on the mix.  Extraction keeps every payload byte of every sector.
 #
-#   data         Plain MODE2/FORM1.  Every sector carries 2048 bytes of user
-#                data and the directory record is a true byte length, so these
-#                carry `size`; the sector count follows from it.
+# `size` is optional and means "truncate to this many bytes".  Only a file
+# whose real content ends mid-sector needs it, which here is system.cnf alone.
+# It is not a way to drop the sector-aligned filler the mastering left in the
+# .BIN containers: that filler also sits in the *middle* of them, not just at
+# the tail, so the containers are taken as presented.
 #
+# `type` is descriptive -- extraction does not branch on it -- and selects
+# files for `azure spec --only`:
+#
+#   data         Plain MODE2/FORM1.  Every sector carries 2048 bytes.
 #   audio-video  A CD-XA stream: MDEC video in FORM1 sectors interleaved 7:1
 #                with XA-ADPCM audio in FORM2 sectors.
-#
 #   audio        A CD-XA stream with no video sectors at all -- XA-ADPCM audio
 #                padded out with blank FORM1 sectors to pace the drive.
-#
-# The two stream types carry `sectors`, the on-disc extent, because a byte
-# length cannot be turned back into a sector count: FORM1 sectors contribute
-# 2048 bytes and FORM2 sectors 2324, so the length depends on the interleave.
-# Extraction keeps every sector's payload -- the audio is woven into the video
-# and separating it would mean demuxing, not slicing.
 infile: az.bin
 shasum: fab68454be5e4e48f7a43ac797cc8c47325c6a20
 outdir: data
 files:
+  # The one file whose content ends mid-sector.
   - name: system.cnf
     type: data
     shasum: a60bb34a165f9e1a1fceb3aa254475f9208efe77
     sector: 23
+    sectors: 1
     size: 0x43
   - name: slus_006.14
     type: data
     shasum: e6bfbb95ff6676899e077481221d73ddd4d3bf52
     sector: 24
-    size: 0x80000
+    sectors: 256
   # The movie-player overlay. Plain data despite the name -- no XA sectors.
+  # PSY-Q libpress (MDEC) text starts at offset 0.
   - name: ovmovie.bin
     type: data
     shasum: 4f6f2cb2b4a74a601137b7dc0ed5168493b2c7bb
     sector: 280
-    size: 0x300000
+    sectors: 1536
   - name: main/main.bin
     type: data
     shasum: 69f63236b7ab2260e2e9aa2048ce7aa540bdbe6d
     sector: 1817
-    size: 0x275800
+    sectors: 1259
   - name: town/town.bin
     type: data
     shasum: b946a57aa5fc8cec29db3ecabad6e6b76df418b7
     sector: 3077
-    size: 0x101b800
+    sectors: 8247
   # 3 XA channels (file 1, channels 0..2).
   - name: strt/m_game1.str
     type: audio
@@ -70,7 +76,7 @@ files:
     type: data
     shasum: 27f9fcc384a570a991e349b920881e7070c0e13c
     sector: 12310
-    size: 0x1a86800
+    sectors: 13581
   # 8 XA channels per file number, file numbers 1..11.
   - name: str/merge.str
     type: audio
