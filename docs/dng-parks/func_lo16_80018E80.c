@@ -101,7 +101,36 @@
    s32 func_lo16_80019684(s16, s16, s16);
    void func_lo16_800194C4(s16);
    void func_80048088(s16);
-   END DECLARATIONS */
+   END DECLARATIONS 
+   THREE MORE SPELLINGS CLOSED BY THE DISPATCHER, 2026-11-25, all measured from
+   the 401/1 body.  The residue is the word-83 comparison naming `$v1' (q)
+   where the target names `$a1' (k), and the target's own allocation is now
+   fully read off its listing: k lives in $a1 (`sra $a1, $v1, 16' at word 58,
+   then the /5 `mult', the `>= 0x28' `slti', and the word-83 test), while
+   `q = k' is copied into $v1 TWICE.  The `k == 2' test at word 83 is reached
+   WITHOUT passing through the 0x28 arm's two calls, which is why a
+   caller-saved $a1 can still hold k there.
+
+       the two LATE tests (`q == 1', `q == 2') rewritten on `k'
+                                                       400 words /  26 rows
+         -- `q = k' goes dead and gcc deletes it, losing the word the two
+            copies are made of.  So the late tests MUST read q, which is what
+            forces q to outlive k and makes q canonical.  The tension is
+            structural, not a spelling.
+       the whole q/k pair's roles swapped (q holds the read, k is the copy)
+                                                       400       /  21
+       the word-83 test given its own re-read of the global,
+         `(s16)(u16)D_8008146C == 2'                    401       /   1  FREE
+       `q' assigned by re-reading the global instead of `q = k'
+                                                       401       /   1  FREE
+
+   The last two are the informative ones: cse folds a second read of
+   D_8008146C back into a register copy from k, so re-reading cannot break the
+   q/k equivalence class and cannot change which member is canonical.  That
+   closes the source-level space for this residue.  The remaining route is the
+   one h197 named -- a `-da' `.cse1'/`.cse2' pair to see why the target's
+   compiler did not canonicalise at all -- and NOT another spelling.
+*/
 
 s32 func_lo16_80018E80(void)
 {
