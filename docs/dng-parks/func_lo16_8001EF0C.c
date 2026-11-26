@@ -1,4 +1,47 @@
-/* func_lo16_8001EF0C -- ovl_dng_lo16, 264 target words.
+/*
+   THIS PARK WAS UNMEASURABLE UNTIL 2026-11-25 and its older notes were written
+   against a splice that no longer compiled. `parkresidue' printed SKIP with
+   `redefinition of struct Unk...' because the unit has since REFINED two
+   typedefs this park also declares, and `drop_known' matched declarations by
+   exact text, so the park's copies survived. Fixed in `parksplice.py' by
+   matching a struct by TAG and an `extern' by SYMBOL NAME. Current measured
+   baseline, which is what any new work must beat:
+
+       264 words built / 264 target, 4 ALIGNED ROWS -- word-exact.
+
+   THE FOUR ROWS, AND THREE READINGS OF THEM THAT ARE ALL WRONG. I read the
+   rows as three independent faults and priced each one; every cell is worse
+   than leaving the park alone, so the park's existing spelling is right on all
+   three counts and the rows mean something else.
+
+       baseline (as parked)                          264 w /  4 rows
+       `a = (s8)...unk_02' for the `(u8)' cast       266   / 10
+       `s32 kr' for `u16 kr'                         263   /  9
+       `extern u8 D_800735C4[]' for `u8 *'           264   /  9
+       all three together                            265   / 19
+
+   What each row looked like, and why the obvious reading failed:
+
+     * word 45: target `lb $v0, 0x2($s2)', built `lbu v0,2(s2)'. Reads as a
+       signedness fault on `unk_02'. It is not -- making the read signed costs
+       2 words and 6 rows. The sign must come from somewhere other than this
+       field's cast.
+     * word 155: target `addu $s0, $a1, $zero' (a plain move), built
+       `andi s0,a1,0xffff'. Reads as `u16 kr' narrowing a value the target
+       keeps wide. Widening it loses a word and gains 5 rows, so the narrowing
+       is wanted and the MOVE is what differs.
+     * words 156/157: target `lui $a0, %hi(D_800735C4)', built `lui a0,0x0'.
+       Reads as the declared-shape rule -- a pointer where the target wants the
+       symbol's address. It is not: the array spelling keeps 264 words and
+       still gains 5 rows, so `extern u8 *D_800735C4' is correct here and the
+       zero high half has another cause.
+
+   So all three rows are symptoms of ONE thing this park has not found, not
+   three local faults, and the next agent should look for a single cause that
+   puts a signed byte load, a register move and a symbol's high half in the
+   target where this body has an unsigned load, a mask and a zero. Do not
+   re-price the three cells above.
+ func_lo16_8001EF0C -- ovl_dng_lo16, 264 target words.
    PARKED by agent h181, batch 35, 2026-11-25.  264 WORDS -- EXACT -- and
    THREE ALIGNED DIFFERENCES, all in one four-instruction window.  Words
    0..154 and 158..263 are identical, registers included.
