@@ -71,9 +71,18 @@
    best 30 in its first TWO minutes and then found nothing in 88 more, with 2
    saved candidates out of 376,116.  This one improved steadily for the whole
    75 minutes with 250 saved.  So the permuter's moves CAN express what this
-   park needs -- it simply did not arrive.  A longer run is the obvious next
-   step and is the cheapest thing left on this body, since nine hand-written
-   spellings and the whole record below are already spent.
+   park needs -- it simply did not arrive.  *** THE LONGER RUN IS DONE AND 740 IS THE FLOOR.
+   DO NOT RUN IT AGAIN. An independent run at a 300-minute budget produced 178
+   saved candidates across 64 distinct scores and NEVER WENT BELOW 740 -- it
+   found a second candidate AT 740 and nothing under it. Two independent
+   searches converging on the same number closes the permuter axis on this
+   body: its move set cannot express what is missing, and a third run is waste.
+   The two 740 candidates are kept at nonmatchings/func_b28_801720EC/.
+
+   What that leaves is source structure, which is where the record below
+   already points. Nine hand-written spellings and that whole record are
+   already spent, so the next move is a different statement, not another
+   search.
 
    Note the output is preprocessed C, so cleaning a 740 candidate up into
    source is real work and only worth doing from a 0.
