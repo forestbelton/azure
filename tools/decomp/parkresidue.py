@@ -20,6 +20,7 @@ import glob
 import os
 import re
 import subprocess
+import io
 import sys
 import tempfile
 
@@ -505,9 +506,30 @@ def main():
         for func, res, err in ex.map(measure, funcs):
             (bad if err else rows).append((func, err) if err else (res, func))
     rows.sort()
+
+    # A HELD PARK MUST NOT READ AS THE NEXT THING TO PICK UP. Three bodies in
+    # this project cannot measure 0 for reasons outside the C -- splat
+    # mislabelling a rodata word as the first instruction, a 4-byte-aligned
+    # jump table, a table in asm/data/. Their park headers say so in their first
+    # lines, but THIS RANKING is what anyone scans to choose work, and
+    # func_b29_8017088C sat twelfth at "5 rows" with nothing to warn a picker.
+    # Carry the park's own warning into the row.
+    HELD = re.compile(r"CANNOT VERIFY AT 0|CANNOT MEET THE GATE|^\s*HELD:",
+                      re.M)
+
+    def _held(func):
+        try:
+            t = io.open(os.path.join(PROJ, "docs", "dng-parks", func + ".c"),
+                        encoding="utf-8", errors="replace").read(4000)
+        except OSError:
+            return False
+        return bool(HELD.search(t))
+
     print("%-18s %6s  %s" % ("function", "rows", "words"))
     for (nd, built, tgt), func in rows:
         flag = "" if built == tgt else "   <- %+d words" % (built - tgt)
+        if _held(func):
+            flag += "   *** HELD: cannot reach 0, see the park's first lines"
         print("%-18s %6d  %d/%d%s" % (func, nd, built, tgt, flag))
     for func, err in bad:
         print("%-18s   SKIP  %s" % (func, err))
