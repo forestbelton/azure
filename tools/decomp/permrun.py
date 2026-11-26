@@ -29,6 +29,7 @@ import io
 import os
 import re
 import signal
+import collections
 import subprocess
 import sys
 import time
@@ -180,6 +181,15 @@ def main():
 
     base = best = None
     iters = 0
+    # EVERY LINE THAT MATCHES NONE OF THE THREE REGEXES USED TO BE DISCARDED,
+    # so a permuter that died at import printed `base=?' and nothing else --
+    # which reads as a broken park (the known causes being a PERMUTER-guarded
+    # structs.h and a park missing the unit's inline declarations) when the
+    # real cause may be environmental. Measured 2026-11-25: permuter.py could
+    # not `import toml' under the project venv, every run reported `base=?'
+    # with 0 iterations, and the park was entirely fine. Keep the tail so the
+    # verdict can name the reason.
+    tail = collections.deque(maxlen=25)
     t0 = time.time()
     deadline = t0 + minutes * 60
     try:
@@ -191,6 +201,7 @@ def main():
             line = proc.stdout.readline()
             if not line:
                 break
+            tail.append(line.rstrip())
             m = BASE.search(line)
             if m:
                 base = int(m.group(1))
@@ -224,6 +235,29 @@ def main():
     with io.open(LOG, "a", encoding="utf-8") as fh:
         fh.write(row + "\n")
     print(row)
+    # A `base=?' IS A FAILURE, NOT A RESULT. Say why, with the permuter's own
+    # last words, so the reader is not left to guess between a park problem and
+    # an environment problem.
+    if base is None:
+        print("FAILED: the permuter never reported a base score, so nothing was "
+              "searched. Its last output follows.")
+        if not tail:
+            print("  (it printed nothing at all -- check that %s exists)"
+                  % os.path.relpath(PERMUTER, PROJ))
+        for ln in tail:
+            print("  | %s" % ln)
+        hay = "\n".join(tail)
+        if "ModuleNotFoundError" in hay or "ImportError" in hay:
+            print("  ^ an IMPORT failure: a dependency is missing from the "
+                  "interpreter running this script, NOT a problem with the "
+                  "park. permuter.py runs under sys.executable.")
+        elif "base.c" in hay or "compile" in hay.lower():
+            print("  ^ base.c did not compile. Run its compile.sh by hand: "
+                  "`bash compile.sh base.c x /tmp/base.o'. The usual causes are "
+                  "a PERMUTER-guarded declaration, a callee or DATA symbol the "
+                  "park never declared, and a prototype that conflicts with "
+                  "csrc/ovl_dungeon_decls.h.")
+        raise SystemExit(1)
     if base is not None and best is not None and best < base:
         print("IMPROVED: %d -> %d. Source in %s/output-*/; gate is verify.py "
               "then make check." % (base, best, os.path.relpath(d, PROJ)))

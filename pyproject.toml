@@ -10,6 +10,10 @@ dependencies = [
     "pydantic>=2.10.4,<3.0.0",
     "PyYAML>=6.0.2,<7.0.0",
     "splat64[mips]>=0.32.2,<1.0.0",
+    # vendor/decomp-permuter imports toml; without it permuter.py dies at import
+    # and permrun.py reports `base=?', which reads as a broken park rather than
+    # a missing dependency. It was only ever satisfied by the system python.
+    "toml>=0.10.2,<1.0.0",
 ]
 
 [project.scripts]
