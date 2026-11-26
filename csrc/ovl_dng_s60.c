@@ -112,6 +112,17 @@ extern u8 *D_800E3D18;
    twin and vacuous here. `z' as its own `u16' local IS load-bearing by
    construction: the `else' arm's `addiu $v0, $v1, -0x20' reuses the value
    loaded from the mover, which a re-read of `b + 0xA' cannot give. */
+s32 func_80053EF0(s32);
+s32 func_800A56E0(s32);
+s32 func_800A05A4(u8 *, s32, s32, s16, s32);
+s16 func_800A45D8(u16, u16, s32);
+void func_8009CE1C(u8 *, s16, s16, s16, s16, u32, s16);
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+extern u16 D_80082E94;
+extern Unk80083462 D_80083460;
+extern u8 D_80083780[];
+
 void func_s60_80024050(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     UnkSlot *s;
@@ -992,4 +1003,267 @@ void func_s60_80025A9C(u8 *p, UnkVec *b, UnkVec *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s60", func_s60_80025C28);
+/* THE BANK'S SIX-STATE CUTSCENE DISPATCHER and the OWNER OF
+   jtbl_s60_80024038 (6 words = 6 cases + 0 pad, dispatch bound 6, 6 distinct
+   targets, no minval subtraction so the case set is 0..5). A JUMP TABLE on
+   *(s16 *)(p + 0xA), with the +0x10 frame counter bumped before the dispatch
+   and a shared *(s16 *)(p + 0x1A) = 0 AFTER the switch that the two retire
+   arms skip with `return'.
+   ARM ORDER VERIFIED by standalone `tools/cdkgcc -O2 -G0 -S': the table emits
+   six entries at STRICTLY ASCENDING arm block addresses, 1:1 positional, which
+   is the ROM's ascending entry sequence
+   [80025C8C, 80025CB8, 80025D48, 80025F78, 80025FC0, 80026108]. Ascending case
+   order is therefore entry-address order and there is nothing to hand-settle.
+   342 words, 0 differing.
+
+   State 0 clears D_800814A8's +0xF4 and the +0x10 counter, bumps the state and
+   FALLS THROUGH into state 1, which gates on the room record's 0x80 bit, arms
+   the 0xA-frame countdown at +0x18, decrements D_800814A8's +0xA6, publishes
+   the camera octant word into +0xE and cues func_800A56E0 with 0x300 or 0x4300
+   on func_80053EF0(4). State 2 is the body: it publishes D_80083780's position
+   pair plus the reticle height into b, asks func_800A05A4 for a slot, and when
+   there is none walks up to eight steps of the camera-facing delta out of
+   D_8006CCD8 / D_8006CCE8 into a local UnkVec, re-solving the height through
+   func_800BCAD0 each step and stepping BACK when func_800A45D8 reports a
+   collision. State 3 re-arms and hands the slot to func_s60_80025508, state 4
+   brightens the renderable and fades it back out through func_8009CE1C, and
+   states 4 and 5 share the retire block on D_80083460.
+
+   THE DONOR is the landed func_s61_8002401C (csrc/ovl_dng_s61.c, 423 words),
+   found by `dngcallee.py' at 11 of 14 symbols reached by exactly ONE function
+   with a clean gap to the 10/14 tier. `dngtwin --unit' found NO carved sibling
+   at 0.70 for either of this unit's stubs and `xsibs' was not needed. The
+   donor's state 0, its `w = (u8 *)D_800814A8' group with the +0x2A read left
+   inline beside it, its `(**(u16 **)(p + 0x4) & 0x80) == 0' gate and its
+   D_80083460 retire block are this body's verbatim.
+   FACTS I TREATED AS VOID: the donor saves NINE callee-saved registers and
+   this body saves SEVEN, so every BUDGET fact in its header -- anything about
+   a device needing a register -- cannot transfer and none was tried. Its
+   SELECTION facts (the `* 64' over `<< 6', the s16 element type on
+   D_8006CCD8 / D_8006CCE8) did carry. Its `(s16)' cast on `rand() % 32 + 0x10'
+   is vacuous here because this body has no spawn loop.
+   The index form is READ OFF THE LISTING, not swept: `srl 8' plus `andi 0xE'
+   is an unsigned read with a mask, so it is
+   `D_8006CCD8[*(u16 *)(D_800814A8 + 0x2A) >> 9 & 7]' and NOT the donor's
+   unmasked `(s16) * (u16 *)(...) >> 9', which would give `sra'.
+
+   MEASURED FROM THE FINISHED BODY (342 / 0), each row a single ablation with
+   the file restored and diffed byte-identical in between. Every one of these
+   was ALSO measured mid-fight and FOUR of the six moved, so the mid-fight
+   figures are not reported:
+     the two state-0 `p' stores as ARRAY REFS, with D_800814A8 inline
+       ... as plain casts, however ordered                     343 w / 7 rows
+     the three `b' stores as PLAIN CASTS off (u8 *)b
+       ... as `b->unk_00' struct fields                         341 w / 8 rows
+     `q' ONE local used at BOTH state-4 sites, read before the `&='
+       ... the second site written inline                       343 w / 29 rows
+     `t = (u8 *)D_800814A8' as its own statement before the `b' stores
+       ... D_800814A8 inline at all three uses                  342 w / 6 rows
+     `s = D_80083780' as a pointer local
+       ... the symbol inline at both reads                      342 w / 2 rows
+     a SEPARATE `e' local for state 5's copy of the retire block
+       ... both copies sharing `d'                              342 w / 3 rows
+   MEASURED AND FREE at 342 / 0, so it is NOT why this lands:
+     the state-0 bump written before the +0x10 clear instead of after.
+
+   THE TWO MECHANISMS WORTH CARRYING, both about a store through a pointer
+   blocking a later load of a global.
+   (1) `true_dependence' will not let a load of a fixed-address global cross a
+   store through a pointer when both MEMs are plain casts, so writing
+   `*(s32 *)(D_800814A8 + 0xF4) = 0' after two `*(s16 *)(p + ...)' stores pins
+   the `lui'/`lw' pair BELOW them and leaves the `lw's load-delay slot as a
+   `nop'. Two cures measure 0 and they are not the same cure: a `t' local that
+   does the LOAD before the stores and stores through the pseudo (state 2, 6
+   rows), or making the `p' stores ARRAY REFS so `MEM_IN_STRUCT_P' is true and
+   `fixed_scalar_and_varying_struct_p' excuses the dependence outright, which
+   needs no local at all (state 0, 7 rows and a word).
+   (2) The CONVERSE on the `b' stores: they must stay PLAIN CASTS, because the
+   target keeps the dependence and leaves one `nop' unfilled. As struct fields
+   the second D_80083780 load hoists into that slot and the body is a word
+   SHORT. The listing tells you which you need -- read the `nop'.
+   AND THE PER-COPY LOCAL IN A DUPLICATED BLOCK IS NOT the `combine_regs' rule
+   the levers file states, which says a read-only local may be shared for free.
+   `d' here is read-only and sharing it still costs 3 rows: with two sets in two
+   blocks it is not block-local, so `local-alloc' gives it no quantity at all
+   and cannot tie the `%hi' temp to it, and the `lui' lands in a different
+   register from the `addiu' that consumes it. A local PER COPY is block-local,
+   the tie happens, and both copies emit `lui $v1' / `addiu $v1, $v1'. */
+void func_s60_80025C28(u8 *p, UnkVec *b)
+{
+    UnkVec *v;
+    u8 *n;
+    u8 *q;
+    u8 *w;
+    u8 *s;
+    u8 *t;
+    u8 *d;
+    u8 *e;
+    s32 i;
+    UnkVec loc;
+
+    *(s16 *)(p + 0x10) = *(u16 *)(p + 0x10) + 1;
+    switch (*(s16 *)(p + 0xA))
+    {
+    case 0:
+        ((s16 *)p)[8] = 0;
+        ((s16 *)p)[5] = ((u16 *)p)[5] + 1;
+        *(s32 *)(D_800814A8 + 0xF4) = 0;
+        func_s60_800243C0(*(u8 **)(p + 0x0) - 0x20, *(u8 **)(p + 0x4));
+        /* fall through */
+    case 1:
+        if ((**(u16 **)(p + 0x4) & 0x80) == 0)
+        {
+            break;
+        }
+        w = (u8 *)D_800814A8;
+        *(s16 *)(p + 0x18) = 0xA;
+        *(s16 *)(w + 0x96) = 8;
+        *(s16 *)(w + 0xA6) = *(u16 *)(w + 0xA6) - 1;
+        *(u8 *)(w + 0xA8) = *(u8 *)(p + 0x8);
+        *(s16 *)(p + 0xE) = *(u16 *)(D_800814A8 + 0x2A);
+        *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        if (func_80053EF0(4) != 2)
+        {
+            func_800A56E0(0x300);
+        }
+        else
+        {
+            func_800A56E0(0x4300);
+        }
+        break;
+    case 2:
+        *(s16 *)(p + 0x18) = *(u16 *)(p + 0x18) - 1;
+        if (*(s16 *)(p + 0x18) > 0)
+        {
+            break;
+        }
+        s = D_80083780;
+        t = (u8 *)D_800814A8;
+        *(s32 *)((u8 *)b + 0x0) = *(s32 *)(s + 0x0);
+        *(s32 *)((u8 *)b + 0x4) = *(s32 *)(s + 0x4);
+        *(s32 *)((u8 *)b + 0x8) = *(s16 *)(t + 0x88) << 16;
+        n = (u8 *)func_800A05A4(t, D_80082E80[0x24], D_80082E80[0x25], *(s16 *)(t + 0x2A), 8);
+        *(u8 **)(p + 0x14) = n;
+        if (n != NULL)
+        {
+            v = *(UnkVec **)(n - 0x18);
+        }
+        else
+        {
+            v = &loc;
+            *(s16 *)((u8 *)v + 0x2) = D_80082E80[0x24] * 64 + 0x20;
+            *(s16 *)((u8 *)v + 0x6) = D_80082E80[0x25] * 64 + 0x20;
+            for (i = 0; i < 8; i++)
+            {
+                *(s16 *)((u8 *)v + 0x2) =
+                    *(u16 *)((u8 *)v + 0x2) +
+                    D_8006CCD8[*(u16 *)(D_800814A8 + 0x2A) >> 9 & 7] * 64;
+                *(s16 *)((u8 *)v + 0x6) =
+                    *(u16 *)((u8 *)v + 0x6) +
+                    D_8006CCE8[*(u16 *)(D_800814A8 + 0x2A) >> 9 & 7] * 64;
+                *(s16 *)((u8 *)v + 0xA) = *(u16 *)(D_800814A8 + 0x88);
+                *(s16 *)((u8 *)v + 0xA) = func_800BCAD0((u8 *)v);
+                if (*(s16 *)((u8 *)v + 0xA) > 0x200)
+                {
+                    *(s16 *)((u8 *)v + 0xA) = *(u16 *)(D_800814A8 + 0x88);
+                }
+                if (func_800A45D8(*(u16 *)((u8 *)v + 0x2), *(u16 *)((u8 *)v + 0x6),
+                                  *(s16 *)((u8 *)v + 0xA)) != 0)
+                {
+                    *(s16 *)((u8 *)v + 0x2) =
+                        *(u16 *)((u8 *)v + 0x2) -
+                        D_8006CCD8[*(u16 *)(D_800814A8 + 0x2A) >> 9 & 7] * 64;
+                    *(s16 *)((u8 *)v + 0x6) =
+                        *(u16 *)((u8 *)v + 0x6) -
+                        D_8006CCE8[*(u16 *)(D_800814A8 + 0x2A) >> 9 & 7] * 64;
+                    *(s16 *)((u8 *)v + 0xA) = *(u16 *)(D_800814A8 + 0x88);
+                    *(s16 *)((u8 *)v + 0xA) = func_800BCAD0((u8 *)v);
+                    if (*(s16 *)((u8 *)v + 0xA) > 0x200)
+                    {
+                        *(s16 *)((u8 *)v + 0xA) = *(u16 *)(D_800814A8 + 0x88);
+                    }
+                    break;
+                }
+            }
+        }
+        func_s60_80025A9C(p, b, v);
+        *(s16 *)(p + 0x18) = 0x10;
+        *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        break;
+    case 3:
+        *(s16 *)(p + 0x18) = *(u16 *)(p + 0x18) - 1;
+        if (*(s16 *)(p + 0x18) > 0)
+        {
+            break;
+        }
+        *(s16 *)(p + 0x18) = 0x18;
+        *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        if (*(u8 **)(p + 0x14) == NULL)
+        {
+            break;
+        }
+        func_s60_80025508(p, *(UnkVec **)(*(u8 **)(p + 0x14) - 0x18));
+        break;
+    case 4:
+        if (*(u8 **)(p + 0x14) != NULL)
+        {
+            *(s32 *)(*(u8 **)(p + 0x14) + 0x1C) |= 0x10000000;
+            q = *(u8 **)(*(u8 **)(p + 0x14) - 0x14);
+            if (*(s16 *)(p + 0x18) >= 0xC)
+            {
+                *(u8 *)(q + 0xE) = *(u8 *)(q + 0xE) + 8;
+                if (*(u8 *)(q + 0xC) > 0xE0)
+                {
+                    *(u8 *)(q + 0xC) = 0xE0;
+                }
+            }
+            else
+            {
+                *(u8 *)(q + 0xE) = *(u8 *)(q + 0xE) - 8;
+                if (*(u8 *)(q + 0xE) < 0x80)
+                {
+                    *(u8 *)(q + 0xE) = 0x80;
+                }
+            }
+        }
+        if ((D_80082E94 & 0x8000) == 0)
+        {
+            *(s16 *)(p + 0x18) = *(u16 *)(p + 0x18) - 1;
+            if (*(s16 *)(p + 0x18) >= 0)
+            {
+                break;
+            }
+        }
+        if (*(u8 **)(p + 0x14) != NULL)
+        {
+            func_8009CE1C(*(u8 **)(p + 0x14), 0xA, *(u8 *)(p + 0x9), 0xA,
+                          *(u16 *)(p + 0xE) * 512 + 0x800, *(u32 *)(p + 0x0), 1);
+            q = *(u8 **)(*(u8 **)(p + 0x14) - 0x14);
+            *(s32 *)(*(u8 **)(p + 0x14) + 0x1C) &= 0xEFFFFFFF;
+            *(s32 *)(q + 0xC) = 0x808080;
+        }
+        if (*(s16 *)(p + 0x1A) != 0)
+        {
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+            break;
+        }
+        e = (u8 *)&D_80083460;
+        *(s16 *)(e + 0xA) = *(u16 *)(e + 0xA) - 1;
+        *(s32 *)(e + 0xC) = 0;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    case 5:
+        if (*(s16 *)(p + 0x1A) != 0)
+        {
+            break;
+        }
+        d = (u8 *)&D_80083460;
+        *(s16 *)(d + 0xA) = *(u16 *)(d + 0xA) - 1;
+        *(s32 *)(d + 0xC) = 0;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    *(s16 *)(p + 0x1A) = 0;
+}
