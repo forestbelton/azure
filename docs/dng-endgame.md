@@ -429,3 +429,39 @@ says nothing about the check.
 reconciliation: everything the body needs, with duplicates the unit also
 declares being harmlessly dropped. That is what `--splice` verifies and it is
 the right contract.
+
+## FOUR PARKS CARRY FOUR DIFFERENT SIGNATURES FOR `func_800A4688` -- RESOLVE IT BEFORE LANDING ANY OF THEM
+
+The committed definition at `csrc/ovl_dungeon_8009F644.c:4167` is
+
+    s32 func_800A4688(u16 px, u16 py, u16 face, u16 ang, s32 flag)
+
+and it is declared **nowhere in `include/`**. Its own comment says the width is
+unwitnessed because nothing called it. Four parks now call it, each through a
+unit-local `__asm__` alias so the definition stays untouched -- and the four
+aliases **disagree**:
+
+    (u16, u16, s16, s16, u32)
+    (u16, u16, s16, s16, s32)
+    (s32, s32, s16, s16, s32)
+    (s32, s32, s16, s32, s32)
+
+**They agree on exactly one thing: argument 3 is a SIGNED halfword**, and three
+of the four give the same evidence for it -- the call site sign-extends with
+`sll`/`sra` where a `u16` parameter would emit `andi ..., 0xFFFF`. Two also cite
+a bare `lh` for argument 4 against a `u16`'s `lhu`.
+
+> **Nobody is wrong yet, because none of these has landed and an alias only has
+> to be right at its own call site.** A parameter whose argument is already in
+> the right form at one site cannot be distinguished there, so `s32` and `u16`
+> are often both consistent with one listing. The disagreement is evidence that
+> **three of the four are under-determined, not that any is false.**
+
+**What to do when one of those parks lands:** take the union of the four call
+sites, and for each parameter keep the NARROWEST width that every site's
+instruction pair permits. Argument 3 is settled. Arguments 1, 2, 4 and 5 need
+the sites compared against each other, which no single agent could do because
+each saw one. **And at that point the committed definition should probably be
+corrected rather than aliased four more times** -- it has no other caller in the
+tree, so changing it is cheap, but it is a landed body and the change needs its
+own verification and container gate.
