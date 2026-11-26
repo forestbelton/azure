@@ -92,6 +92,10 @@ check an order whose arms cross-join to one block, where the gate is blind by
 construction. Two agents found this independently; the figures are in
 docs/matching-levers.md. Do not infer arm order from a word count.
 
+**`cdkgcc` NEEDS `-o` BEFORE THE INPUT FILE, or it silently writes nothing.**
+`tools/cdkgcc -O2 -G0 -I... -S <copy> -o out.s` is the working order; the reverse
+produces no output and no error.
+
 **A WHOLE-UNIT `-da` COMPILE DUMPS ONLY THE FIRST FUNCTION IN THE FILE.** To
 read `.greg`, `.lreg`, `.loop` or `.sched` for any other body you must build a
 single-function probe. One agent lost a detour to this. And when you do read
