@@ -1,5 +1,8 @@
 #include "common.h"
 
+void func_8003DB94(void *, void *, s32);
+void func_80099FDC(UnkNode *n);
+
 s32 func_800AC010();
 
 s32 func_800AC82C();

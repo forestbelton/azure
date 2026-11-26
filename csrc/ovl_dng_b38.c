@@ -1,4 +1,6 @@
 #include "common.h"
+
+s32 func_b38_80172258(u8 *a, void *b, void *c, s32 d);
 UnkNode *func_8003FD64(s32, void *);
 s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
 extern u8 D_80083498[];
