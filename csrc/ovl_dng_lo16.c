@@ -1,4 +1,18 @@
 #include "common.h"
+
+extern u8 D_80080AA0;
+extern u8 D_800E3D20;
+extern u8 D_800E03EC[];
+void func_lo16_80018A70(void);
+void func_80099188(s32);
+void func_lo16_800161D8(void);
+extern Unk80083178 D_80083178;
+extern u16 D_80013714;
+s32 func_80064584(s32);
+s32 func_800644B8(s32);
+void func_lo16_800172A0(u8 *p, s32 n);
+
+void func_800C7B38(u8 *);
 extern u8 D_80077E00[];
 extern u8 D_80077DE8[];
 extern u32 D_8001F5B4[];
@@ -280,7 +294,28 @@ void func_lo16_8001607C(void)
     D_80083478 = D_800DDC7C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_800161D8);
+void func_lo16_800161D8(void)
+{
+    u8 *b;
+    UnkDngLo16Grid *g;
+    s32 t1;
+
+    b = (u8 *)&D_80083160;
+    g = (UnkDngLo16Grid *)(b + 0x1DC);
+    g->unk_14 = 6;
+    g->unk_18 = 0x3F;
+    t1 = 6;
+    g->unk_16 = t1;
+    g->unk_1A = 0x3F;
+    g->unk_1C = 0x180;
+    g->unk_1E = 0x180;
+    D_80083160.unk_A8 = 0x2C808080;
+    D_80083160.unk_1DC = (u32)D_800EA000_s;
+    func_lo16_80018A70();
+    D_80080AA0 = 0;
+    D_800E3D20 = 0;
+    func_80099188((s32)D_800E03EC);
+}
 
 /* 102 words, 0 differing.  FIRST COMPILE.  ONE MEASURED FACT and it is the
    nine D_80083460 stores' ORDER: it is the order the LISTING stores in --
@@ -779,7 +814,75 @@ void func_lo16_80017294(void)
     D_800DCF5A = 0;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo16", func_lo16_800172A0);
+void func_lo16_800172A0(u8 *p, s32 n)
+{
+    u8 *b;
+    u8 *q;
+    u8 *r;
+    s32 a;
+    s16 t;
+    s16 k;
+    s16 v;
+    s32 c;
+    u32 fp;
+    u16 *g;
+
+    b = (u8 *)&D_80083178;
+    q = b + 0x1C4;
+    r = b + 0xB8;
+    a = (rand() & 0x1FFF) - 0x1000;
+    if ((D_80013714 & 2) == 0)
+    {
+        t = *(u16 *)(p + 0x2) + (func_80064584(a) << 1);
+        *(s16 *)(b + 0xA4) = t;
+        if (t < 0)
+        {
+            *(s16 *)(b + 0xA4) = 0;
+        }
+        else if (t >= *(s16 *)(q + 0x1C))
+        {
+            *(s16 *)(b + 0xA4) = *(u16 *)(q + 0x1C) - 1;
+        }
+        t = *(u16 *)(p + 0x6) + (func_800644B8(a) << 1);
+        *(s16 *)(b + 0xA6) = t;
+        if (t < 0)
+        {
+            *(s16 *)(b + 0xA6) = 0;
+        }
+        else if (t >= *(s16 *)(q + 0x1E))
+        {
+            *(s16 *)(b + 0xA6) = *(u16 *)(q + 0x1E) - 1;
+        }
+        *(s16 *)(b + 0xA8) = *(u16 *)(p + 0xA) - 0x400;
+        *(s16 *)(b + 0xAC) = 0;
+        if ((rand() & 1) != 0)
+        {
+            v = 0x800;
+        }
+        else
+        {
+            v = -0x800;
+        }
+        *(s16 *)(b + 0xB0) = v;
+        *(u8 **)(r + 0x0) = r + 4;
+        *(s32 *)(r + 0x14) = 1;
+        *(s16 *)(r + 0x24) = 0x40;
+        *(u8 **)(r + 0xC) = p;
+        *(s32 *)(r + 0x18) = 0;
+        fp = (u32)func_800C7B38;
+        g = D_80083460h;
+        c = *(s16 *)(r + 0x24);
+        do
+        {
+            *(s16 *)(r + 0x26) = n;
+        } while (0);
+        *(u32 *)(b + 0xB4) = fp;
+        k = n + (c + 1) * 48;
+        *(s16 *)(b + 0x98) = k;
+        *(s32 *)(r + 0x10) = k;
+        g[5]++;
+    }
+}
 
 /* 13 words, 0 differing.  The counter decrement is the FIRST statement of the
    body, not the `for' increment: as the increment it is 13 words / 5 differing,
