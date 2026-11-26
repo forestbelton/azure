@@ -141,6 +141,13 @@ void func_800A2FE0(u8 *);
 u8 *func_800A32A4(u8 *);
 void func_8009A028(u8 *);
 
+u8 *func_8003DE58(u8 *, u8 *, void *, s16);
+s32 func_800C8150(u8 *, s32, s32);
+extern u8 D_80174B14[];
+extern u8 D_b38_80174ACC[];
+void func_b38_801745E0(u8 *p);
+s32 func_b38_80174688(u8 *);
+
 u8 *func_b38_80170880(s16 a, u16 b, u16 c, s16 d)
 {
     UnkNode *n;
@@ -1633,20 +1640,6 @@ const u8 D_b38_80170854[] = {
    reference witnesses, and `const' because without it the array
    goes to .data and the linker puts it outside this segment's
    declared .rodata. */
-const u8 D_b38_80170868[] = {
-    0x00,
-    0x10,
-    0x00,
-    0x0C,
-    0x00,
-    0x10,
-    0x00,
-    0x18,
-    0x00,
-    0x14,
-    0x00,
-    0x00,
-};
 
 /* 0x8 bytes of this bank's own rodata, between its jump tables,
    read by func_b38_80174260. Spelled as BYTES because that is all the
@@ -1658,20 +1651,6 @@ const u8 D_b38_80170868[] = {
    `instruction' of func_b38_80170880's INCLUDE_ASM listing until 2026-11-25;
    they are rodata, and splat's `c' start moved to 0xfa7080 with this change.
    See docs/dng-parks/func_b38_8017087C.c for the whole derivation. */
-const u8 D_b38_80170874[] = {
-    0x00,
-    0x10,
-    0x00,
-    0x18,
-    0x00,
-    0x10,
-    0x00,
-    0x08,
-    0x00,
-    0x0C,
-    0x00,
-    0x00,
-};
 
 /* The banked room script's three-state glide, switched on p + 0x9B: state 0
    seeds the velocity from the D_8006CCD8 / D_8006CCE8 facing pair, state 1
@@ -2530,7 +2509,180 @@ void func_b38_801740F4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     func_800A5720(m);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_80174260);
+/* The banked room script's three-state glide-and-spawn on p + 0x9B, with the
+   slot's +0xA0 countdown decremented once before the dispatch: state 0 either
+   retires to state 2 (when c + 0x14 already has 0x8000) or projects the
+   slot's own position through func_8003DE58 and spawns the 0x201 node that
+   func_b38_80174688 draws and func_b38_801745E0 steps, seeded from the mover
+   plus that projection; state 1 drives the spawned node's +0x1C/+0x1E SCALE
+   pair from two five-entry tables indexed by p + 0x96 - 0x12 and runs the
+   +0x96 countdown out; state 2 re-dresses from the bank-local D_b38_80174ACC
+   facing table and hands the actor back to func_b38_80171138.
+   224 words, 0 differing.
+
+   NO JUMP TABLE: three cases, so expand_end_case takes the balanced compare
+   chain for {0,1,2} and the arms emit in ascending source order.
+
+   THE TWO `const u8' ARRAYS ARE cc1psx's OWN INITIALISER BLOBS, NOT GLOBALS.
+   `D_b38_80170868' and `D_b38_80170874' were put in this file as
+   `const u8 [12]' by the agent that landed func_b38_801740F4, with comments
+   saying this function reads them. It does not read them -- IT IS THEM. The
+   two locals are
+       u16 sx[5] = {0x1000, 0x0C00, 0x1000, 0x1800, 0x1400};
+       u16 sy[5] = {0x1000, 0x1800, 0x1000, 0x0800, 0x0C00};
+   and cc1psx emits each initialiser as its own 10-byte `.rdata' constant,
+   4-aligned by CONSTANT_ALIGNMENT in config/mips/mips.h (a CONSTRUCTOR with
+   alignment below BITS_PER_WORD is bumped to BITS_PER_WORD), which is where
+   the ROM's two trailing pad bytes come from. So BOTH `const u8' definitions
+   must be DELETED when this body is integrated; keeping them puts 48 bytes
+   of rodata where the ROM has 24.
+
+   THE DISCRIMINATOR IS THE LAST PAIR OF THE BLOCK MOVE, and it is worth
+   writing down because the opposite case is live in
+   docs/dng-parks/func_b39_80174668.c, where a `const u8 []' IS real.
+   config/mips/mips.c `output_block_move' picks per chunk: `bytes >= 4 &&
+   align >= 4' gives lw/sw, `bytes >= 4' alone gives lwl/lwr + swl/swr,
+   `bytes >= 2 && align >= 2' gives lh/sh, and otherwise lb/sb. This listing
+   copies ten bytes as lwl/lwr, lwl/lwr, lh/sh -- the trailing lh/sh needs
+   `align >= 2' and the two lwl/lwr pairs need `align < 4', so the SOURCE
+   OBJECT'S ALIGNMENT IS EXACTLY 2. A `const u8 []' has alignment 1 and would
+   end lb/sb (b39's object is 8 bytes, so it never reaches that chunk and
+   cannot tell the two apart). `u16 [5]' has alignment 2. MEASURED: with the
+   two initialised locals the copy region is byte-identical to the target at
+   rows 12-34 of aligndiff, frame slots included (sp+0x18 and sp+0x28, both
+   8-aligned because `assign_stack_local' gives a BLKmode local
+   BIGGEST_ALIGNMENT). ASSUMED, from reading `output_block_move' rather than
+   from a compile: that the `const u8 []' spelling would end lb/sb. I did not
+   compile that form.
+   `relcand.py' therefore reports `DATA in the listing, not in your code:
+   D_b38_80170868, D_b38_80170874' on this body. THAT IS THE EXPECTED STATE
+   for an initialiser blob and not a wrong-table fault.
+
+   ONE LOCAL FOR BOTH ARMS' NODE POINTER IS THE WHOLE RESIDUE. State 0's
+   `n = func_8003FD64(...)' and state 1's `n = (UnkNode *)(d->+0x60 - 0x20)'
+   are ONE variable. Written as two separate locals the body is
+   222 words / 47 aligned differences: state 1's pointer then has an allocno
+   of its own that crosses no call, takes $a0, and leaves only five
+   callee-saved quantities, so `d' takes the $s0 slot that state 0's node
+   shares and p/b/c/d/1 all rotate down one position -- the two missing words
+   are the seventh save/restore pair. Merged, the single allocno must be
+   callee-saved for state 0 and is therefore callee-saved in state 1 too.
+   This is the `one local too many' lever with the sign reversed: here the
+   fault was one local too FEW.
+
+   TWO MORE MEASURED, TOGETHER, at 223 words / 12 aligned differences:
+     the two range tests on `p + 0x96' spelled `>= 0x12 && < 0x17' instead of
+       NESTED -- `fold_truthop' merges two relational tests on one memory
+       expression into an unsigned range check, `addiu -0x12' / `sltiu 0x5',
+       and the body loses a word (rows 118-125 of that run)
+     `*(s16 *)(w + 0x48) = 1' written BEFORE `*(s32 *)(w + 0x58) = 0x80'
+       -- a clean two-row transposition (rows 104/105 of the same run)
+   The row attribution between the two is read off those rows, not measured
+   by separating them.
+
+   DONOR: csrc/ovl_dng_b12.c func_b12_80172654 (297 words, landed), found by
+   the callee-set intersection on func_8003DE58, not by a ratio -- dngtwin
+   finds NO carved sibling for any function in this unit at 0.70. Its
+   `u16 t[3]' out-parameter for func_8003DE58 and its fact (3) THAT THE
+   SCRATCH VECTOR IS CLEARED DESCENDING (`t[2]', `t[1]', `t[0]') both hold
+   here verbatim and were taken on trust from its recorded 297/4 price for
+   ascending; its node-payload store order (ascending by offset, the
+   scheduler pulling the constant stores into the gap by itself) also holds.
+   1 copy (dngfam.py). */
+void func_b38_80174260(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u16 t[3];
+    u16 sx[5] = {0x1000, 0x0C00, 0x1000, 0x1800, 0x1400};
+    u16 sy[5] = {0x1000, 0x1800, 0x1000, 0x0800, 0x0C00};
+    UnkNode *n;
+    u8 *w;
+    u8 *m;
+
+    *(u16 *)(p + 0xA0) -= 1;
+    switch (p[0x9B])
+    {
+    case 0:
+        if ((*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            if (*(s32 *)(d + 0x60) != 0)
+            {
+                func_800C8150(*(u8 **)(d + 0x60), 0x10, 0x10);
+            }
+            p[0x9B] = 2;
+            return;
+        }
+        if ((*(u16 *)(c + 0x14) & 0x6000) == 0)
+        {
+            return;
+        }
+        if (func_8003DE58(*(u8 **)(c + 0x8), c, t, 0) == NULL)
+        {
+            t[2] = 0;
+            t[1] = 0;
+            t[0] = 0;
+        }
+        n = func_8003FD64(0x201, D_80083498);
+        if (n != NULL)
+        {
+            func_8004491C(n, (u32)func_b38_80174688);
+            n->unk_10 = (u32)func_b38_801745E0;
+            w = (u8 *)n + 0x20;
+            *(s16 *)(w + 0xC) = *(u16 *)((u8 *)b + 0x2) + t[0];
+            *(s16 *)(w + 0xE) = *(u16 *)((u8 *)b + 0x6) + t[1];
+            *(s16 *)(w + 0x10) = *(u16 *)((u8 *)b + 0xA) + t[2];
+            *(s32 *)(w + 0x58) = 0x80;
+            *(s16 *)(w + 0x48) = 1;
+        }
+        func_800A56E0(0x815);
+        *(s16 *)(p + 0x96) = 0x1E;
+        p[0x9B] += 1;
+        return;
+    case 1:
+        if (*(s32 *)(d + 0x60) != 0)
+        {
+            if (*(s16 *)(p + 0x96) >= 0x12)
+            {
+                if (*(s16 *)(p + 0x96) < 0x17)
+                {
+                    n = (UnkNode *)(*(u8 **)(d + 0x60) - 0x20);
+                    *(s16 *)(n->unk_0C + 0x1C) = sx[*(s16 *)(p + 0x96) - 0x12];
+                    *(s16 *)(n->unk_0C + 0x1E) = sy[*(s16 *)(p + 0x96) - 0x12];
+                }
+            }
+        }
+        if (*(s16 *)(p + 0x96) == 0x14)
+        {
+            if (*(s32 *)(d + 0x60) != 0)
+            {
+                func_800C8150(*(u8 **)(d + 0x60), 0x10, 0x10);
+            }
+        }
+        if ((s16)(--*(u16 *)(p + 0x96)) <= 0)
+        {
+            *(u8 **)(c + 0x2C) = D_80174B14;
+            func_80047784(c, D_80174B14[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+            p[0x9B] += 1;
+        }
+        return;
+    case 2:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            return;
+        }
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800AD594(d, 0x800);
+        *(u8 **)(c + 0x2C) = D_b38_80174ACC;
+        func_80047784(c, D_b38_80174ACC[((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7], 0);
+        m = (u8 *)&D_80083460;
+        *(u16 *)(m + 0xA) -= 1;
+        func_800A4ACC(d);
+        d[0x6D] = 0;
+        *(u16 *)(d + 0x46) &= 0x7FFF;
+        *(u32 *)(p + 0x8C) = (u32)func_b38_80171138;
+        return;
+    }
+}
 
 /* A frameless leaf timer on one record: bias +0x58 while the +0x4C phase is
    8, count the +0x48 ticks down, and on expiry reload +0x48 (0xA out of
@@ -2542,10 +2694,17 @@ INCLUDE_ASM("asm/nonmatchings/ovl_dng_b38", func_b38_80174260);
    better; the callee set is EMPTY -- there is no `jal' in the listing at all,
    so the brief's intersect-the-callees recipe has nothing to intersect -- and
    the distinctive-symbol grep on `D_800814A0 |= 0x8000' matches 20 landed
-   units because it is the global "redraw" bit. Nothing in this unit or in
-   asm/nonmatchings/ovl_dng_b38 references func_b38_801745E0 either, by `jal'
-   or by address, so it is an orphan the carve left behind and its single
-   parameter is all the listing witnesses.
+   units because it is the global "redraw" bit. *** THE "ORPHAN" CLAIM BELOW WAS TRUE ONLY WHILE THE UNIT'S STUBS WERE
+   UNSPLIT, AND IT IS NOW FALSE.  func_b38_80174260.s carries
+   %hi/%lo(func_b38_801745E0) twice, and that body -- landed since this
+   comment was written -- installs this function as the 0x201 node's
+   unk_10 handler.  So it is a NODE HANDLER reached through a function
+   pointer, not an orphan, and its single parameter is the node.
+
+   The lesson is about the method, not this body: "nothing references it"
+   is a statement about the listings THAT EXIST AT THE TIME, and on a
+   carved unit most of them do not exist yet.  An unreferenced-symbol
+   argument is only as good as the split, so date it or do not make it.
 
    FOUR SPELLINGS MEASURED AND ALL FOUR FREE, so this body constrains almost
    nothing and a later copy should not preserve any of them: the predecrement
