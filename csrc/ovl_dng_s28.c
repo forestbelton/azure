@@ -19,8 +19,8 @@ void func_8003DB94(void *, void *, s32);
 s32 func_8004491C(UnkNode *, u32);
 s32 func_80045C34(u8 *, UnkVec *, UnkSlot *);
 extern u8 D_80025EE4[];
-void func_s28_80024FD4(u8 *, UnkVec *);
-UnkNode *func_s28_800253D0(u8 *, UnkVec *);
+void func_s28_80024FD4(u8 *p, UnkVec *b);
+UnkNode *func_s28_800253D0(u8 *p, UnkVec *b);
 
 /* Raise the actor's +0x64 pool by func_800A6870's scale of the second
    parameter plus 8, doubled when the actor's +0x28 has bit 0, then republish
@@ -66,6 +66,61 @@ UnkNode *func_s28_800253D0(u8 *, UnkVec *);
    destination of the doubling is sub-word OR the idiom is not `*2'. The
    twin's `s16'/`s16' is kept because it is the twin's and it is one of the
    four. */
+void func_s28_800242FC(u8 *p, UnkVec *b, u8 *c);
+s32 func_s28_80024A64(u8 *p, UnkVec *b, u8 *s);
+s32 func_80064584(s32);
+s32 func_800644B8(s32);
+extern u8 D_80045340[];
+extern u8 D_800DEC70[];
+s32 rand(void);
+typedef struct UnkDngS28PolySP
+{
+    u8 *unk_00;
+    s32 unk_04;
+    s32 unk_08;
+    s32 unk_0C;
+    s16 unk_10;
+    s16 unk_12;
+    s16 unk_14;
+    u8 pad_16[0x2];
+    s16 unk_18;
+    s16 unk_1A;
+    s16 unk_1C;
+    u8 pad_1E[0x2];
+    s16 unk_20;
+    s16 unk_22;
+    s16 unk_24;
+    u8 pad_26[0x2];
+    s16 unk_28;
+    s16 unk_2A;
+    s16 unk_2C;
+    u8 pad_2E[0x2];
+    s32 unk_30;
+    s32 unk_34;
+    s32 unk_38;
+    u8 pad_3C[0x4];
+    s32 unk_40;
+    s32 unk_44;
+    s32 unk_48;
+    u8 pad_4C[0x4];
+    s32 unk_50;
+    s32 unk_54;
+    s32 unk_58;
+    u8 pad_5C[0x4];
+    s32 unk_60;
+    s32 unk_64;
+    s32 unk_68;
+    u8 pad_6C[0x4];
+    u16 unk_70;
+    u16 unk_72;
+    u16 unk_74;
+    u16 unk_76;
+    u16 unk_78;
+    u16 unk_7A;
+    u16 unk_7C;
+    u16 unk_7E;
+} UnkDngS28PolySP;
+
 void func_s28_80024024(u8 *p, u8 k)
 {
     s16 t;
@@ -137,15 +192,589 @@ void func_s28_800240B8(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s28", func_s28_80024154);
+/* Spawn the 0x212 node func_s28_800242FC fires off at its second phase: a
+   renderable dressed from D_800DEC70 whose packed colour word the caller hands
+   over at +0xC, the 0x7DCF clut, 0xC and 0x100 raised in +0x14 and 0x20 in
+   +0x10, a random 12-bit rotation and 0xC00 scale on both axes, D_80045340 as
+   the per-slot walk and func_s28_800240B8 as the per-frame step; the caller's
+   record at the payload's +0x0 with +0x4/+0x6 cleared, and the caller's mover
+   copied in and then kicked along a random 12-bit heading. Returns the node,
+   or NULL when the pool is empty.
+   106 words, 0 differing, FIRST COMPILE.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s28", func_s28_800242FC);
+   DONORS, two, neither a dngtwin hit. The 0x212 skeleton is
+   func_s28_80025614/func_s28_800253D0 in THIS FILE. The D_80045340 +
+   D_800DEC70 dress block and `func_8004491C(n, (u32)D_80045340)' -- note the
+   second argument is a DATA symbol, not a function -- came from the landed
+   func_b09_80170DDC in csrc/ovl_dng_b09.c, found by one grep of D_80045340
+   across csrc/; `extern u8 D_80045340[];' and `extern u8 D_800DEC70[];' are
+   that unit's declarations verbatim.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s28", func_s28_80024790);
+   FACTS MEASURED ON THIS BODY FROM THE 0 STATE:
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s28", func_s28_80024A64);
+     `s16 t' for the random heading                   106 w,  0   kept
+       ... `s32 t'                                    105 w, 33
+     `func_80064584(t) >> 4'                          106 w,  0   kept
+       ... `func_80064584(t) / 16'                    109 w, 20
+     `* 4608'                                         106 w,  0   kept
+       ... `(x * 9) << 9'                             106 w,  0   free
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s28", func_s28_80024FD4);
+   THE `s16 t' ROW IS THE BODY. The heading is `rand() % 0x1000' handed to both
+   func_800644B8 and func_80064584, and the target sign-extends it with
+   `sll 16'/`sra 16' before the first call -- which only happens if the value
+   lives in a narrow signed pseudo. With `s32 t' the extension is absent, the
+   body is one word short and the whole call pair rotates, 33 rows. This is the
+   brief's "an `lhu' followed by `sll 16'/`sra 16' means an `s16' LOCAL" with
+   no load involved at all: a COMPUTED value narrowed the same way says the
+   same thing.
+
+   The `/ 16' row is three words of signed-divide bias (`srl 31'/`addu'/
+   `sra 4') where `>> 4' is one `sra', so a right shift and a power-of-two
+   divide are NOT interchangeable on a signed value -- the lever file's
+   "unsigned divide by a power of two simply IS the srl" does not extend to
+   the signed case. `* 4608' and `(x * 9) << 9' are the same tree (the listing
+   shows `sll 3'/`addu'/`sll 9' either way), so the plain constant is kept for
+   readability.
+
+   SIGNATURE NOTE, AND IT IS A PROTOTYPE CHANGE: the third parameter is a
+   PACKED COLOUR WORD, not a pointer. func_s28_800242FC's second phase writes
+   the three colour bytes at c+0xC/+0xD/+0xE and then passes `*(s32 *)(c +
+   0xC)' here, which this body stores with one `sw' at the new renderable's
+   +0xC -- the same three bytes func_s28_800253D0 sets as
+   `m[0xE] = m[0xD] = m[0xC] = 0x80'. Spelled `u8 *c' with
+   `*(u8 **)(m + 0xC) = c' the emitted word is identical, so the two are NOT
+   MEASURABLE against each other (106 / 0 both ways) and only the caller makes
+   the s32 reading the honest one.
+
+   DECLARATION NOTE: `s32 rand(void);' was missing from this unit entirely --
+   func_s28_80025614 has been calling it implicitly since it landed, and
+   declcheck --src flags it. Adding it is measured FREE on ALL TWELVE bodies in
+   the unit, the six already-landed ones included. */
+UnkNode *func_s28_80024154(u8 *p, UnkVec *b, s32 col)
+{
+    UnkNode *n;
+    u8 *q;
+    u8 *m;
+    UnkVec *v;
+    s16 t;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s28_800240B8;
+        q = (u8 *)n + 0x20;
+        *(u8 **)q = p;
+        *(s16 *)(q + 0x4) = 0;
+        *(s16 *)(q + 0x6) = 0;
+        m = (u8 *)n->unk_0C;
+        *(s32 *)(m + 0xC) = col;
+        *(s16 *)(m + 0x12) = 0x7DCF;
+        *(u16 *)(m + 0x14) |= 0xC;
+        *(u16 *)(m + 0x10) |= 0x20;
+        *(u16 *)(m + 0x14) |= 0x100;
+        func_8003DB94(m, D_800DEC70, 0);
+        *(s16 *)(m + 0x1A) = rand() % 0x1000;
+        *(s16 *)(m + 0x1E) = 0xC00;
+        *(s16 *)(m + 0x1C) = 0xC00;
+        func_8004491C(n, (u32)D_80045340);
+        v = n->unk_08;
+        *v = *b;
+        t = rand() % 0x1000;
+        v->unk_00 += (func_80064584(t) >> 4) * 4608;
+        v->unk_04 += (func_800644B8(t) >> 4) * 4608;
+        return n;
+    }
+    return NULL;
+}
+
+/* The spark's per-frame step, installed by func_s28_80024FD4: bump the +0x14
+   counter on the node at the payload's +0x0, the payload's own +0x6 frame and
+   +0x8 slot counters, and spin its two +0xC/+0xE headings by 0x80; then
+   dispatch on the frame counter. Under 8 and in 0x28..0x2F it raises
+   0x10000000 in the owner's +0x1C and paints both the renderable at the
+   owner's -0x14 and the caller's own view with the slot counter's residue
+   modulo 7 -- the /4, the (/2)%2 and the %2 bits -- scaled by the frame
+   counter ramping up and then down; in 8..0x27 the same three bits are painted
+   flat at 192 and a child node is spawned through func_s28_80024154 with the
+   view's packed colour; past 0x30 it clears 0x10000000 and retires the owner
+   into D_800814A0.
+   293 words, 0 differing.
+
+   NO EXTERNAL DONOR. The four-arm compare chain and the modulo-7 colour chain
+   are func_s28_800250E8's, already at 0 differing in this file, which is where
+   `s16 k' for the residue and `s16 h' for `k / 2' written AFTER the +0xC store
+   come from; the head bumps and the retire block are
+   func_s28_800240B8's. Only the two scale forms and the arm-B temp were
+   derived here. THE FUNCTION OWNS NO JUMP TABLE: the dispatch is a compare
+   chain of three `slti' (8, 0x28, 0x30) and the listing has no `.section
+   .rodata'.
+
+   FACTS MEASURED ON THIS BODY FROM THE 0 STATE:
+
+   | spelling                                              | words | rows |
+   |-------------------------------------------------------|-------|------|
+   | the ramp as `(f * 3) << 3' / `(f * 3) << 3' etc.      |  293  |   0  |
+   |   ... written `f * 8' and `f * 24'                    |  286  | 114  |
+   |   ... the operand order swapped, scale first          |  287  | 156  |
+   | arm B's product through an `s32 t' local              |  293  |   0  |
+   |   ... the expression written out at both stores        |  293  |   2  |
+   | `h = k / 2;' AFTER arm B's two +0xC stores            |  293  |   0  |
+   |   ... ahead of them                                   |  293  |  21  |
+   |   ... between them                                    |  293  |  26  |
+
+   THE SCALE ROW IS fold's MULT REASSOCIATION AND IT IS THE BODY. The target
+   computes the scale first and then multiplies: `lh 0x6'/`sll 3'/
+   `mult $t1, $v0', i.e. `(k / 4) * (f * 8)'. Written exactly that way, fold
+   pulls the constant out of the inner product and emits
+   `((k / 4) * 8) * f' instead -- the `sll 3' lands on `k / 4' and the body
+   comes out SEVEN WORDS SHORT at 114 rows. `(f << 3)' is an LSHIFT_EXPR, which
+   fold's MULT_EXPR reassociation cannot reach, so the grouping survives; the
+   same trick gives `* 24' as `(f * 3) << 3'. So: WHERE A PRODUCT OF TWO
+   VARIABLES CONTAINS A CONSTANT FACTOR ON ONE SIDE, THE PARENTHESES DO NOT
+   HOLD -- spell the constant factor as a SHIFT to pin it to its own operand.
+   This is the opposite precondition from the lever file's "a multiply the
+   listing shows as sll/addu/sll wants the plain constant", which is about a
+   product with no second variable, and from func_s28_800250E8's `* 128' row
+   40 words up, which is a constant against a single variable and free.
+
+   THE ARM-B TEMP IS NOT A WIDTH OR A SCOPE FACT. Arm B stores one value to
+   both the view and the renderable at each of +0xC/+0xD/+0xE; with the
+   expression written out twice, cse unifies it but the first store is
+   scheduled THREE SLOTS EARLY, ahead of the `k / 2' chain instead of after it,
+   2 rows. One `s32 t' reused for all three pairs, three separate `s32'
+   temps, a single temp on the +0xC pair only, and a `u8' temp ALL measure
+   293 / 0, so the temp's type, count and scope are NOT MEASURABLE -- only its
+   presence is. */
+void func_s28_800242FC(u8 *p, UnkVec *b, u8 *c)
+{
+    u8 *r;
+    s16 k;
+    s16 h;
+    s32 t;
+
+    *(s16 *)(*(u8 **)p + 0x14) = *(u16 *)(*(u8 **)p + 0x14) + 1;
+    *(s16 *)(p + 0x6) = *(u16 *)(p + 0x6) + 1;
+    *(s16 *)(p + 0x8) = *(u16 *)(p + 0x8) + 1;
+    *(s16 *)(p + 0xC) = *(u16 *)(p + 0xC) + 0x80;
+    *(s16 *)(p + 0xE) = *(u16 *)(p + 0xE) + 0x80;
+    if (*(s16 *)(p + 0x6) < 8)
+    {
+        *(s32 *)(*(u8 **)(p + 0x10) + 0x1C) |= 0x10000000;
+        k = *(s16 *)(p + 0x8) % 7 + 1;
+        r = *(u8 **)(*(u8 **)(p + 0x10) - 0x14);
+        r[0xC] = (k / 4) * (*(s16 *)(p + 0x6) << 3) - 0x80;
+        h = k / 2;
+        r[0xD] = (h % 2) * (*(s16 *)(p + 0x6) << 3) - 0x80;
+        r[0xE] = (k % 2) * (*(s16 *)(p + 0x6) << 3) - 0x80;
+        c[0xC] = (k / 4) * ((*(s16 *)(p + 0x6) * 3) << 3);
+        c[0xD] = (h % 2) * ((*(s16 *)(p + 0x6) * 3) << 3);
+        c[0xE] = (k % 2) * ((*(s16 *)(p + 0x6) * 3) << 3);
+    }
+    else if (*(s16 *)(p + 0x6) < 0x28)
+    {
+        *(s32 *)(*(u8 **)(p + 0x10) + 0x1C) |= 0x10000000;
+        k = *(s16 *)(p + 0x8) % 7 + 1;
+        r = *(u8 **)(*(u8 **)(p + 0x10) - 0x14);
+        t = (k / 4) * 192;
+        c[0xC] = t;
+        r[0xC] = t;
+        h = k / 2;
+        t = (h % 2) * 192;
+        c[0xD] = t;
+        r[0xD] = t;
+        t = (k % 2) * 192;
+        c[0xE] = t;
+        r[0xE] = t;
+        func_s28_80024154(*(u8 **)p, b, *(s32 *)(c + 0xC));
+    }
+    else if (*(s16 *)(p + 0x6) < 0x30)
+    {
+        *(s32 *)(*(u8 **)(p + 0x10) + 0x1C) |= 0x10000000;
+        k = *(s16 *)(p + 0x8) % 7 + 1;
+        r = *(u8 **)(*(u8 **)(p + 0x10) - 0x14);
+        r[0xC] = (k / 4) * ((0x30 - *(s16 *)(p + 0x6)) << 3) - 0x80;
+        h = k / 2;
+        r[0xD] = (h % 2) * ((0x30 - *(s16 *)(p + 0x6)) << 3) - 0x80;
+        r[0xE] = (k % 2) * ((0x30 - *(s16 *)(p + 0x6)) << 3) - 0x80;
+        c[0xC] = (k / 4) * (((0x30 - *(s16 *)(p + 0x6)) * 3) << 3);
+        c[0xD] = (h % 2) * (((0x30 - *(s16 *)(p + 0x6)) * 3) << 3);
+        c[0xE] = (k % 2) * (((0x30 - *(s16 *)(p + 0x6)) * 3) << 3);
+    }
+    else
+    {
+        *(s32 *)(*(u8 **)(p + 0x10) + 0x1C) &= ~0x10000000;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* Draw one semi-transparent POLY_GT4 for the four world positions the caller
+   has already left in the 0x1F800000 scratchpad at +0x30/+0x40/+0x50/+0x60:
+   the 0x7DCF clut on GetTPage(0, 3, 0x300, 0x100), a U span of eight texels
+   starting at the sprite index times 8 plus 0x80, V 0x40 on the top edge and
+   0x7F on the bottom, vertices 0 and 1 black and vertices 2 and 3 taking the
+   caller's +0xC/+0xD/+0xE colour bytes, projected with RotAverage4 (ten
+   arguments, so six go on the stack) and chained into D_80083160's +0x8D0 ring
+   when the averaged z is under 0x1E0. Returns 0.
+   181 words, 0 differing.
+
+   DONOR: the landed func_s60_80024A30 in csrc/ovl_dng_s60.c -- 213 words, the
+   same "four-vertex version" of a scratchpad POLY_GT4 -- found by dngcallee,
+   whose 3-of-3 tier (D_80083160, GetTPage, RotAverage4) has a clean gap to a
+   73-function 2-of-3 tier, and confirmed by `func_80065590' occurring in
+   exactly one file in csrc/. Its `UnkDngS60PolySP' is this object's scratchpad
+   layout FIELD FOR FIELD and is copied into this unit as `UnkDngS28PolySP'
+   (it is file-local there too, not in structs.h). Its `(u32)sp | 0xNN'
+   argument idiom, its per-vertex UV order and its `addPrim(sp->unk_00 +
+   sp->unk_04 * 4, l)' tail all carried unchanged; what is new here is the
+   computed U, the black top edge and the caller's colour on the bottom.
+
+   FACTS MEASURED ON THIS BODY FROM THE 0 STATE:
+
+     `s16 k' for the U base                          181 w,  0   kept
+       ... `s32 k'                                   181 w,  6
+       ... no local, the parameter reassigned
+           as `a = a * 8 + 0x80;'                    181 w,  0   free
+     the UV stores BEFORE the colour stores          181 w,  0   kept
+       ... the colour stores first                   181 w, 35
+     `k' assigned after `l->tpage = GetTPage(...)'   181 w,  0   kept
+       ... anywhere BEFORE the GetTPage call         180 w, 14
+       ... any of four slots after it                181 w,  6 or 0
+
+   THE WIDTH ROW IS A SCHEDULE, NOT A CAST, AND THAT IS NEW. With `s32 k' every
+   one of the 181 words is correct and the three insns of `k' (`sll 16'/
+   `sra 13'/`addiu 0x80') come out FOURTEEN SLOTS LATE -- after the six
+   `addu'/`ori' pairs that materialise RotAverage4's stack arguments, instead of
+   immediately after the GetTPage call. Everything in that block has
+   INSN_PRIORITY 1 (sched.c's `priority' takes the longest dependence chain
+   with cost-1 contributions, and no load or multiply is upstream), so
+   `rank_for_schedule' falls through to its INSN_LUID tie-break -- and the
+   HImode truncation changes the pre-sched insn order enough to flip it. FIVE
+   source positions for the statement, both declaration orders and the inline
+   form all give the IDENTICAL 6 rows, which is the brief's "if two candidate
+   spellings each leave the same residue" signal: the position was never the
+   fault, the width was.
+
+   Reassigning the parameter measures 0 as well, so the two are NOT MEASURABLE
+   against each other and `s16 k' is kept only because it reads better. Note
+   the OTHER direction of the same fact: the three k insns moved into the
+   PRE-call block come out one word SHORT, because regmove then folds the
+   parameter's entry copy `addu $s0, $a0, $zero' into the `sll 16' -- the
+   brief's "a missing register-to-register copy is a parameter that dies at its
+   copy", here caused by hoisting rather than by a cursor.
+
+   ADDRESSES A CONSTANT BASE (0x1F800000): `ovlverify --raw' reports 4
+   differing words and all four are relocations (D_80083160's %hi/%lo, `jal
+   GetTPage', `jal RotAverage4'); no displacement differs. Same report as the
+   donor's, which lists 6 for its own symbol set. */
+s32 func_s28_80024790(s16 a, u8 *c)
+{
+    UnkDngS28PolySP *sp = (UnkDngS28PolySP *)0x1F800000;
+    u8 *base;
+    POLY_GT4 *l;
+    s16 k;
+
+    base = D_80083160.unk_00;
+    sp->unk_00 = base + 0xB0;
+    l = *(POLY_GT4 **)(base + 0x8D0);
+    *(POLY_GT4 **)(base + 0x8D0) = l + 1;
+    setPolyGT4(l);
+    setSemiTrans(l, 1);
+    l->tpage = GetTPage(0, 3, 0x300, 0x100);
+    l->clut = 0x7DCF;
+    k = a * 8 + 0x80;
+    l->u0 = k;
+    l->v0 = 0x40;
+    l->u1 = k | 7;
+    l->v1 = 0x40;
+    l->u2 = k | 7;
+    l->v2 = 0x7F;
+    l->u3 = k;
+    l->v3 = 0x7F;
+    l->r0 = 0;
+    l->g0 = 0;
+    l->b0 = 0;
+    l->r1 = 0;
+    l->g1 = 0;
+    l->b1 = 0;
+    l->r2 = c[0xC];
+    l->g2 = c[0xD];
+    l->b2 = c[0xE];
+    l->r3 = c[0xC];
+    l->g3 = c[0xD];
+    l->b3 = c[0xE];
+    sp->unk_10 = sp->unk_30 >> 16;
+    sp->unk_18 = sp->unk_40 >> 16;
+    sp->unk_20 = sp->unk_50 >> 16;
+    sp->unk_28 = sp->unk_60 >> 16;
+    sp->unk_12 = sp->unk_34 >> 16;
+    sp->unk_1A = sp->unk_44 >> 16;
+    sp->unk_22 = sp->unk_54 >> 16;
+    sp->unk_2A = sp->unk_64 >> 16;
+    sp->unk_14 = sp->unk_38 >> 16;
+    sp->unk_1C = sp->unk_48 >> 16;
+    sp->unk_24 = sp->unk_58 >> 16;
+    sp->unk_2C = sp->unk_68 >> 16;
+    sp->unk_04 = RotAverage4((SVECTOR *)((u32)sp | 0x10), (SVECTOR *)((u32)sp | 0x18),
+                             (SVECTOR *)((u32)sp | 0x20), (SVECTOR *)((u32)sp | 0x28),
+                             (long *)((u32)sp | 0x70), (long *)((u32)sp | 0x74),
+                             (long *)((u32)sp | 0x78), (long *)((u32)sp | 0x7C),
+                             (long *)((u32)sp | 0x8), (long *)((u32)sp | 0xC));
+    l->x0 = sp->unk_70;
+    l->y0 = sp->unk_72;
+    l->x1 = sp->unk_74;
+    l->y1 = sp->unk_76;
+    l->x2 = sp->unk_78;
+    l->y2 = sp->unk_7A;
+    l->x3 = sp->unk_7C;
+    l->y3 = sp->unk_7E;
+    if ((u32)sp->unk_04 < 0x1E0)
+    {
+        addPrim(sp->unk_00 + sp->unk_04 * 4, l);
+    }
+    return 0;
+}
+
+/* The spark's per-slot walk, installed by func_s28_80024FD4: two eight-step
+   rings of quads around the mover, drawn one at a time through
+   func_s28_80024790 out of the 0x1F800000 scratchpad. The frame counter at the
+   payload's +0x6 picks the ring geometry -- growing under 8, fixed at
+   0x30/0x10 in 8..0x27, shrinking in 0x28..0x2F, collapsed past that -- and
+   sets the depth of the v0/v1 edge; the first ring sweeps the +0xC heading
+   with a jittered radius on v1 and v2 and a clean one on v0/v3, the second
+   sweeps the +0xE heading carrying each row's far edge into the next row's
+   near edge and wrapping the eighth row back onto the first. Returns 0.
+   348 words, 0 differing.
+
+   NO DONOR FOR THE BODY -- only the scratchpad layout, which is
+   func_s28_80024790's `UnkDngS28PolySP' two listings up, and that is the whole
+   reason the quad corners could be read at all: the four 16-byte slots at
+   +0x30/+0x40/+0x50/+0x60 are the SAME four world positions
+   func_s28_80024790 projects, so the two listings interpret each other and no
+   offset needed guessing. Landing the caller first is what made this body
+   readable.
+
+   FACTS MEASURED ON THIS BODY FROM THE 0 STATE:
+
+   | spelling                                               | words | rows |
+   |--------------------------------------------------------|-------|------|
+   | `s32 m0..m3' DECLARED BEFORE the `s16' locals           |  348  |   0  |
+   |   ... after them                                        |  348  |  52  |
+   | the wrap row as `m0 = sp->unk_30 = <expr>;'             |  348  |   0  |
+   |   ... `m0 = <expr>; sp->unk_30 = m0;'                    |  347  |  15  |
+   |   ... the same, but the +0x64 pair written m-first       |  347  |   4  |
+   |   ... written as a store then a READ-BACK                |  348  |   0  |
+   | the arms assigning `ro, ri, rn, jm' in that order        |  348  |   0  |
+   |   ... `ri, ro, rn, jm'                                   |  347  |  16  |
+   |   ... the other 22 permutations                 339-347 w, 21-111 |
+   | `b->unk_00 + (<product> << 8)'                          |  348  |   0  |
+   |   ... `(<product> << 8) + b->unk_00'                     |  348  |   2  |
+   | `i * 512'                                               |  348  |   0  |
+   |   ... `(i << 9)' at all ten sites                        |  348  |   0  |
+   | `- 0xC00000' for the fixed-ring depth                    |  348  |   0  |
+   |   ... `+ 0xFF400000'                                     |  348  |   0  |
+   | `* 0x180000' for the growing-ring depth                  |  348  |   0  |
+   |   ... `(x * 3 << 19)'                                    |  348  |   0  |
+
+   THE DECLARATION-ORDER ROW IS A STACK-SLOT ORDER AND IT IS WORTH 8 BYTES OF
+   FRAME. This body spills eight pseudos and ten callee-saved registers, so the
+   frame is -0x68 with locals at sp+0x10..0x3F. Reload's `alter_reg' assigns
+   stack slots in ASCENDING PSEUDO NUMBER, and gcc 2.7.2 creates a local's
+   pseudo in `expand_decl' -- at its DECLARATION, not its first use. With the
+   two `s16' locals declared first they take sp+0x10 and sp+0x18, the three
+   SImode wrap values follow at 0x20/0x24/0x28, and the frame comes out -0x60:
+   one 8-byte slot SMALLER, because a HImode slot is 8-aligned here and
+   padding that lands after three words instead of before them is reclaimed.
+   Every save offset then shifts and the residue reads as 52-83 rows of
+   prologue and epilogue. Declaring the `s32' group first reproduces the
+   target's 0x10/0x14/0x18 words, 0x20/0x28 halfwords, -0x68 frame exactly.
+   Three different placements of `s32 i' around that group all measure 348 / 0,
+   so only the s32-before-s16 grouping is load-bearing.
+
+   THE WRAP ROW IS THE SURVIVING COPY. m3 wins `$fp' while m0..m2 are spilled,
+   and the target emits `addu $v0, $v0, $v1' then `addu $fp, $v0, $zero' then
+   stores `$fp'. Written `m3 = <expr>; sp->unk_64 = m3;' the sum coalesces
+   straight into `$fp' and that copy is gone -- one word short. Assigning the
+   scratchpad field FIRST and taking m3 out of it keeps the two pseudos apart.
+   The chained `m3 = sp->unk_64 = <expr>;' and the explicit
+   `sp->unk_64 = <expr>; m3 = sp->unk_64;' read-back are byte-identical, so
+   they are NOT MEASURABLE against each other; the read-back is this family's
+   idiom (func_s28_800250E8 prices it at its +0x1C store). Note the 4-row row:
+   fixing only the +0x64 pair and leaving m0..m2 the other way is still one
+   word short, so the fault is per-value and the fix had to be applied to all
+   four.
+
+   READ WHICH ROWS AGREE: the first compile was 347 words / 83 rows and almost
+   every row was a prologue or epilogue `sw'/`lw' offset with the SAVE LIST and
+   SAVE ORDER already byte-identical. That combination means the frame SIZE is
+   wrong, not the allocation -- the brief's "a frame delta with an identical
+   save list and order is the argument area" generalised: here it is the LOCAL
+   area, and the cause was declaration order rather than a call's arity.
+
+   An `s16 f = *(u16 *)(p + 0x6);' local for the growing arm's four
+   expressions measures 348 / 0 as well, so the brief's "an `lhu' followed by
+   `sll 16'/`sra 16' means an `s16' LOCAL, never a cast" does NOT hold here:
+   the plain `*(s16 *)(p + 0x6)' written out four times produces the same
+   `lhu'/`sll 16'/`sra 16' triple, because cse unifies the four reads and the
+   signed-divide's bias is taken off bit 31 of the `sll 16'. The inline form is
+   kept; the local is NOT MEASURABLE against it.
+
+   `rand() % jm' in the first ring is a real `div' because the divisor is a
+   variable; `rand() % 5' in the second is the 0x66666667 magic multiply. That
+   is the lever file's "if you see any `div' in a listing, the source divided
+   by a variable" with both halves in one function. */
+s32 func_s28_80024A64(u8 *p, UnkVec *b, u8 *s)
+{
+    UnkDngS28PolySP *sp = (UnkDngS28PolySP *)0x1F800000;
+    s32 m0;
+    s32 m1;
+    s32 m2;
+    s32 m3;
+    s16 ro;
+    s16 ri;
+    s16 rn;
+    s16 jm;
+    s16 u;
+    s32 i;
+
+    if (*(s16 *)(p + 0x6) < 8)
+    {
+        sp->unk_38 = sp->unk_48 = b->unk_08 - *(s16 *)(p + 0x6) * 0x180000;
+        ro = *(s16 *)(p + 0x6) * 6;
+        ri = *(s16 *)(p + 0x6) * 2;
+        rn = *(s16 *)(p + 0x6) / 2;
+        jm = *(s16 *)(p + 0x6) / 2 + 1;
+    }
+    else if (*(s16 *)(p + 0x6) < 0x28)
+    {
+        ro = 0x30;
+        ri = 0x10;
+        rn = 4;
+        jm = 5;
+        sp->unk_38 = sp->unk_48 = b->unk_08 - 0xC00000;
+    }
+    else if (*(s16 *)(p + 0x6) < 0x30)
+    {
+        sp->unk_38 = sp->unk_48 = b->unk_08 - (0x30 - *(s16 *)(p + 0x6)) * 0x180000;
+        ro = (0x30 - *(s16 *)(p + 0x6)) * 6;
+        ri = (0x30 - *(s16 *)(p + 0x6)) * 2;
+        rn = (0x2F - *(s16 *)(p + 0x6)) / 2;
+        jm = (0x2F - *(s16 *)(p + 0x6)) / 2 + 1;
+    }
+    else
+    {
+        jm = 0;
+        rn = 0;
+        ri = 0;
+        ro = 0;
+    }
+    sp->unk_58 = sp->unk_68 = b->unk_08;
+    for (i = 0; i < 8; i++)
+    {
+        u = rand() % jm;
+        sp->unk_40 = b->unk_00 + ((func_800644B8(*(s16 *)(p + 0xC) + i * 512) >> 4) * (ro + u) << 8);
+        sp->unk_44 = b->unk_04 + ((func_80064584(*(s16 *)(p + 0xC) + i * 512) >> 4) * (ro + u) << 8);
+        sp->unk_50 = b->unk_00 + ((func_800644B8(*(s16 *)(p + 0xC) + i * 512) >> 4) * (ri + u) << 8);
+        sp->unk_54 = b->unk_04 + ((func_80064584(*(s16 *)(p + 0xC) + i * 512) >> 4) * (ri + u) << 8);
+        sp->unk_30 = sp->unk_60 =
+            b->unk_00 + ((func_800644B8(*(s16 *)(p + 0xC) + (i + 1) * 512) >> 4) * rn << 8);
+        sp->unk_34 = sp->unk_64 =
+            b->unk_04 + ((func_80064584(*(s16 *)(p + 0xC) + (i + 1) * 512) >> 4) * rn << 8);
+        func_s28_80024790(i, s);
+    }
+    u = rand() % 5;
+    m0 = sp->unk_30 = b->unk_00 + ((func_800644B8(*(s16 *)(p + 0xE)) >> 4) * (ro + u) << 8);
+    m1 = sp->unk_34 = b->unk_04 + ((func_80064584(*(s16 *)(p + 0xE)) >> 4) * (ro + u) << 8);
+    m2 = sp->unk_60 = b->unk_00 + ((func_800644B8(*(s16 *)(p + 0xE) + 0x200) >> 4) * ri << 8);
+    m3 = sp->unk_64 = b->unk_04 + ((func_80064584(*(s16 *)(p + 0xE) + 0x200) >> 4) * ri << 8);
+    for (i = 0; i < 8; i++)
+    {
+        sp->unk_40 = sp->unk_30;
+        sp->unk_44 = sp->unk_34;
+        sp->unk_50 = sp->unk_60;
+        sp->unk_54 = sp->unk_64;
+        if (i == 7)
+        {
+            sp->unk_30 = m0;
+            sp->unk_34 = m1;
+            sp->unk_60 = m2;
+            sp->unk_64 = m3;
+        }
+        else
+        {
+            u = rand() % 5;
+            sp->unk_30 =
+                b->unk_00 + ((func_800644B8(*(s16 *)(p + 0xE) + i * 512) >> 4) * (ro + u) << 8);
+            sp->unk_34 =
+                b->unk_04 + ((func_80064584(*(s16 *)(p + 0xE) + i * 512) >> 4) * (ro + u) << 8);
+            sp->unk_60 =
+                b->unk_00 + ((func_800644B8(*(s16 *)(p + 0xE) + (i + 1) * 512) >> 4) * ri << 8);
+            sp->unk_64 =
+                b->unk_04 + ((func_80064584(*(s16 *)(p + 0xE) + (i + 1) * 512) >> 4) * ri << 8);
+        }
+        func_s28_80024790(i, s);
+    }
+    return 0;
+}
+
+/* Spawn the 0x212 node that carries the ring flyer's spark: the caller's own
+   parent record at the payload's +0x0, the caller's +0x12 budget at +0x8, a
+   0x30 countdown at +0xA, two random 12-bit angles at +0xC/+0xE, the caller's
+   +0x18 handle at +0x10, func_s28_800242FC as the per-frame step and
+   func_s28_80024A64 as the per-slot walk, with the caller's mover copied
+   wholesale into the node's own. Returns nothing.
+   69 words, 0 differing, FIRST COMPILE.
+
+   NO EXTERNAL DONOR WAS OPENED. dngtwin and dngcallee were not needed: this
+   file already held func_s28_80025614 at 0 differing, which is the same 0x212
+   spawn with a renderable dress block, so the func_8003FC64 head, the
+   `q = (u8 *)n + 0x20' payload view, the `*n->unk_08 = *b' mover copy and the
+   func_8004491C tail are its measured spellings with this listing's offsets.
+   That is the brief's "land the small siblings in your own unit first" and it
+   is the whole of this body.
+
+   THE MOVER COPY MUST PRECEDE func_8004491C HERE AND MUST FOLLOW IT IN
+   func_s28_800253D0, 180 words down the same file. Priced from the 0 state:
+
+     `*n->unk_08 = *b;' BEFORE func_8004491C          69 w,  0   kept
+       ... after it                                   68 w, 30
+     the +0x8 store BEFORE the +0xA store             69 w,  0   kept
+       ... the other order                            69 w,  5
+     the +0x20 store named off `n' as +0x20           69 w,  0   kept
+       ... named off `q' as +0x0                      69 w,  0   free
+
+   The listing emits the +0xA store FIRST and sinks the +0x8 store into the
+   rand() call's delay slot, so the 5-row row above is the brief's "a store's
+   position inside a dress block is not readable" confirmed directly: reading
+   the order off the asm gives the wrong answer and costs 5 rows.
+
+   `rand' is func_80069EF8 (splat/common_syms.txt), so no address is written;
+   `s32 rand(void);' had to be ADDED to this unit's block -- see the note on
+   func_s28_80024154. ovlverify --raw reports 8 differing words and all eight
+   are relocations (func_8003FC64, two rand, func_8004491C, and the %hi/%lo
+   pairs for func_s28_800242FC and func_s28_80024A64); no displacement
+   differs, and relcand agrees on all four call targets. */
+void func_s28_80024FD4(u8 *p, UnkVec *b)
+{
+    UnkNode *n;
+    u8 *q;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s28_800242FC;
+        q = (u8 *)n + 0x20;
+        *(u8 **)((u8 *)n + 0x20) = *(u8 **)p;
+        *(s16 *)(q + 0x6) = 0;
+        *(s16 *)(q + 0x8) = *(u16 *)(p + 0x12);
+        *(s16 *)(q + 0xA) = 0x30;
+        *(s16 *)(q + 0xC) = rand() % 0x1000;
+        *(s16 *)(q + 0xE) = rand() % 0x1000;
+        *(s32 *)(q + 0x10) = *(s32 *)(p + 0x18);
+        *n->unk_08 = *b;
+        func_8004491C(n, (u32)func_s28_80024A64);
+    }
+}
 
 /* The ring-of-four flyer's own step function: bump the node's +0x14, the
    actor's +0x10 frame counter and its +0x12 slot counter, spin the
@@ -281,7 +910,76 @@ void func_s28_800250E8(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s28", func_s28_800253D0);
+/* Spawn the 0x212 node for the ring-of-four flyer: a renderable dressed from
+   D_80025EE4 at white 0x80, the 0x7E00 sprite with the +0x14 0x100 bit set, a
+   random 12-bit rotation and 0x400 scale on both axes, func_80045C34 as the
+   per-slot walk and func_s28_800250E8 as the per-frame step; the caller's
+   record at the payload's +0x0, a random phase in 0..6 at +0x12, the caller's
+   +0x12 budget at +0x14 and its +0x18 handle at +0x18, with the caller's mover
+   copied wholesale. Returns the node, or NULL when the pool is empty.
+   91 words, 0 differing, FIRST COMPILE.
+
+   DONOR: func_s28_80025614 in THIS FILE, already at 0 differing -- the same
+   0x212 spawn for this bank's trail, 73 words. Every statement here is one of
+   its measured spellings with this listing's offsets and two additions: the
+   `rand() % 7' phase and the +0x12/+0x14/+0x18 payload stores. Its own
+   priced facts carried without re-measurement being needed, except the one
+   below, which INVERTS against the sibling 180 words UP the file.
+
+   FACTS MEASURED ON THIS BODY FROM THE 0 STATE:
+
+     `*n->unk_08 = *b;' AFTER func_8004491C           91 w,  0   kept
+       ... before it                                  91 w, 24
+     the NULL return as the function's LAST line      91 w,  0   kept
+       ... an early `if (n == NULL) return NULL;'     90 w, 78
+
+   TWO BODIES IN ONE UNIT WANT OPPOSITE ANSWERS ON THE SAME STATEMENT, and
+   this is the pair. func_s28_80024FD4 above needs the mover copy BEFORE
+   func_8004491C (68 words / 30 rows after it); this body needs it AFTER (91
+   words / 24 rows before it). The discriminator is visible before any
+   compile: this body RETURNS the node, so `n' has to live past the call and
+   lands in a callee-saved register either way, while func_s28_80024FD4
+   returns void and its `n' dies at the call -- so there the copy's position
+   decides whether `n' crosses it at all. "What the rest of this unit does" is
+   not evidence; the figures are the evidence.
+
+   The early-return row is the same shape and price direction as
+   func_s28_80025614's (72 words / 3 rows there), only much larger here,
+   because this body's `j' to the shared epilogue is what carries the return
+   value out of the success arm. */
+UnkNode *func_s28_800253D0(u8 *p, UnkVec *b)
+{
+    UnkNode *n;
+    u8 *q;
+    u8 *m;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        q = (u8 *)n + 0x20;
+        n->unk_10 = (u32)func_s28_800250E8;
+        *(u8 **)q = p;
+        *(s16 *)(q + 0xE) = 0;
+        *(s16 *)(q + 0x10) = 0;
+        *(s16 *)(q + 0x12) = rand() % 7;
+        *(s16 *)(q + 0x14) = *(u16 *)(p + 0x12);
+        *(s32 *)(q + 0x18) = *(s32 *)(p + 0x18);
+        m = (u8 *)n->unk_0C;
+        m[0xE] = 0x80;
+        m[0xD] = 0x80;
+        m[0xC] = 0x80;
+        *(s16 *)(m + 0x12) = 0x7E00;
+        *(u16 *)(m + 0x14) |= 0x100;
+        func_8003DB94(m, D_80025EE4, 0);
+        *(s16 *)(m + 0x1A) = rand() % 0x1000;
+        *(s16 *)(m + 0x1E) = 0x400;
+        *(s16 *)(m + 0x1C) = 0x400;
+        func_8004491C(n, (u32)func_80045C34);
+        *n->unk_08 = *b;
+        return n;
+    }
+    return NULL;
+}
 
 /* Another of this bank's per-frame step functions, the one func_s28_80025614
    installs on its 0x212 node: bump the +0x14 counter on the node at the
