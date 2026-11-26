@@ -77,3 +77,43 @@ Not parks -- held, and they should not be handed to anyone as work:
   second copy and the container shifts.
 
 Everything else is reachable as far as anyone has shown.
+
+
+## A tool change that made the park set WORSE, and why it is recorded here
+
+Three of the six remaining unmeasurable parks fail on `conflicting types`
+against a **project header** rather than against their unit --
+`extern u8 D_800814A8[];` in a park against `include/structs.h:1242`'s
+`extern u32 D_800814A8;`, with the unit perfectly innocent. `parksplice`'s
+`drop_known` only ever consulted the unit, so none of its three drop rules
+could see the clash.
+
+**Widening `drop_known` to the project headers took the park set from 73
+measured / 6 skipped to 55 / 24.** It was reverted immediately.
+
+**Why it backfired, as far as one measurement shows:** the unit is a closed
+list of what that unit declares, so "the unit already has this" is a safe
+reason to drop a park's copy. `include/structs.h` and `csrc/ovl_dungeon_decls.h`
+are the whole project's declarations, so a symbol appearing there does NOT mean
+the park's declaration is redundant -- many parks deliberately re-declare a
+shared symbol with the narrower or array type their body needs, and dropping
+that leaves the body reaching for a type the header does not give it. Eighteen
+parks depended on exactly that.
+
+> **So the three header-clash parks need the OPPOSITE of a drop: the park's
+> declaration has to stay and the HEADER's has to be the one not in scope**,
+> which a splicer cannot arrange. They are per-park repairs -- reconcile the
+> park's body to the header's type, or rename its local declaration -- not a
+> tool fix.
+
+Two incidental findings from the attempt, both worth keeping:
+
+* `_PROJ` computed with two `dirname`s from `tools/decomp/<file>.py` lands on
+  `<root>/tools`, not the root. Every header open then failed into an
+  `except OSError: pass` and the change appeared to do nothing at all, which
+  cost a round of debugging before the regression was even visible. **A silent
+  fallback hid a wrong path, and then a wrong path hid a bad idea.**
+* A sweep of 79 parks is the only way to see a change like this. Measuring the
+  three parks the change targeted showed them still skipping, which read as
+  "no effect" rather than "no effect here, catastrophe elsewhere".
+  **Re-measure the WHOLE set after touching a shared splicer.**
