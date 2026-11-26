@@ -13,7 +13,7 @@ void func_8003DB94(void *, void *, s32);
 UnkNode *func_8003FC64(s32);
 void func_s25_80024028(u8 *p, u8 k);
 void func_s25_800240C4(u8 *p, UnkVec *b, u8 *c, u8 *d);
-void func_s25_80024230(u8 *, UnkVec *, u8 *, u8 *);
+void func_s25_80024230(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern u8 D_80025238[];
 extern u8 D_80045340[];
 extern u8 D_800DEAE0[];
@@ -27,7 +27,7 @@ s32 func_800A56E0(s32);
 u8 *func_8003DE58(u8 *, UnkSlot *, s16 *, s16);
 void func_s25_80024028_3(u8 *, u8, u8 *) __asm__("func_s25_80024028");
 s32 func_s25_800244A0(u8 *, UnkVec *, s16, s16);
-s32 func_s25_800246D0(u8 *, UnkVec *);
+s32 func_s25_800246D0(u8 *p, UnkVec *q);
 
 /* Raise the actor's +0x64 pool by func_800A6870's scale of the second
    parameter plus 4, half again when the actor's +0x28 has bit 0, then
@@ -52,6 +52,11 @@ s32 func_s25_800246D0(u8 *, UnkVec *);
        is load-bearing and reproduces the twin's price to one -- but ONE
        variable with `t += (s16)t >> 1;' and no `u' at all is 39 words /
        0 differing. The two-variable spelling is FREE on this copy. */
+s32 func_800644B8(s32);
+s32 func_80064584(s32);
+extern u8 D_800DECF8[];
+extern u8 D_s25_80025214[];
+
 void func_s25_80024028(u8 *p, u8 k)
 {
     s16 t;
@@ -156,7 +161,26 @@ UnkNode *func_s25_80024148(u8 *v, UnkVec *q)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s25", func_s25_80024230);
+/* The step func_s25_80024264 installs on this effect's BLACK 0x1000-scale
+   sprite: bump the owning node's +0x14 frame counter and hand the
+   renderable to func_800478B8. Nothing else -- the black sprite neither
+   jitters nor re-dresses. 13 words, 0 differing, first compile.
+
+   AND IT LANDED BECAUSE func_s25_800240C4 WAS ALREADY IN THIS UNIT. This is
+   that body's first four words plus its func_800478B8 hand-off, with the
+   rand() jitter and the D_80025238 re-dress dropped; no new declarations.
+   Neither dngtwin nor xsibs was consulted and neither was needed.
+
+   MEASURED AND FREE, so it is NOT why this lands: hoisting
+   `*(u8 **)(p + 0x0)' into a local instead of naming it twice -- 13 words /
+   0 differing either way, because cse unifies the two loads and the listing
+   has a single `lw 0x0($a0)'. func_s25_800240C4 records the same verdict on
+   its own body and func_s25_80024674 below makes it four bodies. */
+void func_s25_80024230(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    *(s16 *)(*(u8 **)(p + 0x0) + 0x14) = *(u16 *)(*(u8 **)(p + 0x0) + 0x14) + 1;
+    func_800478B8(c);
+}
 
 /* The same spawner for this effect's BLACK 0x1000-scale sprite: no sprite
    id at +0x12, `|= 0xC' on +0x14 instead of 0x100, the resident D_800DEAE0
@@ -202,13 +226,164 @@ UnkNode *func_s25_80024264(u8 *v, UnkVec *q)
     return n;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s25", func_s25_80024340);
+/* The step func_s25_800244A0 installs on each of the effect's ten 0x7E07
+   child sprites: bump the owning node's +0x14 frame counter, add the
+   per-sprite drift at the record's +0x6 to its +0x4 sweep, and once that
+   sweep has fallen below -0x80 re-seed the sprite -- a fresh rand() % 4096
+   angle puts the mover's x/z on the unit circle around the record's
+   +0x8/+0xA centre, the sweep climbs back by 0x80 and the drift is
+   re-rolled as -6 - rand() % 5. Then publish the vertical as +0xC plus the
+   sweep, hand the renderable to func_800478B8, and when its +0x14 reports
+   either 0x6000 bit re-dress it from D_800DECF8. 88 words, 0 differing,
+   FIRST COMPILE.
+
+   DONOR: the landed func_s27_800242E0 in csrc/ovl_dng_s27.c, found by
+   dngcallee at 5 of 6 symbols with a clean gap to the 4/6 tier, and CHOSEN
+   OVER ITS TWO PEERS ON THE PROLOGUE: `-0x28' with saves `s1,ra,s3,s2,s0'
+   is this listing's frame and save ORDER exactly, where
+   func_s26_800240D8 is `-0x20' with four saves. Sentence for sentence the
+   same body; the only deltas off this listing are D_800DECF8 for
+   D_800DEC70 and the angle's width below.
+
+   THE DONOR'S WIDTH FACT INVERTS HERE, AND IT IS A SELECTION FACT, so this
+   is a measured counter-example to the taxonomy's prior rather than a
+   frame effect -- the two prologues are identical:
+
+   | spelling                                 | words | aligned |
+   | `s16 r = rand() % 4096'  (as written)     |   88  |    0    |
+   | `s32 r', which is what the donor keeps    |   87  |   11    |
+
+   THE DIAGNOSTIC IS IN THE BRIEF'S OWN RULE AND IT FIRED. An `sll 16' /
+   `sra 16' pair means a narrow local only when the value was COMPUTED;
+   here it sits on the `subu' that finishes the `% 4096', so the value IS
+   computed and the narrowing is real source. It is NOT the callees'
+   prototypes doing it: func_800644B8 and func_80064584 take `s32' in all
+   six units that declare them, so nothing truncates the argument but the
+   local's own width. The eleven rows are the two missing shift words plus
+   the nine-row wake of every later block moving up.
+
+   THREE OF THE DONOR'S FACTS CARRY AT ITS OWN PRICES and are kept
+   unmeasured here because this body landed first compile with all three
+   already satisfied: `((func_800644B8(r) << 1) >> 8)' rather than
+   `>> 7' (donor: 85 words / 53 differing), the b+0xA publish BEFORE
+   func_800478B8 rather than after (donor: 88 / 24), and the 0x80 sweep bump
+   written BEFORE the drift re-roll (donor: 87 / 9). Treat those three as
+   ASSUMED on this body -- inherited, not re-priced. */
+void func_s25_80024340(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    s16 r;
+
+    *(s16 *)(*(u8 **)(p + 0x0) + 0x14) = *(u16 *)(*(u8 **)(p + 0x0) + 0x14) + 1;
+    *(s16 *)(p + 0x4) = *(u16 *)(p + 0x4) + *(u16 *)(p + 0x6);
+    if (*(s16 *)(p + 0x4) < -0x80)
+    {
+        r = rand() % 4096;
+        *(s16 *)((u8 *)b + 0x2) = *(u16 *)(p + 0x8) + ((func_800644B8(r) << 1) >> 8);
+        *(s16 *)((u8 *)b + 0x6) = *(u16 *)(p + 0xA) + ((func_80064584(r) << 1) >> 8);
+        *(s16 *)(p + 0x4) = *(u16 *)(p + 0x4) + 0x80;
+        *(s16 *)(p + 0x6) = -6 - rand() % 5;
+    }
+    *(s16 *)((u8 *)b + 0xA) = *(u16 *)(p + 0xC) + *(u16 *)(p + 0x4);
+    func_800478B8(c);
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        func_8003DB94(c, D_800DECF8, 0);
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s25", func_s25_800244A0);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s25", func_s25_80024674);
+/* The step func_s25_800246D0 installs on the effect's single D_s25_80025214
+   sprite: bump the owning node's +0x14 frame counter and re-roll its +0x1A
+   by rand() % 0x1000 every frame. 23 words, 0 differing, first compile.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s25", func_s25_800246D0);
+   THE SAME IN-UNIT DONOR AS func_s25_80024230 -- func_s25_800240C4's body
+   with the func_800478B8 hand-off and the re-dress gate dropped. The
+   `bgez'/`addiu 0xFFF'/`sra 12'/`sll 12'/`subu' run is a signed
+   `% 0x1000', not a mask, and func_80069EF8 IS `rand' per
+   splat/common_syms.txt.
+
+   MEASURED AND FREE, so it is NOT why this lands: hoisting
+   `*(u8 **)(p + 0x0)' into a local -- 23 words / 0 differing either way,
+   for the same cse reason recorded on func_s25_80024230. */
+void func_s25_80024674(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    *(s16 *)(*(u8 **)(p + 0x0) + 0x14) = *(u16 *)(*(u8 **)(p + 0x0) + 0x14) + 1;
+    *(s16 *)(c + 0x1A) = rand() % 0x1000;
+}
+
+/* Spawn the effect's single D_s25_80025214 sprite -- the one child the root
+   step keeps at the actor's +0x20 rather than in the +0x24 slot array.
+   A 0x212 node dressed by storing D_s25_80025214 straight into the
+   renderable's +0x8 (NOT through func_8003DB94, which is what both landed
+   spawners above use), the 0x7E07 sprite id, black at +0xC..+0xE,
+   `|= 0x60' on +0x10 and `|= 0x10C' on +0x14, a rand() % 0x1000 spin at
+   +0x1A, zero scale both ways, D_80045340 through func_8004491C, and
+   func_s25_80024674 as its per-frame step, with the caller's record at
+   +0x20 and the position copied off q. Returns the node, or 0 when the
+   allocator refuses. 65 words, 0 differing.
+
+   THE SECOND rand() AT 80024784 IS REAL AND ITS RESULT IS DISCARDED. It
+   sits between `m2 = n->unk_08' and the three position copies, its $v0 is
+   overwritten by the very next `lhu 0x2($s2)', and its delay slot is a
+   `nop'. A bare `rand();' statement reproduces it exactly; do not try to
+   attach it to a store.
+
+   THE RETURN SHAPE IS THE IN-UNIT SIBLINGS' FACT INVERTED, and this is the
+   only thing that had to be found:
+
+   | spelling                                              | words | aligned |
+   | `return (s32)n;' as the last statement INSIDE the gate |   65  |    0    |
+   | `else { return 0; }' then `return (s32)n;' after it    |   66  |   13    |
+
+   Both func_s25_80024148 and func_s25_80024264 above keep the SECOND form
+   and match with it, and both comments price the early-return form at 38
+   differing -- so this is not the early return they rejected, it is their
+   kept spelling costing a word here. The 13 rows are the whole tail: the
+   second form puts `addu $v0, $s1, $zero' in a join block the success path
+   has to `j' to, which costs the extra `j' and leaves the NULL arm unable
+   to fall through into the epilogue. The target sets $v0 = n inline before
+   its `j' and lets `.Ls25_800247B4' fall straight through, which is what
+   the first form emits. func_s25_800244A0 (parked) needs the same
+   inversion, so it is two for two in this unit against the two spawners'
+   two. Class it REFERENCE-COUNT / STATEMENT-ORDER, which is the class the
+   levers file says inverts.
+
+   Everything else landed on the first compile and is therefore UNMEASURED
+   on this body: the store order inside the gate, `m[0xE]/[0xD]/[0xC]'
+   descending, and 0x1E before 0x1C. */
+s32 func_s25_800246D0(u8 *p, UnkVec *q)
+{
+    UnkNode *n;
+    u8 *m;
+    u8 *m2;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        n->unk_10 = (u32)func_s25_80024674;
+        *(u8 **)((u8 *)n + 0x20) = p;
+        m = (u8 *)n->unk_0C;
+        *(u8 **)(m + 0x8) = D_s25_80025214;
+        *(s16 *)(m + 0x12) = 0x7E07;
+        m[0xE] = 0;
+        m[0xD] = 0;
+        m[0xC] = 0;
+        *(u16 *)(m + 0x10) |= 0x60;
+        *(u16 *)(m + 0x14) |= 0x10C;
+        *(s16 *)(m + 0x1A) = rand() % 0x1000;
+        *(s16 *)(m + 0x1E) = 0;
+        *(s16 *)(m + 0x1C) = 0;
+        func_8004491C(n, (u32)D_80045340);
+        m2 = (u8 *)n->unk_08;
+        rand();
+        *(s16 *)(m2 + 0x2) = *(u16 *)((u8 *)q + 0x2);
+        *(s16 *)(m2 + 0x6) = *(u16 *)((u8 *)q + 0x6);
+        *(s16 *)(m2 + 0xA) = *(u16 *)((u8 *)q + 0xA);
+        return (s32)n;
+    }
+    return 0;
+}
 
 /* THE EFFECT'S ROOT STEP, an eight-state machine on *(s16 *)(p + 0xA).
    Every frame it bumps the +0x10 timer and spins the +0x16/+0x18 phases by
