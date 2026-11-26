@@ -28,6 +28,19 @@
    short. That is segment surgery on splat's data segment, not a deletion, and
    it is the only remaining work on this body.
 
+   THE OBVIOUS ALTERNATIVE IS CLOSED, MEASURED, so do not spend a cycle on
+   it. The listing references D_b57_80170804 twice and the local is only read
+   twice (`t[k & 7] << 9' at two sites), which makes "the original read the
+   EXISTING GLOBAL and there was never a local" an attractive theory -- it
+   would emit no pool and the container would accept it. It is wrong:
+
+       u16 t[8] = {4,5,6,7,0,1,2,3};  local, read twice   1366 words /   0
+       extern u16 D_b57_80170804[];   read twice directly 1348 words / 107
+
+   EIGHTEEN WORDS SHORT. Those eighteen are the prologue block-copy of the
+   pool to the stack, so the local really is in the original and the duplicate
+   object really is the whole problem. Two measurements to close it.
+
    The body as written is kept below verbatim; it was recovered from the
    unsplice and is the 0-differing version.
 */
