@@ -37,6 +37,25 @@
    measured and reproducible; the cause is open.  Do not write the
    birthing_insn_p story into anything.
 
+   A CANDIDATE MECHANISM TO TEST, FROM A DIFFERENT BODY (not verified here).
+   An agent on ovl_dng_b34 established that the cure for a sched1 priority
+   fault is THE NUMBER OF INSNS COMPETING IN THE BLOCK, not any property of
+   the destination: moving one unrelated statement out of a scheduled block
+   took 392 words / 12 rows to 391 / 0, while six spellings that changed the
+   destination's set count all cost words.  That is in docs/matching-levers.md
+   under "THE CURE FOR A `birthing_insn_p' PRIORITY FAULT IS THE BLOCK'S INSN
+   COUNT".
+
+   If that is what is happening here, the extra `q = p;' is doing its work by
+   changing the block's insn count rather than by anything to do with `q'.
+   THE TEST IS CHEAP AND I HAVE NOT RUN IT: the first `q = p;' is a dead
+   store and should be deleted outright, so if the count is what matters it
+   must survive to scheduling, and some OTHER way of adding or removing one
+   insn from the same block should reproduce the 13-to-6 on its own.  If a
+   different single-insn change gets the same figure, the cause is the count;
+   if nothing but `q = p;' does it, the cause is specific to that assignment
+   and still unknown.  Either answer is worth having.
+
    THE REMAINING 6 ROWS ARE PURE STATEMENT ORDER in one loop, at target words
    105..111.  The target emits `addiu $a1, $a1, 0x14' then `addiu $s3, $s3,
    0x1' then `lhu $v0, 0x4($s0)' then `addu $a2, $s0, $zero'; this body emits
