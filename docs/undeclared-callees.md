@@ -1,4 +1,4 @@
-# Undeclared callees: 14 symbols across 9 units (was 19 across 13)
+# Undeclared callees: 7 symbols across 5 units (was 19 across 13)
 
 Found 2026-11-25, after `declcheck.py` was fixed to pass `-Wimplicit`. Every
 one of these is in **landed, byte-identical code**: the containers match, so
@@ -24,6 +24,34 @@ to check the call against.
 | `csrc/ovl_dng_s41.c` | `func_800B8FC8` |
 | `csrc/ovl_dng_s51.c` | `func_800478B8` |
 | `csrc/ovl_dng_s72.c` | `func_8003FD64` |
+
+## SEVEN MORE CLOSED, 2026-11-25 -- AND THE EMPTY-PAREN FORM IS SOMETIMES THE RIGHT ONE
+
+`ovl_dng_s41` took `void func_800B8FC8(u8 *, s32 *, s32 *, s32, s32);` and
+`ovl_dng_s72` took `u8 *func_8003FD64(s32, u8 *);`, both real prototypes copied
+from units that already had them.
+
+**`ovl_dng_b21`'s five needed the EMPTY-PAREN form, and a comment in the file
+said so before I started.** Two of them are *defined* with four parameters
+(`s32 func_800AC480(u8 *p, UnkVec *v, u8 *r, u8 *b)`) while b21 calls them with
+**one** (`if (func_800AC480(p) != 0)`), and the other three are **old-style
+K&R definitions with untyped parameters**, for which `s32 f();` is the correct
+C89 declaration rather than a cop-out.
+
+I added real prototypes first and **broke the build** -- "too few arguments to
+function `func_800AC480'". The source comment two lines above the call site
+reads: *"The empty-paren `s32 func_800AC480();' already in this unit's
+declaration block is what the one-argument call needs; do not rewrite it to a
+prototype."* Its **instruction was right and its premise was wrong** -- those
+declarations were never actually in the block, only quoted in the comment,
+which is why `declcheck` flagged them. Adding the empty-paren form closes all
+five: `declcheck b21` is now 0 warnings and the containers stay
+byte-identical.
+
+**So the rule for this backlog is not "add a prototype".** It is: read the
+call sites' arity first, and where it disagrees with the definition, the
+empty-paren declaration is the faithful spelling -- the original source cannot
+have had a prototype there either, or it would not have compiled.
 
 ## FIVE CLOSED, 2026-11-25, gated at five byte-identical containers
 

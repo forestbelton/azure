@@ -1,5 +1,11 @@
 #include "common.h"
 
+s32 func_800ABDBC();
+s32 func_800AC480();
+s32 func_800AC5C8();
+s32 func_800AC7EC();
+s32 func_800ACE34();
+
 void func_b21_80174B68(u8 *p, UnkVec *b, u8 *c, u8 *d);
 extern u8 D_80176328[];
 
