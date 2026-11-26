@@ -74,6 +74,15 @@ the old outside-the-repo refusal is gone. Your copy's path is given below.
     --written COPY CSRC   which stubs your copy has landed
     FILE NAME             one function's exact span
 
+**AND YOU MUST, BECAUSE `ovlverify` CANNOT SEE ARM ORDER AT ALL.** Measured:
+two arm orders of one 350-word switch BOTH read 350/350 and 0 aligned rows,
+while the emitted table's last three entries were reversed between them.
+ovlverify compares one function's words and says nothing about `.rodata`, and a
+jump table IS `.rodata`. So a table owner can reach 0 differing with the wrong
+arm order and only `make containers` -- which you cannot run -- would catch it.
+**If you own a table, run the standalone compile and REPORT the emitted
+entry-address order in your hand-back.** A zero is not proof for a table owner.
+
 **SETTLE A SWITCH'S ARM ORDER BY COMPILING, NOT BY SWEEPING.** Run
 `tools/cdkgcc -S <your unit>` -- a standalone compile, no build and no splat --
 and read the emitted `.rdata` table's labels in ADDRESS order, then compare that

@@ -88,9 +88,21 @@ PROJ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 #   jtbl_*       a LANDED jump table is cc1psx's own `$L95'-style local label,
 #                not the listing's `jtbl_' name, so a landed table owner
 #                always looks like it dropped its table. The remaining 2.
-#                `ovlverify' pins a table's CONTENT through the words and the
-#                dispatcher checks its PLACEMENT at the build gate, so this
-#                tool is not the thing that should chase them.
+#                THIS USED TO SAY "`ovlverify' pins a table's CONTENT through
+#                the words", WHICH IS FALSE and was actively misleading.
+#                ovlverify.py's own docstring says it compares ONE FUNCTION'S
+#                words and "says nothing about the unit's .rodata" -- and a
+#                jump table IS .rodata. Measured by an agent on 2026-11-25:
+#                two arm orders of one 350-word switch BOTH read 350/350 and
+#                0 aligned differences, while the emitted .rdata table's last
+#                three entries came out reversed between them. So a table
+#                owner can land at 0 differing with the WRONG ARM ORDER, and
+#                `make containers' is the only check that sees it.
+#                The cheap pre-check is a standalone `tools/cdkgcc -S' of the
+#                unit, reading the emitted table's labels in ADDRESS order
+#                against the listing's -- see docs/matching-levers.md under
+#                "ARM ORDER IS DIRECTLY MEASURABLE". This tool still does not
+#                chase them, but not for the reason it claimed.
 # ONLY `%lo' OCCURRENCES COUNT, and the reason is arithmetic rather than
 # convention.  A `%hi' is PAGE-GRANULAR: D_8006CCD8 and D_8006CCE8 are 0x10
 # apart and both have %hi = 0x8007, so `lui $v0, %hi(D_8006CCD8)' and
