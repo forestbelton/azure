@@ -262,6 +262,14 @@ typedef struct UnkDngB31fName24
     u8 bb[0x18];
 } UnkDngB31fName24;
 
+extern u8 D_b31f_801746CC[];
+void func_800AD4D0(u8 *);
+s32 func_800AAA54(u8 *, UnkVec *, u8 *, u8 *);
+typedef struct UnkDngB31fName32
+{
+    u8 bb[0x20];
+} UnkDngB31fName32;
+
 void func_b31f_8016A908(u8 *p)
 {
     p[0x6D] = 0;
@@ -1453,7 +1461,137 @@ void func_b31f_8016D1CC(u8 *p, UnkVec *b, u8 *c, u8 *d)
     *(u16 *)(d + 0x46) &= 0x7FFF;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016D204);
+/* h186:BEGIN func_b31f_8016D204 */
+void func_b31f_8016D204(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *t;
+    u8 *q;
+    s16 n;
+    s32 goal;
+    s32 now;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        func_800AD4D0(d);
+        *(s16 *)(p + 0x96) = 0xC;
+        p[0x9B] += 1;
+        if (d[0x28] == 0)
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            if (p[0xB4] != 0)
+            {
+                p[0x9B] = 0;
+                *(u32 *)(p + 0x8C) = (u32)func_b31f_8016B778;
+                return;
+            }
+            p[0x9B] = 0;
+            func_800AAA54(p, b, c, D_b31f_801746CC);
+            return;
+        }
+        if (*(u16 *)(c + 0x14) & 0x8000)
+        {
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] = 3;
+        }
+        return;
+    case 1:
+        n = *(u16 *)(p + 0x96) - 1;
+        *(s16 *)(p + 0x96) = n;
+        if (n >= 0xB)
+        {
+            b->unk_0C = *(s16 *)(((*(u16 *)(d + 0x6A) >> 8) & 0xE) + (s32)D_8006CCD8) << 20;
+            b->unk_10 = *(s16 *)(((*(u16 *)(d + 0x6A) >> 8) & 0xE) + (s32)D_8006CCE8) << 20;
+            *(u16 *)(c + 0x14) |= 0x800;
+        }
+        else if (n >= 7)
+        {
+            b->unk_0C /= 4;
+            b->unk_10 /= 4;
+        }
+        else if (n >= 2)
+        {
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+        }
+        else if (n == 1)
+        {
+            *(u16 *)(c + 0x14) &= 0xF7FF;
+        }
+        else if (n == 0)
+        {
+            *(s16 *)(p + 0x96) = 4;
+            p[0x9B] += 1;
+        }
+        return;
+    case 2:
+        if (*(s16 *)(p + 0x96) != 0)
+        {
+            goal = c[0x24] << 6;
+            now = *(s16 *)((u8 *)b + 0x2) - 0x20;
+            goal -= now;
+            b->unk_0C = (goal << 16) / *(s16 *)(p + 0x96);
+            now = *(s16 *)((u8 *)b + 0x6) - 0x20;
+            b->unk_10 = (((c[0x25] << 6) - now) << 16) / *(s16 *)(p + 0x96);
+        }
+        if ((*(s16 *)(p + 0x96))-- > 0)
+        {
+            return;
+        }
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        p[0x9B] += 1;
+        return;
+    case 3:
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        func_800A2B04(b, c[0x24], c[0x25]);
+        if (d[0x28] == 0)
+        {
+            b->unk_14 = 0;
+            b->unk_10 = 0;
+            b->unk_0C = 0;
+            if (p[0xB4] == 0)
+            {
+                p[0x9B] = 0;
+                func_800AAA54(p, b, c, D_b31f_801746CC);
+                return;
+            }
+            p[0x9B] = 0;
+            *(u32 *)(p + 0x8C) = (u32)func_b31f_8016B778;
+            return;
+        }
+        q = *(u8 **)(c + 0x2C);
+        if (q == D_b31f_801746C4)
+        {
+            if (p[0xB3] == 0)
+            {
+                t = D_b31f_8017467C;
+            }
+            else
+            {
+                t = D_b31f_80174684;
+            }
+            if (q != t)
+            {
+                *(u8 **)(c + 0x2C) = t;
+                func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) + (s32)t), 0);
+            }
+        }
+        g = (u8 *)&D_80083460;
+        if (*(s32 *)(g + 0x10) == (s32)(d - 0x20))
+        {
+            *(s32 *)(g + 0x10) &= 0x7FFFFFFF;
+        }
+        *(u32 *)(p + 0x8C) = (u32)func_b31f_8016B778;
+        return;
+    }
+}
 
 /* The +0x8C handler's frame counter: bump the payload's +0x9B state byte; on
    the FIRST frame drop the top bit of D_80083460's +0x10 word if it still
