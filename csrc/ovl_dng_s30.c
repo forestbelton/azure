@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 s32 func_8009D218_2(u8 *, s32) __asm__("func_8009D218");
 s32 func_800A6870(s16);
 void func_800AD4D0(u8 *);

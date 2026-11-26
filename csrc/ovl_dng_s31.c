@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 typedef struct UnkDngS31Dirs
 {
     u8 unk_00[0x20];

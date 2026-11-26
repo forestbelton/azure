@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 typedef union UnkDng2429CW
 {
     s32 w;

@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 extern u16 D_80083462;
 s32 func_800A2BDC(u8 *);
 void func_800A9A0C(u8 *);

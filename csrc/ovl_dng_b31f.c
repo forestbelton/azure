@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 void func_8003DB94(void *, void *, s32);
 void func_80099FDC(UnkNode *n);
 

@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 void func_800478B8(u8 *);
 
 typedef struct UnkDngRoom2970

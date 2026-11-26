@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 extern Unk80083462 D_80083460;
 extern u8 D_80176480[];
 u8 *func_800A04F0_r(u8 *p, s32 x, s32 y, s16 dir) __asm__("func_800A04F0");

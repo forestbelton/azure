@@ -129,3 +129,35 @@ load-bearing for the match wherever the target sets that register. If `rand` is
 ever given a project-wide declaration it needs a per-site `__asm__` alias for
 the argument-passing sites -- the same device this project already uses for
 arity mismatches -- and every affected unit re-gated.
+
+
+## `rand` -- fixed PER UNIT, 2026-11-26, and the global fix is still wrong
+
+**61 dng units called `rand` with no declaration in scope**, so gcc gave it
+`int (...)` in every one of them. Five separate agents hit this and each fixed
+it locally for its own unit, which is five agents spending effort on one
+mechanical line.
+
+`s32 rand(void);` is now declared in all 61 (the four units live agents were
+holding at the time were skipped and will pick it up through their own
+hand-backs). **Measured free: `make check` clean, five containers
+byte-identical, 6556 functions and 269 stubs unchanged.** The per-unit
+measurements each agent took predicted that.
+
+**The global fix remains wrong and this is the second time it has been
+checked.** Putting `s32 rand(void);` in `common.h` breaks the build, because
+`csrc/ovl_dungeon_800C2824.c:1525` genuinely calls it WITH an argument:
+
+    *(u16 *)(p + 0x2E) = *(s16 *)(p + 0x2E) + 0x40 + (rand(ii) & 0x1F);
+
+That is the only such site in the tree -- the apparent hits in
+`csrc/ovl_town.c` are `rand(0xB4)` and similar inside prose comments, not code.
+So one real call site blocks a shared declaration for the whole project, and
+the per-unit form is the only one available.
+
+**What is left in `declcheck`** on the units that still report warnings is the
+`incompatible pointer type` family on GTE arguments (`CompMatrix`,
+`RotTransPers`, `RotTransPers4`): the committed resident donors pass
+`&D_...` and `&sp->field` to `MATRIX *` / `SVECTOR *` / `long *` parameters and
+build byte-identical, so mirroring them is correct and inventing `(long *)`
+casts in a tree that does not use `long` is not.

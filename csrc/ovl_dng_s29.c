@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 UnkNode *func_8003FC64(s32);
 s32 func_8004491C(UnkNode *, u32);
 u8 *func_8003DE58(u8 *, UnkSlot *, s16 *, s16);

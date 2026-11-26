@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 typedef struct UnkDng73E94SP
 {
     s16 unk_00;

@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 typedef struct UnkDng264D4Vec
 {
     u16 unk_00;

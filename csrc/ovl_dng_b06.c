@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 s32 func_b06_80172550(u8 *, void *, void *, s32);
 
 s32 func_800A19E4(s32 a, u8 *b, s16 c, s16 d, u8 *out);

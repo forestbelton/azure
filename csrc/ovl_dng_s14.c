@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 typedef union UnkDngS14Word
 {
     s32 w;

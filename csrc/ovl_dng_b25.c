@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 extern s16 D_80083228;
 extern u8 D_800E2348[];
 extern u8 D_800E23A8[];

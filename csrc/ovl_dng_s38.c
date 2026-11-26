@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 typedef struct UnkDngRoom2970
 {
     u8 pad_00[0xC];

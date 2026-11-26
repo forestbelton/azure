@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 typedef struct UnkDngS22LineSP
 {
     u8 pad_00[0x18];

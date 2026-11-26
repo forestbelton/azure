@@ -1,5 +1,7 @@
 #include "common.h"
 
+s32 rand(void);
+
 s32 func_8004491C(UnkNode *, u32);
 void func_800478B8(u8 *);
 s32 func_8009D218_2(u8 *, s32) __asm__("func_8009D218");
