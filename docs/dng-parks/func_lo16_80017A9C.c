@@ -44,15 +44,37 @@
        target's `addu $v1, $a1, $a0' puts the CONSTANT register first, which
        `1 + i' is the natural spelling of
 
-   WHAT TO TRY NEXT: get the `1' hoisted as a movable ahead of the bases.
-   Untried ideas, cheapest first: write the loop bound through a local
-   (`s32 w = 1 << g->unk_16;' -- but check it does not get hoisted out of the
-   second loop as well, the target recomputes `1 << g->unk_16' at both loop
-   bottoms); write the far-edge index with the `1' appearing EARLIER in the
-   body than the near edge's base, e.g. by putting the far-edge cell first and
-   the near-edge second (this was not measured and it also changes the store
-   order, so price both halves); or give the body a second reference to the
-   literal 1 so `move_movables' sees a bigger saving.
+   TWO OF h172's THREE "WHAT TO TRY NEXT" IDEAS ARE NOW PRICED -- agent h181,
+   batch 35, same day -- and both are dead ends:
+
+     far-edge cell FIRST and near-edge second in loop 1       84w / 40
+     a single `s32 w = 1' local in the entry block, used for
+       every literal 1 (both bounds and the `(i + 1)')        82w / 15
+
+   The far-edge-first order is much worse, so the store order in loop 1 is
+   settled as it stands.  The `w = 1' local is the more informative failure:
+   it LOSES TWO WORDS, because the target materialises the constant 1 FOUR
+   times -- once for each loop's entry guard (`addiu $v0, $zero, 0x1' at words
+   4 and 47) and once as each loop's movable (`$a1' at word 10, `$a3' at word
+   53) -- and one function-scope pseudo collapses two of the four.  So the
+   fix must leave all four materialisations standing and only change the
+   ORDER within loop 1's preheader; anything that unifies the 1 across the
+   loops is moving away from the target.
+
+   WHY THE ORDER IS WHAT IT IS, now read off the listing.  loop.c's
+   `move_movables' emits the loop-invariant CONSTANTS in the order they appear
+   in the loop BODY, and `strength_reduce' emits the address bases afterwards,
+   so the target's `3 / 0x400 / 1 / lui / addiu base / addiu base-6' is
+   exactly the body order 3 (`unk_00 = 3'), 0x400 (`unk_02 = 0x400'), 1
+   (`addu $v1, $a1, $a0' at word 28, the `1 + i') followed by the two bases.
+   In the candidate the 1 lands AFTER the bases, which means it is not in the
+   movables list at all -- it is being created later, by cse2 sharing the
+   bottom test's `sllv $v0, $a1, $v0' operand with the body's add.  So the
+   question is sharper than h172 could state it: WHAT MAKES THE `1' INVARIANT
+   INSIDE THE BODY RATHER THAN AT THE BOTTOM TEST?  h172's third idea -- a
+   second body-level reference to the literal 1, early, so the movables scan
+   sees it before the address computations -- is the one still untried, and it
+   must not be a reference that also serves either entry guard.
 
    DECLARATIONS
    typedef struct UnkDungeonCell

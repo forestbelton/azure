@@ -54,17 +54,50 @@
    The word count moves with the number of preheader shuffles: 2 shuffles =
    69, 3 = 70, 4 = 71.  Only the kept spelling has the target's three.
 
-   WHAT TO TRY NEXT, in order:
-   1. find a spelling of the loop's direction index that keeps a
-      sign-extension of `d' INSIDE the loop for loop.c to hoist, while still
-      emitting `andi 0x6' and `addu $v0, $t0, $a1'.  A local holding
-      `(d + k) & 6' and used for both table subscripts AND the return value
-      was NOT tried and is the obvious candidate -- but note the target
-      recomputes the return value from the RAW $a2 (`addu $v0, $a2, $a1'),
-      so the local cannot also be the returned expression.
-   2. permute the local declaration order; this body was never swept that way
-      and the brief's rule is to do it before anything else on a clean
-      two-register exchange.
+   BOTH OF h172's "WHAT TO TRY NEXT" ITEMS ARE NOW CLOSED -- agent h181,
+   batch 35, same day.  Neither moves the figure, and the flatness is itself
+   the result: by the batch rule, a flat declaration-order sweep rules out
+   allocation PRIORITY, so the lever is the SET of locals or their WIDTHS, and
+   the local-set sweep below rules that out too for the direction index.
+
+   1. ALL TWENTY-FOUR DECLARATION-ORDER PERMUTATIONS of `dy nx ny k' measure
+      70 words / 13 aligned rows.  Allocation priority order is ruled out.
+   2. A LOCAL FOR THE MASKED DIRECTION does not supply the hoistable
+      sign-extension either, in any width or either shape:
+        `e = (d + k) & 6' with the two subscripts on `e', `e' as `s32'   13
+        the same with `e' as `s16'                              67w / 26
+        the same with `e' as `u16'                              67w / 26
+        `e = d' (`s16') inside the loop, subscripts `(e + k) & 6'        13
+        `e = (s16)d' (`s32') inside the loop, same subscripts            13
+      The two narrow widths drop THREE WORDS, which is the three preheader
+      shuffles collapsing, so they are moving in the wrong direction.
+   3. The one untried cell in h172's table, dx a POINTER LOCAL and dy BARE,
+      is 70 words / 14 -- worse than the kept dx-bare/dy-local by one row,
+      and `u16 *dx' with the casts dropped is also 14.  The table is now
+      complete and the kept spelling is the best of the four.
+
+   SO WHAT IS LEFT is only h172's first half: a spelling in which `(s16)d'
+   survives combine as a loop-invariant for loop.c to hoist.  Every source
+   route to it through the direction index is now priced and closed; the
+   remaining idea was to change what `d' IS, and THAT IS NOW CLOSED TOO:
+       `s32 d', no casts                                   66w / 40
+       `s32 d' with `(s16)d' at all four subscript sites    67w / 35
+       `s32 d' with the casts in the loop only             66w / 34
+   All three lose FOUR words, so `s16 d' is right and the parameter is not
+   the lever.  (Nothing in this unit calls func_lo16_8001CBD4 -- a grep of
+   every listing in asm/nonmatchings/ovl_dng_lo16 finds no `jal' to it -- so
+   a prototype change here would have been contained, which is why it was
+   safe to price.)
+
+   SO EVERY SOURCE-LEVEL ROUTE TO THE HOISTABLE `(s16)d' IS PRICED AND SHUT.
+   What is left is the mechanism itself: combine strips the sign-extension
+   because `andi 0x6' makes the high bits dead, and nothing in C stops it.
+   NEXT AGENT: this is a combine-stripping residue, not a statement position
+   and not an allocation priority, so it is not a permuter job either; a `-da'
+   `.combine`/`.loop` pair on both sides is the only thing that would say
+   what the original's `d` reference looked like before combine saw it.  Do
+   not re-sweep the declaration order, the direction-index local, the table
+   locals or the parameter type -- all four tables above are complete.
 
    The `(u16)' casts on both table reads are load-bearing in the sense that
    the listing reads them with `lhu'; the project declares both tables
