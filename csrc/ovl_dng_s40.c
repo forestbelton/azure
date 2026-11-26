@@ -173,6 +173,15 @@ extern u8 D_800E20BC[];
    The rest of this comment is the family representative's and its other
    numbers are its own.
 */
+void func_s40_80024750(u8 *p);
+UnkNode *func_8003FC64(s32);
+extern u8 D_80045340[];
+extern u8 D_80025E64[];
+void func_800B8FC8(u8 *, s32 *, s32 *, s32, s32);
+extern u16 D_80025EE8[];
+extern const u8 D_s40_80024028[];
+extern const u8 D_s40_80024030[];
+
 void func_s40_8002407C(u8 *p, u8 b, u8 *q)
 {
     void *m;
@@ -396,17 +405,389 @@ void func_s40_800244CC(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s40", func_s40_800245EC);
+/* The shutter's frame counter and its eight-step shutter animation, and IT
+   OWNS A JUMP TABLE.  jtbl_s40_80024008: 8 `.word's = 8 cases + 0 pad,
+   dispatch `sltiu $v0, $v1, 0x8' with NO minval subtraction, so the case set
+   is 0..7 and every entry is a real case -- the range-check `beqz' target
+   `.Ls40_800246C0' is the body's COMMON TAIL, not one of the entries, so
+   there is no `default:' statement.  Three distinct targets:
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s40", func_s40_800246F8);
+     .Ls40_80024658   cases 0 1 2 4 5 6      .Ls40_80024674   case 3
+     .Ls40_8002469C   case 7
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s40", func_s40_80024750);
+   67 words, 0 differing, 0 aligned differences.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s40", func_s40_80024780);
+   THE DECREMENT IS SPLIT AROUND THE D_80025E80 STORE.  `t = *(u16 *)(p + 0x2)
+   - 1; D_80025E80 = 1; *(u16 *)(p + 0x2) = t;' is 67 / 0; written in place as
+   `*(u16 *)(p + 0x2) -= 1;' before the store it is 66 words and 31 aligned
+   rows.  gcc 2.7.2 cannot disambiguate `mem:HI (lo_sum D_80025E80)' from
+   `mem:HI ($a1 + 2)', so neither the load nor the store can cross it and the
+   only way to get the `sh %lo(D_80025E80)' emitted BETWEEN them is to split
+   the read-modify-write.  Same device as csrc/ovl_dng_s58.c's
+   func_s58_80024374.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s40", func_s40_8002499C);
+   ARM ORDER IS MEASURABLE HERE -- the three arms differ in length and in
+   which byte they touch, so jump2 does not collapse them -- and the entries
+   want ENTRY-ADDRESS order: the {0,1,2,4,5,6} group, then case 3, then case
+   7.  Case 3's arm written first is 67 / 15, case 7's first is 67 / 16.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s40", func_s40_80024DB8);
+   Inside case 3, `p[0x28] -= 0x60' comes BEFORE `p[0x29] += 0x20' (the other
+   way is 67 / 10).  The gate is `== 0' with the SWITCH as the then arm;
+   inverted, with the increment as the then, it is 67 / 6.
+
+   p+0x1C is read TWICE because the two reads differ in extension: `lh' for
+   the `*(s16 *)' test and `lhu' for the `*(u16 *) += 1', which cse cannot
+   unify.  The third parameter is an UnkSlot the body only writes
+   (+0x1C/+0x1E = 0x2000); the second is never read, which is why gcc parks
+   `p' in $a1 and the body opens with `addu $a1, $a0, $zero'. */
+void func_s40_800245EC(u8 *p, UnkVec *v, u8 *q)
+{
+    u16 t;
+
+    t = *(u16 *)(p + 0x2) - 1;
+    D_80025E80 = 1;
+    *(u16 *)(p + 0x2) = t;
+    *(s16 *)(q + 0x1C) = 0x2000;
+    *(s16 *)(q + 0x1E) = 0x2000;
+    if (*(s16 *)(p + 0x1C) == 0)
+    {
+        *(s16 *)(p + 0x1C) = 0;
+        switch (*(s16 *)(p + 0x1E))
+        {
+        case 0:
+        case 1:
+        case 2:
+        case 4:
+        case 5:
+        case 6:
+            *(u16 *)(p + 0x1E) += 1;
+            p[0x28] += 0x20;
+            break;
+        case 3:
+            *(u16 *)(p + 0x1E) += 1;
+            p[0x28] -= 0x60;
+            p[0x29] += 0x20;
+            break;
+        case 7:
+            *(s16 *)(p + 0x1E) = 0;
+            p[0x28] -= 0x60;
+            p[0x29] -= 0x20;
+            break;
+        }
+    }
+    else
+    {
+        *(u16 *)(p + 0x1C) += 1;
+    }
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The same frame counter with no animation: spend p+0x2, publish 0x1000 into
+   the renderable's two scale words and raise both kill bits at zero.
+   22 words, 0 differing, 0 aligned differences.
+
+   THE TEST VALUE IS AN `s32' LOCAL READ BEFORE THE D_80025E80 STORE.  With
+   the test inline (`if (*(s16 *)(p + 0x2) <= 0)') it is 23 words and 11
+   aligned rows -- the `lh' cannot hoist above the fixed-address halfword
+   store, so the store cannot reach the `bgtz' delay slot.  Declared `s16 t'
+   it is 23 / 6: the HImode pseudo is loaded with `lhu' and sign-extended
+   with an `sll' where the target has a plain `lh'.
+
+   MEASURED AND FREE, so it is NOT the reason this lands: the decrement's
+   lvalue.  `*(s16 *)(p + 0x2) -= 1' is also 22 / 0.
+
+   The second parameter is never read; `p' takes $a1 and the body opens with
+   `addu $a1, $a0, $zero'.  csrc/ovl_dng_s58.c's func_s58_80024374 is the
+   same local-around-the-global-store shape one size down. */
+void func_s40_800246F8(u8 *p, UnkVec *v, u8 *q)
+{
+    s32 t;
+
+    *(u16 *)(p + 0x2) -= 1;
+    *(s16 *)(q + 0x1C) = 0x1000;
+    *(s16 *)(q + 0x1E) = 0x1000;
+    t = *(s16 *)(p + 0x2);
+    D_80025E80 = 1;
+    if (t <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The bare teardown step: pin D_80025E80 and raise both kill bits.
+   12 words, 0 differing, 0 aligned differences.  One parameter -- nothing in
+   the body reads $a1.  `D_80025E80 = 1;' is FIRST; written last it is 11
+   words and 8 aligned rows, because the two 0x8000 read-modify-writes then
+   lose the `lui' that fills the load delay. */
+void func_s40_80024750(u8 *p)
+{
+    D_80025E80 = 1;
+    *(u16 *)(p - 0x2) |= 0x8000;
+    D_800814A0 |= 0x8000;
+}
+
+/* The shutter's third step: give up at once when the +0x30 object's +0x13
+   byte has reached 0x33..0x36, otherwise spend p+0x2, flip the +0xA toggle
+   and glide the mover's +0x8 by +/-0x20000, hand the 0x80 flag from the
+   renderable to the object at -0x14 of the +0x30 object, and drive the three
+   colour bytes off the counter -- up over the first 0x3C frames and down
+   again after -- then raise both kill bits and take the 0x80 flag back.
+   135 words, 0 differing, 0 aligned differences.
+
+   THREE STATEMENTS IN THIS ORDER, AND ALL THREE POSITIONS ARE PRICED:
+   `h = *(u8 **)(p + 0x30);' then `D_80025E80 = 1;' then `s = h[0x13];'.
+   Without the `h' local, reading the byte in one expression before the store,
+   it is 133 words / 8 rows; with the store FIRST it is 136 / 4.  The local is
+   what puts the `lw 0x30' ABOVE the fixed-address store and the `lbu 0x13'
+   BELOW it, which is the only arrangement gcc can reach -- it cannot move
+   either memref across that store itself.
+
+   THE FIRST GATE IS A RANGE TEST IN THE SOURCE: `s >= 0x33 && s <= 0x36' is
+   what fold's make_range turns into the listing's `addiu -0x33' / `sltiu 4'.
+   csrc/ovl_dng_s41.c's func_s41_800252E4 is this body's closest relative and
+   prices the same sentence.
+
+   MEASURED AND FREE, so it is NOT the reason this lands: writing the three
+   colour bytes as `*(u8 *)((u8 *)r + 0xE)' plain casts instead of
+   `r->unk_0C[2]' field refs -- 135 / 0 either way.
+
+   The fade is `(0x3C - x) * 0x40 / 0x3C + 0x40' at both ends; the 0x88888889
+   magic with `sra 5' is divisor 0x3C, not the 0x1E the same magic means with
+   `sra 4'.  Both arms spell the three stores out, 0xE then 0xD then 0xC, and
+   jump2 merges their last one. */
+void func_s40_80024780(u8 *p, UnkVec *v, UnkSlot *r)
+{
+    UnkSlot *t;
+    u8 *h;
+    s32 s;
+
+    h = *(u8 **)(p + 0x30);
+    D_80025E80 = 1;
+    s = h[0x13];
+    if (s >= 0x33 && s <= 0x36)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        return;
+    }
+    *(u16 *)(p + 0x2) -= 1;
+    if (*(s16 *)(p + 0xA) == 0)
+    {
+        *(s16 *)(p + 0xA) = 1;
+        v->unk_08 -= 0x20000;
+    }
+    else
+    {
+        *(s16 *)(p + 0xA) = 0;
+        v->unk_08 += 0x20000;
+    }
+    t = *(UnkSlot **)(*(u8 **)(p + 0x30) - 0x14);
+    r->unk_14 &= 0xFF7F;
+    t->unk_14 |= 0x80;
+    if (*(s16 *)(p + 0x2) < 0x3C)
+    {
+        r->unk_0C[2] = (0x3C - *(s16 *)(p + 0x2)) * 0x40 / 0x3C + 0x40;
+        r->unk_0C[1] = (0x3C - *(s16 *)(p + 0x2)) * 0x40 / 0x3C + 0x40;
+        r->unk_0C[0] = (0x3C - *(s16 *)(p + 0x2)) * 0x40 / 0x3C + 0x40;
+    }
+    else
+    {
+        r->unk_0C[2] = (*(s16 *)(p + 0x2) - 0x3C) * 0x40 / 0x3C + 0x40;
+        r->unk_0C[1] = (*(s16 *)(p + 0x2) - 0x3C) * 0x40 / 0x3C + 0x40;
+        r->unk_0C[0] = (*(s16 *)(p + 0x2) - 0x3C) * 0x40 / 0x3C + 0x40;
+    }
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+        t->unk_14 &= 0xFF7F;
+    }
+}
+
+/* The shutter's fourth step and its two renderables: flip the +0xA toggle,
+   then on state 0 invert a 4x4 grid of 0x18x0x15 VRAM tiles through
+   D_80025EE8 and fall into state 1, which parks the two func_800B8FC8
+   renderables, fades the three colour bytes off the +0x2 counter and kills
+   the node at 0x64; the tail hands the 0x80 flag to the +0x30 object's -0x14
+   sibling.  263 words, 0 differing, 0 aligned differences.  A compare-chain
+   switch, not a table: two arms with case 0 falling through into case 1.
+
+   THE TOGGLE'S TEST VALUE IS AN `s32' LOCAL READ BEFORE THE D_80025E80
+   STORE, exactly as in func_s40_800246F8 above: inline it is 265 words and 9
+   aligned rows.
+
+   `e = *(s16 *)(p + 0x2) / 4 - 0x4E; w.vy = r1.y - e;' -- THE LOCAL IS THE
+   FACT.  Written `w.vy = r1.y - (*(s16 *)(p + 0x2) / 4 - 0x4E)' it is 263
+   words and 11 rows: fold's associate step rewrites `A - (B - C)' as
+   `(A + C) - B' and the `addiu' lands on r1.y instead of on the quotient.
+
+   `(r1.w >> 1)' AND NOT `/ 2': the divide form is 267 words / 9 rows, the
+   four extra words being the signed-division correction.  `s16 u' for the
+   +0x2 counter: `s32' is 261 / 2.
+
+   The twin is csrc/ovl_dng_s41.c's func_s41_80025408 (242 words), which has
+   the same `RECT r1; RECT r2; DVECTOR w;' stack trio off this bank's own
+   rodata and the same grid loop; r1 here is the D_s40_80024028 copy and is
+   only ever READ, which is why its three `lhu' reads at +0x18/+0x1A/+0x1C
+   come out unsigned. */
+void func_s40_8002499C(u8 *p, UnkVec *b, u8 *c)
+{
+    RECT r1;
+    RECT r2;
+    DVECTOR w;
+    u8 *n;
+    u16 *q;
+    s32 i;
+    s32 j;
+    s32 k;
+    s32 t;
+    s32 e;
+    s16 u;
+
+    r1 = *(RECT *)D_s40_80024028;
+    r2 = *(RECT *)D_s40_80024030;
+    t = *(s16 *)(p + 0xA);
+    D_80025E80 = 1;
+    if (t == 0)
+    {
+        *(s16 *)(p + 0xA) = 1;
+        b->unk_08 -= 0x20000;
+    }
+    else
+    {
+        *(s16 *)(p + 0xA) = 0;
+        b->unk_08 += 0x20000;
+    }
+    switch (*(s16 *)p)
+    {
+    case 0:
+        for (i = 0; i < 4; i++)
+        {
+            for (j = 0; j < 4; j++)
+            {
+                r2.x = i * 0x18 + 0x340;
+                r2.y = j * 0x15 + 0x154;
+                r2.w = 0x18;
+                r2.h = 0x15;
+                StoreImage(&r2, (u_long *)D_80025EE8);
+                while (DrawSync(1) != 0)
+                {
+                    ;
+                }
+                q = D_80025EE8;
+                for (k = 0; k < 0x1F8; k++)
+                {
+                    if (*q == 0)
+                    {
+                        *q = 0xFFFF;
+                    }
+                    else
+                    {
+                        *q = 0;
+                    }
+                    q++;
+                }
+                LoadImage(&r2, (u_long *)D_80025EE8);
+            }
+        }
+        *(s16 *)p = *(u16 *)p + 1;
+        *(u16 *)(c + 0x14) &= 0xFF7F;
+    case 1:
+        r2.x = 0x340;
+        r2.y = 0x100;
+        r2.w = 0x60;
+        r2.h = 0x54;
+        w.vx = 0x370;
+        w.vy = 0x148;
+        func_800B8FC8(*(u8 **)(p + 0x38), (s32 *)&r2, (s32 *)&w, 0, 1);
+        w.vx = r1.x + (r1.w >> 1) - 0x6;
+        e = *(s16 *)(p + 0x2) / 4 - 0x4E;
+        w.vy = r1.y - e;
+        func_800B8FC8(*(u8 **)(p + 0x3C), (s32 *)&r1, (s32 *)&w, 1, 1);
+        if (*(s16 *)(p + 0x2) < 0x15)
+        {
+            c[0xE] = *(s16 *)(p + 0x2) * 0x80 / 0x14;
+            c[0xD] = *(s16 *)(p + 0x2) * 0x80 / 0x14;
+            c[0xC] = *(s16 *)(p + 0x2) * 0x80 / 0x14;
+        }
+        if (*(s16 *)(p + 0x2) >= 0x51)
+        {
+            c[0xE] = (0x64 - *(s16 *)(p + 0x2)) * 0x80 / 0x14;
+            c[0xD] = (0x64 - *(s16 *)(p + 0x2)) * 0x80 / 0x14;
+            c[0xC] = (0x64 - *(s16 *)(p + 0x2)) * 0x80 / 0x14;
+        }
+        u = *(u16 *)(p + 0x2) + 1;
+        *(s16 *)(p + 0x2) = u;
+        if (u > 0x64)
+        {
+            *(s16 *)(p + 0x2) = 0;
+            *(s16 *)p = *(u16 *)p + 1;
+            *(s16 *)(*(u8 **)(p + 0x34) + 0x90) = 1;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        break;
+    }
+    n = *(u8 **)(p + 0x30);
+    if (n[0x13] >= 0x33 && n[0x13] <= 0x36)
+    {
+        *(u16 *)(c + 0x14) |= 0x80;
+    }
+}
+
+/* The 0x212 renderable the three shutter steps publish through: seed the
+   mover from `b', tag it with D_80045340 and func_s40_80024750, point its
+   +0x8 at the 12-byte D_80025E64 template and carry the caller's three
+   colour bytes and 0x1000-complemented +0x1A across.  86 words, 0 differing,
+   0 aligned differences, FIRST COMPILE off csrc/ovl_dng_b22.c's
+   func_b22_80171928 (68 words) -- same 0x212 / func_8004491C / D_80045340
+   opening, same `n->unk_0C' reload before the second half.
+
+   Three orderings, all priced here rather than inherited:
+   the payload stores are 0x2C, 0x30, 0x34 in source order and sched
+   transposes the last two (writing 0x34 before 0x30 is 86 / 2);
+   `r->unk_1E' is assigned BEFORE `r->unk_1C' (swapped, 86 / 2);
+   and `r->unk_10 = 0x20' comes BEFORE `r->unk_06 = 0' (swapped, 86 / 6). */
+void func_s40_80024DB8(u8 *a, UnkVec *b, u8 *c)
+{
+    UnkNode *n;
+    u8 *q;
+    UnkVec *m;
+    UnkSlot *r;
+
+    n = func_8003FC64(0x212);
+    if (n != NULL)
+    {
+        q = (u8 *)n + 0x20;
+        *(u32 *)(q + 0x2C) = *(u32 *)a;
+        *(u32 *)(q + 0x30) = *(u32 *)(*(u8 **)a + 0x60);
+        *(u32 *)(q + 0x34) = (u32)a;
+        n->unk_10 = (u32)func_s40_80024750;
+        func_8004491C(n, (u32)D_80045340);
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_10 = 0x20;
+        r->unk_06 = 0;
+        r->unk_14 |= 0xC;
+        m = n->unk_08;
+        m->unk_00 = b->unk_00;
+        m->unk_04 = b->unk_04;
+        m->unk_08 = b->unk_08;
+        r = (UnkSlot *)n->unk_0C;
+        r->unk_1E = 0x800;
+        r->unk_1C = 0x800;
+        r->unk_0C[0] = c[0xC];
+        r->unk_0C[1] = c[0xD];
+        r->unk_0C[2] = c[0xE];
+        r->unk_1A = 0x1000 - *(u16 *)(c + 0x1A);
+        *(UnkDngS58Name12 *)((u8 *)n + 0x40) = *(UnkDngS58Name12 *)D_80025E64;
+        r->unk_08 = (u32)((u8 *)n + 0x40);
+    }
+}
 
 /* 0x8 bytes of this bank's own rodata, between its jump tables,
    read by func_s40_8002499C, func_s40_80024F10. Spelled as BYTES because that is all the
