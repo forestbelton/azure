@@ -107,6 +107,22 @@ def main():
     # and without --src it was a SILENT NO-OP: `b35' printed nothing at all and
     # "0 unit(s) checked", while `s51' printed NO SUCH UNIT. Found 2026-11-24 by
     # an agent who tried it without --src. Normalise instead of failing.
+    # AND REFUSE A PATH WITH AN EXPLANATION, not with NO SUCH UNIT. An agent
+    # ran `declcheck.py <path-to-its-copy>' -- the natural reading when every
+    # other tool in this family takes a path first -- and got `NO SUCH UNIT'
+    # plus "0 unit(s) checked", then reported the tool as unable to check a
+    # copy at all. It can: the UNIT TAG comes first and the copy goes after
+    # `--src'. The old message named the right problem in the wrong words.
+    bad_paths = [u for u in units if "/" in u or u.endswith(".c")]
+    if bad_paths:
+        raise SystemExit(
+            "declcheck: %s looks like a PATH, and the first argument is a "
+            "UNIT TAG.\n"
+            "  the copy goes after --src:\n"
+            "    declcheck.py %s --src %s"
+            % (bad_paths[0],
+               os.path.basename(bad_paths[0])[8:-2] or "<tag>",
+               bad_paths[0]))
     units = [u if os.path.exists(os.path.join(PROJ, "csrc", u + ".c"))
              else "ovl_dng_" + u for u in units]
     nu = nbad = nhit = nfail = 0
