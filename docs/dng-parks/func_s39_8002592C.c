@@ -172,7 +172,34 @@
    neighbour); func_s39_80025228/80025348/80025398/8002558C/80025648 and
    func_s39_8002512C are all LANDED in the unit and all defined above this
    function, so no forward declaration is needed. 0x80069EF8 is `rand' in
-   splat/common_syms.txt and the unit already declares `s32 rand(void);'. */
+   splat/common_syms.txt and the unit already declares `s32 rand(void);'.
+
+   DECLARATIONS
+#include "common.h"
+
+UnkNode *func_8003FC64(s32);
+extern s16 D_8006CCD8[];
+extern s16 D_8006CCE8[];
+extern s32 D_8008346C;
+extern u8 D_80026674[];
+extern u8 D_80026680[];
+extern u8 D_80026698[];
+extern u8 D_800266A4[];
+extern u8 D_80045340[];
+extern u8 D_800DDC40[];
+extern u8 D_800E3D68;
+extern u8 D_s39_80024014[];
+extern u8 D_s39_80026668[];
+s32 func_8004491C(UnkNode *, u32);
+s32 func_8009D218(u8 *, s32, u8 *);
+s32 func_800A4778(u16, u16, s16, s32);
+s32 func_800A56E0(s32);
+s32 func_800A6D30(void);
+s32 func_800C8A3C(u8 *, s16, s16);
+u8 *func_8003DF74(u8 *, UnkSlot *, s16 *, s16);
+void func_800B835C(u8 *, s32 *, s32, s32);
+   END DECLARATIONS
+*/
 void func_s39_8002592C(u8 *p, UnkVec *v, u8 *c)
 {
     u16 out[3];

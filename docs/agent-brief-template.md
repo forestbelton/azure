@@ -967,6 +967,30 @@ Those numbers must come from the final all-at-once `ovlverify` run. Then:
 Confirm in the report: your copy's path, that `csrc/` is unmodified, and that
 clang-format leaves your copy untouched.
 
+## IF YOU PARK A BODY, ITS DECLARATIONS GO IN THE PARK, NOT IN THE UNIT
+
+A park's `DECLARATIONS` block must carry **everything that body needs**, even
+when the declarations are already sitting in your unit copy. Leaving them in
+the unit and saying so does not work: my integration runs `dngland`, which
+reconciles the unit's declarations against what the LANDED bodies use, so
+anything only the parked body needed is dropped -- and the park then will not
+splice at all, which makes every figure in it unreachable.
+
+**This happened twice on 2026-11-26**, once where an agent deliberately left 18
+declarations in the unit "so the park re-splices with no new declarations" (21
+were missing afterwards and that park had no `DECLARATIONS` block at all), and
+once where I reverted a landed body's externs after unsplicing it (23 missing).
+Both parks read "NO placement compiles" until repaired by hand.
+
+**Check it yourself before handing back:**
+
+    uv run python tools/decomp/parkcheck.py docs/dng-parks/<your park>.c --splice
+
+`parkcheck` WITHOUT `--splice` validates the comment structure and the
+definition and does not try to build, so it passes a park that cannot be
+measured. I ran it without the flag for a whole session and reported "0 bad"
+while five parks were unspliceable.
+
 **APPEND ONE LINE TO `<your dir>/PROGRESS.txt` THE MOMENT EACH FUNCTION
 LANDS**, before you write anything else up -- the function name, its target
 words, its candidate words and its differing count, one line, nothing else.
