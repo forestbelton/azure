@@ -34,6 +34,7 @@ typedef struct UnkDngB09A28Tbl
 void func_800478B8(u8 *);
 
 void func_8003DB94(void *, void *, s32);
+s32 rand(void);
 UnkNode *func_8003FC64(s32);
 s32 func_8004491C(UnkNode *, u32);
 void func_s10_80024048(u8 *p, UnkVec *b, u8 *c, u8 *d);
@@ -61,7 +62,27 @@ extern s16 D_8006CCE8[];
 extern s32 D_8008346C;
 extern s16 D_80083228;
 
-/* PLACEHOLDER_80024048 */
+/* The 0x212 sprite's step with a repeat: bump the +0x16 counter on the node
+   at the actor's +0xC, clear the renderable's +0x1A rotation, then hand the
+   renderable to func_800478B8 `rand() % 4 + 1' times, and when its +0x14
+   reports 0x6000 mark the owning actor retired and set the same bit in
+   D_800814A0. 58 words, 0 differing, first compile.
+
+   This is the already-landed func_s10_80024224 above plus the +0x1A clear and
+   the loop. func_80069EF8 IS `rand' -- splat/common_syms.txt names it -- and
+   the `bgez'/`addiu 0x3'/`sra 2'/`sll 2'/`subu' run is a signed `% 4', not a
+   mask.
+
+   BOTH LOCALS ARE NARROW AND BOTH ARE LOAD-BEARING, measured on this body:
+
+     `s16 n' for the repeat count          58 w,  0   kept
+       ... `s32 n'                         55 w,  9
+     `s16 i' for the loop counter          58 w,  0   kept
+       ... `s32 i'                         55 w,  7
+
+   Three words each: the narrow declarations are what give the two `sll 16' /
+   `sra 16' pairs the target has, one at the count's store and one per
+   iteration at the loop test. */
 void func_s10_80024048(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     s16 n;
@@ -295,7 +316,25 @@ UnkNode *func_s10_800243E0(UnkVec *q)
     return n;
 }
 
-/* PLACEHOLDER_800244A4 */
+/* The step for the node func_s10_80024550 spawns: point the renderable's
+   +0x1A rotation at the camera-relative angle, drop the mover 8 units per
+   frame, hand the renderable to func_800478B8, and when its +0x14 reports
+   0x6000 mark the owning actor retired and set the same bit in D_800814A0.
+   43 words, 0 differing, first compile off its own spawner's payload layout
+   (p is the node payload at node + 0x20, so p+0x8 is the angle the spawner
+   seeded and p-0x2 is the node's own +0x1E).
+
+   D_80083228 IS Unk80083160's unk_C8 -- the camera yaw at 0x80083160 + 0xC8 --
+   and the DIRECT SYMBOL is right here, where the spawner wants a pointer
+   local instead. The discriminator is in the listing: this body has
+   `lui %hi(D_80083228)' / `lh %lo(D_80083228)($v0)', the spawner has
+   `lui' + `addiu' into a callee-saved register and `lh 0xC8($s4)'. See
+   func_s10_80024550 for the 11-row price of getting that backwards.
+
+   MEASURED AND FREE at 43 words / 0 differing, so it is NOT why this lands:
+   `-((f(...) >> 4) << 8) >> 8' in place of `((f(...) >> 4) * -256) >> 8'.
+   fold builds the same tree from both, so this is FREE and not merely
+   unmeasurable. */
 void func_s10_800244A4(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     *(s16 *)(c + 0x1A) = ((func_80064584(*(s16 *)(p + 0x8) - D_80083228) >> 4) * -256) >> 8;
@@ -308,7 +347,29 @@ void func_s10_800244A4(u8 *p, UnkVec *b, u8 *c, u8 *d)
     }
 }
 
-/* PLACEHOLDER_80024550 */
+/* Spawn the 0x212 node that carries the camera-facing sprite for this effect:
+   a random start angle into the payload at +0x28 (node+0x20+0x8), the
+   resident D_800DE870 as its dresser, func_s10_800244A4 as its per-frame
+   step, the +0x10 0x20 and +0x14 0xC bits, publication through D_80045340,
+   and the mover at n->unk_08 placed at the caller's vector offset by the
+   angle's sine and cosine. Returns nothing. 87 words, 0 differing, first
+   compile.
+
+   THE ONE FACT IS THE CAMERA YAW'S SPELLING, and it inverts against the step
+   function 40 words below. Measured here, aligned differences at 87 words:
+
+     `Unk80083160 *gg = &D_80083160;' with `gg->unk_C8'   87 w,  0   kept
+       ... the plain `D_80083228' symbol inline           84 w, 11
+
+   Three words: the pointer local is what gives the target's `lui' + `addiu'
+   pair materialising 0x80083160 into $s4 before the first call plus
+   `lh 0xC8($s4)', where the direct symbol emits one `lui %hi' / `lh %lo'
+   pair at the site. func_s10_800244A4 reads the SAME datum and wants the
+   OPPOSITE spelling, so read the lui/addiu-versus-lui/lh shape out of your
+   own listing rather than taking a house style from the unit.
+
+   MEASURED AND FREE at 87 words / 0 differing: `-((f(...) >> 4) << 8) >> 8'
+   for the +0x1A rotation instead of `((f(...) >> 4) * -256) >> 8'. */
 void func_s10_80024550(UnkVec *q)
 {
     Unk80083160 *gg = &D_80083160;
@@ -341,7 +402,22 @@ void func_s10_80024550(UnkVec *q)
     }
 }
 
-/* PLACEHOLDER_800246AC */
+/* The step for one of the ring's eight frames spawned by func_s10_80024790:
+   advance the payload angle at p+0x8 by 0x40 modulo 0x1000, hand the
+   renderable to func_800478B8, and when its +0x14 reports 0x6000 re-dress it
+   from D_800DEB28 at frame 0 and move the caller's vector onto the angle's
+   sine and cosine scaled by 28/256. 57 words, 0 differing, first compile.
+
+   It landed off its own spawner: func_s10_80024790 above stores the position
+   at (u8 *)n + 0x20 + 0/2/4 and the angle at +0x8, so this body's `p' is that
+   payload pointer and no field offset needed guessing. The `bgez' /
+   `addiu 0x103F' / `sra 12' / `sll 12' / `subu' run is a signed
+   `(angle + 0x40) % 0x1000' with the +0x40 folded into the correction, not a
+   mask; the `sra 4' then `* 28' then `sra 8' is the spawner's `>> 4' scaling
+   idiom with a different multiplier.
+
+   Everything in this body is ASSERTED, not measured: it landed on the first
+   compile, so price any spelling here before building on it. */
 void func_s10_800246AC(u8 *p, UnkVec *b, u8 *c, u8 *d)
 {
     *(s16 *)(p + 0x8) = (*(s16 *)(p + 0x8) + 0x40) % 0x1000;
@@ -436,7 +512,31 @@ UnkNode *func_s10_80024790(UnkVec *q, s16 k)
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s10", func_s10_80024930);
 
-/* PLACEHOLDER_80024CFC */
+/* State 3 of the effect's dresser: two passes of the sixteen-segment ring
+   func_s10_80024930 draws, the first at tpage 3 with colour 0x40 and the
+   second at tpage 1 with the +0x10 byte's own level, both at the node's +0x14
+   angle and its negation, with the three radii taken off func_800644B8 of the
+   +0x10 byte's angle scaled by 320, 2 and 24. Always returns 0. 82 words,
+   0 differing, first compile.
+
+   TWO WIDTHS MEASURED, both load-bearing, aligned differences:
+
+     `u8 h' for the second pass's colour      82 w,  0   kept
+       ... `s32 h'                           81 w,  2
+     `s16 t1' / `s16 t2' / `s16 t3'          82 w,  0   kept
+       ... all three `s32'                   80 w,  2
+
+   The `u8' is what gives the two `andi $v0, $s3, 0xFF' the target has -- one
+   at the `if (h != 0)' gate and one at the outgoing argument slot -- and the
+   `s16' radii are what give the three `sll 16' / `sra 16' pairs before the
+   stack stores. Note the fifth parameter of func_s10_80024930 is `s32' and
+   the sixth `s16', so an `s16' local satisfies both slots with no extension.
+
+   The `(s16)(*(u16 *)(p + 0x14) << 5)' and `(s16)(-(*(u16 *)(p + 0x14) << 6))'
+   arguments are the combined form of a narrowing shift: the listing's
+   `sll 21' / `sra 16' and `sll 22' / `negu' / `sra 16' are what cc1psx emits
+   for an SImode shift converted to the `s16 d' parameter, not a separate
+   mask. */
 s32 func_s10_80024CFC(u8 *p, UnkVec *b, u8 *c)
 {
     u8 h;
@@ -457,7 +557,15 @@ s32 func_s10_80024CFC(u8 *p, UnkVec *b, u8 *c)
     return 0;
 }
 
-/* PLACEHOLDER_80024E44 */
+/* State 4 of the dresser: the same two passes of func_s10_80024930's ring
+   with every radius a constant -- 0x140 and 0x20 at tpage 3 colour 0x40, then
+   0x140 and 0x18 at tpage 1 colour 0xFF. Always returns 0. 45 words,
+   0 differing, first compile, and it landed because func_s10_80024CFC above
+   was already there: same call shape, same argument widths, nothing new.
+
+   The repeated 0x140 is held in one callee-saved register across both calls
+   because cse unifies the two constants; that is free and not a spelling.
+   Everything else here is ASSERTED rather than measured. */
 s32 func_s10_80024E44(u8 *p, UnkVec *b, u8 *c)
 {
     func_s10_80024930(p, b, c, *(u16 *)(p + 0x14) << 5, 0x140, 0x20, 3, 0x40);
@@ -465,7 +573,23 @@ s32 func_s10_80024E44(u8 *p, UnkVec *b, u8 *c)
     return 0;
 }
 
-/* PLACEHOLDER_80024EF8 */
+/* State 5 of the dresser: the same two passes of func_s10_80024930's ring,
+   both at radius 0x140, with the angle argument taken from `0x10 - the +0x10
+   byte' rather than the byte itself and the second pass's colour the
+   one's-complement `~(byte << 4)'. Always returns 0. 74 words, 0 differing,
+   first compile off func_s10_80024CFC above.
+
+   `u8 h' IS LOAD-BEARING HERE TOO BUT IT COSTS NO WORD, which is the
+   difference from func_s10_80024CFC and is worth recording as a per-body
+   price rather than a unit idiom:
+
+     `u8 h' for the second pass's colour      74 w,  0   kept
+       ... `s32 h'                            74 w,  7
+
+   Same width, same mechanism, 2 rows and a word in the sibling and 7 rows and
+   no word here -- the sibling's `h' is computed under a gate and this one's is
+   a single `nor', so the narrowing lands in a different place in the
+   schedule. */
 s32 func_s10_80024EF8(u8 *p, UnkVec *b, u8 *c)
 {
     u8 h;
@@ -548,7 +672,101 @@ s32 func_s10_80025020(u8 *p, UnkVec *b, u8 *c, u8 *d)
     return 0;
 }
 
-/* PLACEHOLDER_80025090 */
+/* THE ACTOR DRIVER, the biggest body in this unit and the owner of
+   jtbl_s10_80024028. Bumps both the actor's +0x10 frame counter and its +0x14
+   on every call and dispatches *(s16 *)(p + 0xA) through the table; every arm
+   leaves through the shared `*(s16 *)(p + 0x16) = 0' after the switch.
+   State 0 seeds the facing from the actor's +0x2A, whitens the tint and clears
+   the 32-entry node-pointer array at p+0x1C before falling through into
+   state 1; state 1 reads the target through func_8003DE58, publishes this
+   object's own dresser func_s10_80025020 once under a `p+0xC & 1' gate, then
+   either locks on to the party member at `*(u8 **)(s + 0x60) - 0x18' or walks
+   up to eight tiles with func_800A44E0 / func_800BCB04 and aims at the far
+   end; state 2 integrates and spawns through func_s10_800243E0; state 3 fills
+   the 32-entry array from func_s10_80024790; state 4 sprinkles
+   func_s10_80024550 every fourth frame and then retires everything in the
+   array; state 5 is the func_8009CE1C hit; state 6 the teardown; state 7 the
+   five-phase func_s10_80024130 flash. 709 words, 0 differing.
+
+   THIS FUNCTION OWNS jtbl_s10_80024028: EIGHT `.word's = EIGHT CASES PLUS NO
+   PAD. The dispatch bound `sltiu $v0, $v1, 0x8' is the authority and
+   tools/decomp/jtcheck.py agrees; the case count is even so no `.align 3'
+   filler is needed. Entries, in order, all eight distinct and ascending:
+
+     0 .Ls10_8002510C   1 .Ls10_8002515C   2 .Ls10_80025674
+     3 .Ls10_80025730   4 .Ls10_80025770   5 .Ls10_80025824
+     6 .Ls10_80025878   7 .Ls10_800258B0
+
+   The range-check `beqz $v0, .Ls10_80025B6C' lands on the function's COMMON
+   TAIL, which is not a table entry, so there is NO default label among the
+   entries and no `default:' arm is written. Case 0 falls through into case 1.
+
+   DONOR: the landed func_s43_80025954 in csrc/ovl_dng_s43.c (454 words,
+   7-case table) and func_s44_80025408 in csrc/ovl_dng_s44.c (450 words).
+   dngtwin reports NO carved sibling at 0.70 for this stub and xsibs is
+   useless on an s-unit; what found it was tools/decomp/dngcallee.py, which
+   matched 9 of 10 symbols and named both bodies with the SAME -0x70 frame and
+   the same ten saves. All thirteen of s43's priced source-shape facts carried
+   unchanged -- the shared `UnkVec *v' across the lock-on and walk arms,
+   `(cx << 6) & 0xFFFFFFC0' (not `& 0xFFC0'), `ox * 64' (not `(ox << 6)'),
+   `(D_8006CCD8[dir] + 1) * 32', `u16 z' for the target's +0xA across the flag
+   gate, the `i = 1' hoisted ahead of the max loop, the walk's output vector
+   reached through `v = &vv', and the rest -- and the body landed at 720 words
+   / 77 aligned differences on the first compile with all of them in place.
+
+   FIVE FACTS, every one priced on THIS body at 709 words / 0 differing:
+
+     the case-7 tail written ONCE after the if/else chain     709 w,  0  kept
+       ... written out in BOTH arms of the two gates          717 w, 29
+     `*(s16 *)(p + 0x10) <= *(s16 *)(p + 0x12) + 4'          709 w,  0  kept
+       ... `*(s16 *)(p + 0x12) + 4 >= *(s16 *)(p + 0x10)'     709 w,  7
+     `(s16) * (u16 *)(p + 0x12) >> 5'                        709 w,  0  kept
+       ... `>> 4', which is the donor's shift                 709 w,  1
+     case 0's +0xE store BEFORE the three zero stores        709 w,  0  kept
+       ... after them                                         709 w,  6
+     the retired node's flag as `->unk_1E |= 0x8000'         709 w,  0  kept
+       ... `*(u16 *)(*(u8 **)(p + 0x18) + 0x1E) |= 0x8000'    711 w, 18
+       ... the same plain cast at the array site in case 4    711 w, 21
+
+   THE TAIL ROW IS THE LARGEST AND THE LEAST OBVIOUS. Both gates in case 7
+   reach the same `if (p12 + 4 >= p10 && p12 * 2 >= p10)' block, and the
+   listing's two labels .Ls10_80025B08 / .Ls10_80025B0C look exactly like two
+   cross-joined copies -- .Ls10_80025B08 reloads p+0x12 and .Ls10_80025B0C
+   does not. They are not: one textual copy reached from both arms gives both
+   labels for free, because jump.c redirects the else-arm's branch past the
+   reload its own gate has already performed. Writing the block out twice
+   costs EIGHT WORDS, since jump2 then cross-joins the copies only from the
+   first `slt' onward and each copy keeps its own prologue.
+
+   THE COMPARISON ROW IS THE SAME LEVER docs/matching-levers.md records, with
+   the residue it predicts: seven rows that are a uniform $a0/$v1 exchange in
+   the tail block with every instruction in place and nothing moved. The
+   `slt' operand order in the listing is NOT the source's.
+
+   THE +0x1E ROW IS MEM_IN_STRUCT_P IN THE DIRECTION THAT WANTS THE FIELD.
+   `D_800814A0 |= 0x8000' sits beside each node flag update, and the target
+   interleaves the two read-modify-writes -- `lhu 0x1E', `lw %lo(D_800814A0)',
+   two `ori's, `sh 0x1E', `sw %lo(D_800814A0)'. Through a plain cast
+   `true_dependence' refuses to hoist the fixed-address load above the store
+   through the pointer, each pair serialises behind its own `nop', and the two
+   sites cost two words each. The COMPONENT_REF off `UnkNode *' makes
+   MEM_IN_STRUCT_P true and the dependence goes away.
+
+   THE DELTAS OFF func_s43_80025954, for whoever lands the next relink: eight
+   cases rather than seven; the +0x14 counter is BUMPED on entry here and
+   zeroed inside states 0 and 1, where s43 zeroes it once after the switch,
+   and the shared tail is `p+0x16 = 0' instead; state 1 publishes this
+   object's dresser with `func_8004491C((UnkNode *)(p - 0x20),
+   (u32)func_s10_80025020)' under a once-only `p+0xC & 1' gate that s43 has
+   not got; the lock-on z reads the party member's own +0x88 as
+   csrc/ovl_dng_s28.c does, not D_800DDC40 with a 0x300000 lift; the lock-on
+   arm's velocity is three HALFWORD stores at b+0xE / b+0x12 / b+0x16 while
+   the walk arm's is three WORD stores at b->unk_0C / unk_10 / unk_14, and
+   both arms are in the same body, so this is not a unit idiom; the walk arm
+   has three abs deltas and a `v->z = b->z + 0x20'; states 3 and 4 own a
+   32-entry node-pointer array at p+0x1C walked by a DOWN loop from 0x1F whose
+   giv is `p + i * 4' with 0x1C left in the MEM displacement; and state 7 has
+   no counterpart at all. */
 void func_s10_80025090(u8 *p, UnkVec *b, u8 *c)
 {
     u8 *s;
@@ -786,49 +1004,49 @@ void func_s10_80025090(u8 *p, UnkVec *b, u8 *c)
         {
             if (*(s16 *)(p + 0x12) >= *(s16 *)(p + 0x10))
             {
-            *(s16 *)((u8 *)b + 0x2) =
-                *(u16 *)((u8 *)b + 0x2) + *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x10);
-            *(s16 *)((u8 *)b + 0x6) =
-                *(u16 *)((u8 *)b + 0x6) + *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x10);
-            *(s16 *)((u8 *)b + 0xA) =
-                *(u16 *)((u8 *)b + 0xA) + *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x10);
-            func_s10_80024130(p, b);
-            *(s16 *)((u8 *)b + 0x2) =
-                *(u16 *)((u8 *)b + 0x2) - *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x10);
-            *(s16 *)((u8 *)b + 0x6) =
-                *(u16 *)((u8 *)b + 0x6) - *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x10);
-            *(s16 *)((u8 *)b + 0xA) =
-                *(u16 *)((u8 *)b + 0xA) - *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x10);
-            break;
+                *(s16 *)((u8 *)b + 0x2) =
+                    *(u16 *)((u8 *)b + 0x2) + *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x10);
+                *(s16 *)((u8 *)b + 0x6) =
+                    *(u16 *)((u8 *)b + 0x6) + *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x10);
+                *(s16 *)((u8 *)b + 0xA) =
+                    *(u16 *)((u8 *)b + 0xA) + *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x10);
+                func_s10_80024130(p, b);
+                *(s16 *)((u8 *)b + 0x2) =
+                    *(u16 *)((u8 *)b + 0x2) - *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x10);
+                *(s16 *)((u8 *)b + 0x6) =
+                    *(u16 *)((u8 *)b + 0x6) - *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x10);
+                *(s16 *)((u8 *)b + 0xA) =
+                    *(u16 *)((u8 *)b + 0xA) - *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x10);
+                break;
             }
         }
         else if (*(s16 *)(p + 0x12) >= *(s16 *)(p + 0x10))
         {
             if (*(s16 *)(p + 0x12) < 0x4)
             {
-            *(s16 *)((u8 *)b + 0x2) =
-                *(u16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)b + 0xE) * (*(s16 *)(p + 0x12) + 1);
-            *(s16 *)((u8 *)b + 0x6) =
-                *(u16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)b + 0x12) * (*(s16 *)(p + 0x12) + 1);
-            *(s16 *)((u8 *)b + 0xA) =
-                *(u16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)b + 0x16) * (*(s16 *)(p + 0x12) + 1);
-            func_s10_80024130(p, b);
-            *(s16 *)((u8 *)b + 0x2) =
-                *(u16 *)((u8 *)b + 0x2) - *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x12);
-            *(s16 *)((u8 *)b + 0x6) =
-                *(u16 *)((u8 *)b + 0x6) - *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x12);
-            *(s16 *)((u8 *)b + 0xA) =
-                *(u16 *)((u8 *)b + 0xA) - *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x12);
+                *(s16 *)((u8 *)b + 0x2) =
+                    *(u16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)b + 0xE) * (*(s16 *)(p + 0x12) + 1);
+                *(s16 *)((u8 *)b + 0x6) =
+                    *(u16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)b + 0x12) * (*(s16 *)(p + 0x12) + 1);
+                *(s16 *)((u8 *)b + 0xA) =
+                    *(u16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)b + 0x16) * (*(s16 *)(p + 0x12) + 1);
+                func_s10_80024130(p, b);
+                *(s16 *)((u8 *)b + 0x2) =
+                    *(u16 *)((u8 *)b + 0x2) - *(u16 *)((u8 *)b + 0xE) * *(u16 *)(p + 0x12);
+                *(s16 *)((u8 *)b + 0x6) =
+                    *(u16 *)((u8 *)b + 0x6) - *(u16 *)((u8 *)b + 0x12) * *(u16 *)(p + 0x12);
+                *(s16 *)((u8 *)b + 0xA) =
+                    *(u16 *)((u8 *)b + 0xA) - *(u16 *)((u8 *)b + 0x16) * *(u16 *)(p + 0x12);
             }
             else
             {
-            *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)b + 0xE) * 5;
-            *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)b + 0x12) * 5;
-            *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)b + 0x16) * 5;
-            func_s10_80024130(p, b);
-            *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) - *(s16 *)((u8 *)b + 0xE) * 4;
-            *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) - *(s16 *)((u8 *)b + 0x12) * 4;
-            *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) - *(s16 *)((u8 *)b + 0x16) * 4;
+                *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) + *(s16 *)((u8 *)b + 0xE) * 5;
+                *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) + *(s16 *)((u8 *)b + 0x12) * 5;
+                *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) + *(s16 *)((u8 *)b + 0x16) * 5;
+                func_s10_80024130(p, b);
+                *(s16 *)((u8 *)b + 0x2) = *(u16 *)((u8 *)b + 0x2) - *(s16 *)((u8 *)b + 0xE) * 4;
+                *(s16 *)((u8 *)b + 0x6) = *(u16 *)((u8 *)b + 0x6) - *(s16 *)((u8 *)b + 0x12) * 4;
+                *(s16 *)((u8 *)b + 0xA) = *(u16 *)((u8 *)b + 0xA) - *(s16 *)((u8 *)b + 0x16) * 4;
             }
             break;
         }

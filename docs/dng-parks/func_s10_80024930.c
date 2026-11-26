@@ -285,6 +285,196 @@
    NOT RE-PRICED: the author's byte-dressing order table and the eleven rows
    that measure 14 unchanged. The body below is the author's, byte for byte.
 */
+/* ==== THIRD PASS, agent h187, batch 35.  The two sections above are intact.
+   THE BODY IS UNCHANGED AND THE FIGURE IS UNCHANGED -- 243 words / 243 words /
+   14 aligned differences, reproduced today after the eight other stubs in
+   ovl_dng_s10 landed, so nothing in the unit's new context moved it.  What this
+   pass adds is a PROOF that one of the two layers is unreachable from C, a
+   THIRD layer nobody had named, and two alternative bases that are better
+   starting points than the 14-row body even though their figures are worse.
+
+   LAYER 1 IS TWO FACTS WITH OPPOSITE REQUIREMENTS.  h148 had this half right.
+   Read the three expansions separately:
+
+     block 1, the `t' modulo (rows 84-98):  the target's `sra' writes $v0, a
+       pseudo that is NOT t ($s3), so expand_divmod ran with `target == 0'.
+     block 2, the `t2' modulo (rows 118-124): the target's `sra', `sll' and
+       `subu' ALL write $s0, which IS t2's register, so expand_divmod ran with
+       `target' ALIVE -- the exact opposite.
+
+   So the park's kept body has BOTH SIGNS WRONG, and no single change can fix
+   both.  Block 2 is fixed by writing t2 as ONE EXPRESSION (the dividend is
+   then a fresh pseudo, `reg_mentioned_p' cannot fire, target survives).
+
+   BLOCK 1 IS NOT REACHABLE WITH AN SImode `t', AND THIS IS A PROOF, NOT A
+   SWEEP.  There are exactly four ways `target' dies (expmed.c:2760-2771):
+   `REG_FUNCTION_VALUE_P (target)', `reg_mentioned_p (target, op0)',
+   `reg_mentioned_p (target, op1)', and a MEM/MEM pair; plus the mode test at
+   expmed.c:2815, `if (target && GET_MODE (target) == compute_mode) tquotient
+   = target'.  Taken in turn:
+
+     - op1 is `(const_int 4096)', so no register is mentioned in it.
+     - `REG_FUNCTION_VALUE_P' cannot be arranged from source.
+     - MEM/MEM needs BOTH a memory `t' and a memory dividend; the dividend is
+       a sum and is always forced into a register.
+     - `reg_mentioned_p (target, op0)' fires only when op0's rtx IS t's
+       pseudo, and the ONLY source form that does that is the statement split
+       `t = sum; t = t % 0x1000;'.  But then op0 and t are ONE PSEUDO and get
+       ONE hard register -- measured: with the split the sum lands in t's own
+       register ($s2 in that build) -- while the target has the sum in $a0 and
+       t in $s3.  So the split is excluded by the listing, not by its score.
+     - AND THE DIVIDEND CAN NEVER LAND IN t's PSEUDO BY ACCIDENT, which is the
+       fact that closes the argument: expr.c:6325 expands the dividend with
+       `subtarget', and expr.c:4820 sets `subtarget = 0' whenever
+       `preserve_subexpressions_p ()' is true, which at -O2 is unconditional
+       because `flag_expensive_optimizations' is 1.  So for a plain
+       `var = X % K;' at -O2 the dividend is ALWAYS a fresh pseudo and
+       `target' ALWAYS survives.
+
+   That leaves the mode test, and the mode test is exactly a narrow
+   declaration: store_expr's `GET_CODE (target) == SUBREG &&
+   SUBREG_PROMOTED_VAR_P (target)' arm (expr.c:3169) calls
+   `expand_expr (exp, NULL_RTX, VOIDmode, 0)' -- the one place a plain
+   assignment hands expand_divmod a zero target -- and then pays for it with
+   the conversion at expr.c:3197/3216.  THE CONVERSION'S PRICE IS THE WHOLE
+   REMAINING PROBLEM AND IT IS NOW MEASURED PER SIGNEDNESS:
+
+     | `t' spelling, t2 kept SPLIT                      | words | rows |
+     | `s32 t' (the park's body)                        |  243  |  14  |
+     | `s16 t'                                          |  245  |  11  |
+     | `u16 t'                                          |  244  |  10  |
+     | `s32 t', `t = (s16)(sum % 0x1000);'              |  245  |  11  |
+     | `s32 t', `t = (u16)(sum % 0x1000);'              |  244  |  10  |
+     | `s32 t', `t = (s16)(sum) % 0x1000;'              |  249  | 102  |
+
+   `s16' costs TWO words (`sll 16' + `sra 16'), `u16' costs ONE (`andi
+   0xFFFF'), and a cast costs exactly what the matching declaration costs --
+   so casts are not a way round it, which is worth knowing because h148's
+   note could be read as leaving them open.
+
+   AND THE `u16 t' ROW IS THE MOST USEFUL MEASUREMENT IN THIS PASS: AT 244
+   WORDS BLOCK 1 IS WORD-EXACT.  Its entire residue is
+
+     R  98  subu v0,a0,v0           subu $s3, $a0, $v0
+     +  99  andi s3,v0,0xffff
+     R 118-124                      block 2, the seven known rows
+     R 228  bnez (branch target, a consequence of the one extra word)
+
+   Rows 84-97 -- `addu $a0,$v0,$t1', `addu $a1,$a0,$zero', `bgez $a0',
+   `addiu $a1,$a0,0xFFF', `sra $v0,$a1,12', `sll $v0,$v0,12' -- are
+   word-identical to the target for the first time in this park's history.
+   The `subu' destination differs only because the `andi' stands between it
+   and t, so IF THAT ONE CONVERSION WORD CAN BE SUPPRESSED the body is 243
+   words with block 2 as its only fault.  That is a much smaller question than
+   the one this park has been carrying.
+
+   LAYER 3, WHICH IS NEW: SPELLING t2 AS ONE EXPRESSION ROTATES `q' OFF $s1,
+   AND `-da' NAMES THE MECHANISM EXACTLY.  `;; N regs to allocate' in `.greg'
+   is global.c's `allocno_order', i.e. the priority order, and three builds of
+   this body give:
+
+     t2 SPLIT   (14 rows)   22 regs: 98 164 95 153 ...   98=t2 is #1 -> $s0,
+                                                         95=q  is #3 -> $s1
+     t2 ONE     (58 rows)   23 regs: 163 164 95 153 171 181 98 ...
+                                                         95=q  is #3 -> $s0,
+                                                         98=t2 is #7 -> $s1
+     t2 TWO-STMT (22 rows)  23 regs: 161 98 162 95 ...   98=t2 is #2 -> $s0,
+                                                         95=q  is #4 -> $s1
+
+   So q (reg 95, 78 references over 171 insns, `floor_log2 (78) * 78 / 171 =
+   2.74') always ranks third or fourth, and whether it gets $s0 depends
+   entirely on whether a CALL-CROSSING allocno outranks it and takes $s0
+   first.  t2 is that allocno when -- and only when -- an earlier statement
+   has already set it; as one expression its allocno falls to #7 and q takes
+   $s0, which is 44 of the 58 rows.  `i' sign-extended (the `(s16)i' pseudo)
+   then follows t2 into $s0, so the whole q/i exchange h148 described is one
+   decision, not two.
+
+   NOTE ALSO that the loop counter itself is $s7, not $s0: $s0 holds the
+   `(s16)i' temporary and then t2, two pseudos sharing one register.  h148's
+   phrase "the counter" means the sign-extended temporary.
+
+   THE FULL GRID, aligndiff, built words / aligned rows.  t2 forms:
+   SPLIT = `t2 = sum; t2 = t2 % 0x1000;' (the park's);
+   ONE   = `t2 = (((i + 1) % 0x10) * 0x100 + d) % 0x1000;';
+   TWO   = `t2 = (i + 1) % 0x10; t2 = (t2 * 0x100 + d) % 0x1000;'.
+
+     | t            | t2    | words | rows |
+     | s32 one-expr | SPLIT |  243  |  14  |  the kept body
+     | s32 one-expr | ONE   |  243  |  58  |
+     | s32 one-expr | TWO   |  243  |  22  |
+     | s32 split    | ONE   |  243  |  98  |  h148's row, reproduced
+     | s32 split    | TWO   |  243  |  62  |
+     | s16          | SPLIT |  245  |  11  |  h148's row, reproduced
+     | s16          | ONE   |  245  |  55  |
+     | s16          | TWO   |  245  |  19  |
+     | u16          | SPLIT |  244  |  10  |  block 1 WORD-EXACT
+     | u16          | ONE   |  244  |  54  |
+     | u16          | TWO   |  244  |  18  |
+     | u16 split    | ONE   |  240  | 145  |
+
+   MEASURED AND REJECTED THIS PASS, t kept as the park's `s32' one expression
+   unless stated:
+
+     | t2 spelling or device                                  | words | rows |
+     | a scratch local for the WHOLE t2 sum, `u = sum;
+       t2 = u % 0x1000;'                                      |  243  |  58  |
+     | `u = (i + 1) % 0x10; t2 = (u * 0x100 + d) % 0x1000;'
+       with `s32 u'                                           |  243  |  58  |
+     |   ... with `s16 u'                                     |  244  |  61  |
+     | `t2 = ((i + 1) % 0x10) * 0x100; t2 = (t2 + d) % 0x1000' |  243  |  59  |
+     | `t2 = i + 1; t2 = ((t2 % 0x10) * 0x100 + d) % 0x1000;'  |  245  |  95  |
+     | `t2 = i;' then ONE  (the dead set is deleted)           |  243  |  58  |
+     | `t2 = (u16)((i + 1) % 0x10);' then `(t2*0x100+d)%0x1000' |  244  |  61  |
+     | `t2 = sum; t2 = (t2 + 0x1000) % 0x1000;'                |  244  |  16  |
+     | ONE wrapped in `do { } while (0)'                       |  242  |  95  |
+     | ONE plus `do { } while (0)' round t2's vx statement      |  243  |  62  |
+     | ONE plus `do { } while (0)' round t2's vy statement      |  243  |  93  |
+     | the `t' assignment EMBEDDED in the vx statement as
+       `func_800644B8(t = sum % 0x1000)', t2 SPLIT              |  243  |  14  |
+     |   ... the same with t2 ONE                              |  243  |  58  |
+
+   THE EMBEDDED-ASSIGNMENT ROW IS A REAL NEGATIVE AND WORTH THE LINE: it is
+   FREE, not an improvement and not a regression, because store_expr passes
+   `target' through on the want_value path too (expr.c:3221).  Reaching
+   `target == 0' by nesting the assignment inside an expression therefore does
+   not work, and nobody needs to try it again.
+
+   THE DECLARATION-ORDER SWEEP IS FLAT AT THE NEW SET TOO.  Six permutations
+   of {sp, gg, q, i, t, t2} with t2 as ONE expression all measure 243 / 58 --
+   bit-identical residues -- so order is not reachable at this set either, and
+   an unused extra `s32' local is free (gcc drops it) rather than a set
+   change.  `s32 i' with no casts is a different program (237 / 91) and is not
+   a spelling of this body.
+
+   WHAT TO TRY NEXT, in order, and the question is now SINGULAR.
+
+   1. THE ONLY OPEN QUESTION IS AN SImode SPELLING FOR WHICH expand_divmod
+      RECEIVES `target == 0'.  Every source route has been enumerated and
+      eliminated above from the compiler's own text, so this is a permuter
+      job and the statement to name for it is just
+      `t = ((i << 8) + d) % 0x1000;'.  Do NOT spend measurements on the
+      dividend's shape or on casts -- both are closed.
+   2. IF THAT FAILS, START FROM THE 244-WORD `u16 t' BODY, NOT FROM THE
+      14-ROW ONE.  Block 1 is word-exact there and the whole deficit is one
+      `andi $s3, $v0, 0xFFFF' that `convert_move' emits at the store.  A
+      device that suppresses one zero-extension is a far better-posed target
+      than a four-allocno rotation.
+   3. THE 243-WORD / 22-ROW TWO-STATEMENT BODY IS THE OTHER BASE WORTH
+      HAVING, because it is the only 243-word body in which block 2's
+      expmed threading is CORRECT and `q' keeps $s1 at the same time.  Its
+      faults are block 1 (7 rows, the unreachable one) and the `% 0x10'
+      expansion (8 rows) -- and the `% 0x10' fault is the SAME fault one
+      level down, since writing `t2 = (i + 1) % 0x10;' makes t2 that
+      modulo's target where the target has a fresh pseudo.
+   4. DO NOT REACH FOR A REFERENCE BUMP ON q OR t2.  Bumps on t2's two use
+      sites measure 62 and 93, a bump on the t2 statement itself costs a word
+      (242 / 95), and q's 78 references over 171 insns cannot be moved by
+      anything that does not change the code.
+
+   NOT RE-PRICED: the first author's byte-dressing order table.  The body
+   below is unchanged from h148's pass, which is unchanged from the author's.
+*/
 s32 func_s10_80024930(u8 *a, UnkVec *b, u8 *c, s16 d, s32 e, s16 f, u8 g, u8 h)
 {
     UnkDngS10QuadSP *sp = (UnkDngS10QuadSP *)0x1F800000;

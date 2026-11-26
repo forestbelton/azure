@@ -101,6 +101,20 @@ void func_s58_80024AF8(u8 *p, UnkVec *b, u8 *c, s16 x, s16 y, s16 z);
 void func_s58_800244E4(u8 *p, UnkVec *b, u8 *c);
 extern u8 D_800DE870[];
 
+void func_s58_80024CA4(u8 *p, UnkVec *vv, u8 *cc, s16 x, s16 y, s16 z);
+void func_s58_80024F80(u8 *p, UnkVec *vv, u8 *cc, s16 x, s16 y, s16 z);
+void func_s58_8002553C(u8 *a, UnkVec *b, u8 *c);
+extern u8 D_80082E80[];
+extern s16 D_80082E86;
+extern u16 D_80082E94;
+extern Unk80083462 D_80083460;
+extern u8 D_80026990[];
+extern u8 D_8002699C[];
+extern u8 D_800269A8[];
+s32 func_8003DF74(u8 *, UnkSlot *, s16 *, s16);
+void func_800A56E0(s32);
+void func_800542BC(void);
+
 void func_s58_8002407C(u8 *p, UnkVec *v, UnkSlot *s)
 {
     s16 c;
@@ -495,7 +509,7 @@ void func_s58_80024AF8(u8 *p, UnkVec *b, u8 *c, s16 x, s16 y, s16 z)
    the 0x4 -> 0xF life, the 0x1000 -> 0x800 scale (twice) and the
    D_800DECF8 -> D_800DEC70 slot template.  Every spelling fact in
    func_s58_80024F80's comment above was re-measured here and holds. */
-void func_s58_80024CA4(u8 *p, s32 c1, s32 c2, s16 x, s16 y, s16 z)
+void func_s58_80024CA4(u8 *p, UnkVec *vv, u8 *cc, s16 x, s16 y, s16 z)
 {
     UnkDngS58Rec rec[8];
     UnkNode *n;
@@ -585,7 +599,7 @@ void func_s58_80024CA4(u8 *p, s32 c1, s32 c2, s16 x, s16 y, s16 z)
    The 0x20-byte copy is `u8 b[0x20]` so its alignment is 1 and the move is
    the inline `lwl`/`lwr` + `swl`/`swr` sequence (0x20 == 2 * MAX_MOVE_BYTES,
    so it is unrolled, not the loop func_s58_8002525C's 0x40 copy gets). */
-void func_s58_80024F80(u8 *p, s32 c1, s32 c2, s16 x, s16 y, s16 z)
+void func_s58_80024F80(u8 *p, UnkVec *vv, u8 *cc, s16 x, s16 y, s16 z)
 {
     UnkDngS58Rec rec[8];
     UnkNode *n;
@@ -748,7 +762,7 @@ void func_s58_8002525C(u8 *p)
    record copy is a struct whose type has ALIGNMENT 1 (`u8 b[0xC]`), which is
    what forces the `lwl`/`lwr` + `swl`/`swr` pairs instead of aligned `lw`s --
    the same fact UnkDungeonName12 carries in csrc/ovl_dungeon_decls.h. */
-void func_s58_8002553C(u8 *a)
+void func_s58_8002553C(u8 *a, UnkVec *b, u8 *c)
 {
     UnkNode *n;
     u8 *p;
@@ -990,4 +1004,380 @@ void func_s58_80025A80(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s58", func_s58_80025D68);
+/* The object's master state machine, a five-way jump table on the node's
+   +0xA: state 0 arms the engine (0 at D_800814A8 + 0xF4, 0x21 at +0x96,
+   6 at D_80082E86) and falls through into state 1, which waits for bit 0x80
+   of **(p + 0x4), then books the 0x2D-frame cutscene, decrements the engine's
+   +0xA6 counter, publishes p[0x8] at +0xA8, picks a +0x26 variant from
+   (D_800814A8 + 0x2A) >> 9, spawns func_s58_8002553C and starts the 0x300
+   cue; state 2 projects the caster's hand through func_8003DF74 and, on the
+   way down a 0x27-frame countdown, spawns the func_s58_80025648 node at 0x26,
+   the func_s58_80024A5C node under 6, two func_s58_80024AF8 bursts under 7
+   and two more at the midpoint of +0xC..+0x11 and +0x12..+0x17 under 3,
+   latching the mover into +0x12/+0x14/+0x16 each frame; state 3 forks on the
+   engine's +0x60 flag -- set, it fires four func_s58_80024CA4 and four
+   func_s58_80024F80 bursts and raises the two trail emitters
+   (func_s58_800257B0, func_s58_80025A80) at 0x10; clear, it raises the
+   func_s58_80025724 node at 0x10 and two more func_s58_80024AF8 bursts; and
+   state 4 clears the engine, drops D_80083460's +0xA counter and retires the
+   node.  772 words, 0 differing.
+
+   THIS FUNCTION OWNS jtbl_s58_80024068: five words, cases 0..4, entries
+   .Ls58_80025E58 / .Ls58_80025E90 / .Ls58_80025F18 / .Ls58_800262CC /
+   .Ls58_800268F4, no padding, bound `sltiu 0x5'.  Case 0 FALLS THROUGH into
+   case 1 and every other arm ends at the epilogue, so `default:' needs no
+   label.
+
+   EVERY SYMBOL-ADDRESS BASE NEEDS ITS OWN LOCAL, ONE PER BLOCK.  This is the
+   whole of the allocation work on this body and it is worth 99 aligned rows:
+
+   | D_80083780 and D_80082E80 written as              | words | aligned |
+   | one local per spawn block (d1..d5) and per        |       |         |
+   |   func_8003DF74 site (h1, h2)                     |  772  |   13    |
+   | one shared `d' local and one shared `h'           |  778  |  122    |
+   | the bare symbol at every site                     |  775  |   52    |
+
+   A local used in five blocks is a GLOBAL allocno, so global.c assigns it
+   after local-alloc has already taken $a0 for the block-local quantities, and
+   it lands in $a1 where the target has $a0 -- every mover store in all five
+   blocks then names the wrong register, which is the 122.  A local used in
+   ONE block is a local-alloc quantity and gets $a0.  The bare symbol fixes
+   the register and loses the addressing instead: combine folds the base to
+   `D_80083780 + 2' and the other two reads become 4 and 8 off it, 5 rows per
+   site.
+
+   THE LAST 13 ROWS WERE A STATEMENT ORDER INSIDE STATE 1, and the sweep that
+   found it is the point: the body sat at 772 words / 13 aligned through five
+   SET changes (a copy of `p' into each of three different existing locals,
+   an `s16' temp on the +0xA bump, an `s16' temp on the +0x26 value) and six
+   spellings (each of the five p-accesses cast-vs-array-ref, the gate
+   likewise) with EVERY ONE measuring exactly 13.  A full 720-point sweep of
+   the six statements' order has 0 at
+   `+0x20, +0xA6, +0xA8, +0x26, +0xA, +0x2C' -- the +0x26 store BEFORE the
+   +0xA bump -- 2 at `+0x20, +0xA6, +0x2C, +0xA8, +0x26, +0xA', 5 at two
+   others, and 13 at the order that reads naturally.  So a flat sweep over
+   spellings is not evidence that order is reachable; it is evidence that the
+   sweep was over the wrong axis.
+
+   The 13 rows were one `addu $a0, $s4, $zero' in the wrong slot.  Worth
+   knowing for next time: a parameter's base register can be RENAMED after
+   allocation.  reload's own cse replaces $s4 with $a0 in every MEM that
+   follows the argument copy, so where sched1 puts that copy decides how many
+   of state 1's accesses are addressed off $a0 -- the rtl at `.regmove' has
+   `(reg/v:SI 80)' in all seven of them and the assembly has two different
+   registers.  Do not read a base-register residue in a block that ends in a
+   call as an allocation fault; it is a schedule.
+
+   STATE 1'S FIVE p-ACCESSES ARE ARRAY REFS (`((s16 *)p)[0x10]' and friends).
+   Measured: the +0x20 store as a cast deref is 773 words / 18 and the +0xA
+   bump as a cast deref is 774 / 19, while the +0x2C store, the +0x26 store,
+   the `p[0x8]' read and the gate are free either way.  Same MEM_IN_STRUCT_P
+   mechanism as func_s58_800244E4's gate: the two D_800814A8 reads have to
+   hoist past p's stores, and a scalar-global MEM only clears a varying MEM
+   that is in a struct.
+
+   The +0x20/+0x2E/+0x4C stores are written off `n' directly where the two
+   trail-emitter spawns use a `q = (u8 *)n + 0x20' local, because that is how
+   the listing addresses them (`sh $v0, 0x4C($s3)' against
+   `sh $v0, 0x2C($s1)').  The stack record table is func_s58_80024F80's
+   `UnkDngS58Rec rec[8]' copied from D_s58_80024004, indexed `rec[k].a' and
+   `rec[k].b' -- that body's note prices the field access against the cast at
+   1 row and the `u8[0x20]' type at 2, and both hold here. */
+void func_s58_80025D68(u8 *p, UnkVec *b, u8 *c)
+{
+    UnkDngS58Rec rec[8];
+    UnkNode *n;
+    u8 *q;
+    u8 *d1;
+    u8 *d2;
+    u8 *d3;
+    u8 *d4;
+    u8 *d5;
+    u8 *g;
+    u8 *h1;
+    u8 *h2;
+    UnkVec *m;
+    UnkSlot *r;
+    s32 i;
+    s16 e;
+    s16 t;
+
+    *(UnkDngS58Blk32 *)rec = *(UnkDngS58Blk32 *)D_s58_80024004;
+    *(s16 *)(p + 0x2C) = *(u16 *)(p + 0x2C) + 1;
+    switch (*(s16 *)(p + 0xA))
+    {
+    case 0:
+        *(s32 *)(D_800814A8 + 0xF4) = 0;
+        *(s16 *)(D_800814A8 + 0x96) = 0x21;
+        D_80082E86 = 6;
+        t = *(u16 *)(p + 0xA) + 1;
+        D_800269B4 = 1;
+        *(s16 *)(p + 0xA) = t;
+    case 1:
+        if ((**(u16 **)(p + 0x4) & 0x80) == 0)
+        {
+            break;
+        }
+        ((s16 *)p)[0x10] = 0x2D;
+        *(s16 *)(D_800814A8 + 0xA6) = *(u16 *)(D_800814A8 + 0xA6) - 1;
+        *(u8 *)(D_800814A8 + 0xA8) = p[0x8];
+        ((s16 *)p)[0x13] = (*(u16 *)(D_800814A8 + 0x2A) >> 9) & 7;
+        ((s16 *)p)[0x5] = ((u16 *)p)[0x5] + 1;
+        ((s16 *)p)[0x16] = 0;
+        func_s58_8002553C(p, b, c);
+        func_800A56E0(0x300);
+        func_800542BC();
+        break;
+    case 2:
+        if (*(s16 *)(p + 0x20) < 0x27)
+        {
+            h1 = D_80082E80;
+            if (func_8003DF74(*(u8 **)(h1 + 0x8), (UnkSlot *)h1, (s16 *)(p + 0xC), 0) != 0)
+            {
+                if (*(s16 *)(p + 0x20) == 0x26)
+                {
+                    n = func_8003FC64(0x212);
+                    if (n != NULL)
+                    {
+                        *(s16 *)((u8 *)n + 0x4C) = 0x21;
+                        n->unk_10 = (u32)func_s58_80025648;
+                        func_8004491C(n, (u32)D_80045340);
+                        r = (UnkSlot *)n->unk_0C;
+                        r->unk_10 = 0x20;
+                        r->unk_14 |= 0xC;
+                        r->unk_06 = -4;
+                        d1 = D_80083780;
+                        m = n->unk_08;
+                        *(s16 *)((u8 *)m + 0x2) = *(u16 *)(p + 0xC);
+                        *(s16 *)((u8 *)m + 0x6) = *(u16 *)(p + 0xE);
+                        *(s16 *)((u8 *)m + 0xA) = *(u16 *)(p + 0x10);
+                        *(s16 *)((u8 *)m + 0x2) += *(u16 *)(d1 + 0x2);
+                        *(s16 *)((u8 *)m + 0x6) += *(u16 *)(d1 + 0x6);
+                        *(s16 *)((u8 *)m + 0xA) += *(u16 *)(d1 + 0xA);
+                        r->unk_1C = 0x900;
+                        r->unk_1E = 0x604;
+                        *((u8 *)r + 0xE) = 0x80;
+                        *((u8 *)r + 0xD) = 0x80;
+                        *((u8 *)r + 0xC) = 0x80;
+                        *(UnkDngS58Name12 *)((u8 *)n + 0x58) = *(UnkDngS58Name12 *)D_80026990;
+                        r->unk_08 = (u32)((u8 *)n + 0x58);
+                    }
+                }
+                if (*(s16 *)(p + 0x20) < 6)
+                {
+                    n = func_8003FC64(0x212);
+                    if (n != NULL)
+                    {
+                        *(s16 *)((u8 *)n + 0x4C) = 1;
+                        n->unk_10 = (u32)func_s58_80024A5C;
+                        func_8004491C(n, (u32)D_80045340);
+                        r = (UnkSlot *)n->unk_0C;
+                        r->unk_10 = 0x20;
+                        r->unk_14 |= 0xC;
+                        r->unk_06 = -4;
+                        d2 = D_80083780;
+                        m = n->unk_08;
+                        *(s16 *)((u8 *)m + 0x2) = *(u16 *)(p + 0xC);
+                        *(s16 *)((u8 *)m + 0x6) = *(u16 *)(p + 0xE);
+                        *(s16 *)((u8 *)m + 0xA) = *(u16 *)(p + 0x10);
+                        *(s16 *)((u8 *)m + 0x2) += *(u16 *)(d2 + 0x2);
+                        *(s16 *)((u8 *)m + 0x6) += *(u16 *)(d2 + 0x6);
+                        *(s16 *)((u8 *)m + 0xA) += *(u16 *)(d2 + 0xA);
+                        r->unk_1C = 0x1800;
+                        r->unk_1E = 0x1000;
+                        *((u8 *)r + 0xE) = 0x80;
+                        *((u8 *)r + 0xD) = 0x80;
+                        *((u8 *)r + 0xC) = 0x80;
+                        *(UnkDngS58Name12 *)((u8 *)n + 0x58) = *(UnkDngS58Name12 *)D_8002699C;
+                        r->unk_08 = (u32)((u8 *)n + 0x58);
+                    }
+                }
+                if (*(s16 *)(p + 0x20) < 7)
+                {
+                    for (i = 0; i < 2; i++)
+                    {
+                        func_s58_80024AF8(p, b, c, *(s16 *)(p + 0xC), *(s16 *)(p + 0xE),
+                                          *(s16 *)(p + 0x10));
+                    }
+                }
+                if (*(s16 *)(p + 0x20) < 3)
+                {
+                    *(s16 *)(p + 0x18) = (*(s16 *)(p + 0xC) + *(s16 *)(p + 0x12)) / 2;
+                    *(s16 *)(p + 0x1A) = (*(s16 *)(p + 0xE) + *(s16 *)(p + 0x14)) / 2;
+                    *(s16 *)(p + 0x1C) = (*(s16 *)(p + 0x10) + *(s16 *)(p + 0x16)) / 2;
+                    for (i = 0; i < 2; i++)
+                    {
+                        func_s58_80024AF8(p, b, c, *(s16 *)(p + 0x18), *(s16 *)(p + 0x1A),
+                                          *(s16 *)(p + 0x1C));
+                    }
+                }
+                *(s16 *)(p + 0x12) = *(u16 *)(p + 0xC);
+                *(s16 *)(p + 0x14) = *(u16 *)(p + 0xE);
+                *(s16 *)(p + 0x16) = *(u16 *)(p + 0x10);
+            }
+        }
+        if (--*(s16 *)(p + 0x20) <= 0)
+        {
+            *(s16 *)(p + 0x20) = 0x10;
+            *(s16 *)(p + 0xA) = *(u16 *)(p + 0xA) + 1;
+        }
+        break;
+    case 3:
+        if (*(s32 *)(D_800814A8 + 0x60) != 0)
+        {
+            if (*(s16 *)(p + 0x20) >= 0xD)
+            {
+                h2 = D_80082E80;
+                if (func_8003DF74(*(u8 **)(h2 + 0x8), (UnkSlot *)h2, (s16 *)(p + 0xC), 0) != 0)
+                {
+                    for (i = 0; i < 4; i++)
+                    {
+                        func_s58_80024CA4(p, b, c, *(s16 *)(p + 0xC), *(s16 *)(p + 0xE),
+                                          *(s16 *)(p + 0x10));
+                    }
+                    for (i = 0; i < 4; i++)
+                    {
+                        func_s58_80024F80(p, b, c, *(s16 *)(p + 0xC), *(s16 *)(p + 0xE),
+                                          *(s16 *)(p + 0x10));
+                    }
+                    e = *(s16 *)(p + 0x20);
+                    if (e == 0x10)
+                    {
+                        n = func_8003FC64(0x212);
+                        if (n != NULL)
+                        {
+                            q = (u8 *)n + 0x20;
+                            *(s16 *)(q + 0x2C) = 0x1E;
+                            *(s16 *)(q + 0x2E) = 0x1E;
+                            n->unk_10 = (u32)func_s58_800257B0;
+                            func_8004491C(n, (u32)D_80045340);
+                            r = (UnkSlot *)n->unk_0C;
+                            r->unk_10 = 0x20;
+                            r->unk_14 |= 0xC;
+                            *(s32 *)(q + 0x94) = 0xFFF20000;
+                            *(s32 *)(q + 0xA0) = 0x20000;
+                            *(s32 *)(q + 0x8C) = rec[*(s16 *)(p + 0x26)].a << 19;
+                            *(s32 *)(q + 0x90) = rec[*(s16 *)(p + 0x26)].b << 19;
+                            *(s32 *)(q + 0x8C) += 0xFFFC0000 + ((rand() & 0x1FFF) << 6);
+                            *(s32 *)(q + 0x90) += 0xFFFC0000 + ((rand() & 0x1FFF) << 6);
+                            *(s32 *)(q + 0x94) += 0xFFFC0000 + ((rand() & 0x1FFF) << 6);
+                            d3 = D_80083780;
+                            m = n->unk_08;
+                            *(s16 *)((u8 *)m + 0x2) = *(u16 *)(p + 0xC);
+                            *(s16 *)((u8 *)m + 0x6) = *(u16 *)(p + 0xE);
+                            *(s16 *)((u8 *)m + 0xA) = *(u16 *)(p + 0x10) - 0x10;
+                            *(s16 *)((u8 *)m + 0x2) += *(u16 *)(d3 + 0x2);
+                            *(s16 *)((u8 *)m + 0x6) += *(u16 *)(d3 + 0x6);
+                            *(s16 *)((u8 *)m + 0xA) += *(u16 *)(d3 + 0xA);
+                            r->unk_1E = 0x1000;
+                            r->unk_1C = 0x1000;
+                            *((u8 *)r + 0xE) = 0x80;
+                            *((u8 *)r + 0xD) = 0x80;
+                            *((u8 *)r + 0xC) = 0x80;
+                            *(UnkDngS58Name12 *)((u8 *)n + 0x58) = *(UnkDngS58Name12 *)D_800269A8;
+                            r->unk_08 = (u32)((u8 *)n + 0x58);
+                        }
+                        if (*(s16 *)(p + 0x20) == e)
+                        {
+                            n = func_8003FC64(0x212);
+                            if (n != NULL)
+                            {
+                                q = (u8 *)n + 0x20;
+                                *(s16 *)(q + 0x2C) = 0x1E;
+                                *(s16 *)(q + 0x2E) = 0x1E;
+                                n->unk_10 = (u32)func_s58_80025A80;
+                                func_8004491C(n, (u32)D_80045340);
+                                r = (UnkSlot *)n->unk_0C;
+                                r->unk_10 = 0x20;
+                                r->unk_14 |= 0xC;
+                                *(s32 *)(q + 0x94) = 0xFFF20000;
+                                *(s32 *)(q + 0xA0) = 0x20000;
+                                *(s32 *)(q + 0x8C) = rec[*(s16 *)(p + 0x26)].a << 18;
+                                *(s32 *)(q + 0x90) = rec[*(s16 *)(p + 0x26)].b << 18;
+                                *(s32 *)(q + 0x8C) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
+                                *(s32 *)(q + 0x90) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
+                                *(s32 *)(q + 0x94) += 0xFFF80000 + ((rand() & 0x3FFF) << 6);
+                                d4 = D_80083780;
+                                m = n->unk_08;
+                                *(s16 *)((u8 *)m + 0x2) = *(u16 *)(p + 0xC);
+                                *(s16 *)((u8 *)m + 0x6) = *(u16 *)(p + 0xE);
+                                *(s16 *)((u8 *)m + 0xA) = *(u16 *)(p + 0x10) - 0x10;
+                                *(s16 *)((u8 *)m + 0x2) += *(u16 *)(d4 + 0x2);
+                                *(s16 *)((u8 *)m + 0x6) += *(u16 *)(d4 + 0x6);
+                                *(s16 *)((u8 *)m + 0xA) += *(u16 *)(d4 + 0xA);
+                                r->unk_1E = 0x1000;
+                                r->unk_1C = 0x1000;
+                                *((u8 *)r + 0xE) = 0x80;
+                                *((u8 *)r + 0xD) = 0x80;
+                                *((u8 *)r + 0xC) = 0x80;
+                                *(UnkDngS58Name12 *)((u8 *)n + 0x58) = *(UnkDngS58Name12 *)D_800269A8;
+                                r->unk_08 = (u32)((u8 *)n + 0x58);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (*(s16 *)(p + 0x20) == 0x10)
+            {
+                n = func_8003FC64(0x212);
+                if (n != NULL)
+                {
+                    q = (u8 *)n + 0x20;
+                    *(s16 *)(q + 0x2C) = 7;
+                    *(s16 *)(q + 0x2E) = 7;
+                    n->unk_10 = (u32)func_s58_80025724;
+                    func_8004491C(n, (u32)D_80045340);
+                    r = (UnkSlot *)n->unk_0C;
+                    r->unk_10 = 0x20;
+                    r->unk_14 |= 0xC;
+                    d5 = D_80083780;
+                    m = n->unk_08;
+                    *(s16 *)((u8 *)m + 0x2) = *(u16 *)(p + 0xC);
+                    *(s16 *)((u8 *)m + 0x6) = *(u16 *)(p + 0xE);
+                    *(s16 *)((u8 *)m + 0xA) = *(u16 *)(p + 0x10);
+                    *(s16 *)((u8 *)m + 0x2) += *(u16 *)(d5 + 0x2);
+                    *(s16 *)((u8 *)m + 0x6) += *(u16 *)(d5 + 0x6);
+                    *(s16 *)((u8 *)m + 0xA) += *(u16 *)(d5 + 0xA);
+                    r->unk_1C = 0x1800;
+                    r->unk_1E = 0x1000;
+                    *((u8 *)r + 0xE) = 0x80;
+                    *((u8 *)r + 0xD) = 0x80;
+                    *((u8 *)r + 0xC) = 0x80;
+                    *(UnkDngS58Name12 *)((u8 *)n + 0x58) = *(UnkDngS58Name12 *)D_8002699C;
+                    r->unk_08 = (u32)((u8 *)n + 0x58);
+                }
+            }
+            if (*(s16 *)(p + 0x20) >= 0xD)
+            {
+                for (i = 0; i < 2; i++)
+                {
+                    func_s58_80024AF8(p, b, c, *(s16 *)(p + 0xC), *(s16 *)(p + 0xE),
+                                      (s16)(*(u16 *)(p + 0x10) - 8));
+                }
+            }
+        }
+        if ((D_80082E94 & 0x8000) != 0 || --*(s16 *)(p + 0x20) < 0)
+        {
+            *(s16 *)(p + 0xA) = 4;
+        }
+        break;
+    case 4:
+        if (D_800269B4 == 0)
+        {
+            g = (u8 *)&D_80083460;
+            *(s32 *)(g + 0xC) = 0;
+            D_80082E86 = 0;
+            *(s16 *)(g + 0xA) = *(u16 *)(g + 0xA) - 1;
+            *(u16 *)(p - 0x2) |= 0x8000;
+            D_800814A0 |= 0x8000;
+        }
+        else
+        {
+            D_800269B4 = 0;
+        }
+        break;
+    }
+}

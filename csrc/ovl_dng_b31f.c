@@ -270,6 +270,16 @@ typedef struct UnkDngB31fName32
     u8 bb[0x20];
 } UnkDngB31fName32;
 
+extern u8 D_b31f_801746FC[];
+extern u8 D_b31f_801746B4[];
+extern u8 D_800F93AA[];
+extern s32 D_8008346C;
+u8 *func_8009C12C(u8 *p, u8 *q, s16 ang, s16 k);
+extern u8 D_b31f_80174694[];
+extern u8 D_800DF45C[];
+s32 func_800BBA40(s16 x, s16 y, s16 ang, void *d, s16 e, s32 g, void *h);
+s32 func_b31f_8016EF10(u8 *p, void *b, u8 *c);
+
 void func_b31f_8016A908(u8 *p)
 {
     p[0x6D] = 0;
@@ -1443,7 +1453,84 @@ void func_b31f_8016CED4(u8 *p, void *b, void *c, void *d)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016CF30);
+/* h186:BEGIN func_b31f_8016CF30 */
+void func_b31f_8016CF30(u8 *p, UnkVec *b, u8 *c, u8 *d)
+{
+    u8 *g;
+    u8 *e;
+    u8 *r;
+    s16 n;
+    s32 i;
+
+    switch (p[0x9B])
+    {
+    case 0:
+        b->unk_14 = 0;
+        b->unk_10 = 0;
+        b->unk_0C = 0;
+        *(s16 *)(p + 0x96) = 0;
+        p[0x9B] += 1;
+        if ((*(u16 *)(c + 0x14) & 0x8000) == 0)
+        {
+            break;
+        }
+    case 1:
+        *(s16 *)(p + 0x96) = 0;
+        p[0x9B] += 1;
+        *(u8 **)(c + 0x2C) = D_b31f_801746B4;
+        func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(d + 0x2A) + 0x100) >> 9) & 7) + (s32)D_b31f_801746B4), 0);
+    case 2:
+        n = *(u16 *)(p + 0x96) + 1;
+        *(s16 *)(p + 0x96) = n;
+        if (n == 0xA || (*(u16 *)(c + 0x14) & 0x8000) != 0)
+        {
+            func_8009C12C(d, c, *(s16 *)(d + 0x2A), 1);
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] += 1;
+        }
+        if (*(s16 *)(p + 0x96) == 8)
+        {
+            func_800A56E0(0x804);
+        }
+        break;
+    case 3:
+        if ((*(u16 *)(c + 0x14) & 0xE000) == 0)
+        {
+            break;
+        }
+        if (D_800E3D7C[0x28] < 2)
+        {
+            func_b31f_8016AD00();
+            *(u32 *)(p + 0x8C) = (u32)func_b31f_8016B778;
+            g = (u8 *)&D_80083460;
+            *(u16 *)(g + 0xA) += 1;
+            *(s32 *)(g + 0xC) = 0;
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+            D_80013714 |= 8;
+            func_800353F4((u32)D_800F93AA);
+            d[0x6D] = 0;
+            p[0x9B] = 0;
+            for (i = 0; i < 2; i++)
+            {
+                e = *(u8 **)(D_800E3D7C + i * 4 + 0xAC);
+                if (e != NULL)
+                {
+                    func_b31f_8016A908(e);
+                    r = *(u8 **)(D_800E3D7C + i * 4 + 0xAC) - 0x20;
+                    *(u32 *)(r + 0x10) |= 0x80000000;
+                }
+            }
+        }
+        else
+        {
+            *(u32 *)(p + 0x8C) = (u32)func_b31f_8016B778;
+            D_8008346C = 0;
+            func_800A4ACC(d);
+            *(u16 *)(d + 0x46) &= 0x7FFF;
+        }
+        break;
+    }
+}
 
 /* Install func_b31f_8016B778, decrement D_80083460's +0xA counter and clear
    the +0x46 re-facing bit of the fourth argument. 14 words, 0 differing,
@@ -2624,7 +2711,74 @@ s32 func_b31f_8016EEBC(void)
     return 1;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b31f", func_b31f_8016EF10);
+/* h186:BEGIN func_b31f_8016EF10 */
+s32 func_b31f_8016EF10(u8 *p, void *b, u8 *c)
+{
+    u16 k;
+    s32 v;
+
+    if ((*(u16 *)(c + 0x14) & 0x40) != 0)
+    {
+        return 0;
+    }
+    k = D_b31f_80174CCC[1];
+    v = k;
+    if (v == 0)
+    {
+        p[0xB2] = 0;
+    }
+    else
+    {
+        if (D_b31f_80174CCC[0] < ++D_b31f_80174CD0)
+        {
+            D_b31f_80174CCC += 2;
+            D_b31f_80174CD0 = 0;
+        }
+        *(s16 *)(p + 0x2A) = (k & 7) << 9;
+        *(u16 *)(p + 0x46) |= 0x8000;
+        switch (v & 0xF8)
+        {
+        case 8:
+            func_b31f_8016BF74(p, b, c, p);
+            return 0;
+        case 0x10:
+            if (*(u8 **)(c + 0x2C) != D_b31f_8017467C)
+            {
+                *(u8 **)(c + 0x2C) = D_b31f_8017467C;
+                func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7) + (s32)D_b31f_8017467C), 0);
+            }
+            break;
+        case 0xF8:
+            if (*(u8 **)(c + 0x2C) != D_b31f_801746FC)
+            {
+                *(u8 **)(c + 0x2C) = D_b31f_801746FC;
+                func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7) + (s32)D_b31f_801746FC), 0);
+            }
+            break;
+        case 0xF0:
+            if (p[0x9B] != 0)
+            {
+                break;
+            }
+            *(s16 *)(p + 0x2A) = func_b31f_8016A928((u8 *)b) << 9;
+            if (*(u8 **)(c + 0x2C) != D_b31f_80174694)
+            {
+                *(u8 **)(c + 0x2C) = D_b31f_80174694;
+                func_80047784(c, *(u8 *)((((D_80083228 + *(s16 *)(p + 0x2A) + 0x100) >> 9) & 7) + (s32)D_b31f_80174694), 0);
+            }
+            if (func_800BBA40(c[0x24], c[0x25], *(s16 *)(p + 0x88), D_800DF45C, 0x2800, 0x208020, func_b31f_8016EEBC) == 0)
+            {
+                return 0;
+            }
+            *(s16 *)(p + 0x96) = 0;
+            p[0x9B] += 1;
+            D_80083460h[5] += 2;
+            break;
+        }
+    }
+    func_800A9A0C(p);
+    return 0;
+}
 
 /* Second member of the +0x6D/+0x71/+0x46 pair -- see func_b31f_8016A908 near
    the top of this file for the class, its arity evidence and its two priced
