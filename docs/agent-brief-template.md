@@ -36,6 +36,25 @@ you load the schemas, so run this FIRST, once:
   result would add a syntax error. It returns the function as it reads
   afterwards, so you do not need a follow-up `describe` to confirm.
 
+**AND THE HEADER COMMENT IS READABLE AND WRITABLE -- `include_comment` AND
+`comment`, BOTH OPT-IN.** This is the one that stops you hand-splicing a park.
+
+* `describe_function(filepath, name, include_comment=true)` returns the
+  `/* ... */` block immediately above the definition, verbatim, as `comment`.
+  Verified on a 27-line landed-body header in `csrc/` and on a 200-line PARK
+  header. **It is off by default and your tool schema may not list it** -- pass
+  it anyway, the server accepts it.
+* `edit_function(filepath, name, comment="/* ... */")` rewrites that block and
+  leaves the body alone; combine with `body=` to change both, and with
+  `output=` to write the result elsewhere. Verified: comment replaced, body
+  preserved byte for byte, input file untouched, sibling functions intact.
+
+So a park write-up is now: `describe_function(..., include_comment=true)` to
+read the header, then `edit_function(..., comment=...)` to replace it. **Do not
+locate a header by counting lines backwards from the definition, and do not
+regex for `/*`** -- that is what the dispatcher did an hour before this existed,
+and agents doing it were getting the boundaries wrong.
+
 **THE SWEEP LOOP, WITH NO PYTHON AT ALL:** `describe_function(..., include_body=true)`
 to get the text, then one `edit_function(..., body=<cell>, output=<variant path>)`
 per cell, then `ovlverify`/`aligndiff` on each variant. The dispatcher ran a
