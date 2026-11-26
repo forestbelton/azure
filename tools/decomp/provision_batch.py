@@ -70,7 +70,7 @@ PICKS=_picks_from_argv(sys.argv[1:])
 print("provisioning %d unit(s): %s" % (
       len(PICKS), ", ".join("%s=%s" % (a, t) for a, (t, _) in sorted(PICKS.items()))))
 for ag,(tag,n) in PICKS.items():
-    d="/home/case/scratch/azure-dng/agent-%s"%ag
+    d="/home/case/projects/azure/scratch/azure-dng/agent-%s"%ag
     os.makedirs(d, exist_ok=True)
     bad=fragments(tag)
     rows=[r for r in sorted(per[tag]) if r[1] not in bad]

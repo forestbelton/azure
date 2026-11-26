@@ -234,10 +234,12 @@ def main():
         os.path.basename(p)[:-2]
         for p in glob.glob(os.path.join(PROJ, "build", "csrc", "ovl_dng_*.s")))
     nf = nb = 0
+    nskip = 0
     for unit in units:
         r = check(unit)
         if r is None:
             print("%-22s NOT BUILT -- run make check first" % unit)
+            nskip += 1
             continue
         n, rows = r
         nf += n
@@ -258,6 +260,19 @@ def main():
                       % ", ".join(sorted(cextra.elements())))
     print("\n%d landed bodies checked, %d with a data-symbol or call mismatch"
           % (nf, nb))
+    # A SKIPPED UNIT USED TO READ AS A PASS. Unbuilt units `continue', so a run
+    # where NOTHING could be checked printed "0 landed bodies checked, 0 with a
+    # mismatch" -- indistinguishable from a clean sweep. An agent reported it as
+    # exactly the checks-that-pass-wrongly shape, and it is the sixth of that
+    # family in this project. Say so loudly and exit non-zero.
+    if nskip:
+        print("%d unit(s) SKIPPED as NOT BUILT -- this run did not check them."
+              % nskip)
+        if nf == 0:
+            raise SystemExit(
+                "relocheck: NOTHING WAS CHECKED (every unit unbuilt). Run "
+                "`make check' first; a 0/0 result is not a pass.")
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
