@@ -509,3 +509,61 @@ question in `global.c` and it is open.**
 > mechanism that is LABELLED unestablished is an asset -- the next person knows
 > exactly what to spend a dump on -- while the same mechanism stated as fact is
 > the thing that produced two confident wrong answers today.
+
+## THE func_800A4688 SIGNATURE QUESTION IS SETTLED, AND MY OWN NOTE OF IT WAS WRONG
+
+I had this recorded as **"four parks carry four different signatures for
+`func_800A4688`; resolve by union of call sites before landing any of them."**
+Both halves were wrong, and the method was the worse error.
+
+**There are three parks, not four.** The fourth match was the same signature
+quoted inside three different park header comments, which my count had read as
+three separate declarations.
+
+**And the union of call sites was never the way to settle it, because the
+function is DEFINED AND LANDED:**
+
+    csrc/ovl_dungeon_8009F644.c:4167
+    s32 func_800A4688(u16 px, u16 py, u16 face, u16 ang, s32 flag)
+
+No listing remains for it. That definition is authoritative and was there the
+whole time; inferring a signature from call sites when the definition is in the
+tree is the same mistake as asserting progress from memory when `progress.py`
+exists. **Read the definition.**
+
+**All three parks disagree with it, each differently:**
+
+| where | declares | how |
+|---|---|---|
+| **truth** | `(u16, u16, u16, u16, s32)` | the definition |
+| `func_s07_80024020.c` | `(s32, s32, s16, s16, s32)` | **plain local declaration** |
+| `func_s05_8002401C.c` | `(u16, u16, s16, s16, s32)` | `__asm__` alias `…s` |
+| `func_s03_80024020.c` | `(u16, u16, s16, s16, u32)` | `__asm__` alias `…h` |
+
+**AND THEN I GOT THE CONCLUSION WRONG, IN THE EXACT WAY I WAS CHECKING FOR.**
+I first wrote that s07's plain `func_800A4688` declaration was live code and
+would be a conflicting redeclaration when landed. I checked before committing,
+because a comment-vs-code confusion had already cost me two tool fixes today --
+and that is what this was. **s07's line is indented three spaces inside the
+park's header comment, under a `DECLARATIONS` heading: it is the park's
+DOCUMENTATION of the declarations it needs, not a declaration.** The s03 and s05
+lines are unindented and are real code.
+
+So the live picture is the opposite of my first reading, and benign:
+
+* **s03 and s05 declare real `__asm__` aliases** (`func_800A4688h`,
+  `func_800A4688s`), each giving the symbol a second type under a different C
+  name. That is an established device here -- s13, s14 and s15 all carry it --
+  and it cannot collide with the true declaration.
+* **s07's differing signature is prose.** Nothing compiles it. When that park is
+  landed the declarations get written fresh against the definition anyway, so
+  there is no conflict to resolve, only a stale line in a comment.
+
+**What generalises is still worth keeping, and it is not what I thought it was.**
+A park's `DECLARATIONS` block is required to be self-contained, and in some parks
+that block is CODE while in others it is a documented list inside the header
+comment. Both pass `parkcheck --splice`. So when reading a park, **the indentation
+is the only thing that tells you whether a declaration is a compile-time claim or
+a note to the next reader** -- and an automated sweep over park declarations that
+does not distinguish them will produce confident findings about lines no compiler
+ever sees. Mine did, for about four minutes.

@@ -112,12 +112,47 @@ def parked():
         and no amount of C moves them. Its ratio is the most misleading number
         in the backlog.
     """
+    # A PARK IS NOT ONLY THE FUNCTION ITS FILENAME NAMES. Two project rules
+    # collided head-on here for months:
+    #
+    #   * the brief template says ONE PARK PER FAMILY -- if a family member is
+    #     already parked, UPDATE THAT FILE rather than write a second one;
+    #   * this function detected a park PURELY BY FILENAME.
+    #
+    # So a park filed under one member's name left EVERY OTHER MEMBER OF THAT
+    # FAMILY READING UNPARKED FOREVER, and `provision_batch' (which computes
+    # `dngfam.stubs() - parked()') re-offered them indefinitely. On 2026-11-26
+    # `func_s20_80026010' was dispatched to an agent, parked at 170/5 into
+    # `docs/dng-parks/func_s21_80025BA0.c' under its family sibling's name, and
+    # then dispatched to a SECOND agent hours later -- who stopped, found this,
+    # and located it to the line. The dispatcher's brief even told that agent
+    # its stub was neither landed nor parked, because the dispatcher believed
+    # the tool.
+    #
+    # The fix expands each park filename through its family, so a park excludes
+    # every member of it. Scope when found: exactly one family corpus-wide,
+    # which is why it survived this long.
     d = os.path.join(PROJ, "docs", "dng-parks")
     try:
-        return {f[:-2] for f in os.listdir(d)
-                if f.startswith("func_") and f.endswith(".c")}
+        named = {f[:-2] for f in os.listdir(d)
+                 if f.startswith("func_") and f.endswith(".c")}
     except OSError:
         return set()
+    # Expand through families: a park under ANY member's name parks them all.
+    # dngfam.families() is {digest: [(unit, func, words)]} -- the function name
+    # is index 1. The agent that found this bug first read index 0 and got a
+    # plausible wrong ZERO affected families, which is the padded-output failure
+    # mode in another costume: a bad field choice returns a clean answer, not an
+    # error. It caught and retracted that itself.
+    try:
+        import dngfam
+        for members in dngfam.families(landed=True).values():
+            names = {m[1] for m in members}
+            if names & named:
+                named |= names
+    except Exception:
+        pass        # never let family expansion break picking outright
+    return named
 
 
 # THE HEADLINE RESIDUE: MATCH ACROSS A LINE BREAK, THEN TAKE THE LAST.
