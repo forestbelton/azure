@@ -222,6 +222,11 @@ So:
 
 * **Keep every working file inside your own `agent-hNNN/` directory**, which is
   yours alone, and never in the shared scratchpad.
+* **THE DIRECTORY `provision_batch.py` PRINTS IS THE ONE TO USE, AND ITS NAME
+  WILL NOT MATCH THE AGENT ID IN YOUR BRIEF.** The id is auto-allocated as the
+  lowest unused number, so a brief addressed to `h260` can be handed
+  `agent-h276`. Two agents reported that mismatch as a discrepancy; it is
+  expected. Use the printed path and ignore the difference.
 * If you must use the scratchpad, **qualify every name with your agent id** --
   `h186-body.c`, not `body.c`.
 * **Re-verify your unit copy** (`ovlverify` over every defined body) after any
