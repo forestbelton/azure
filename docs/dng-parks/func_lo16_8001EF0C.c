@@ -186,6 +186,77 @@
    priced above and the body is word-exact.  The whole job is the form of one
    copy at word 155.
 
+   ===================================================================
+   agent-h231, 2026-11-26.  THE `-da' DUMPS WERE READ, AND ONE OF THE FOUR
+   ROWS WAS NEVER THIS BODY'S FAULT.
+
+   1. ROW 45 (`lbu' vs `lb') IS PARK ROT, NOT A RESIDUE.  `parksplice' now
+      matches a struct by TAG, so it DROPS this park's own
+      `UnkDungeonSlot' -- the refined one with `s8 unk_02' that fact 3 above
+      is about -- and the splice compiles against the UNIT's copy at
+      `csrc/ovl_dng_lo16.c:34-40', which still says `u8 unk_02'.  Widen that
+      one field in a copy of the spliced unit and the row disappears:
+          park as spliced (unit's `u8 unk_02')      264 w / 4 rows
+          same, unit's typedef widened to `s8'      264 w / 3 rows
+      SO THE PARK'S REAL BASELINE IS 264/3, AND THE 264/4 FIGURE AT THE TOP
+      OF THIS HEADER IS AN ARTEFACT OF THE SPLICER.  This park cannot be made
+      self-measuring: the unit also declares `D_800E3648_s' itself, so the
+      park's narrower typedef can never be the one in scope.  It is a
+      per-park repair of the kind docs/dng-endgame.md describes, and a
+      landing MUST edit `csrc/ovl_dng_lo16.c:38' by hand.
+      RE-VERIFIED, so the edit is gated: with `s8 unk_02' in place,
+      `ovlverify' over ALL 57 currently-defined bodies of the unit gives 56
+      at `0 differing' and only this park non-zero.  (h181's note says 54
+      bodies; it is 57 now and still clean.)
+
+   2. WHAT THE `andi 0xffff' ACTUALLY IS.  In `.jump', `kr' is `reg/v:HI 91'
+      and `k' is `reg/v:SI 89', and the copy is
+          (insn 478 (set (reg/v:SI 89) (zero_extend:SI (reg/v:HI 91))))
+      i.e. word 155 is the HImode->SImode ZERO_EXTEND, not a copy whose form
+      went wrong.  THE TWO PSEUDOS SURVIVE PRECISELY BECAUSE THE MODES
+      DIFFER: `insert_regs' (cse.c:1029-1046) calls `make_regs_eqv' only for
+      a class member with `GET_MODE (classp->exp) == GET_MODE (x)', so a
+      HI/SI pair is never put in one equivalence class and neither pseudo can
+      be canonicalised onto the other.
+
+   3. AND THAT IS WHY EVERY SAME-MODE SPELLING LOSES THE WORD.  With
+      `s32 kr' the copy is a reg-reg copy, the class forms with `k'
+      canonical, EVERY use of `kr' is rewritten to `k' -- including the
+      `sb $a1, 0x0($s2)', which the target keeps on `kr' -- and by the `.cse'
+      dump insn 477 is gone and insn 474 sets `k' straight from `$v0':
+          `s32 kr'                    263 w /  8 rows, `sb s0,0(s2)'
+          `u16 kr' + `u16 k'          263 w / 17 rows, BOTH moves gone and
+                                      `andi a0,v0,0xff' reads `$v0' direct
+      (that second cell CORRECTS the "`u16 kr' -> `u16 k' same 264 / 3" row
+      in the table above, which no longer reproduces.)
+      The target reads `$a1' at the `sb' and `$s0' at both masks, so the
+      target's two pseudos were never in one class either -- the same
+      structural tension as func_lo16_80018E80's park, and the mode
+      difference is the only thing in the source language that produces it.
+
+   4. THE cse-BLOCK AXIS IS CLOSED, AND THIS IS THE NEW RESULT, because a
+      cse dump was the next step this header named.  It is NOT a cse
+      block-extension decision:
+          baseline + `-fno-cse-follow-jumps'     264 w /  3 rows  IDENTICAL
+          baseline + `-fno-cse-skip-blocks'      264   / 16
+          baseline + `-fno-rerun-cse-after-loop' 267   / 56
+          `s32 kr' + `-fno-cse-follow-jumps'     263   /  8  IDENTICAL
+      (On func_lo16_80018E80 the same probe gave 401/0, so this is a real
+      discrimination between the two parks and not a flat sweep.)
+      cse1's blocks here end at LABELS, not at branches: the three
+      `continue' guards between the copy and the `sb' do not split the block,
+      which is why turning jump-following off changes nothing.
+
+   SO THE REMAINING AXIS IS: a source construct whose RTL is a plain SImode
+   reg-reg move that cse cannot put in one class -- and `insert_regs' offers
+   only the mode escape, which on MIPS costs the extension that IS word 155.
+   Unless a pass after cse can be made to drop the `andi', this park's three
+   rows are the price of the only two-pseudo shape the language gives.
+   Measurement harness note: `onefunc.py' drops the park's spliced
+   DECLARATIONS (they sit after the unit's preamble), so add the 11 lines to
+   the standalone preamble by hand or it will not compile; with them it
+   reproduces 264/3 exactly at 0.09 s a candidate.
+
    DECLARATIONS
    extern u32 D_800835E4[];
    extern u32 D_800835E8[];

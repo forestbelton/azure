@@ -157,6 +157,119 @@
    That is the whole source-level space closed twice over, by two different
    mechanisms, and it is worth more than another flat spelling: the
    `-da' `.cse1'/`.cse2' route is now the ONLY one left.
+
+   THE `-da' DUMPS WERE READ (agent-h231, 2026-11-26).  THE RESIDUE IS FULLY
+   EXPLAINED, THE BODY IS PROVED BYTE-EXACT UNDER ONE COMPILER FLAG, AND THE
+   SOURCE-LEVEL SPACE IS NOW CLOSED BY A TWO-PASS ARGUMENT RATHER THAN BY A
+   FLAT SWEEP.  Everything below is measured.
+
+   MEASUREMENT HARNESS.  `onefunc.py' reproduces the unit exactly ONLY after
+   the park's five DECLARATIONS are added to the standalone preamble by hand:
+   `parksplice' puts them immediately before the definition, i.e. AFTER the
+   unit's preamble (which ends at the first INCLUDE_ASM), so `onefunc' drops
+   them.  Without them the standalone reads 399 words / 5 rows (the missing
+   pair is the `sll'/`sra' sign-extension of `m + 1' for
+   `func_lo16_80019684(s16,...)'); with them it reads 401 / 1, the same row as
+   the unit.  Standalone measurement is 0.09 s a candidate.
+
+   WHAT THE DUMPS SAY.  In the pre-cse `.jump' dump q is `reg/v:SI 83', k is
+   `reg/v:SI 84', `q = k' is insn 137 and the `k == 2' test is jump_insn 200
+   reading `(reg/v:SI 84)'.  In `.cse' (cse1) that SAME insn reads
+   `(reg/v:SI 83)'.  So cse1 rewrites it, exactly as h197's reading said, and
+   nothing before cse1 is wrong.
+
+   WHY: `cse.c:838 make_regs_eqv' picks q as `qty_first_reg' because, with
+   both pseudos,
+       (A)  uid_cuid[regno_last_uid[q]] > cse_basic_block_end
+            || uid_cuid[regno_first_uid[q]] < cse_basic_block_start
+       (B)  uid_cuid[regno_last_uid[q]] > uid_cuid[regno_last_uid[k]]
+   both hold.  (A) holds on BOTH disjuncts and is not reachable: q's last use
+   is in the `q != 0' arm, past every candidate block end, and its first set
+   (insn 91) is before the block start.
+
+   (B) IS REACHABLE, AND BOTH DIRECTIONS ARE WRONG.  A later read of k flips
+   which member is canonical:
+       `zz = k;' (a NEW unused local) at the tail         401 w / 1 row
+         -- NO EFFECT AT ALL, and the reason is a trap worth keeping:
+            `jump.c:603-620' runs under `after_regscan' and deletes any insn
+            that is the ONLY insn mentioning its destination pseudo, so a
+            brand-new unused local's store is gone before reg_scan runs again
+            and cse never sees it.  Confirmed in the dumps: the insn is in
+            `.rtl' and absent from `.jump'.  THIS IS WHY THE b07 LEVER IS
+            SPELLED `k = 0;' ON AN EXISTING LOCAL -- a fresh local would have
+            measured flat for a reason that has nothing to do with cse.
+       `t = k;' at the tail (t is a LIVE local, so the store survives jump1
+         and `flow' deletes it later)                     400 w / 5 rows
+         -- the flip WORKS: k becomes canonical, and cse then rewrites the
+            EARLY tests (`q == 0x28', `q < 2') onto k, `q = k' goes dead and
+            BOTH `addu $v1, $a1, $zero' copies disappear.
+   The target reads q at words 56/63/64/66 and k at word 83.  One equivalence
+   class cannot do that whichever member is canonical, so THE TARGET'S cse
+   NEVER HAD THE TWO IN ONE CLASS AT WORD 83 -- the question is the class's
+   REACH, not its direction.
+
+   PROVED BY FLAG.  The park body as it stands, with the ONLY change being
+   `-fno-cse-follow-jumps':
+       401 words, 401 target words, 0 ALIGNED DIFFERENCES.
+   `-fno-cse-skip-blocks' alone changes nothing (the dump still reads
+   `reg 83'), so it is the BARRIER/`follow_jumps' arm of
+   `cse_end_of_basic_block', not the skip-blocks arm.
+
+   THE EXACT GATE.  `cse.c:8151' (`cse_end_of_basic_block'): a conditional
+   jump can extend the block only if
+       LABEL_NUSES (JUMP_LABEL (p)) == 1
+   (plus a BARRIER before the label, and path_size < PATHLENGTH-1 = 9).  cse
+   follows insn 141 (`q != 0x28' -> the `q < 2' test) and insn 182 (`q < 2'
+   -> the `k == 2' test), which is how insn 137 and insn 200 land in one
+   block.  Give EITHER target label a SECOND label_ref and the two are in
+   different blocks.
+
+   MEASURED, THE BLOCK SPLIT WORKS AND IS FREE IN WORDS:
+       control: the chain rewritten as `else { lt2: if (q < 2) ... }', an
+         unused label, no other change              401 w / 1 row  (free)
+       + a dead `if (m != 0) { goto lt2; }' inside the LATE `if (m == 0)'
+         arm of the common tail                     401 w / 1 row
+         -- and the `.cse' dump now shows NO substitution: the blocks
+            containing insn 137 end at `lt2' (`86 to 181', `137 to 181') and
+            the chain is processed in `184 to 228' / `202 to 228', which do
+            not contain insn 137.  The `k == 2' test still reads `reg 84'
+            after cse1.  THE DEVICE COSTS ZERO WORDS -- cse folds the dead
+            test (it knows m == 0 there) and deletes it.
+   The row survives because **cse2 REDOES IT**.  Tracked through the dumps:
+   `.loop' reads `reg 84', `.cse2' reads `reg 83'.  (Note the real pass order
+   from `toplev.c:3365-3380' is loop -> cse2 -> flow -> combine; the
+   `.cse2' dump is NOT after `.greg' as docs/landing-a-function.md's table
+   implies.)  cse2 succeeds because cse1 already folded the dead goto away,
+   so LABEL_NUSES is back to 1 when cse2 computes its blocks.
+
+   CONFIRMED BY A SECOND FLAG, with the device in place:
+       device + `-fno-rerun-cse-after-loop'   401 w / 28 rows, and the
+         word-83 row is GONE (the 28 are all at word 238+, in the four
+         `for' loops, and are cse2 doing work that IS wanted there)
+       baseline + `-fno-rerun-cse-after-loop' 401 w / 29 rows, word-83 row
+         STILL PRESENT (cse1 did it)
+   So the block split is sufficient; it just has to hold through BOTH cse
+   passes.
+
+   THE CLOSED AXIS, STATED PRECISELY.  A free device needs a dead
+   conditional branch that (i) survives jump1, (ii) is still present when
+   cse2 computes its blocks, and (iii) costs no words.  (ii) and (iii) are in
+   tension: cse folds a dead test only from an equivalence it has IN THAT
+   BLOCK, and the only equivalences available are the ones the device itself
+   has just split away.  Measured end of that line:
+       the dead test moved to just AFTER `lt2' so cse1 cannot fold it
+         (`if (q != k) { goto lt2; }' -- q and k are equivalent only in the
+         block the device removes)                  403 w / 5 rows
+         -- it does survive, but a backward self-jump costs two words (the
+            branch plus a `nop' delay slot) and the substitution comes back
+            from another pass anyway.
+   NEXT AGENT: the remaining route is a construct that gives
+   `JUMP_LABEL(insn 141)' or `JUMP_LABEL(insn 182)' a second label_ref which
+   is removed at ZERO word cost by a pass AFTER cse2 -- `thread_jumps'
+   (toplev.c:3382) or jump2's cross-jump (`jump_optimize(insns,1,1,0)',
+   toplev.c:3690) are the only two candidates.  Do NOT re-run any spelling
+   that relies on cse folding the device: that is the measured dead end
+   above.
 */
 
 s32 func_lo16_80018E80(void)

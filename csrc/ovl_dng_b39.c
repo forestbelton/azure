@@ -167,7 +167,129 @@ s32 func_b39_80172658(u8 *a, void *b, void *c, s32 d);
 void func_b39_80172514(u8 *p, UnkVec *b, u8 *c, u8 *d);
 void func_b39_80175174(u8 *p, UnkVec *b, u8 *c, u8 *d);
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_b39", func_b39_801708A4);
+s32 func_800A9C18(UnkNode *, UnkVec *, UnkSlot *, s16);
+void func_b39_80170B40(u8 *p, UnkVec *b, u8 *c);
+u8 *func_b39_801708A4(s16 a, u16 b, u16 c, s16 d);
+
+/* 167 words, 0 differing.  Landed by agent-h231, 2026-11-26, from h198's
+   167-word / 4-row park.  Donor for the head: func_b45_80170854.
+
+   THE ONE THING THAT WAS WRONG, AND IT IS A MECHANISM WORTH REUSING:
+   `j = i * 2' IS THE FIRST STATEMENT OF THE SCAN LOOP, NOT PART OF THE TAIL
+   EXPRESSION.  Written as `i * 0xC' in the tail (h198's park, every spelling
+   of the arithmetic flat at 4 rows) local-alloc's `combine_regs' ties the
+   `i*2' temporary to the `addu' that consumes it -- the temp dies in that
+   insn -- so the chain temp -> sum -> scaled -> address is ONE quantity in
+   $v0.  $v0 is the scan loop's byte temp and the exit branch's own input, so
+   reorg refuses the `sll' as the branch's delay insn and fills the slot from
+   the loop body instead.  Computed INSIDE the loop the temp's def is in the
+   loop block and its use in the exit block, so it is not block-local,
+   `combine_regs' declines (local-alloc.c: "not local to this block or dies
+   more than once"), the temp gets $a2, and reorg puts `sll $a2, $a1, 1' in
+   the branch's delay slot exactly as the target has it -- for no extra word,
+   because the slot was being spent on `q += 0xC' anyway.
+   The loop recomputes `j' on every pass including the exiting one, which is
+   what makes the delay-slot placement correct: at exit `j' is 2*i for the
+   final `i'.
+   Measured on the way: `k = i * 2 + i' (reusing a non-block-local local as
+   the SUM) 167 w / 22 rows -- it drags k's live range to the tail and
+   re-allocates the whole function; `i = i * 2 + i' 167 / 6 -- it DOES break
+   the tie, but the temp still lands in $v0 and the branch still refuses it.
+   Breaking the tie is not enough; the temp has to be the non-block-local one.
+
+   DEVICE (or macro residue): the scan loop is a `goto', not a `while'.  A
+   `while' costs 3 words here (170 against 167) because stmt.c's
+   expand_end_loop rotates a loop that opens with a conditional exit and
+   jump.c's duplicate_loop_exit_test then copies the test above it; a `goto'
+   back edge emits no NOTE_INSN_LOOP_BEG so neither pass fires.  Measured
+   both ways, and on func_b39_8017382C as well. */
+u8 *func_b39_801708A4(s16 a, u16 b, u16 c, s16 d)
+{
+    RECT rect;
+    UnkNode *n;
+    UnkVec *m;
+    UnkSlot *r;
+    u8 *p;
+    u8 *w;
+    u8 *q;
+    s32 k;
+    s32 i;
+    s32 t;
+    s32 v;
+    s32 j;
+
+    p = NULL;
+    n = func_8003FD64(0x112, D_80083498);
+    if (n != NULL)
+    {
+        p = (u8 *)n + 0x20;
+        w = p;
+        n->unk_10 = (u32)func_b39_80170B40;
+        p[0x13] = 0x27;
+        func_8004491C(n, (u32)D_80045340);
+        m = n->unk_08;
+        *(s16 *)((u8 *)m + 0xA) = d;
+        r = (UnkSlot *)n->unk_0C;
+        *((u8 *)r + 0x25) = c;
+        *(u8 **)((u8 *)r + 0x2C) = D_80175258;
+        k = a & 3;
+        *((u8 *)r + 0x24) = b;
+        if (k == 1)
+        {
+            *(u32 *)(p + 0x14) |= 0x6000;
+            *(u32 *)(p + 0x1C) |= 0x6000;
+        }
+        else if (k >= 2)
+        {
+            *(u32 *)(p + 0x14) |= 0x2000;
+            *(u32 *)(p + 0x1C) |= 0x2000;
+        }
+        else if ((a & ~3) == 0)
+        {
+            if ((*(u32 *)(p + 0x14) & 0x200) == 0)
+            {
+                if ((func_800A6D30() & 1) != 0)
+                {
+                    *(u32 *)(p + 0x1C) |= 0x200;
+                    func_800A48F0((s8 *)p, 1, (func_800A6D30() & 0x3F) | 0x20);
+                    *(u8 **)((u8 *)r + 0x2C) = D_80175298;
+                }
+            }
+        }
+        func_800A9C18(n, m, r, a);
+        i = 0;
+        v = *(u16 *)((u8 *)r + 0x12);
+        w[0x9A] = 0xFF;
+        *(s8 *)(w + 0x9C) = -1;
+        *(u32 *)(w + 0x8C) = (u32)func_b39_80170F6C;
+        *(s16 *)(w + 0xAE) = v;
+        q = *(u8 **)((u8 *)r + 0x8);
+    scan708:
+        j = i * 2;
+        if ((q[0] & 0x20) != 0)
+        {
+            q += 0xC;
+            i++;
+            goto scan708;
+        }
+        t = *(u16 *)(*(u8 **)((u8 *)r + 0x8) + (j + i) * 4 + 0x6) >> 6;
+        rect.x = 0;
+        rect.y = t;
+        rect.w = 0x100;
+        rect.h = 1;
+        MoveImage(&rect, 0, t - 1);
+        rect.w = 0x10;
+        rect.x = 0x30;
+        rect.y -= 1;
+        do
+        {
+            MoveImage(&rect, rect.x - 0x30, rect.y);
+            rect.x += 0x40;
+        } while (rect.x < 0x100);
+        func_800AA36C(w, m, (u8 *)r, p);
+    }
+    return p;
+}
 
 /* The banked room script's per-frame actor driver, the relinked twin of the
    resident overlay's func_800D8728 (csrc/ovl_dungeon_800D50FC.c): past the
