@@ -14,7 +14,7 @@ Carried by `jtbl_*_80170820` and equivalents. Members found by `jtcheck`:
 | body | unit | state |
 |---|---|---|
 | `func_b42_801714B8` | b42 | **landed** earlier — the first reference, 481 words |
-| `func_b39_80170F6C` | b39 | **landed** 2026-11-25, 617/617, 0 differing |
+| `func_b39_80170F6C` | b39 | measured 617/617 at 0 differing in its agent's copy; **not yet in `csrc`** at the time of writing |
 | `func_b07_80170E54` | b07 | in progress |
 | `func_b08_80170E7C` | b08 | **still a stub** |
 | `func_b22_801724BC` | b22 | **still a stub** |
@@ -74,6 +74,21 @@ inlined `d + 0x46` dispatch. It is not. It is a separate
 `*(s16 *)(p + 0xA8)` state machine gated on `*(s32 *)(d + 0x14) & 0x20000`,
 minval 0, cases 0..4, and its sixth word is a real `0x00000000` alignment pad
 rather than a label.
+
+## A bookkeeping caution, learned the hard way on this file
+
+**Record what is MEASURED and where, not what is landed, unless you have
+integrated it.** When this file was written `func_b39_80170F6C` was listed as
+"landed" on the strength of an interim message from a still-running agent, while
+`csrc/ovl_dng_b39.c` still carried its `INCLUDE_ASM`. The next agent was told by
+its brief to read "`csrc/ovl_dng_b39.c`'s landed header", found none, and had to
+work out for itself that the body existed only in a sibling agent's uncommitted
+copy. It read that copy for the switch shape and cross-checked everything against
+its own listing, which was the right recovery -- but the doc had sent it to a
+file that did not have what the doc promised.
+
+A state table that runs ahead of integration is the same failure as a check that
+passes wrongly: it reads as settled and is not.
 
 ## How to use this file
 

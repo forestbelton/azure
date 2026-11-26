@@ -28,1679 +28,1681 @@ Companion documents:
 One line per lever, with its line number. Read this,
 then read only the section you need.
 
-- The pass order, and what each pass does to you  `:1707`
-- 1. Block membership beats scheduling  `:1731`
-- 2. Loop notes change every reference weight in the function  `:1955`
-  - `threshold -= 3` IS A CONTROL, NOT JUST AN EXPLANATION -- AND IT IS HOW YOU SPLIT AN EQUAL PAIR  `:2006`
-  - AND TO PIN AN EXPRESSION *INSIDE* A LOOP: SET THE VARIABLE TWICE, NON-CONSECUTIVELY  `:2035`
-  - Giv EMISSION is the REVERSE of creation; a second pointer at offset ZERO reorders it  `:2124`
-  - A degenerate loop AROUND ONE STATEMENT weights that reference by 2  `:2175`
-  - WHERE YOU PUT A REFERENCE-BUMP DEVICE DECIDES WHETHER IT ALSO BREAKS THE SCHEDULE  `:2187`
-  - AND THE SAME NOTE COUNTING MAKES A `goto` LOOP A DIFFERENT PROGRAM -- 76 ROWS  `:2221`
-  - THE PRECONDITION: READ THE PREHEADER FIRST. NO LOOP NOTE MEANS NO INVARIANT HOISTING EITHER  `:2245`
-  - AND THE SAME ERROR IN STRENGTH REDUCTION: AN INDEX LOCAL KILLS THE giv  `:2290`
-  - AND A COROLLARY THAT COST ONE BODY 23 ROWS: A LOOP'S TABLE POINTERS ARE HOISTS, NOT SOURCE LOCALS  `:2312`
-  - A degenerate loop is a BLOCK BOUNDARY you can put anywhere  `:2398`
-  - A SCAN loop's failure `return` belongs INSIDE it -- LOOP_END is a sched1 slot  `:2428`
-- 3. Allocation priority is the commonest thing left  `:2471`
-  - DIAGNOSE IN THIS ORDER -- priority is the LAST question, not the first  `:2473`
-  - ONE variable per LOOP, not one counter reused -- refs add up, priority inflates  `:3007`
-  - A REUSED TEMPORARY IS HOW THE ARGUMENT KEEPS THE SHORT PSEUDO  `:3036`
-  - RETURN THROUGH THE PARAMETER to stop cse canonicalising a copy away  `:3099`
-  - A `u8` destination makes a register copy INVISIBLE to cse  `:3152`
-  - A LOCAL PER CONSTANT fixes the materialisation order without moving the stores  `:3224`
-  - Statement granularity is what orders the pieces of an address  `:3255`
-  - A two-term index adds the BASE LAST unless the row address is its own statement  `:3297`
-  - POINTER arithmetic is always pointer-first; INTEGER arithmetic keeps source order  `:3332`
-  - A wider store invalidates cse's entry for the narrow read after it  `:3357`
-  - A switch's tree says which cases share a body, and whether there is a default  `:3371`
-  - Two `beq`s that branch TO their bodies are a switch, not an if/else chain  `:3396`
-  - A 0/1 pair ALWAYS triggers jump.c's store-flag transform; share the site  `:3405`
-  - A switch's case bodies are emitted in SOURCE order  `:3445`
-  - The load-delay slot is filled by the NEXT insn only  `:3455`
-  - A `bgez`/nop/`negu` TRIO IS ONE INSN -- its nop is not a slot you can fill  `:3485`
-  - `?:` keeps the copies that `if` deletes  `:3521`
-  - A store through a loaded pointer pins the argument loads after it  `:3532`
-  - Two address materialisations interleave only if BOTH are split pairs  `:3562`
-  - An unresolved `%gp_rel` addend USED TO make advise.py print SHAPE (fixed)  `:3610`
-  - A %lo in the displacement with a REGISTER index means a constant base  `:3700`
-  - `p += x` is one long quantity; `q = p + x` is two short ones  `:3748`
-  - `||` puts the body BETWEEN the two tests  `:3765`
-  - Duplicate the tail per arm: cross-jumping puts it back  `:3787`
-  - A cross-jumped tail can present as a DELAY SLOT, not as registers  `:3831`
-  - A pass-through call that emits nothing still costs references  `:3876`
-  - `a - C + b` reassociates -- a TEMPORARY is the only way to pin the constant  `:3893`
-  - AND THE IN-PLACE FORM COSTS FOUR REFERENCES, which can be worth more  `:3917`
-  - A shared tail cross-jumping does NOT reach wants a `goto`  `:3945`
-  - WHERE A VARIABLE IS DECLARED DECIDES WHICH ALLOCATOR SEES IT  `:3962`
-  - THE SAME VARIABLE IN TWO BLOCKS COSTS THE TEMPS THAT FEED IT A REGISTER  `:4009`
-  - TWO WAYS TO PRICE AN ALLOCATION MARGIN WRONG, both of which I did  `:4065`
-  - TWO MORE REFERENCES ON A TIED CHAIN, not on its rival  `:4159`
-  - READ `.greg`'s OWN conflicts and preferences lines before pricing a margin  `:4211`
-  - A NARROW PARAMETER'S DELETED SIGN-EXTENSION STILL MOVES local-alloc  `:4345`
-  - A FREE RETURN of the value just stored is the first thing to check on an ALLOC row  `:4401`
-  - A DEAD reference is still a reference -- the free way to flip an allocno  `:4435`
-  - A reference that COMBINE folds away still counts -- the phantom test  `:4505`
-  - `update_equiv_regs` DOUBLES the live length of any ONCE-SET EQUIVALENT pseudo  `:4566`
-  - `SMALL_REGISTER_CLASSES` IS ABSENT, so gcc treats HARD registers like pseudos  `:4673`
-  - STORES CAN SHARE A HOISTED ARGUMENT REGISTER INSTEAD OF THE VALUE'S OWN  `:4714`
-  - A DEGENERATE LOOP BEFORE THE FIELD STORES BUYS CALLEE-SAVED REGISTERS  `:4760`
-  - A DEAD TEST ON THE STORED VALUE STOPS THE ARGUMENT-REGISTER SHARING  `:4829`
-  - THE LATE TEMPORARY GOES BACK INTO A DEAD PARAMETER  `:4862`
-  - COMBINE CANNOT FOLD ACROSS A BASIC BLOCK BOUNDARY  `:4878`
-  - A CONSTANT FOLDED INTO A LATER SHIFT needs a SECOND SET, not a boundary  `:4908`
-  - A PARAMETER always reserves its incoming register, unless there is a call  `:4988`
-  - Keep $v0 busy to make a `lui`/`addiu` pair share its register  `:5039`
-  - A VALUE-PRESERVING NARROWING CAST in a test still moves the allocation  `:5054`
-  - A POINTER LOCAL at ONE store site hoists that symbol's `(high)` to the TOP  `:5079`
-  - A PHANTOM ARGUMENT FROM A WRONG SIGNATURE COSTS A SCHED2 CYCLE  `:5111`
-  - THE FREE REFERENCE PAIR: ADD AND CANCEL A LIVE VALUE, NOT A CONSTANT  `:5149`
-  - A FREE REFERENCE PAIR ON A LOOP CURSOR DOES NOT FOLD BACK  `:5235`
-  - ONE SCRATCH LOCAL PER HALF, or the PARAMETER keeps its argument register  `:5263`
-  - THE ACCUMULATOR MUST OUTRANK THE COUNTER, and a call-result scratch is how  `:5291`
-  - A PRODUCT WRITTEN BACK INTO ITS VARIABLE TIES TO ITS QUANTITY  `:5326`
-- 4. Re-dereference rather than cache  `:5346`
-- TWO LOCALS INITIALISED TO THE SAME CONSTANT -- the second becomes a copy  `:5563`
-- STORES TO DISTINCT CONSTANT OFFSETS off one base do not pin source order  `:5601`
-- A REDUNDANT OUTGOING ARGUMENT is a FREE REFERENCE -- the cheapest tie-break  `:5629`
-  - AND A FREE REFERENCE THAT IS A HARD-REGISTER COPY ALSO *NAMES* THE REGISTER  `:5671`
-- A WHOLE-STRUCT ASSIGNMENT's copy expansion is picked by ALIGNMENT  `:5694`
-- READ A FIELD BACK OUT OF ITSELF to make cse forward the store  `:5718`
-- FOLD REASSOCIATES `A + K - B` INTO `A - (B - K)`; a STATEMENT BOUNDARY stops it  `:5738`
-- A COMPONENT_REF vs a CAST controls a SCHEDULER DEPENDENCE (MEM_IN_STRUCT_P)  `:5764`
-- A CAST beats a LOCAL for an `extern u8 []` whose address is used late  `:5795`
-- A MISSING PROTOTYPE for a MANY-ARGUMENT callee costs a word per narrow arg  `:5809`
-- AN EARLY `return` IS LAID OUT INLINE; the same test as an `if/else` is not  `:5834`
-- `lhu` FEEDING A `mult` means the source CASTS to `u16`; `lhu` feeding a store does not  `:5856`
-- `A - B - K - C` AND `A - B - (C + K)` ARE DIFFERENT CODE, AND THE FLAT FORM KEEPS THE GROUPING  `:5876`
-- A SPILLED TEMPORARY IN THE LISTING IS EVIDENCE *AGAINST* A SOURCE LOCAL  `:5922`
-- SWEEP A STATEMENT'S POSITION -- THE CURVE IS NOT CONVEX, AND ONE-AT-A-TIME MISSES  `:5940`
-- `x * 2` and `x << 1` ARE NOT INTERCHANGEABLE in a once-set local's INITIALISER  `:6028`
-- AN INT SUM ASSIGNED TO AN `s16` LOCAL swaps the add's operand order  `:6043`
-- TWO PARAMETERS THAT TIE IN PRIORITY allocate in DECLARATION ORDER -- copy one  `:6069`
-- WHEN TWO if/else ARMS END IN MIRROR STATEMENTS, the ELSE arm's copy is merged  `:6098`
-- `ori` WHERE THE TARGET HAS `addiu` off a held base: address-of a MEMBER  `:6119`
-- TWO INDEPENDENT IN-PLACE INCREMENTS: their source order is load-order visible  `:6139`
-- `abs()` IS ONE INSN, and its delay slot tells you how it was SPELLED  `:6153`
-- `sll`/`sll`/`slt` WITH NO `sra` means BOTH operands are 16-bit  `:6184`
-- AN OUT-OF-LINE `else` ARM: read it off the LABEL PAIR  `:6207`
-- A cse BLOCK ends at a LOOP-END note, not only at a label  `:6223`
-- A LIBRARY CONSTRUCT can have the shape the hand-written form loses  `:6239`
-- 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation  `:6266`
-  - A conditional negate with a COPY in it means the result is a NARROW local  `:6428`
-  - `x = x << 16; x = x >> 16;` is the IN-PLACE sign-extension; the cast is not  `:6443`
-  - A parameter re-assigned its own truncation extends IN PLACE -- and resets cse  `:6456`
-  - An `s16` parameter's sign-extension sits at its first INT USE, not at entry  `:6507`
-  - A RAW COPY of the parameter ahead of the `sll`/`sra` pair means `s16`, not in-place  `:6519`
-  - A narrow STACK parameter is loaded with `lw`, so `lw` is not evidence for `s32`  `:6551`
-  - "A pure register rotation" can be a narrow PARAMETER -- check the types first  `:6620`
-  - A switch subject read as `s16` is declared `s32`  `:6648`
-  - A stack buffer whose loads are NOT hoisted is a STRUCT, not a byte array  `:6665`
-  - A store that gcc deletes as dead is a VOLATILE field  `:6684`
-  - A load of a value just stored is a VOLATILE field  `:6740`
-  - THE LAST STORE OF A VOLATILE RUN CAN BE PLAIN, and that fills the delay slot  `:6766`
-  - Two bit tests that stayed separate are NESTED IFS  `:6781`
-  - Two bit tests that stayed separate are two SPELLINGS of one lvalue  `:6791`
-  - Which spelling a global's bound takes is PER SITE: read the `lui`'s register  `:6819`
-  - A struct POINTER local gets both a materialised base and MEM_IN_STRUCT_P  `:6836`
-  - Reading one field twice beats a local when the value is wanted in two registers  `:6855`
-  - A reg-reg copy right after an `lbu` means the byte is a LOCAL  `:6865`
-  - A PARAMETER RELOADED FROM ITS HOME SLOT AND RE-SHIFTED is a RESPELLING  `:6881`
-- 6. Declaration decides addressing  `:6907`
-  - A SUBSCRIPT keeps the symbol's own pseudo; a `u8 *` BASE eats the `%lo`  `:7229`
-  - A walked pointer RE-LOWERS its symbol; a separate cursor does not  `:7261`
-  - `sw X, -C($sN)` beside `sw Y, %gp_rel(SYM)` means ONE pointer, used  `:7289`
-  - A SYMBOL whose accesses ALL sit at a nonzero offset wants a POINTER LOCAL  `:7327`
-- 7. Narrow types  `:7352`
-  - A narrow parameter a CALLER must not see: define under an `__asm__` alias  `:7683`
-  - A narrow RETURN the caller must not see: truncate in the BODY, not in the type  `:7723`
-- 8. Statement order and expression shape  `:7749`
-  - sched1 defers a value SET EXACTLY ONCE, and that is a knob  `:7751`
-  - WHEN BOTH COMPETING INSNS ARE BUMPED, IT IS LUID -- AND A NEW LOCAL MOVES IT  `:7842`
-  - A THIRD SYMBOL'S MATERIALISATION DECIDES WHICH CYCLE A TWO-INSN CONTEST HAPPENS IN  `:7892`
-  - A THREE-SET integer chain puts a lookup's quantity on the INDEX, not the base  `:7958`
-  - A global's DECLARED SIZE also decides how many registers its address costs  `:7993`
-  - A 32-bit mask on a narrow value needs ITS OWN STATEMENT, not just a wide local  `:8101`
-  - Truncating an `lbu` result is FREE -- an explicit `& 0xFF` is not  `:8122`
-  - A value stored twice is a CHAINED assignment, because a store flushes cse  `:8140`
-  - Four `||` terms whose `or`s sit in the delay slots are `|`, written INLINE  `:8156`
-  - `% C` is NARROWED by the front end, and a cast will not stop it  `:8172`
-  - An index INLINE in a call argument gets the hard register; a local does not  `:8226`
-  - cse rewrites `*q` into `*(p + C)` but leaves `*(q + 4)` alone  `:8241`
-  - A symbol added to an index expands SECOND; a pointer variable expands first  `:8252`
-  - Read a field BACK instead of respelling the expression -- cse makes a MOVE  `:8278`
-  - Read the scheduler's own decisions -- it is not "priority, then LUID"  `:8300`
-- TWO CALL RESULTS IN ONE LOCAL BUY A CALLEE-SAVED REGISTER FOR BOTH  `:8515`
-  - THE SPLIT IS ABOUT TYPES AS WELL AS RANGES -- A CALL RESULT AND ITS REMAINDER  `:8725`
-  - A `nop` in a CONDITIONAL branch's delay slot can mean a LOAD comes next  `:8758`
-  - Two loads of one MEM collapse at greg unless they overlap at SCHED1 time  `:8768`
-  - An empty `jal` delay slot says the address was ONE instruction  `:8785`
-  - N materialisations of ONE base mean N LOCALS, because cse restarts at a join  `:8832`
-  - The PREHEADER's giv initialisations are in REVERSE body order  `:8850`
-  - A PARAMETER COPY IN THE PREHEADER, not the prologue, means the source INDEXES  `:8861`
-  - Two offsets off a walked pointer become TWO induction variables  `:8877`
-  - A THIRD induction variable presents as a SPILL, not as a giv-shaped diff  `:8887`
-  - A displacement offset by a CONSTANT from the field it reads is a REDUCED GIV  `:8975`
-  - A volatile MEM is NOT replaced by a reduced giv  `:9006`
-  - A struct copy is a FOUR-REGISTER block move; N statements are N lw/sw pairs  `:9023`
-  - A loop-invariant pointer belongs INSIDE the loop body  `:9034`
-  - A MUTATED cursor cannot be hoisted -- write the guard yourself  `:9043`
-  - A USER-VARIABLE POINTER WITH A DEAD EARLIER SET keeps the %lo INSIDE the loop  `:9079`
-  - WHICH REGISTER THE GIV USES SAYS WHETHER THE SOURCE WALKS THE POINTER  `:9124`
-  - A NAMED LOCAL FOR A GLOBAL'S VALUE keeps the LOAD inside the loop  `:9164`
-  - reorg fills a delay slot from the insn BEFORE the branch first  `:9214`
-  - Reusing one counter beats a second one, and that decides its register  `:9232`
-  - `p = param` BEFORE the first branch moves that parameter's copy LAST  `:9251`
-  - Where a loop's counter is INITIALISED decides which register it gets  `:9281`
-  - An early `return x` is another REFERENCE to x, and it can flip global-alloc  `:9300`
-  - A base pointer assigned before a call lives in a callee-saved register  `:9315`
-  - One call after the join, not a call in each arm  `:9326`
-  - Two bounds written with `&&` become one range check  `:9334`
-  - Two shifts with mismatched counts are two shifts in the source  `:9342`
-  - `break` and a tested `while` condition pick DIFFERENT registers  `:9351`
-  - No re-test at the bottom means that is not the loop condition  `:9361`
-  - Many arms rejoining at several places is LABELS AND GOTOS, laid out to match  `:9369`
-  - A comparison TREE where you get a jump table means a case you have not found  `:9393`
-  - A switch's range split means there is a case label you have not found  `:9424`
-  - A switch's range split means there is a case label you have not found  `:9442`
-  - A two-case store chain whose opcodes are `beq` then `bne` is a SWITCH  `:9460`
-  - Read the block ORDER off the listing and write the arms to match  `:9484`
-  - Spell the whole expression out in each arm, not a shared temp after the join  `:9508`
-  - Two masks of one word are two `&=` statements  `:9543`
-  - cse learns a case value inside a switch arm  `:9562`
-  - A value reassigned in several blocks is several block-scoped locals  `:9576`
-  - ...and the converse: two block-scoped locals with the same job are ONE function-scope local  `:9590`
-  - When a call's argument setup is EARLIER than the loop's giv updates, move `i++` after the call  `:9628`
-  - A post-increment whose value outlives its statement costs a copy  `:9654`
-  - Two primitives in one function are TWO variables, and that moves the mask  `:9686`
-  - An address sum written INLINE is one PLUS tree -- the loads and shifts all come first  `:9714`
-  - A live length is trimmed ONE insn at a time by what sched1 puts before the value's last store  `:9759`
-  - Declaration ORDER is the sched2 tie-break for same-priority prologue insns  `:9820`
-  - A VOLATILE byte read is how two loads of ONE byte sit side by side  `:9835`
-  - A SUB-WORD parameter type is how a parameter copy becomes schedulable  `:9857`
-- The PREHEADER's order is the order the invariants are FIRST USED  `:9975`
-  - A SOURCE statement in the preheader sits AHEAD of the bound hoist; a giv's init does not  `:10029`
-- 9. Induction variables  `:10076`
-- A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY DEPENDENCE AT ALL  `:10234`
-  - THE OTHER HALF OF THAT CLAUSE: THE READ MUST BE A NON-AGGREGATE AT A FIXED ADDRESS  `:10325`
-- TWO EXITS FROM ONE LOOP WANT TWO DIFFERENT STATEMENTS  `:10384`
-- COMBINE WILL NOT COMBINE ACROSS A CALL  `:10443`
-- A REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID *NOT* EQUATE  `:10473`
-  - AND WHICH OF TWO SURVIVING LOADS BECOMES THE COPY IS DECIDED BY `birthing_insn_p`  `:10587`
-- loop.c CANNOT BE PERSUADED NOT TO STRENGTH-REDUCE -- READ ITS OWN PRINTOUT  `:10632`
-- 10. Measured dead ends -- do not retry  `:10681`
-- 11. Toolchain traps  `:10850`
-- 12. Keeping an agent's run cheap  `:10923`
-- Which of two givs is initialised first, and the bias on a walked pointer  `:11050`
-- TWO SAME-STRIDE GIVS STAY APART ONLY IF ONE `add_val` IS A REGISTER AND THE OTHER A CONST_INT -- WHICH IS WHERE YOU PARENTHESISE THE OFFSET  `:11089`
-- fold's `associate:` moves a constant onto the wrong operand  `:11164`
-  - Both halves of this are in search.py now  `:11211`
-- An explicit `goto` is how you get a loop that is NOT rotated  `:11222`
-- Put each accumulation next to the channel it consumes  `:11256`
-- `potential_hazard` acts ONLY inside one priority group  `:11289`
-- sched2's tie-break inside a priority group is MEMORY OVER ALU  `:11308`
-- A declaration NARROWING can be a semantic break that scores better  `:11353`
-- `REG_USERVAR_P`: where NAMING a value changes a decision, and where it cannot  `:11416`
-- A use before the assignment: a cure for a PARAMETER's copy, and it is not valid C  `:11503`
-- An unused `return p` is where a post-call copy of a PARAMETER comes from  `:11556`
-- A pointer BUMPED AND RETURNED needs to be its own variable  `:11589`
-- An in-place `x &= MASK` blocks the shift/and/scale fold, and costs nothing  `:11652`
-- A COMPARISON TEMPORARY'S $v1 PREFERENCE TRAVELS TO A LATER ZERO-EXTEND  `:11689`
-- TWO ARGUMENT SETUPS IN ONE CALL CANNOT BE REORDERED FROM THE SOURCE  `:11775`
-- `x >= 0 ? x : -x` FOLDS TO `abs`; `x < 0 ? -x : x` DOES NOT  `:11828`
-- A REDUNDANT TEST STILL HAS TO BE OUT OF THE ARM'S PATH  `:11876`
-- AN `s16` LOCAL READ FROM A `u8` FIELD COSTS A WIDENING COPY  `:11902`
-- A GUARD AROUND BOTH LOOPS is how the first test branches to the TAIL  `:11917`
-  - A VALUE'S OWN STATEMENT IS SCHEDULED INTO THE STORE'S ADDRESS-LOAD SLOTS  `:11978`
-- A RECOMPUTED GLOBAL+INDEX WANTS ITS OWN POINTER LOCAL *AND* ITS OWN DESTINATION LOCAL, ONE PAIR PER OCCURRENCE  `:12015`
-- WHICH LOCAL HOLDS A HOISTED SUB-EXPRESSION DECIDES BOTH ITS REGISTER AND ITS SCHEDULE SLOT  `:12072`
-- OF TWO SYMMETRIC LOCALS, COMPUTING ONE FIRST LENGTHENS ITS LIVE RANGE, AND THAT IS WHAT SPILLS IT  `:12101`
-- THREE BYTE READ-MODIFY-WRITES ON ONE BASE COME OUT WITH THE SECOND AND THIRD SWAPPED  `:12161`
-- WHICH LOOP A ONE-SET INVARIANT IS ASSIGNED IN IS AN ALLOCATION-PRIORITY LEVER, NOT ONLY A PLACEMENT ONE  `:12180`
-- A TWO-USE SIGN EXTENSION OF AN `s16` PARAMETER MATERIALISES IN PLACE, AND THAT IS ONE WORD  `:12211`
-- `__asm__("" ::"r"(x))` IS A ZERO-INSTRUCTION REFERENCE, AND IT MOVES TWO DIFFERENT ALLOCATION DECISIONS  `:12253`
-- TWO ARGUMENT COPIES IN THE LISTING'S ORDER: EMIT THE SECOND ONE YOURSELF, AS THE FENCE  `:12309`
-- A TIED PHANTOM COPY: three free references on a two-reference temporary move local-alloc's march  `:12427`
-- A `return 0` BETWEEN A COMPARE AND ITS BRANCH: one jump1 hoist is both the $v1 compare and the delay slot reorg declines  `:12551`
-- A PHANTOM ZERO: `+ ((v + v) - v - v)` is three references on ONE value, no insn, no tie  `:12684`
-- TWO ALIASES SPLIT THE TWO SIZE DECISIONS: an 8-byte alias gives cc1psx the `la`, a 16-byte decoy gives gas a `.extern` it will not call small  `:12775`
-- A DEAD SET IN A TWO-OUTPUT ASM: a conflict for global-alloc and a second death for local-alloc, with no insn and no fence  `:12887`
-- A BLOCK-LOCAL TWIN FOR A GLOBAL VALUE: local-alloc occupies the register global-alloc will hand the global  `:13097`
-- A GIV IS REPLACEABLE ONLY IF ITS SET SITS ABOVE THE LOOP'S FIRST JUMP -- and a volatile read through it is the tell  `:13214`
-- TWO FREE REFERENCES ON A CALL ARGUMENT: write the call in EVERY arm, cross-jumping runs only after flow  `:13265`
-- INDEX THE TABLE BY THE COUNTER AND LET loop.c MAKE THE COPY: a compiler-temp giv is reduced even when its store block has been moved out, and cse2's two passes decide which register the block keeps  `:13285`
-- A 3-BYTE STRUCT COPY IS A BLOCK MOVE WHOSE SCRATCHES PRUNE THE PARAMETER'S PREFERENCE  `:13353`
-- A POINTER ASSIGNED AT THE LOOP TOP HOISTS ITS high, THE ARM'S high MATCHES IT, AND RELOAD REMATERIALISES BOTH IN $t0  `:13458`
-- THE SWITCH INDEX'S STATEMENT POSITION IS A sched1 TIE-BREAK, AND THE TIE-BREAK IS THE WHOLE mfhi/mflo REGISTER BLOCK  `:13561`
-- A REG-REG COPY WHOSE DESTINATION ALREADY HOLDS THE SOURCE IS DELETED BY jump2 -- THE PASS IS IN THE TREE, AND ITS THREE EXITS ARE THE ONLY WAYS TO KEEP THE COPY  `:13598`
-- THE DELAY SLOT OF AN ENTRY BRANCH TAKES THE NEAREST ELIGIBLE INSN BEFORE IT -- NOT "THE FALL-THROUGH"  `:13637`
-- A RELOAD EMITTED AHEAD OF A BLOCK HEAD IS NEVER SCHEDULED -- and three more facts that landed func_8004B954  `:13670`
-- loop.c's HOIST THRESHOLD DECAYS BY 3 PER MOVE AND insn_count DOUBLES PER INNER-LOOP HOIST -- A lo_sum's LIFETIME IS THE LEVER, AND A goto LOOP IS NO LOOP AT ALL  `:13744`
-- A QImode COPY OF AN SImode REGISTER IS THE SAME `addu` BUT NOT THE SAME NO-OP -- a one-byte struct is how jump2 keeps the copy, and a dead write is how cse keeps the reads  `:13843`
-- THE SCAN LOOP WRITTEN AS THE SIBLING'S INNER-LOOP GIV KEEPS ITS high OUT OF THE OUTER MERGE, A DEAD STORE AT THE BODY TOP MOVES THE MERGED high BEFORE THE DOUBLINGS, AND A MATCHED lo_sum IS NEVER MOVED ON ITS OWN  `:13896`
-- AN ARGUMENT REGISTER SET IN A `jal`'s DELAY SLOT IS THAT CALL'S LIVE ARGUMENT -- AND THE SAME INSN IN EVERY PREDECESSOR'S SLOT IS A SUCCESSOR BLOCK'S FIRST INSN  `:13999`
-- CROSS-JUMPING RUNS AFTER sched2 AND BEFORE reorg, AND ONE MATCHING INSN IS ENOUGH -- SO AN EMPTY `__asm__` AT A BLOCK'S END IS A ONE-WORD LEVER  `:14038`
-  - `if (c) x = 1; else x = 0;` -- WHICH ARM'S ASSIGNMENT COMES FIRST decides whether the compare and the flag share a register  `:14098`
-- `while (1)` WITH A `break` DEFEATS LOOP REVERSAL, AND THAT IS WHAT KEEPS A WALKED POINTER  `:14169`
-- A SYMBOL ARRAY REFERENCE EMITS ITS `lui` FIRST AS A *MEM*, ITS `sll` FIRST AS A *POINTER VALUE* -- and the join block's first insn is what reorg puts in the delay slot  `:14239`
-  - A HOISTED CONSTANT CANNOT KEEP A COPY -- a body-order preheader can be all STATEMENTS  `:14314`
-  - loop.c's HOIST TEST IS `threshold * savings * lifetime >= insn_count` WITH threshold 60 HERE -- SO AN INVARIANT STAYS IN THE LOOP ONLY IF EARLIER MOVABLES SPEND THE THRESHOLD, A FORCED SHIFT RIDES OUT FREE WHATEVER YOU DO, AND A FOUR-USE CONSTANT CANNOT BE BLOCKED AT ALL  `:14377`
-  - A CONSTANT THAT IS ALSO THE RETURN VALUE CANNOT BE THE STORE'S REGISTER -- AN UNEXPLAINED `move` OF A CONSTANT IS EVIDENCE THE FUNCTION IS NOT `void`  `:14470`
-  - WHERE `i++` SITS RELATIVE TO THE POINTER BUMP DECIDES sched1's LOAD-DELAY FILLER -- loop.c pins the reduced giv's update to the biv update, and `rank_for_schedule` breaks a priority tie on the HIGHER LUID  `:14520`
-- A CROSS-JUMPED TAIL STARTS WHERE THE LABEL IS, NOT WHERE THE INSNS START LOOKING SHARED -- READ THE LABEL'S ADDRESS BEFORE DIAGNOSING ONE  `:14587`
-- `qty_size` IS IN WORDS, NOT BYTES -- A QImode QUANTITY IS NOT PRICED AT A QUARTER, AND WHICH STATEMENT FILLS A LOAD DELAY DECIDES WHO GETS `$v0`  `:14677`
-- gcc'S DIVIDE-BY-POWER-OF-TWO COPY SURVIVES ONLY WHEN THE QUOTIENT IS WRITTEN BACK INTO THE DIVIDEND -- cse1's `make_regs_eqv` DECIDES IT, ON THE *LAST* `regno_last_uid` OF THE TWO PSEUDOS  `:14764`
-  - AND A SECOND EXCEPTION: A SIGN-EXTENDED BYTE OPERAND  `:14777`
-  - THE SECOND WORD: A GIV INITIALISER IS A COPY ONLY IF THE ARRAY BASE IS ALREADY IN A PSEUDO  `:14874`
-- A `while` LOOP'S DUPLICATED GUARD IS REMOVED BY CROSS-JUMPING, NOT BY BLOCKING `duplicate_loop_exit_test` -- AND THE MERGE NEEDS TWO IDENTICAL INSNS, SO THE POINTER BUMP MUST SIT IN THE TEST  `:14906`
-- A DUPLICATED FAIL BODY IS WHAT PUTS IT IN cse1's PATH -- cse CAN ONLY SHARE A `%hi` WITH A BLOCK IT REACHES, AND IT REACHES ONE ONLY ACROSS A **ONE-USE** LABEL  `:14970`
-- `;; N regs to allocate:` IN `.greg` IS THE WHOLE ANSWER FOR CALLEE-SAVED REGISTERS -- AND `allocno_compare` IS global.c's, NOT local-alloc's  `:15075`
-  - A `return` WEIGHTED BY TWO NESTED DEGENERATE LOOPS  `:15148`
-  - SECOND INSTANCE: `func_800B85E8`, 2026-11-05 -- AND A CORRECTION TO MY OWN FRAMING  `:15183`
-  - THIRD INSTANCE: FOUR PARAMETERS, A 2% GAP, AND ELEVEN REWRITES THAT MOVED NOTHING  `:15266`
-- THE `lui` TEMP REGISTER TELLS SYMBOL FROM CONSTANT ADDRESS IN A *REGISTER* LOAD -- AND WRITING `p + 4` INLINE IS A LOCAL-ALLOC/GLOBAL-ALLOC LEVER  `:15303`
-  - 1. A word load from a constant address uses the DESTINATION as the `lui` temp  `:15308`
-  - 2. `p + 4` written INLINE at every call site is a register lever, not a wash  `:15337`
-  - 3. A TERNARY puts the shared call's `$a0` setup ABOVE the branch -- worth one word  `:15351`
-- A QImode STORE WIPES CSE'S WHOLE MEMORY TABLE; AN HImode STRUCT STORE DOES NOT  `:15386`
-  - Corollary: the load count feeds back into the register allocation  `:15441`
-- STORE-POINTER PARENTHESISATION, MEASURED END TO END  `:15452`
-- LOCAL-ALLOC PRICES THE *SCHED1* ORDER, AND A ZERO-WORD `asm` MARKER'S sched1 PRIORITY DECIDES WHICH LOAD-DELAY HOLE IT EATS  `:15482`
-  - A REFERENCE MARKER IS THE LOAD'S LAST CONSUMER, SO IT SETS THAT LOAD'S LAUNCH CLOCK -- WHICH IS A SECOND, USUALLY UNINTENDED JOB  `:15571`
-  - A PINNED HARD REGISTER NEEDS AN EXPLICIT SHIFT-AND-ADD, BECAUSE `expand_mult` COPIES IT INTO A PSEUDO  `:15603`
-  - PASS ORDER CORRECTION: cse2 RUNS RIGHT AFTER loop, BEFORE flow  `:15622`
-  - A BACK-TO-BACK DOUBLE CALL IS AN ARITY WITNESS  `:15637`
-  - TWO OUT-OF-IMAGE GLOBALS WITH ONE SHARED %hi ARE ONE BASE POINTER  `:15672`
-  - cc1psx EMITS `.align 3` FOR JUMP TABLES, WHICH CAN BLOCK A PERFECT BODY  `:15749`
-  - A BLOCK MOVE FORCES ITS ADDRESS WHOLE; A SCALAR ACCESS KEEPS ITS %lo  `:15804`
-  - WHICH OF TWO EQUAL LOCALS cse CANONICALISES ON IS DECIDED BY LAST MENTION  `:15831`
-  - THE STATEMENT POSITION OF A DEAD-LOOKING COPY IS MEASURABLE  `:15858`
-  - WHEN THE LIFT IS ONE floor_log2 STEP, THE LOOP WRAPPER IS THE ONLY TOOL  `:15873`
-  - A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER .rodata SURVIVES  `:15908`
-  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:16034`
-  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:16068`
-  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:16077`
-  - CITATIONS RE-ANCHORED TO THE CDK TREE, AND TWO TIE-BREAKS UPSTREAM LACKS  `:16112`
-  - A GLOBAL THAT *HOLDS* AN ADDRESS IS NOT A GLOBAL THAT *IS* AN ARRAY  `:16209`
-  - A STORED ARGUMENT REGISTER THE PROTOTYPE DOES NOT HAVE IS A FORWARDED PARAMETER -- AND ITS WITNESS IS THE GRANDCALLER  `:16229`
-  - A SYMMETRIC TWO-CALL `if/else` KEEPS SOURCE ORDER; ONLY AN ARM THAT *RETURNS* INVERTS  `:16274`
-  - A HALFWORD FIELD'S READ-MODIFY-WRITE NEEDS NO EXPLICIT TEMP FOR THE NEXT EXPRESSION ON THE SAME FIELD -- AND A USE THAT NEEDS THE SIGN-EXTENDED HALFWORD STILL RELOADS  `:16318`
-  - A NARROW PARAMETER THAT IS ONLY EVER TRUNCATED IS WITNESSED AT THE CALL SITE, NOT IN THE CALLEE  `:16354`
-  - A VALUE THAT IS *STORED* WANTS A TWO-ARM `if/else`; A VALUE THAT IS *RETURNED* WANTS AN ACCUMULATOR  `:16398`
-  - TWO DISJOINT LIVE RANGES IN ONE DECLARED LOCAL SHARE A REGISTER; TWO LOCALS DO NOT  `:16425`
-  - A DUPLICATED TAIL IS NOT ONLY A CROSS-JUMP -- IT CHANGES WHICH LOOP INVARIANTS ARE HOISTED  `:16447`
-  - loop.c's `combine_givs` MERGES ADDRESS GIVS, SO ONE `addiu $sN, $sN, 4` IS NOT A SOURCE POINTER WALK  `:16485`
-  - DECLARATION ORDER FIXES *AGGREGATE* STACK SLOTS ONLY, AND A SLOT IS ROUNDED TO 8 BYTES  `:16505`
-  - A STRUCT-ARRAY REFERENCE WHOSE SUBSCRIPT IS A MEMORY LOAD MUST BE CACHED IN A LOCAL POINTER -- WHEN A CALL SITS BETWEEN **TWO** USES  `:16531`
-  - gcc EVALUATES AN ASSIGNMENT'S *DESTINATION ADDRESS* BEFORE ITS RHS  `:16578`
-  - CHECK THE DEREFERENCE DEPTH BEFORE DIAGNOSING A FORWARDED STORE  `:16592`
-  - AN IMPLICITLY DECLARED CALLEE IS SOMETIMES THE MATCHING ONE  `:16608`
-  - cse CANNOT BE STOPPED FROM UNIFYING TWO IDENTICAL SMALL CONSTANTS, AND THE `do { } while (0)` BOUNDARY IS NOT ENOUGH FOR ONE  `:16624`
-  - A FLAT FUNCTION-POINTER TABLE IS AN ARITY WITNESS WHEN ITS OTHER ENTRIES ARE LANDED  `:16753`
-  - A HALF-THREADED GUARD EDGE NEEDS AN INSN THAT BREAKS `thread_jumps`' WALK AND THEN DISAPPEARS  `:16776`
-  - `<< 7` AND `* 128` ARE NOT THE SAME STATEMENT WHEN THE RESULT IS NARROW  `:16845`
-  - WHERE A LOOP'S POINTER INCREMENT IS WRITTEN CHANGES THE DELAY SLOT OF AN EARLY `break`, NOT THE LOOP  `:16871`
-  - A CONSTANT-BASE POINTER MUST BE RE-ASSIGNED PER `if`, NOT PER BASIC BLOCK  `:16901`
-  - TWO LOCAL ARRAYS WITH THE SAME INITIALISER SHARE ONE rodata LABEL ACROSS FUNCTIONS  `:16929`
-  - CROSS-JUMPING SWITCH ARMS ONTO A SHARED STORE TAIL NEEDS ONE SHARED VARIABLE, NOT A LITERAL PER ARM  `:16951`
-  - A `switch` ON A `short` SUBJECT PUTS THE SIGN EXTENSION *AFTER* THE RANGE BIAS  `:16981`
-  - WITH NO `default`, A SHARED TAIL MUST BE A `goto` LABEL INSIDE THE SWITCH  `:17009`
-  - DECLARATION ORDER ALSO FIXES INIT-CODE ORDER, NOT ONLY AGGREGATE SLOTS  `:17067`
-  - A `u16` FIELD PLUS AN EXPLICIT `(s16)` IS NOT THE SAME AS AN `s16` FIELD, AND ONLY THE SIGN-EXTENDED USES WITNESS IT  `:17139`
-  - THE FIRST OF A RUN OF IDENTICAL TESTS ON ONE BASE LOOKS CHEAPER THAN THE REST  `:17157`
-  - A SHORT LOCAL SEEDED FROM A PARAMETER IS WHY THE PARAMETER LANDS IN A CALLEE-SAVED REGISTER  `:17179`
-  - `s16 v = e;` PUTS THE NARROWING AT THE USE; `s32 v = (s16)e;` PUTS IT AT THE ASSIGNMENT  `:17194`
-  - `&arr[i]` GIVES A BASE-FIRST `addu`; `arr[i].field` GIVES AN INDEX-FIRST ONE  `:17206`
-  - sched WILL REORDER TWO STORES TO DISJOINT DISPLACEMENTS OFF ONE BASE, SO MEASURE BOTH SOURCE ORDERS  `:17220`
-  - THE PER-`if` CONSTANT-BASE RULE DOES NOT APPLY TO A TYPED SCRATCHPAD POINTER  `:17237`
-  - `CASE_VALUES_THRESHOLD` IS 5 ON THIS TARGET, SO A gcc JUMP TABLE NEEDS FIVE CASE NODES  `:17252`
-  - A CONSTANT ADDRESS IS A TWO-WORD ASSEMBLER MACRO IN ONE INSN; A SYMBOL IS `high` + `lo_sum` IN TWO -- AND ONLY THE SYMBOL'S `lui` CAN FILL A DELAY SLOT  `:17285`
-  - TWO BASE LOCALS IN ONE EXTENDED BASIC BLOCK ARE UNIFIED BY cse INTO ONE `lui`  `:17307`
-  - `u8` VERSUS `s32` FOR A VALUE USED INSIDE A LOOP DECIDES WHETHER A HOISTED `zero_extend` BECOMES A REGISTER COPY  `:17314`
-  - TWO SWITCH ARMS SHARE A HARD REGISTER FOR A VALUE ONLY IF ONE DECLARED LOCAL SPANS BOTH  `:17322`
-  - A RECORD POINTER WANTS `non-constant-base + index`, NOT AN ARRAY REF OR `symbol + index`  `:17336`
-  - A LOOP-INVARIANT CONSTANT THAT loop.c HOISTS IS A WORD IN THE WRONG PLACE -- MOVE ITS COMPETITOR INTO THE LOOP  `:17349`
-  - A LOOP COUNTER'S INIT MUST BE SEQUENCED BEFORE A PRECEDING SIGNED DIVIDE, OR reorg.c COSTS A WORD  `:17363`
-  - THE `non-constant-base + index` RULE IS WORTH ONE `addu` OPERAND ORDER, AND ONLY ON AN UNSCALED INDEX  `:17393`
-- A HALF-WORD STORE TO A STACK LOCAL MUST BE A COMPONENT_REF, NOT A CAST THROUGH A `u8 *` -- THE CAST LETS THE NEXT ARGUMENT LOAD FLOAT ABOVE THE STORE  `:17420`
-- A NEGATIVE CONSTANT STORED TO A HALF-WORD FIELD WITNESSES THE FIELD'S SIGNEDNESS, IN ONE WORD  `:17449`
-- TWO INDEPENDENT HALF STORES TO ONE STACK LOCAL COME OUT IN SOURCE ORDER, AND A PRE-LOOP STORE TO A FIELD THE LOOP OVERWRITES IS REAL SOURCE  `:17472`
-- TWO SHORT LOCALS FOR A REPEATED STRUCT FIELD CAN DECIDE WHICH CALLEE-SAVED REGISTER THE STRUCT POINTER GETS -- `reg_n_refs` IS TAKEN AT *flow* TIME AND NEVER RECOMPUTED  `:17494`
-- THE SCHEDULER'S PLACEMENT OF A PROLOGUE'S *NON*-STORES IS A SOURCE-ORDER QUESTION TOO  `:17539`
-- A BACKWARD POINTER WALK WANTS THE DECREMENT PRE-BIASED, NOT AT THE TOP OF THE BODY  `:17559`
-  - ONE CELL LIST, TWO POLYGON RECORD SIZES (ovl_town collision geometry)  `:17577`
-- A NARROW-TYPED BOOLEAN IS WHAT KEEPS gcc's VARIABLE-ASSIGNMENT COPY ALIVE -- FOUR SPELLINGS, THREE OUTCOMES  `:17595`
-- A TEMPORARY FOR THE ADDED OPERAND DECIDES `addu`'s OPERAND ORDER, AND THE SOURCE ORDER DOES NOT  `:17621`
-- AN EXPLICIT EARLY `return` IS A cse-REGION BOUNDARY LEVER, NOT JUST A LAYOUT ONE -- AND ITS RESIDUE IS INVISIBLE TO ovlverify  `:17640`
-- A SECOND `extern` WITH THE SAME `__asm__` NAME DEFEATS cse's UNIFICATION OF TWO POINTERS TO ONE GLOBAL  `:17671`
-- A SHARED COORDINATE NEEDS ONE VARIABLE PER REGION, NOT ONE PER AXIS  `:17696`
-  - THE SCRATCHPAD WANTS A STRUCT TYPEDEF, NOT A `u16 *` -- SAME MEM_IN_STRUCT_P RULE AS A STACK RECORD  `:17717`
-- `schedule_select`'s HAZARD PICK DECIDES WHETHER A LOOP PREHEADER IS EMITTED BEFORE OR AFTER THE STATEMENT THAT PRECEDES THE LOOP -- AND A BYTE STORE WINS THAT CONTEST WHERE A HALFWORD STORE DOES NOT  `:17732`
-- THE SIGNED `x % (1 << n)` IDIOM HAS TWO SHAPES AND WHICH ONE YOU GET IS A CONSEQUENCE, NOT A CAUSE  `:17769`
-- A LOAD THAT CANNOT MOVE ABOVE A STORE IS PINNED, AND ITS PINNED POSITION IS WHAT DECIDES THE REGISTER ALLOCATION  `:17785`
-- ONE POINTER VARIABLE REUSED ACROSS N BLOCKS IS A global-alloc QUANTITY AND GETS ONE HARD REGISTER IN ALL OF THEM; N VARIABLES ARE local-alloc QUANTITIES AND GET N  `:17803`
-- A `volatile` RE-READ PLUS A DEGENERATE LOOP DOES EVERYTHING A FULL MEMORY CLOBBER DOES  `:17823`
-- FOUR SMALL-FUNCTION SHAPES, MEASURED ACROSS 36 LEAVES IN ONE SITTING  `:17860`
-- WHERE A PARAMETER LIVES: THE THREE RULES, AND THE TWO SHAPES THEY EXPLAIN  `:17916`
-- A FOUR-WORD `if` ARM WHOSE ONLY CONTENT IS A LOAD IS A BARE `volatile` READ  `:17970`
-- A `do { } while (0)` AROUND A CALL IS THE GR-CONSTRAINED USE AT A JOIN THAT AN ASM OUTPUT OPERAND OTHERWISE BUYS  `:18006`
-- A LOOP'S SUBSCRIPT BIAS MUST LIVE IN THE BOUND, NOT IN THE SUBSCRIPT, WHEN THE BODY ALSO STORES A BIASED VALUE -- AND THE WRONG FORM IS *SHORTER*  `:18040`
-- AN `s16` LOCAL GETS AN HImode PSEUDO ON THIS TARGET, SO ITS LOAD NARROWS TO `lhu` AND EVERY ARITHMETIC USE PAYS ITS OWN `sll 16`/`sra 16`  `:18094`
-- A DECLARED STRUCT FIELD AT THE OFFSET IS A TIE FOR **ONE** FIELD AND WRONG FOR TWO -- IT DOES NOT OUTRANK THE SYMBOL THE LISTING NAMES  `:18130`
-- THE TRIVIAL ARM HAS TO BE THE EARLY `return`, NOT THE LAST STATEMENT  `:18186`
-- A `%lo` INSIDE THE LOAD MEANS A DECLARED SCALAR, AND ONE `lui` PER SYMBOL MEANS INDEPENDENT SYMBOLS  `:18219`
-- A TWO-CASE `switch` IS NOT THE SAME CODE AS AN `else if` CHAIN, AND IT IS WORTH EIGHT WORDS  `:18250`
-- TWO CONSTANT OFFSETS OFF ONE SYMBOL: THE RAW CAST IS ONE WORD SHORT, AND THE POINTER LOCAL'S POSITION IS THE LEVER  `:18277`
-- A HALFWORD READ MUST CROSS A BASIC-BLOCK BOUNDARY BEFORE ITS `(s16)` CONVERSION, OR combine FOLDS BOTH INTO ONE `lh`  `:18298`
-- READING THE SAME GLOBAL SLOT TWICE LEAVES A REGISTER COPY, AND THAT COPY IS A REAL WORD  `:18323`
-- A NARROWER-THAN-WORD PARAMETER TYPE KEEPS A STACK ARGUMENT'S ENTRY LOAD ALIVE  `:18353`
-- A ONE-WAY STORE OUT OF AN `if`/`else` IS HOISTED PAST THE COMPARE CONSTANT, WHICH IS AN UNREACHABLE REGISTER CONFLICT -- DUPLICATE THE STORE INTO BOTH ARMS, AT ZERO WORD COST  `:18401`
-- A `high`'s REGISTER IS DECIDED BY WHETHER `update_equiv_regs` MOVES IT TO ITS USE, AND LOOP NOTES AROUND THE USE KEEP IT GLOBAL  `:18455`
-- `seqcheck` REPORTS `HI16 .rodata` FOR EVERY C JUMP TABLE, AND THAT IS NOT A DEFECT  `:18511`
-- AN ARGUMENT LOAD IS HOISTED OVER A `%lo(global)` STORE ONLY IF IT IS MARKED `MEM_IN_STRUCT_P` -- AND WHICH SPELLINGS SET THAT FLAG DEPENDS ON THE TREE CODE, NOT ON THE DISPLACEMENT  `:18522`
-- A `<< k` BETWEEN A SIGN-EXTENDED LOAD AND A NARROWING STORE TURNS `lh` INTO `lhu`; `* (1 << k)` DOES NOT  `:18670`
-- WHICH SIDE OF A CALL A STORE SITS ON IS READABLE OFF THE DELAY SLOTS, AND IT IS WORTH A WORD  `:18710`
-  - THREE CORROBORATIONS WITH FRESH NUMBERS, ON THE allocate-or-teardown TEMPLATE  `:18751`
-  - A CALL CAN PERMUTE ITS ARGUMENTS, AND THE CALLEE'S OWN LISTING IS THE CORROBORATION  `:18775`
-- THE NARROWED `/ C % C` RESULT HAS TYPE `short`, SO THE DESTINATION LOCAL'S DECLARED TYPE DECIDES WHETHER YOU PAY A WIDENING  `:18791`
-- loop.c DOES NOT HOIST A NARROWING TRUNCATION OUT OF A CONDITIONALLY-EXECUTED LOOP BODY, THOUGH IT HOISTS SYMBOL ADDRESSES FROM THE SAME BLOCK  `:18827`
-  - WHICH OF TWO STORES LANDS IN THE `jal`'s DELAY SLOT IS DECIDED BY THEIR SOURCE ORDER, WHEN THEY ARE OFF DIFFERENT BASES  `:18852`
-  - ON A TRUNCATING STORE, A `(u16)` CAST IS FREE IN BOTH DIRECTIONS  `:18878`
-- A REG-REG COPY SURVIVES WHEN ITS TWO ENDS ARE READ IN DIFFERENT ARMS OF AN `if`/`else` -- AND IT MUST BE TWO STATEMENTS, INTERLEAVED, NOT A BLOCK AND NOT A CHAIN  `:18894`
-  - A DIFFERING COUNT THAT MATCHES ANOTHER FUNCTION'S IS NOT EVIDENCE  `:18959`
-- A LOOP BOUND gcc CAN PROVE NON-NEGATIVE MAKES THE GUARD `beqz`, NOT `blez` -- SO A LONE `beqz` IS NOT A MISSING `== 0` GUARD  `:18978`
-  - SCOPE CORRECTION: `* (1 << k)` vs `<< k` NEEDS A SIGN-EXTENDED MEMORY *LOAD*  `:19012`
-- A STORE PAIR OFF ONE BASE IS ORDER-VISIBLE ONLY WHEN ITS VALUES ARE NOT ALREADY LIVE  `:19023`
-  - THREE MORE MEASUREMENTS THAT NARROW EXISTING ENTRIES  `:19041`
-  - `lhu` ON AN `s16` FIELD UNDER A MASK IS NOT EVIDENCE OF `u16`  `:19075`
-- A SPLIT GLOBAL'S ADDRESS CHAIN SINKS ITS STORE PAST THE NEXT ONE -- THE LISTING'S STORE ORDER IS NOT THE SOURCE ORDER  `:19084`
-- A FUNCTION'S OWN BODY IS INSENSITIVE TO ITS DECLARED RETURN WIDTH -- ONLY THE WHOLE-UNIT SWEEP CATCHES A WRONG ONE, AND ONLY THROUGH ITS CALLERS  `:19135`
-  - WHICH LVALUE A POST-CALL RELOAD NAMES IS VISIBLE, AND IT IS WORTH ONE WORD  `:19168`
-  - A WRONG *ARGUMENT* TO A MASKED `jal` IS NOT MASKED -- ONLY A WRONG *CALLEE* IS  `:19187`
-  - A CHAINED ASSIGNMENT'S RIGHT-TO-LEFT STORE ORDER IS OBSERVABLE FOR BYTE STORES OFF ONE BASE  `:19200`
-  - THREE NO-OPS, MEASURED, SO NOBODY SPENDS A COMPILE ON THEM  `:19227`
-- A GATE WHOSE *BOTH* ARMS LEAVE THE FUNCTION IS STILL LAID OUT IN SOURCE ORDER -- AND INVERTING IT COSTS THE CROSS-JUMP  `:19248`
-  - TWO SMALLER MEASUREMENTS FROM THE SAME SET  `:19293`
-- A FORWARDED PARAMETER CARRIES A `REG_EQUIV` THAT **DOUBLES** ITS LIVE LENGTH -- COPYING IT INTO A LOCAL *BEFORE* THE BRANCH HALVES IT BACK AND WINS THE `$s` REGISTER  `:19316`
-  - WHEN A FAMILY MEMBER HAS NO ADDRESS-TAKEN SYMBOL AT ALL, A DESCRIPTOR WRITTEN INTO IT IS PURE INVENTION  `:19383`
-  - THE GATE AND THE SLOT CLEAR ARE INDEPENDENT -- `func_800C5ADC` IS THE MEMBER THAT SEPARATES THEM  `:19400`
-- AN OUTGOING ARGUMENT COPY CANNOT BE MOVED EARLIER FROM THE SOURCE -- IT TIES AT sched2 AGAINST A `high`/`lo_sum` PAIR AND THE TIE BREAKS ON LUID, WHICH `calls.c` FIXES  `:19409`
-  - A THIRTEEN-MEMBER FAMILY'S STATEMENT ORDER IS NOT INHERITED FROM ITS LANDED RELATIVE  `:19472`
-  - `lh` AND `lhu` ON ONE `s16` FIELD IS CORRECT, NOT A TYPING INCONSISTENCY  `:19491`
-  - A TAIL DUPLICATED INTO BOTH ARMS IS STILL TWO COPIES WHEN THE ALLOCATOR PRICES THE PSEUDOS  `:19525`
-  - A SHARED `goto` EXIT KEEPS THE FINAL BRANCH FROM BEING IF-CONVERTED  `:19565`
-  - SHARING THE EXIT IS THE CURE, NOT WRITING `goto` -- AN `else if` CHAIN DOES IT  `:19597`
-  - AN HImode STRUCT STORE DOES INVALIDATE A FIELD READ OFF A POINTER LOCAL  `:19637`
-  - THE DECLARED-SIZE RULE GOVERNS GLOBALS, NOT POINTER PARAMETERS  `:19659`
-  - TWO NEGATIVE RESULTS WORTH NOT RE-DERIVING  `:19671`
-  - A CHAINED ASSIGNMENT EMITS ITS STORES RIGHT-TO-LEFT  `:19706`
-  - A FORWARDED PARAMETER IS WITNESSABLE WHEN THE CALLER PASSES A CONSTANT  `:19735`
-  - A ONE-ARMED `if` CANNOT HIT THE IF/ELSE INVERSION TRAP  `:19748`
-  - `&&` WITH A SIDE-EFFECTING RIGHT OPERAND IS NOT A SINGLE `if`  `:19759`
-  - A STORE OF ZERO TO A HALFWORD FIELD IS ONE WORD CHEAPER THAN ANY CONSTANT  `:19771`
-  - AN UNREAD THIRD PARAMETER ON ONE CALLEE COSTS A WORD ON A *DIFFERENT*, LATER INDIRECT CALL  `:19780`
-  - A FORWARDED PARAMETER PASSED ON TO AN EARLIER CALL WINS THE LOWER `$s` REGISTER  `:19821`
-  - A `goto` BACK-EDGE IS INVISIBLE TO `loop.c`  `:19846`
-  - A NESTED LOOP'S `i = 0` INIT CAN BE STOLEN INTO THE OUTER LOOP'S DELAY SLOT  `:19872`
-  - `get_pointer_alignment` IS AN ALIGNMENT LEVER, AND IT IS HOW A STRING'S `.rodata` SURVIVES  `:19885`
-  - C POINTER ARITHMETIC CANNOT EMIT AN INDEX-FIRST ADD  `:19910`
-  - THE CONSTANT-ADDRESS-VS-SYMBOL CHOICE IS WORTH BYTES EVEN FOR A SINGLE `lbu`  `:19923`
-  - `sched1`/`sched2` ARE STRICTLY PER-BASIC-BLOCK, SO "WHICH BLOCK" IS A SOURCE QUESTION  `:19942`
-  - `reorg` STEALS FROM TWO INSNS BACK, AND A NEARER CANDIDATE IS A LEVER  `:19955`
-  - `expand_abs`'s COPY SURVIVES ONLY WHEN THE TERNARY WRITES A SEPARATE VARIABLE  `:19971`
-  - COMPARISON OPERAND ORDER IS WORTH A WORD WHEN IT DECIDES A BLOCK'S FIRST INSN  `:20014`
-  - TWO INDEPENDENT LOOP COUNTERS: SOURCE ORDER PICKS WHICH DELAY SLOT EACH FILLS  `:20037`
-  - A DUPLICATED TAIL *CALL STATEMENT* IS NOT THE DUPLICATED-TAIL LEVER  `:20066`
-  - A DEAD *MIDDLE* PARAMETER IS WITNESSED; ONLY A DEAD TRAILING ONE IS NOT  `:20085`
-  - A POINTER-TO-GLOBAL LOCAL MUST BE ASSIGNED ON THE SAME SIDE OF THE CALL OR BRANCH AS ITS USE -- WHICH IS NOT THE SAME AS "A STATEMENT, NOT AN INITIALISER"  `:20103`
-  - `*((u8 *)&SYM + N)` FOLDS THE OFFSET INTO THE RELOCATION -- AND `ovlverify` HIDES IT  `:20144`
-  - AN ALLOCATE-AND-WIRE BODY NEEDS A POINTER LOCAL FOR THE `n + 0x20` VIEW  `:20163`
-  - AN INSTALL FEEDING A LATER CALL'S ARGUMENT IS ORDER-SENSITIVE; A SLOT WRITE FOLLOWED BY A CALL THROUGH THAT SLOT IS NOT  `:20171`
-  - TWO FLAGS IN ONE FUNCTION CAN WANT OPPOSITE DECLARATION SCOPES -- `combine_regs` REFUSES THE TIE AT FUNCTION SCOPE  `:20208`
-  - loop.c's ADDRESS GIV IS REACHABLE ONLY FROM AN INDEXED SUBSCRIPT -- A POINTER WALK PUTS THE `lo_sum` IN THE WRONG BLOCK  `:20271`
-  - A LOCAL FED BY A CALL RESULT IS `s32` PLUS A CAST, NOT `s16` -- AND THE SIGN EXTENSION'S SOURCE REGISTER SAYS SO (BUT ONLY WITH NO CALL IN BETWEEN)  `:20315`
-  - TWO DIFFERENT LOAD WIDTHS FOR ONE `s16` GLOBAL IN ONE FUNCTION IS NOT TWO DECLARATIONS  `:20364`
-  - A PLAIN CONSTANT STORE TO A *SIGNED* NARROW FIELD CANNOT PRODUCE `ori`  `:20392`
-  - `preexpand_calls` PUTS THE CALL BEFORE **BOTH** OPERANDS, SO WHERE YOU SPLIT A STATEMENT DECIDES WHICH SIDE OF IT THE ARITHMETIC LANDS ON  `:20424`
-  - AN INTERIOR POINTER MUST BE ONE C VARIABLE WITH ITS BASE, OR IT COSTS A REGISTER OR VANISHES  `:20467`
-- A 16-BIT WINDOW MUST BE A `(u16)` CAST, NOT AN `& 0xFFFF` MASK -- SAME WORD COUNT, 32 DIFFERING  `:20493`
-- THE `addPrim` MACRO VS THE REAL CALL IS A PER-SITE QUESTION, AND A NEIGHBOUR'S RECORDED ANSWER DOES NOT TRANSFER  `:20525`
-- A `(u32)` CAST ON A STRUCT FIELD STORE RESTORES THE sched1 DEPENDENCE THAT `MEM_IN_STRUCT_P` CANCELS -- AND IT CAN FIX AN UNRELATED sched2 TIE TWO WORDS AWAY  `:20545`
-- A DIVISION USED AS A TRUTH VALUE STAYS A DIVISION WHEN ITS QUOTIENT IS LIVE DOWNSTREAM  `:20601`
-- ONE OF 24 STORE ORDERS, AND THE READER'S ORDER IS NOT IT -- A FOUR-STORE LEAF IS WORTH AN EXHAUSTIVE SWEEP  `:20617`
-- A NARROW RETURN TYPE ON A NEWLY LANDED FUNCTION IS A CALLER-SIDE HAZARD -- THE CALLEE IS IDENTICAL EITHER WAY  `:20633`
-- A DISPATCH CALL THROUGH A SLOT CAN BE A TIE ACROSS ARITY, SO THE CALL SITE CANNOT WITNESS ITS OWN ARGUMENT COUNT  `:20668`
-- THE PARENTHESISATION OF AN INTEGER SUM ADDED TO A POINTER IS DECIDED IN THE C FRONT END, AND IT FIRES ON THE PARENTHESISED FORM  `:20689`
-- `abs()` ON MIPS IS ONE RTL INSN, AND WHETHER IT COSTS 2 OR 3 WORDS IS AN ALLOCATION FACT, NOT A TREE SHAPE  `:20724`
-- A COMPARISON'S WRITTEN OPERAND ORDER FIXES THE RTL INSN NUMBERING OF BOTH OPERANDS, WHICH SETS A REGISTER PAIR AND ONE LOAD'S SCHEDULING SLOT  `:20753`
-- `memrefs_conflict_p` TREATS TWO CONSTANT-OFFSET MEMs ASYMMETRICALLY BY BASE REGISTER, WHICH SAYS WHICH STORE PERMUTATIONS WERE EVEN REACHABLE  `:20779`
-- reorg COPIES A LOOP HEAD IT DOES NOT OWN INTO THE BACK BRANCH'S DELAY SLOT -- BUT THE COUNTER ADJUSTMENT IS ONLY *SOURCE* WHEN THE COUNTER IS LIVE AFTER THE LOOP  `:20811`
-- A COMPOUND ASSIGNMENT TO A NARROW FIELD IS ABOUT `+=` VERSUS THE WRITTEN-OUT FORM, NOT ABOUT OPERAND ORDER  `:20871`
-- A 4 x `u8` RECORD CANNOT HAVE SImode, SO A 4-BYTE GLOBAL THAT MOVES IN ONE `lw`/`sw` IS NOT A RECORD TYPE  `:20888`
-- reorg's DELAY-SLOT THREAD CHOICE IS WORTH A WORD, AND THE SOURCE CONTROL IS WHICH OPERAND `fold` PUTS FIRST IN A PLUS  `:20925`
-- AN ODD `%hi`/`%lo` COUNT ON ONE FUNCTION SYMBOL IS reorg COPYING THE `lui`, NOT A SECOND INSTALL  `:20980`
-- sched1 DEFERS A SINGLE-ASSIGNMENT PSEUDO'S DEFINITION TO THE LATEST POINT IN ITS BLOCK, WHICH PUTS THE WRONG INSN IN A `jal`'s DELAY SLOT  `:21023`
-- A NEAR-`INT_MIN` CLAMP IS A `MAX_EXPR`, AND ITS OPERAND ORDER IS A SOURCE-VISIBLE FACT WORTH 16 WORDS  `:21061`
-- A POINTER LOCAL'S POSITION AMONG STATEMENTS DECIDES WHICH ALLOCATOR SEES IT, AND THE BOUNDARY IS THE BASIC BLOCK, NOT THE DECLARATION  `:21096`
-- HOW MANY IDENTICAL `return CONST;` BODIES A FUNCTION HAS DECIDES WHICH COPY SURVIVES CROSS-JUMPING, AND THE SURVIVOR'S POSITION DECIDES EVERY OTHER BRANCH'S DELAY SLOT  `:21126`
-- CORRECTION: abssi2's THREE-WORD FORM EMITS ITS OWN DELAY SLOT; reorg DOES NOT STEAL THE `move`  `:21152`
-- CORRECTION: AN EXPLICIT `(u8 *)` CAST DOES NOT BLOCK `pointer_int_sum`'s REWRITE -- A POINTER LOCAL DOES  `:21168`
-- `&&` IS LEFT-ASSOCIATIVE, AND THAT HIDES A RANGE TEST FROM `fold`  `:21177`
-- `fold`'s ADDITIVE-CONSTANT SWAP IS AN INVOLUTION, SO WRITE THE CONSTANT ON THE OPERAND THE LISTING DOES NOT HAVE IT ON  `:21217`
-- `split_tree` MATCHES ONLY THE OPERATOR BEING FOLDED, SO `<< k` BLOCKS MULT REASSOCIATION WHERE `* (1 << k)` DOES NOT  `:21253`
-- CORRECTION: TRY THE DECLARATION LEVER BEFORE THE BLOCK-COUNT ESCALATION WHEN A LEAF'S RESIDUE IS A PURE RENAME  `:21281`
-- THE abs TERNARY'S ARM ORDER DECIDES WHETHER `fold` PRODUCES `ABS_EXPR` AT ALL -- A SEPARATE VARIABLE IS NECESSARY BUT NOT SUFFICIENT  `:21324`
-- SHARING ONE LOCAL ACROSS REPEATED BLOCKS LETS THE SIGNED DIVIDE'S COPY BE PROPAGATED AWAY -- AND ONLY IN THE BLOCKS THAT ARE NOT LAST  `:21360`
-- AN INLINE `memcpy`'s ALIGNMENT IS DECIDED BY THE SOURCE DECLARATION ALONE  `:21384`
-- `output_block_move`'s BYTE CASE EMITS THE SIGNED `lb`, SO A SIGNED BYTE LOAD IN A STRAIGHT-LINE COPY IS POSITIVE EVIDENCE FOR `memcpy`  `:21400`
-- `LEGITIMIZE_ADDRESS` IS THE MECHANICAL BASIS OF THE ONE-`lui`-BASE LEVER, AND IT FIRES ONLY ON `(plus REG CONST_INT)`  `:21432`
-- A `nop` IN A BRANCH'S DELAY SLOT WHOSE FALL-THROUGH LOADS THE BRANCH'S OWN TEST REGISTER MEANS NOTHING ELSE WAS THERE  `:21454`
-- reorg's BACKWARD SCAN IS NOT LIMITED TO TWO INSNS -- IT IS LIMITED BY LABELS  `:21472`
-- A 16-BIT VALUE PASSED TO A 16-BIT PARAMETER MUST BE DECLARED 16-BIT -- THE EXTRA TRUNCATION REFERENCE RE-ORDERS THE WHOLE CALLEE-SAVED ALLOCATION  `:21497`
-- IN A THREE-TERM SUM `mem + BIGCONSTANT + index_term`, THE EMITTED OPERAND ORDER IS NOT THE SOURCE'S ASSOCIATION -- PERMUTE IT MECHANICALLY  `:21535`
-- AN IN-PLACE `+=` ON A LOCAL TIES THE LOAD AND THE SUM TO ONE PSEUDO; THE ONE-EXPRESSION FORM GIVES THE LOAD ITS OWN REGISTER  `:21576`
-- A CONSTANT STORED INTO ONE GLOBAL FROM BOTH ARMS BELONGS IN EACH ARM, NOT IN A LOCAL STORED AFTER THE MERGE -- AND IT IS A WORD  `:21616`
-- A FUNCTION ADDRESS USED TWICE MUST BE WRITTEN TWICE, NOT HELD IN A LOCAL  `:21660`
-- TWO BARE `nop`s, IN A BRANCH SLOT AND A CALL SLOT, PROVE THE ARM HOLDS EXACTLY ONE STATEMENT  `:21684`
-- BREAKING combine_regs' TIE IS NOT THE SAME AS MOVING THE REGISTER  `:21714`
-- REUSE ONE VARIABLE TO TIE A CONSTANT TO A DYING VALUE'S REGISTER  `:21738`
-- AT EQUAL PRIORITY A STORE BEATS A REG-TO-REG COPY, BECAUSE ONLY THE STORE TAKES A FUNCTION UNIT  `:21818`
-  - THE COROLLARY THAT MAKES IT A TRILEMMA: A COPY'S EXISTENCE AND ITS REFERENCE COUNT ARE THE SAME FACT  `:21867`
-- AN INDEX-FIRST `addu` IS POSITIVE EVIDENCE THAT THE SOURCE WROTE INTEGER ARITHMETIC, NOT A SUBSCRIPT  `:21893`
-- WHICH SCHEDULER SOURCE TO CITE: `sched.c`, NEVER `haifa-sched.c`  `:21932`
-- `MEM_IN_STRUCT_P` CANNOT MOVE A DEPENDENCE WHEN EVERY MEMREF IN THE FUNCTION HAS A REGISTER BASE  `:21961`
-- A DIVIDEND, ITS REMAINDER AND THE NEXT LOAD BECOME ONE PSEUDO ONLY WHEN THE VARIABLE IS cse-CANONICAL -- A REFERENCE IN AN EARLIER BLOCK IS WHAT MAKES IT SO  `:22007`
-- A THREE-QUANTITY BLOCK CAN ONLY REACH THREE OF THE SIX REGISTER ORDERS -- block_alloc's HAND-ROLLED SORT IS BUGGY  `:22084`
-- CANONICALITY IS PAID AT cse1, THE REFERENCE COUNT AT flow -- SO A REFERENCE THAT DIES IN BETWEEN BUYS THE COPY WITHOUT THE COUNT  `:22142`
-- `actual_hazard` STARVES LOADS BEHIND A RUN OF STORES IN sched1 -- AND A BUMPED ALU PRODUCER RELEASED MID-RUN IS WHAT BREAKS THE RUN  `:22210`
-- reload_cse SEES THROUGH SAME-BASE DISJOINT STORES BUT NOT ACROSS A DIFFERENT BASE REGISTER  `:22255`
-- A SAME-BASE DISJOINT STORE IS AN OFFSET-BLIND cse BARRIER -- SO A READ-BACK PLACED AFTER ONE SURVIVES AS A REAL LOAD  `:22282`
-- AN INDEX HOISTED INTO A LOCAL IS THREE DIFFERENT LEVERS AT ONCE: A SLOT INSIDE ANOTHER STATEMENT'S ADDRESS CHAIN, AN ANTI-DEPENDENCE THAT TIES TWO STORES' PRIORITIES, AND A LUID SWAP  `:22343`
-  - A CONSTANT ADDRESS WITH A ZERO LOW HALF IS A ONE-WORD BASE, and the only way to share one base across several symbols  `:22432`
-  - A PSEUDO THAT DIES TWICE IN A BLOCK ESCAPES LOCAL-ALLOC -- use it to lose a register race  `:22488`
-- `reload_cse_regs` IS AN SN ADDITION, SO AN `addu $rD, $rS, $zero` WHERE YOU MATERIALISE THE CONSTANT CAN BE A COMPILER-VERSION DIFFERENCE AND NOT A SPELLING  `:22523`
-- A FIXED-ADDRESS SCALAR DOES NOT CONFLICT WITH A VARYING-ADDRESS STRUCT -- SO A GLOBAL THAT MUST RELOAD AFTER A STORE THROUGH A POINTER HAS TO BE A STRUCT MEMBER  `:22587`
-- AN assert ARM THAT CANNOT FALL THROUGH IS WORTH SEVEN DELAY SLOTS AND A REGISTER ORDER -- DECLARE THE exit NORETURN  `:22631`
-- THE TWIN BLOCK'S ASSEMBLER EXPANDS DIVISION AND THE REST OF THE GAME'S DOES NOT  `:22650`
-- AN `__asm__` MARKER THAT READS A VARYING VALUE AND WRITES THE ONE YOU CARE ABOUT DECIDES WHICH SIDE OF THE LOOP AN INVARIANT LANDS ON -- IN BOTH DIRECTIONS  `:22665`
-- AN UNSIGNED DIVISION'S MAGIC CONSTANT IS A CONST_DOUBLE WHEN ITS TOP BIT IS SET, SO THE `lui`/`ori` SPLIT NEVER FIRES AND THE `lui` CANNOT FILL A LOAD DELAY  `:22704`
-- IN A UNIT WHOSE RODATA IS A HAND-OWNED BLOB, A LOCAL ARRAY INITIALISER EMITS THE TEMPLATE A SECOND TIME -- COPY THE BLOB'S OWN OBJECT INSTEAD  `:22771`
-- A SIGNED BYTE ASSIGNED STRAIGHT THROUGH LOADS WITH `lbu`; THROUGH AN `s32` LOCAL IT LOADS WITH `lb` -- AND THE PAIR REORDERS TO load/load/store/store  `:22795`
-- `memcpy`'s ALIGNMENT COMES OFF THE POINTER EXPRESSION, NOT THE TYPE -- AND A CAST IS UNDONE, SO ONLY A POINTER VARIABLE CARRIES IT  `:22817`
-- reorg FILLS A CALL'S DELAY SLOT FROM BEHIND TOO -- AN EMPTY `asm` BEFORE THE CALL MAKES IT LOOK FORWARD  `:22881`
-- AN asm-ONLY BLOCK BETWEEN THE LAST ARM AND THE SHARED TAIL KEEPS THAT ARM'S JUMP ALIVE -- AND PARKS THE DEFAULT'S JUMP ON A SLOT IT CANNOT FILL  `:22907`
-- A CONDITIONAL LOOP BOUND COSTS TWO PSEUDOS FOR THE INDUCTION VARIABLE -- WRITE IT AS TWO COMPARISONS  `:22949`
-- AN UNSIGNED DIVISION'S MAGIC NEVER SPLITS WHEN ITS BIT 31 IS SET  `:22983`
-- A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- NAME THE BASE  `:23054`
-- THE TWIN'S COMPILER REUSES HI'S REGISTER FOR THE RESULT; OURS NEVER DOES, 0 OF 115  `:23096`
-- WALK A STRING THROUGH A COPY OF THE POINTER TO KEEP THE ROTATED LOOP'S PREHEADER RELOAD  `:23152`
-- A STORE ALWAYS BEATS A REGISTER COPY FOR THE LAST SLOT OF A BLOCK -- ONLY A DEPENDENCE MOVES IT  `:23190`
-- MAKE THE STORE'S ADDRESS OPAQUE TO KEEP A LOAD ABOVE IT  `:23257`
-- THE TARGET'S `addu' OPERAND ORDER TELLS YOU WHICH SIDE ITS SOURCE WROTE FIRST  `:23283`
-- `birthing_insn_p' GLUES A `%hi'/`%lo' PAIR TO ITS CONSUMER, AND THE ONLY ESCAPE COSTS YOU LOCAL-ALLOC  `:23312`
-- A DEPENDENCE IS IN PROGRAM ORDER, SO THE TARGET'S LISTING GIVES YOU ITS SOURCE ORDER  `:23378`
-- reorg.c:3700 UN-SUBSTITUTES `optimize_reg_copy_1''s HARD REGISTER  `:23409`
-- A STALE POSITIVE IS AS DANGEROUS AS A STALE NEGATIVE  `:23439`
-- A REJECTED CANDIDATE IN A PARK HEADER IS NOT A REFUTED ONE -- IT MAY BE A PREREQUISITE WHOSE PARTNER IS MISSING  `:23461`
-- MATERIALISE A `&global' BASE POINTER LATE TO MOVE ITS `lo_sum'  `:23488`
-- A `do { } while (0)' BUYS REFERENCES ONLY WHERE loop.c CANNOT HOIST THE STATEMENT OUT  `:23519`
-- SPLIT A CAST COPY THROUGH A TEMP SO THE DEVICE'S MULTIPLIER LANDS ON THE SHORT-LIVED PSEUDO  `:23538`
-- A LOCAL ASSIGNED IN TWO ARMS CANNOT BE TIED TO ITS OWN SUM -- DECLARE IT INSIDE THE BLOCK  `:23561`
-- A LOAD'S DESTINATION IS NEVER TIED TO ITS ADDRESS REGISTER, BUT AN ARITHMETIC RESULT'S IS TIED TO ITS SOURCE -- AND ONE CROSS-BLOCK REFERENCE UNTIES IT  `:23618`
-- A CONSTANT-SIZE `memcpy` FROM AN ALIGNED SYMBOL IS ONE `movstrsi` INSN -- AND THEREFORE ONE SCHEDULING ATOM AT PRIORITY 1  `:23673`
-- TAKE `$v0` AWAY FROM A TIED QUANTITY BY STRETCHING A HIGHER-PRIORITY ONE OVER IT  `:23718`
-- A u64 WIDENING MULTIPLY REACHES A REAL `multu` WITH A C-LEVEL MAGIC, AND `(u32)` ON ITS PRODUCT EMITS `mfhi`  `:23756`
-  - A HARD-REGISTER DESTINATION SUGGESTS ITSELF TO EVERY DYING INPUT, AND THE HIGHEST-PRIORITY QUANTITY WINS IT  `:23828`
-- A `do { } while (0)` IS A FREE `loop_cost` MULTIPLIER FOR `regclass`, AND CAN FLIP A prefclass TIE  `:23856`
-  - THE COUNTER-LEVER: YOU CANNOT PUT A MULTIPLY'S HIGHPART AND ITS MULTIPLIER IN DIFFERENT GPRs  `:23908`
-- A NAMED LOCAL HOLDING THE SAME CONSTANT BECOMES A DIVISION'S MULTIPLIER, AND ONE USE AFTER THE MULTIPLY UNTIES IT FROM THE HIGHPART  `:23952`
-- A SYMBOL AND A CONSTANT ADDRESS EMIT THE SAME TWO WORDS AND SCHEDULE DIFFERENTLY -- WHICH IS HOW YOU TELL THEM APART WHEN THE RELOCATION IS MASKED  `:24027`
-- A TWO-STEP INDEX WRITTEN AS TWO STATEMENTS LOSES THE TABLE BASE'S REGISTER  `:24075`
-- READ A CALL'S SMALL ARGUMENTS BEFORE THE `if` THAT COMPUTES ITS LAST ONE  `:24107`
-- A `n->field` STORE LETS A `%lo(global)` LOAD HOIST ABOVE IT; THE SAME STORE THROUGH A CAST DOES NOT  `:24129`
-- A SCREEN FOR THE CONSTANT-ADDRESS TELL: AN UNFILLED LOAD-DELAY `nop` AFTER A `lui`/`lw` PAIR THAT SHARES ITS REGISTER  `:24171`
-- jump.c's `thread_jumps` REFUSES A BRANCH WHOSE TARGET BLOCK WRITES THE COMPARED REGISTER  `:24202`
-- HOW MANY REFERENCES YOU NEED IS AN ARITHMETIC PROBLEM, NOT A SWEEP -- READ BOTH QUANTITIES OUT OF `.flow` AND SOLVE `allocno_compare`  `:24234`
-- A REFERENCE THAT CROSS-JUMPING FOLDS AWAY STILL COUNTS IN `flow`'s REFERENCE COUNT  `:24277`
-- A LOOP-INVARIANT DIVISION IS NOT UNIFIED WITH A PRE-LOOP ONE -- WRITE BOTH INSIDE THE LOOP  `:24297`
-- `expand_abs`'s TERNARY NEEDS A SEPARATE *DESTINATION*, AND `abs()` IS EXEMPT  `:24320`
-- A FLAG TEST SPELLED `(x & 0x80000000) != 0` AND ONE SPELLED `x < 0` ALLOCATE DIFFERENTLY  `:24341`
-- A READ-MODIFY-WRITE ON A GLOBAL MUST BE SPLIT AROUND A STORE THE COMPILER CANNOT DISAMBIGUATE FROM IT  `:24365`
-- A `%hi`/`addiu` BASE SHARED BETWEEN TWO ENGINE GLOBALS IS WRITTEN AS ONE BASE MINUS A CONSTANT  `:24388`
-- A SIGNED DIVIDE-BY-2^k's `sra` BECOMES `srl` WHEN THE QUOTIENT'S DESTINATION IS NARROW  `:24408`
-- A `u16` LOCAL CANNOT BE A `srl`'s DESTINATION, SO IT BUYS AN EXTRA COPY  `:24434`
-- TWO AGENTS COMPILING `ovl_dungeon.c` SHARE ONE SCRATCH FILE  `:24454`
-- A PARAMETER'S DECLARED WIDTH IS AN ALLOCATION LEVER THROUGH `live_length`, NOT ONLY THROUGH ITS TRUNCATION REFERENCE  `:24468`
-- THE ONLY WAY TO LENGTHEN A LOCAL'S `live_length` IS TO MAKE IT LIVE AT FUNCTION ENTRY  `:24498`
-- combine DELETES A SIGNED `/ 2`'s ROUNDING TRIPLE WHEN THE DIVIDEND'S LOW BITS ARE PROVABLY ZERO  `:24529`
-- A FRAME LARGER THAN THE FUNCTION'S CALLS NEED IS AN UNREFERENCED STACK LOCAL, AND THE ARITHMETIC NAMES ITS SIZE  `:24554`
-- `volatile` ON THE FIRST OF TWO READ-MODIFY-WRITES OF ONE FIELD, AND ONLY THE FIRST  `:24579`
-- A NARROWER DECLARED TYPE CAN WIN A STACK PARAMETER A CALLEE-SAVED REGISTER  `:24606`
-- THE RETURN-THROUGH CURE LEAVES A REGISTER SWAP THAT THE PHANTOM ZERO FIXES  `:24623`
-- A GLOBAL'S LOAD FLOATS OVER A STRUCT-TYPED FIELD STORE, AND NOT OVER A CAST ONE  `:24654`
-- combine WILL NOT FOLD A `reg + const` BASE INTO A DISPLACEMENT ACROSS A CALL, AND THAT IS HOW A POINTER LOCAL SURVIVES  `:24696`
-- A `COMPONENT_REF` STORE IS SINKABLE AND A CAST STORE IS NOT  `:24719`
-- `x * 64` AND `x << 6` DECIDE `lh` AGAINST `lhu` UNDER A TRAILING MASK  `:24734`
-- AN EXPLICIT `& 0xFFFF` INTO AN `s32` IS NOT THE SAME ALLOCATION AS A `u16` LOCAL  `:24748`
-- A NARROW LOCAL FOR A `sltu` RESULT BUYS THE TARGET'S REDUNDANT `addu`  `:24766`
-- `abs(d) > K` CANNOT PRODUCE `slt reg, reg`; THE THRESHOLD MUST BE A LOCAL, AND ITS WIDTH MATTERS  `:24780`
-- AN `==` COMPARISON'S OPERAND ORDER CAN ROTATE EVERY CALLEE-SAVED REGISTER  `:24793`
-- A CALL RESULT'S DECLARED TYPE DECIDES WHERE ITS `sll`/`sra` LANDS  `:24804`
-- A LOAD THAT IS LIVE ACROSS A CALL MUST BE WRITTEN BEFORE IT  `:24813`
-- A TWO-STEP INDEX WRITTEN `(p + i)[K]` AND `p[i + K]` DIFFER BY THE `addu`'s OPERAND ORDER  `:24823`
-- A `u16` TABLE READ INTO A `u16` LOCAL STOPS combine FOLDING `lhu` + `sll`/`sra` INTO `lh`  `:24848`
-- A STEP WRITTEN AS A TERNARY WITH A SHARED TAIL CROSS-JUMPS; TWO COMPLETE ARMS DO NOT  `:24861`
-- HOLD A CONSTANT IN A LOCAL TO BLOCK fold's REASSOCIATION WITHOUT A STATEMENT BOUNDARY  `:24873`
-- ONE TEMPORARY PER READ-BACK, AND THE MODE IS THE SCREEN  `:24902`
-- A GLOBAL'S STORE GOES ABOVE THE STACK-ARRAY STORES THAT FEED THE SAME CALL  `:24920`
-- `(u8 *)&SYM - K` IS THREE INSTRUCTIONS AND A SEPARATE SYMBOL IS TWO  `:24929`
-- `&SYMBOL + K` FOLDS INTO THE RELOCATION; A BASE LOCAL DOES NOT  `:24944`
-- ONE LOOP COUNTER VARIABLE IS ONE HARD REGISTER FOR THE WHOLE FUNCTION  `:24964`
-- TO PLACE A LOOP'S INCREMENT INSIDE AN ADDRESS COMPUTATION, SPLIT THE SUBSCRIPT  `:24975`
-- WITH TWO COPIES OF ONE CALL CHAIN, SHARE THE LONG-LIVED VARIABLES AND SPLIT THE SHORT ONES  `:24995`
-- A THREE-VALUED FLAG'S MIDDLE TEST IS SPELLED BY THE BRANCH, NOT BY THE READING ORDER  `:25012`
-- A SUBSCRIPT READ INTO A LOCAL MOVES THE SYMBOL'S `lui`/`addiu` AFTER THE PRECEDING STORE  `:25023`
-- A do/while OVER A RING LOADS INTO THE CURSOR, NOT THE SENTINEL  `:25035`
-- A DUPLICATED `if` ARM IS A BASIC-BLOCK BOUNDARY YOU CAN PUT ANYWHERE, AND IT IS THIS BLOCK'S COMMONEST DEVICE  `:25043`
-- A DUPLICATED `if` ARM IS A cse-REGION BOUNDARY, AND IT STOPS AN EXTENSION THE OTHER DUPLICATION LEVER CREATES  `:25069`
-- THE ORDER OF TWO INDEPENDENT STORES DECIDES WHERE sched2 PUTS THE SECOND HALF OF A SPLIT `li`  `:25106`
-- ADVANCE A CURSOR BEFORE THE TAIL `if`, NOT IN THE `return`  `:25117`
-- TWO LOCALS HOLDING THE SAME POINTER ARE THREE WORDS  `:25126`
-- `allocno_compare`'s `floor_log2` STEP IS THE POINT OF A DEGENERATE LOOP, NOT THE DOUBLING  `:25137`
-- STATEMENT STRUCTURE CANNOT MOVE `reg_live_length`, SO AN ALLOCATION ROTATION IS NOT A REWRITING PROBLEM  `:25153`
-- THE FRONT END'S RANGE FOLDING COLLAPSES `a != 0 && a < K && a == C`; NESTED `if`s SURVIVE IT  `:25169`
-- DUPLICATING A SHARED TAIL KEEPS CROSS-JUMPING FROM FOLDING WHOLE CALL SEQUENCES  `:25180`
-- A WHOLE-BODY `&&` GUARD AND TWO EARLY `return 0`s ARE A DELAY-SLOT LEVER  `:25192`
-- AN `s16` DESTINATION DISTRIBUTES THE TRUNCATION INTO A PLUS AND SWAPS THE `addu`  `:25202`
-- A `+c1` POINTER LOCAL FOLDS INTO THE FOLLOWING `+c2` DISPLACEMENT UNLESS A CALL SEPARATES THEM  `:25215`
-- `x / 10` ON AN `(s8)` OPERAND IS SHORTENED TO A QImode DIVISION  `:25228`
-- AN `s16` RETURN ON A FUNCTION DEFINED IN THE SAME UNIT COSTS EVERY CALLER A WORD ON A ZERO TEST  `:25248`
-- A POINTER LOCAL ASSIGNED IN TWO ARMS BECOMES A GLOBAL ALLOCNO AND ITS `%hi`/`%lo` PAIR SPLITS  `:25262`
-  - Three more cases, and this is the highest-yield lever on a symbol-heavy body  `:25279`
-- A `return 1` PER ARM LOSES TO A SHARED TRAILING ONE WHEN THE ARMS' TAILS AGREE  `:25308`
-- AN ASSIGNMENT CONTEXT DOES NOT FOLD `(a < 0) ? -a : a` TO ABS_EXPR  `:25319`
-- A NARROW LOCAL FOR A PRODUCT IS A cse-INVISIBLE COPY THAT FILLS A BRANCH DELAY SLOT  `:25331`
-- A GIV'S INITIALISATION GOES AFTER loop.c's HOISTED INVARIANTS; AN ACCUMULATOR'S GOES BEFORE  `:25349`
-- COPY A REGISTER PARAMETER INTO A LOCAL *BEFORE* THE FIRST CALL, NOT AFTER  `:25363`
-- A TRAILING `do { } while (0)` IS A BASIC-BLOCK BOUNDARY THAT BREAKS A LOCAL-ALLOC TIE  `:25377`
-- AN ADDRESS-TAKEN LOCAL REUSED AS A LOOP COUNTER IS WHAT PUTS THE COUNTER IN MEMORY  `:25400`
-- A NARROW RETURN-FLAG LOCAL STOPS cse SUBSTITUTING ITS REGISTER FOR A LITERAL `return 0`  `:25416`
-- A DECLARED `extern u8 X[]` MUST BE SUBSCRIPTED EVEN FOR A SCALAR TEST  `:25431`
-- NEGATE-THEN-DIVIDE AND SUBTRACT-THE-QUOTIENT ARE DIFFERENT INSTRUCTIONS  `:25439`
-- `fold` FOLDS NEGATE-OF-NEGATE BUT WILL NOT DISTRIBUTE A NEGATION THROUGH A SIGNED DIVISION, SO `-(-x / 2)` IS FIVE INSTRUCTIONS AND `x / 2` IS THREE  `:25447`
-- A `roll = 0` HOISTED OUT OF ITS ARM IS CATASTROPHIC, NOT NEUTRAL  `:25473`
-- TWO DISTINCT `return 0` TARGETS IN A LISTING MEAN THE BODY IS AN OUTER `if` AND THE LAST STATEMENT IS THE `return`  `:25486`
-- DUPLICATE THE TAIL PER ARM FOR AN ADDRESS MATERIALISATION, NOT ONLY FOR A REGISTER  `:25503`
-- A STACK PARAMETER WANTS THE NARROW DECLARATION WHERE A REGISTER ONE WANTS `s32` PLUS A CAST  `:25518`
-- A HALFWORD STORE DELETES A 16-BIT SIGN-EXTENSION, AND `(s32)b * K` IS HOW YOU KEEP IT  `:25528`
-- MEM_IN_STRUCT_P HAS TO AGREE ON BOTH SIDES BEFORE cse WILL DROP A READ  `:25539`
-- AN ASSIGNMENT INSIDE A CONDITIONAL EXPRESSION HIDES THE VALUE'S LOW BITS FROM combine  `:25555`
-- `__asm__("" : "=r"(x) : "0"(x))` BUYS A SURVIVING REG-REG COPY -- CONFIRMED  `:25571`
-- clang-format REWRITES `(u32)*(s32 *)p` INTO A MULTIPLICATION  `:25588`
-- A TRAILING EMPTY `case` CHANGES `balance_case_nodes`' ROOT, AND IT IS WORTH SEVEN WORDS  `:25596`
-- A VALUE HELD ACROSS A CALL FOR A LATER ARGUMENT WANTS `s16`, AND THE WIDTH IS A sched1 LEVER  `:25618`
-- SEVEN EARLY `return 0`s PUT THEIR SHARED ZERO BLOCK WHERE THE FIRST ONE IS  `:25630`
-- A GATE THAT REWRITES THE VARIABLE IT TESTED IS NOT A SECOND VARIABLE  `:25645`
-- `i << 1` AND `i * 2` COMMUTE THE ROW `addu` IN AN ADDRESS EXPRESSION  `:25658`
-- A CONSTANT INSIDE A GIV UPDATE IS NEVER OFFERED FOR INVARIANT HOISTING  `:25673`
-- A SHARED `return` BLOCK PLACED LAST MAKES reorg COPY ITS INSN INTO THE DELAY SLOT INSTEAD OF MOVING IT  `:25695`
-- SHARING A LOOP COUNTER'S PSEUDO WITH A LATER VALUE DEFEATS `nonzero_bits`  `:25713`
-- AN EARLY `return` IS NOT ALWAYS LAID OUT INLINE -- IT CAN BE PUSHED TO THE END  `:25725`
-- A REGISTER ROTATION CAN BE THE SOURCE READING THE WRONG VARIABLE  `:25746`
-- AN ASSIGNMENT EMBEDDED IN A SUBTRACTION IS BOTH A fold BLOCK AND A STATEMENT-ORDER LEVER  `:25774`
-- THREE CALL RESULTS THAT MUST STAY IN MEMORY ARE AN ARRAY  `:25796`
-- AN IN-LOOP `lui`/`addiu` IS NOT EVIDENCE THAT loop.c DECLINED TO HOIST  `:25808`
-- A `%hi`/`%lo` PAIR FEEDING A STORE IS HOISTED; ONE FEEDING A CALL ARGUMENT IS NOT  `:25821`
-- A SWITCH ARM REUSES THE CONSTANT THE SWITCH HEAD MATERIALISED  `:25831`
-- A CALL RESULT SHARED BY TWO CALL SITES IN ONE VARIABLE BECOMES A GLOBAL ALLOCNO  `:25841`
-- THE `flags & MASK` STORE-FLAG REWRITE FIRES ON A PLAIN BOOLEAN TEST, AND CASTS DO NOT STOP IT  `:25864`
-- A `u16` DESTINATION KEEPS A NEGATIVE HALFWORD CONSTANT AS `ori`; AN `s16` ONE FOLDS IT TO `addiu`  `:25915`
-- A POINTER LOCAL'S POSITION INSIDE A BLOCK PICKS WHICH `lui` reorg TAKES INTO THE DELAY SLOT  `:25925`
-- AN `s16` INDEX USED THREE TIMES BUYS THE `addu` COPY THE TARGET SHARES  `:25938`
-- AN `s16` LOCAL WHOSE WIDENING IS ITS OWN STATEMENT PUTS THE SIGN EXTENSION AT THE JOIN  `:25949`
-- A SHARED `goto fail` LABEL IS WHERE CROSS-JUMPING LEAVES THE MERGED `return CONST` BLOCK  `:25969`
-- THERE IS NO SOURCE FORM THAT ATTACHES A `+K` TO THE BASE WHEN THE INDEX IS ALREADY SCALED  `:25986`
-- A CAST STORE WILL NOT SINK WHERE A FIELD STORE WILL -- THE THIRD DIRECTION OF THE MEM_IN_STRUCT_P RULE  `:26002`
-- A POINTER LOCAL WRITTEN `&g[K]` DOES NOT FOLD THE DISPLACEMENT WHERE `g + K` DOES  `:26019`
-- AN `s16` LOCAL ASSIGNED IN SEVERAL BLOCKS NEEDS AN EXPLICIT `s32` COPY TO GET ITS CONVERSION EMITTED  `:26032`
-- A NARROW-TYPED 0/1 FLAG KEEPS THE COPY BEFORE ITS `beqz`, WITH NO COMPARISON IN IT AT ALL  `:26046`
-- A COMPONENT_REF READ SCHEDULES LATER THAN THE SAME READ THROUGH A CAST, AND THAT CAN DECIDE A SPILL  `:26061`
-- A `switch` IS NOT AN if/else CHAIN, EVEN FOR TWO CASES PLUS A DEFAULT  `:26078`
-- `||` WITH THE WHOLE BODY INSIDE IT, AGAINST AN EARLY `return`  `:26087`
-- A `goto` CAN PREVENT A CROSS-JUMP AS WELL AS FORCE ONE  `:26098`
-- A DEGENERATE LOOP IS NOT ALWAYS A cse BOUNDARY -- SOMETIMES IT IS ONLY THE REFERENCE WEIGHT  `:26114`
-- `sh $aN` WITH NO ARGUMENT SETUP NEARBY CAN BE A SWITCH'S OWN COMPARE CONSTANT  `:26128`
-- A `void`-DECLARED CALLEE WHOSE RESULT IS DISCARDED STILL CHANGES CODEGEN  `:26138`
-- TWO PERMUTER WINS TODAY WERE HYPOTHESES, NOT PATCHES  `:26160`
-- A LOAD'S DELAY SLOT CROSSES A STORE ONLY WHEN *BOTH* POINTER-SIDE MEMs CARRY MEM_IN_STRUCT_P  `:26176`
-- A COMPONENT_REF STORE AT THE TOP OF A FUNCTION CAN COST A WHOLE CALLEE-SAVED REGISTER  `:26202`
-- TWO USES OF ONE `(u8 *)&SYM` BASE IN TWO `if` ARMS WANT TWO DECLARED LOCALS  `:26218`
-- READ A CALL'S ARGUMENTS INTO LOCALS BEFORE AN UNRELATED STORE, TO DECIDE WHICH TAKES THE DELAY SLOT  `:26230`
-- A NARROW LOCAL IS HOW YOU BUY A COPY OF A WIDENED VALUE -- THE `__asm__` TIE DOES NOT  `:26246`
-- AN `s16` DESTINATION KEEPS A REG-REG COPY cse WOULD DELETE, AS THE `u8` ONE DOES  `:26268`
-- A STORE'S MEM_IN_STRUCT_P DECIDES WHETHER AN INCOMING *STACK* PARAMETER'S LOAD CAN MOVE TO ITS USE  `:26289`
-  - Second instance, and the two things this entry did not say  `:26308`
-- A GOTO TO A BLOCK AFTER THE FUNCTION'S `return` LETS jump.c INVERT INTO THE CROSS-JUMPED TAIL  `:26341`
-- A DECLARED SYMBOL BEATS A CONSTANT ADDRESS WHEN BOTH MEASURE 0 MASKED  `:26353`
-- GLOBAL-ALLOC PRIORITY BETWEEN A PARAMETER AND A SHORT-LIVED LOCAL IS SET BY WHERE THE LOCAL IS COMPUTED  `:26366`
-- A WORD-ALIGNED STRUCT TYPE IS THE ONLY WAY TO GET THE ALIGNED BLOCK MOVE  `:26377`
-- A CONSTANT MULTIPLIER SPELLED AS A VARIABLE IS HOW YOU FORCE `mult`  `:26400`
-- A SHIFT BY A BOOLEAN NEEDS ITS OWN LOCAL OR GCC SPECIALISES IT INTO A BRANCH  `:26412`
-- `<< 5` NARROWS AN `s16` ARRAY READ TO `lhu`; `* 32` KEEPS THE `lh` -- AND THE OPPOSITE IS ALSO TRUE  `:26426`
-- fold's `associate:` PUTS THE CONSTANT ON WHICHEVER OPERAND IS WRITTEN SECOND  `:26441`
-- TWO LOCALS INITIALISED TO THE SAME CONSTANT BECOME A COPY ONLY IN THE SAME BASIC BLOCK  `:26457`
-- WITH A CONSTANT-ADDRESS BASE, `MEM_IN_STRUCT_P` IS THE ONLY WAY A STORE CAN KILL A LOAD IN cse  `:26467`
-- `abssi2` NEEDS TWO DIFFERENT REGISTERS, SO THE THREE-WORD TRIO NEEDS TWO VARIABLES  `:26494`
-- TWO NARROW LOCALS CAN BE NEEDED AT ONCE, AND EITHER ALONE LOOKS LIKE A NEAR MISS  `:26511`
-- STATEMENT ORDER INSIDE ONE BASIC BLOCK IS AN ALLOCATION LEVER  `:26531`
-- A `u8 *` POINTER LOCAL IS THE ONLY SPELLING THAT KEEPS A SYMBOL IN ONE REGISTER ACROSS A LOOP  `:26545`
-- AN IN-LOOP `return` OF A NARROWED COUNTER BECOMES AN INDUCTION VARIABLE  `:26561`
-- REUSE THE TEST'S OWN TEMPORARY AS THE VALUE TO BEAT jump.c's STORE-FLAG HOIST  `:26574`
-- TWO IDENTICAL `if` ARMS WANT TWO DIFFERENT LOCAL NAMES FOR THE SAME BASE  `:26597`
-- A FLAG DECLARED `s16` STOPS reload_cse TURNING A SECOND ZERO INTO A COPY  `:26610`
-- AN ARGUMENT THAT NEEDS NO SETUP IS STILL AN ARGUMENT  `:26622`
-- A NARROW PARAMETER HAS NO REG_EQUIV, SO ITS SPILL GETS A FRESH FRAME SLOT  `:26636`
-- STACK SLOTS ARE HANDED OUT IN ASCENDING PSEUDO NUMBER  `:26656`
-- AN 11-BYTE RECORD COPY IS `memcpy`, AND `lh`/`lb` IS THE TELL  `:26671`
-- A BINDING PLACED ONE STATEMENT TOO EARLY COSTS A WHOLE CALLEE-SAVED REGISTER  `:26689`
-- A SYMBOL NAMED TWICE AND A SYMBOL BOUND TO A LOCAL ARE BOTH RIGHT, PER SITE  `:26705`
-- STORES IN ALL THREE ARMS AGAINST ONE STORE AFTER THE JOIN -- THE DISCRIMINATOR  `:26726`
-- A PARAMETER'S CALLEE-SAVED REGISTER IS DECIDED BY WHERE ITS LAST USE SITS  `:26740`
-- A DUPLICATED `if` ARM CANNOT BREAK A cse REG-EQUIVALENCE  `:26837`
-- IN THE ENTRY BLOCK, WHICH SIDE OF A LOAD YOU WRITE A STORE ON IS THE WHOLE SCHEDULE  `:26853`
-- SMALLER SPELLINGS MEASURED IN BATCH j2  `:26914`
-- A LOAD HOISTED INTO A LOCAL IS A SCHEDULING LEVER ONLY AT ONE EXACT POSITION  `:26931`
-- A COMPONENT_REF STORE LETS A CAST LOAD FLOAT ABOVE IT -- THE THIRD DIRECTION OF THE MEM_IN_STRUCT_P RULE  `:26970`
-- loop.c's PREHEADER KEEPS BODY ORDER, SO A ONE-USE ADDRESS IN A LOCAL MOVES THE HOIST  `:26990`
-- A MASKED COMPARE IS UNSIGNED, AND A LOCAL IS HOW YOU GET IT BACK  `:27014`
-- A TWO-CASE `switch` CANNOT PUT THE HIGHER CASE AT THE TREE ROOT  `:27027`
-- `if (p[FIELD] > 1)` ON A `u8 *` GIVES `sltiu`; AN `s32` LOCAL GIVES `slti`  `:27041`
-- "TWO LOCALS INITIALISED TO THE SAME CONSTANT -- THE SECOND BECOMES A COPY" IS PER-MODE  `:27057`
-- A REUSED-TEMPORARY SAVE IS WORTH THE COPY, AND `x = y; y = f(y);` IS HOW YOU GET IT  `:27072`
-- A PERMUTER WIN THAT CHANGES A DECLARATION MUST BE GATED ON THE WHOLE UNIT  `:27079`
-- A READ-MODIFY-WRITE OF A LIVE FLAG IS NOT STEALABLE INTO A DELAY SLOT; A CONSTANT SET IS  `:27119`
-- `fold` REASSOCIATES `A - (B - C)`, AND BREAKING THE FOLD COSTS YOU THE LOAD ORDER  `:27136`
-- `fold_truthop` ALSO MERGES TWO *RELATIONAL* TESTS INTO AN UNSIGNED RANGE CHECK  `:27160`
-- `fold_truthop` MERGES CHAINED BIT TESTS, SO AN `&&` CHAIN IS SHORTER THAN NESTED `if`s  `:27180`
-- `fold` CANONICALISES AN `EQ` TERNARY TO `NE` WITH THE ARMS SWAPPED  `:27192`
-- ONE PAGE-BASE LOCAL PER REGION, NOT ONE PER FUNCTION  `:27209`
-- COPYING A PARAMETER INTO A LOCAL AT THE TOP COSTS NO INSTRUCTION AND RENUMBERS THE ALLOCNOS  `:27218`
-- A SECOND POINTER LOCAL WITH THE SAME VALUE IS A TENTH LONG-LIVED VALUE, AND THAT IS A STACK SLOT  `:27232`
-- A DECLARED-SIZE CHANGE DECIDES WHICH SIDE OF A CALL A `lo_sum` LANDS  `:27248`
-- A FUNCTION-SCOPE INDEX LOCAL SET IN TWO BLOCKS COSTS A REGISTER PAIR  `:27258`
-- INTEGER ARITHMETIC PUTS THE BASE LAST IN AN ADDRESS SUM  `:27270`
-- A DUPLICATED `while` GUARD IS REMOVED BY CROSS-JUMPING, NOT BY `duplicate_loop_exit_test`  `:27278`
-- A CHAINED ASSIGNMENT IS WHERE A REDUNDANT `andi $sN, $aM, 0xFF` COMES FROM  `:27289`
-- A CHAINED ASSIGNMENT BUYS A REGISTER WHEN EVERY LINK IS THE SAME WIDTH  `:27305`
-- `&&`/`||` LEFT-ASSOCIATIVITY HIDES A RANGE TEST AT ANY ADJACENT PAIR  `:27314`
-- THE 3-DENSE-CASE SWITCH TREE ROOTS ON THE MIDDLE CASE  `:27322`
-- A `jtbl_` TARGET AGAINST A `.rodata` CANDIDATE IS seqcheck's ESTABLISHED BENIGN CLASS  `:27330`
-- AN `__asm__` REFERENCE IS THE ONLY BARRIER THAT STOPS A MASK/TRUNCATION FOLD WITHOUT MOVING THE STATEMENT  `:27353`
-- A WIDE `s32` TEMPORARY KEEPS A SIGN EXTENSION `force_to_mode` WOULD OTHERWISE DELETE  `:27406`
-- A `u8` PROTOTYPE NARROWS THE CALLER'S ARGUMENT, AND ONLY THE CALLER WITNESSES IT  `:27428`
-- A JUMP TABLE'S ENTRY COUNT IS THE SWITCH'S RANGE, NOT ITS LIVE CASE COUNT  `:27445`
-- AN ARM THAT FALLS INTO THE SHARED `return` IS NOT THE SAME AS ONE THAT RETURNS  `:27454`
-- AN ARGUMENT REGISTER SET SIX WORDS EARLY, IN AN UNRELATED BRANCH'S DELAY SLOT, IS A REAL ARGUMENT  `:27473`
-- `update_equiv_regs` DOUBLES THE LIVE LENGTH OF A ONCE-SET PSEUDO WITH A CONSTANT `REG_EQUAL`  `:27487`
-- loop.c MOVES A `break` BODY TO THE NEAREST BARRIER, SO COUNT THE BARRIERS BEFORE THE LOOP  `:27518`
-- A PARAMETER READ THROUGH TWO POINTER ALIASES IS REAL, NOT A REDUNDANCY  `:27543`
-- AN EXTRA READ OF A SLOT POINTER BUYS A WORD  `:27555`
-- MERGE ONE LOCAL ACROSS TWO MUTUALLY EXCLUSIVE ARMS TO RAISE ITS PRIORITY  `:27567`
-- TWO ADJACENT STATEMENTS ON DIFFERENT POINTER BASES CANNOT BE INTERLEAVED  `:27576`
-- A ZERO-TRIP `do { } while (0)` AROUND AN `if` IS A REGISTER-ALLOCATION DEVICE  `:27585`
-- A CALL AFTER A JOIN MUST BE DUPLICATED INTO BOTH ARMS WHEN A CONSTANT COMPETES FOR THE BASE REGISTER  `:27606`
-- THE SYMBOL-NAMED-TWICE vs BOUND-TO-A-LOCAL CHOICE HAS A LISTING-VISIBLE TELL  `:27619`
-- A STACK PARAMETER'S `lw` vs `lhu` IS DECIDED BY A SECOND USE, NOT BY SIGNEDNESS  `:27634`
-  - A SECOND SET TURNS THE DOUBLING OFF, SO A CANCELLED PAIR OVERSHOOTS  `:27642`
-- `update_equiv_regs` UNDOES A HAND-HOISTED LOAD  `:27662`
-- SMALL SPELLINGS MEASURED IN BATCH j12  `:27669`
-- A SECOND SET IS WHAT KEEPS A SIGN EXTENSION ALIVE: `reg_nonzero_bits` IS ONLY CONSULTED FOR A PSEUDO SET ONCE  `:27678`
-- DUPLICATE A SHARED TAIL PER ARM INSTEAD OF `goto`-ING IT, AND CROSS-JUMPING PAYS YOU TWICE  `:27696`
-- A NARROW DESTINATION MAKES A REGISTER COPY OPAQUE TO cse  `:27716`
-- A SYMBOL PLUS A CONSTANT OFFSET IS ONE `%hi` TO cse; TWO SYMBOLS ARE TWO  `:27727`
-- `/ 2` vs `>> 1` IS PER SITE, NOT A RULE  `:27739`
-- THE PERMUTER CANNOT MOVE A CALL'S ARGUMENT SETUP -- 3 OF 8 NOW, AND THIS IS THE REFINEMENT  `:27748`
-- THE PERMUTER DOES NOT CRACK A SMALL PURE-ALLOCATION RESIDUE  `:27801`
-- THE NUMBER OF SOURCE LOCALS HOLDING ONE GLOBAL'S ADDRESS DECIDES WHETHER ITS `%hi` AND `%lo` SHARE A REGISTER  `:27832`
-- WHERE A GLOBAL IS READ DECIDES A DELAY-SLOT FILL, INDEPENDENTLY OF THE DEPENDENT STORE  `:27847`
-- AN EXTRA `addu` COPY IN THE OUTPUT IS AN `optimize_reg_copy_1` RESIDUE, AND ONLY A LOOP NOTE BLOCKS IT  `:27861`
-- A FIXED-ADDRESS SCALAR AND A VARYING-ADDRESS STRUCT: THE REVERSE EDIT IS SOMETIMES THE ONE THAT LANDS  `:27885`
-- "REUSE THE TEST'S OWN TEMPORARY AS THE VALUE" IS A REGISTER LEVER FIRST  `:27907`
-- `expand_call` EVALUATES AN INDIRECT CALLEE BEFORE THE ARGUMENT PRECOMPUTE  `:27925`
-- A THREE-DEEP CHAIN OF NARROW ASSIGNMENTS RELOADS THE BYTE IT JUST STORED  `:27934`
-- READING AN `s8` GLOBAL TWICE KEEPS THE HImode PSEUDO; READING IT ONCE COLLAPSES TO `lb`  `:27957`
-- `find_cross_jump` BREAKS ON THE REGISTERS OF THE TWO COMPARES, NOT ON THE INSN BEFORE THEM  `:27974`
-- `(t + 3) >> 2` INTO AN HImode DESTINATION IS A SOURCE CONDITIONAL; `t / 4` IS `expand_divmod`  `:27988`
-- AN `s16` LOCAL SEEDED FROM AN `s16` PARAMETER COSTS A PLAIN COPY, NOT A SHIFT PAIR  `:28007`
-- SPLIT A PERMUTER ANSWER INTO ITS INDEPENDENT EDITS AND MEASURE EACH ONE  `:28017`
-- WITHDRAWN: "A CONSTANT WITH BITS DISJOINT FROM THE OTHER ADDEND'S `nonzero_bits` IS REASSOCIATED ONTO IT"  `:28060`
-- `s16` ON A 0/1/2 TEMPORARY KEEPS THE JOIN COPY THAT `s32` CONSTANT-PROPAGATES AWAY  `:28099`
-- `s16` ON A VALUE USED ONLY BY A `!= 0` TEST AND AN OUTGOING ARGUMENT KEEPS THE ARGUMENT COPY  `:28122`
-- A STORE THROUGH A DIFFERENT BASE IS THE ONLY BARRIER BETWEEN TWO BYTE READ-MODIFY-WRITES ON ONE BASE  `:28131`
-- MEASURED NEGATIVE: `MEM_IN_STRUCT_P` IS NOT THE LEVER FOR STACK-ARRAY STORE SCHEDULING  `:28143`
-- A LOCAL WRITTEN IN MORE THAN ONE LOOP IS NEVER DEFERRED BY sched1 -- SPLIT EVERY TEMPORARY PER SITE  `:28154`
-- A `u8 *` BASE IS ALWAYS THE FIRST `addu` OPERAND; ONLY A NON-POINTER TYPE CHANGES IT  `:28183`
-- A `u16` PARAMETER COSTS `andi 0xFFFF` AT EVERY CALL SITE WHERE `s16` COSTS `sll`/`sra`  `:28197`
-- AN INNER-LOOP CURSOR MUST BE A REAL biv, NOT AN INDEXED EXPRESSION  `:28209`
-- USE `aligndiff.py`, NOT `ovlverify`'s COUNT, TO SIZE A BIG RESIDUE  `:28223`
-- A SHARED PARTIAL EXPRESSION PICKS UP HARD-REGISTER PREFERENCES THROUGH `expand_preferences`  `:28233`
-- DUPLICATING THE RETIRE TAIL PER ARM IS AN ALLOCATION LEVER, BECAUSE jump2 RUNS AFTER GLOBAL-ALLOC  `:28255`
-- WHERE A ONCE-SET SYMBOL POINTER IS ASSIGNED IS A sched2 LEVER, EVEN WHEN THE BYTES ARE THE SAME  `:28269`
-- A `u8` GLOBAL DIVIDED BY A SMALL CONSTANT IS A BARE `srl`  `:28278`
-- A SWITCH TABLE'S LENGTH IS THE ONLY WITNESS FOR ITS TOP CASE LABEL  `:28286`
-- OPEN TENSION: DOES A NARROW DESTINATION HIDE A REGISTER COPY FROM cse?  `:28295`
-- gcc 2.7.2 CROSS-JUMPS A TAIL ONLY AGAINST THE CODE BEFORE ITS OWN TARGET LABEL  `:28312`
-- A TERNARY ARGUMENT vs TWO CALLS DECIDES WHETHER A SYMBOL'S `%hi` AND `%lo` SHARE A REGISTER  `:28326`
-- `lui $at` IN A STORE IS THE ASSEMBLER MACRO, SO THE ADDRESS IS A CONSTANT, NOT A SYMBOL  `:28333`
-- `if (x != K)` vs `if (x == K)` DECIDES WHETHER cse's CONSTANT SURVIVES INTO THE STORING ARM  `:28345`
-- MEASURED NEGATIVE: `__asm__("" ::"r"(p))` CANNOT BUY A REFERENCE FOR A `high`/`lo_sum` PAIR  `:28352`
-- MEASURED NEGATIVE: `volatile` ON A GLOBAL IS DISPROVED BY ITS OTHER USERS  `:28360`
-- A `__asm__` ALIAS GIVES ONE CALL SITE A DIFFERENT RETURN MODE, AND THAT DECIDES WHETHER `expand_call` COPIES  `:28373`
-- AN EMPTY `asm` WITH ONE `"r"` INPUT BUYS LIVE-RANGE INSNS WITHOUT BUYING A REFERENCE  `:28396`
-- ONE POINTER LOCAL PER SITE CAN MEAN *TWO*, NOT ONE AND NOT THREE  `:28419`
-- BUILD THE ONE-FUNCTION DUMP BY TRUNCATION, NOT BY HAND  `:28437`
-- WHEN ALLOCNOS TIE ON PRIORITY, THE TIE-BREAK IS DECLARATION ORDER -- AND A cse-CREATED PSEUDO ALWAYS LOSES  `:28454`
-- NARROWING AN UNRELATED LOCAL CAN BLOCK A loop.c HOIST, AND THE SYMPTOM IS A SPILL ELSEWHERE  `:28488`
-- TWO NARROW COPIES OF ONE VALUE MUST NOT SHARE A MODE  `:28504`
-- A PARAMETER'S STRUCT TYPE NAMES THE RESIDENT TEMPLATE, IN PROSE  `:28520`
-- AN `"m"` INOUT `asm` BUYS TWO REFERENCES WHERE `"r"` BUYS NONE AND COSTS A WORD  `:28537`
-- AN `asm` REFERENCE IN A SECOND BASIC BLOCK STOPS local-alloc TYING AN ADDRESS TO ITS `sra`  `:28564`
-- A CONSTANT INITIALISED IN A `for`'s INIT CLAUSE OUTRANKS EVERY loop.c MOVABLE  `:28575`
-- TWO NOPS IN A ROW MEAN A HOISTED LOAD WITH NOTHING TO SCHEDULE AGAINST IT  `:28595`
-- METHOD: DUMP THE WHOLE UNIT, NOT A ONE-FUNCTION FILE  `:28613`
-- `lbu` + `sll 24` + `sra 24` INSTEAD OF `lb`: `volatile` IS ONE CAUSE, NOT THE CAUSE  `:28623`
-- A VOLATILE READ OF THE POINTER VARIABLE RESTORES A RELOAD cse FORWARDS  `:28672`
-- A `goto` LOOP CARRIES NO LOOP NOTES, SO IT CANNOT RAISE `loop_depth`  `:28688`
-- MEASURED NEGATIVES FROM BATCH j21  `:28703`
-- AN `asm` OUTPUT BUYS THE BASIC BLOCK WITHOUT BUYING LIVE RANGE; AN `asm` INPUT BUYS BOTH  `:28713`
-- AN `asm` THAT *WRITES* A VARIABLE KILLS cse's SUBREG EQUIVALENCE  `:28736`
-- A LINKER-SCRIPT SYMBOL RELOCATES WORDS THE ORIGINAL LEFT AS CONSTANTS  `:28755`
-- FIXED: `build/dungeon.bin` NOW LINKS `common_syms.txt` -- BUT CHECK THE RULE BEFORE TRUSTING A PSYQ NAME  `:28779`
-- GREP A CALL *WITH ITS LITERAL ARGUMENT* -- THE SHARPEST DONOR ROUTE LEFT  `:28826`
-- GREP THE CALLEE'S SPLAT NAME ACROSS `csrc/` -- NO `provision.py` ROUTE DOES  `:28910`
-- A WRAPPED DECLARATION HARD-EXITS THE WHOLE-UNIT SWEEP -- AGAIN  `:28933`
-- A FOLDED `(subreg:SI (reg:QI))` ALWAYS WINS THE COMMUTATIVE TIE, SO WRITE THE SUM BACK INTO THE POINTER  `:28945`
-- A NARROWED FOURTH PARAMETER IS A sched2 ENTRY-BLOCK LEVER  `:28969`
-- THE `|= 0x80000000` GATE IS A LOCALITY PROBLEM, NOT UNREACHABLE -- SOLVED 2026-11-16  `:28984`
-- TWO DISJOINT BRANCHES SHARING A LOCAL ARE ONE GLOBAL ALLOCNO WITH ONE HARD REGISTER  `:29056`
-- A MATCHED-OPERAND `asm` IS A SECOND SET THAT IS *NOT* A SCHEDULING BARRIER  `:29073`
-- A `do { } while (0)` CAN BE A cse-BLOCK DEVICE RATHER THAN AN ALIAS ONE  `:29094`
-- DO NOT DECLARE A SIZE UNRECOVERABLE BEFORE GREPPING `include/structs.h`  `:29107`
-- A SWITCH'S CASE BODIES ARE EMITTED IN SOURCE ORDER, AND THAT ORDER DECIDES A CROSS-JUMP  `:29126`
-- AN ARRAY REF IS AN ALIAS LEVER AGAINST A SCALAR-GLOBAL STORE, IN BOTH DIRECTIONS  `:29137`
-- WRITING A CASE'S TAIL EXPLICITLY INSTEAD OF `break` IS A WORD AND 60 DIFFERING  `:29159`
-- A NEVER-REASSIGNED PARAMETER CARRIES ROUGHLY TWICE A LOCAL'S `live_length` -- COPY IT TO WIN IT A REGISTER  `:29167`
-- `v + (tbl[i] & 0xFFFF)` AND `v + (u16)tbl[i]` DIFFER BY NINE TRANSPOSED `addu`s  `:29190`
-- THE POINTER-LOCAL LEVER EXTENDS FROM SYMBOLS TO RAW CONSTANT ADDRESSES  `:29202`
-- MAKING THE *STORE* THE STRUCT REF LETS A PLAIN GLOBAL'S `lw` HOIST OVER IT  `:29218`
-- `if (A && B) { goto shared; }` LETS cse CARRY AN ADDRESS ACROSS THE ARM; AN INLINE ARM DOES NOT  `:29236`
-- RECOGNISING THE `|= 0x80000000` GATE -- AND IT IS NO LONGER A REASON TO STOP  `:29252`
-- AN `asm` THAT WRITES A VARIABLE ALSO RESTORES ITS REFERENCE COUNT  `:29284`
-- A LOCAL WHOSE *ADDRESS* IS PASSED TWICE WANTS A POINTER LOCAL TOO  `:29321`
-- LOCAL DECLARATION ORDER IS FRAME LAYOUT, AND AN ARRAY BESIDE A `MATRIX` IS WHERE IT BITES  `:29341`
-- THE SCRATCHPAD INDEX TYPE CAN BE WORTH 45 DIFFERING WORDS BY ITSELF  `:29349`
-- A READ-MODIFY-WRITE OF A SCALAR GLOBAL BLOCKS ITS OWN LOAD DELAY  `:29363`
-- DENY loop.c A CONSTANT HOIST BY PUTTING THE CONSTANT IN A *USER* VARIABLE  `:29375`
-- LOAD POSITION INSIDE A REPEATED BLOCK DECIDES A `nop`, AND IT DIFFERS PER BLOCK  `:29405`
-- AN IN-PLACE BYTE UPDATE IS NOT THE SAME AS A FRESH SUM  `:29420`
-- `s16` FOR A BOOLEAN SWITCH RESULT KEEPS THE JOIN COPIES  `:29429`
-- A LOOP BOUND AS A LOCAL AND AS AN IN-CONDITION READ ARE BOTH RIGHT, PER LOOP  `:29437`
-- A CONSTANT ADDRESS AND ITS DECLARED SYMBOL CAN BE BYTE-IDENTICAL AND STILL DECIDE A REGISTER PAIR  `:29451`
-- AN `s16` DESTINATION IS WHAT STOPS combine FOLDING `lbu`/`sll 24`/`sra 24` INTO ONE `lb`  `:29499`
-- WHICH OPERAND OF A `<` IS WRITTEN FIRST DECIDES THE REGISTER PAIR AND THE LOAD ORDER  `:29510`
-- clang-format READS `(s16)*(u16 *)x` AS A MULTIPLY  `:29517`
-- A STORE'S `MEM_IN_STRUCT_P` ALSO DECIDES jump2's CROSS-JUMP LENGTH -- AND THAT IS WORDS, NOT REGISTERS  `:29523`
-- `MEM_IN_STRUCT_P` MUST GO ON THE VARYING-ADDRESS SIDE  `:29543`
-- UN-NESTING A CALL CHAIN BUYS TWO FREE REFERENCES PER STEP  `:29551`
-- `((u16 *)&SYM)[4]` FOLDS TO `SYM + 8` AND BIASES A REGISTER  `:29572`
-- A STORE THROUGH A CAST MOVES ITS REGISTER, AND THAT DECIDES WHAT reorg STEALS  `:29582`
-- `setSemiTrans(q, flag)` KEEPS A REDUNDANT `setcode`; TWO LITERALS DO NOT  `:29601`
-- "ONE POINTER LOCAL PER ARM" CUTS BOTH WAYS  `:29611`
-- READING A GLOBAL INTO A LOCAL BEFORE AN UNRELATED READ-MODIFY-WRITE LETS sched1 INTERLEAVE  `:29627`
-- ONE `s16` LOCAL SHARED BY TWO GROUPS CAN SHIFT EVERY COMPILER TEMPORARY IN THE FUNCTION  `:29635`
-- A COUNTER DECLARED FIRST AND ZEROED AT ITS DECLARATION IS NOT THE SAME AS `for (i = 0; ...)`  `:29654`
-- THE GIV BASE FOR A LOOP POINTER IS THE OFFSET OF ITS LAST *MEM* REFERENCE  `:29663`
-- TWO STRUCT FACES FOR ONE PRIMITIVE, WHEN TWO FUNCTIONS WRITE IT DIFFERENTLY  `:29690`
-- DUPLICATE THE JOIN SO CROSS-JUMPING CANNOT REACH IT -- THE INVERSE OF THE CROSS-JUMP ENTRY  `:29703`
-- A HOISTED CONSTANT NEEDS A USER VARIABLE AT THE *TOP* OF THE LOOP BODY  `:29719`
-- NINE SELF-ASSIGNMENTS THAT ARE REALLY IN THE TARGET  `:29741`
-- A BYTE STORE TO A NEIGHBOURING FIELD KEEPS cse FROM FORWARDING A HALFWORD LOAD ACROSS A FOLLOWED BRANCH -- AND THAT BUYS THE BRANCH'S NOP TOO  `:29753`
-- A TERNARY THAT REASSIGNS THE VARIABLE IN ITS OWN CONDITION COSTS A REGISTER COPY  `:29777`
-- A FIFTH ARGUMENT'S STACK STORE IS EMITTED BEFORE THE REGISTER ARGUMENTS, SO A LOADED POINTER ARGUMENT MUST BE PRECOMPUTED  `:29800`
-- WHY A RAW CONSTANT ADDRESS AND THE DECLARED SYMBOL ARE BYTE-IDENTICAL BUT NOT INTERCHANGEABLE  `:29819`
-- `aligndiff.py` USED TO REPORT MATCHING `%hi`/`%lo` WORDS AS DIFFERENCES -- FIXED, BUT CONFIRM AGAINST `ovlverify` ANYWAY  `:29839`
-- A POINTER LOCAL ONLY WINS A REGISTER IF ITS LIVE RANGE DOES NOT CROSS A FULL LOOP NEST -- COUNT THE ALLOCNOS, DO NOT RE-SPELL THE BASE  `:29861`
-- `a + (-1 - k)`, NOT `a - 1 - k` -- `fold` REASSOCIATES THE SUBTRACTION CHAIN  `:29887`
-- TWO CONSTANT ADDRESSES WITH THE SAME `%hi` SHARE ONE `lui` ONLY THROUGH AN EXPLICIT BASE POINTER  `:29902`
-- THE CONSTANT-VS-SYMBOL CHOICE CAN DIFFER BETWEEN SITES IN THE SAME FUNCTION, AND THE TELL IS A `nop`  `:29917`
-- gcc EMITS A SPARSE SWITCH'S ARM BODIES IN SOURCE ORDER, SO READ THE ORDER OFF THE LISTING  `:29938`
-- TWO SWITCH ARMS CROSS-JUMP ONLY IF THEIR INDEX LANDS IN THE SAME REGISTER -- AND A SHARED LOCAL IS NOT RELIABLY HOW YOU GET THAT  `:29953`
-- AN ARRAY OF **TWO** IS HOW YOU PUT A LOCAL IN A STACK SLOT -- NOT `volatile`, AND NOT AN ARRAY OF ONE  `:30015`
-- THE SECOND HALFWORD OF A `D_x` / `D_x+2` PAIR NEEDS AN `__asm__` ALIAS TO BE AN INDEPENDENT SYMBOL REFERENCE  `:30044`
-- WHICH LOCALS ARE THE **SAME** LOCAL IS A LEVER; SHUFFLING THE DECLARATION LIST IS NOT -- BUT NOT FOR THE REASON IT LOOKS LIKE  `:30064`
-- `f(ot, q++)` BIASES EVERY FIELD ADDRESS IN THE LOOP TO ZERO -- SPLIT IT INTO TWO STATEMENTS  `:30096`
-- A COPY TEMP SURVIVES cse ONLY IF THE VARIABLE IT COPIED IS KILLED BETWEEN THE TEMP'S SET AND ITS USE  `:30123`
-- A LOOP'S UPDATE GROUP IS EMITTED IN SOURCE ORDER, SO THE COUNTER'S POSITION IS THE `for` CLAUSE'S  `:30141`
-- A `s16` PARAMETER IS TWO PSEUDOS, SO AN EARLY TEST AND A LATE TEST READ DIFFERENT REGISTERS  `:30159`
-- A DEPENDENCE-FREE STORE IS THE SCHEDULER'S FAVOURITE STALL FILLER, SO ITS SOURCE POSITION MOVES THE WHOLE BLOCK'S ALLOCATION  `:30177`
-- AN IMPLICIT DECLARATION IS LOAD-BEARING -- ADDING THE PROTOTYPE BREAKS THE MATCH  `:30196`
-- `base=?` WITH ZERO ITERATIONS IS A pycparser PARSE ERROR, NOT A DEAD PERMUTER -- AND `compile.sh` CLEARS IT  `:30216`
-- TWO LEVERS CAN BE ORDER-DEPENDENT: A POINTER LOCAL THAT COSTS 3 WORDS ALONE CAN SAVE A WORD ONCE A LOCAL IS NARROWED  `:30245`
-- `s16` FOR A BOOLEAN LOCAL, WHEN `s32` COSTS A `move`  `:30275`
-- A STACK-PASSED ARGUMENT ONLY GETS A REGISTER IF A LOCAL BINDS IT BEFORE THE FIRST CALL -- AND IT HAS TO BE THE FIRST STATEMENT  `:30290`
-- THE PERMUTER'S SCORE IS NOT THE ALIGNED DIFFERENCE COUNT -- RE-MEASURE EVERY ANSWER BEFORE ADOPTING IT  `:30316`
-  - THE SIZE OF THE GAP, MEASURED FOUR TIMES  `:30346`
-  - THE FIVE OUTCOMES, AFTER SEVEN RUNS ON THIS BLOCK  `:30384`
-- `-fcse-skip-blocks` COMMONS TWO READS ACROSS A BRANCH EVEN WHEN THE JOIN BLOCK HAS TWO PREDECESSORS -- SO A RE-READ NEEDS A DEVICE  `:30426`
-- A JUMP TABLE'S GAPS NEED NO WRITTEN-OUT EMPTY CASES -- ONLY THE LOWEST AND HIGHEST LABELS MATTER  `:30459`
-- A "GOTO LADDER" WITH ENTRY POINTS ONE INSTRUCTION APART IS USUALLY ONE LABEL AND DELAY-SLOT STEALING  `:30484`
-- `shorten_compare` NEEDS **BOTH** OPERANDS SHORT-TYPED, SO ONE WIDE CALLEE COSTS THE WHOLE COMPARE  `:30513`
-- A RESULT MUST ARRIVE **UNEXTENDED** FOR `(u16)(x - k) < n` TO KEEP ITS `andi`  `:30534`
-- SPLITTING VARIABLES IS NOT MONOTONE -- AND THE THING TO WATCH IS WHERE THE MAIN RECORD POINTER LANDS  `:30548`
-- A SHORT CROSS-JUMP MATCH FOUND FIRST BLOCKS A LONGER ONE -- AND THE SHORT MATCH IS THE CODE BEFORE THE TARGET LABEL  `:30575`
-- A ONCE-SET NARROW LOCAL WHOSE VALUE IS PROVABLY NARROW DISAPPEARS -- GIVE IT A SECOND SET TO KEEP IT  `:30619`
-- A LOOP-INVARIANT COPY AS THE LOOP BODY'S FIRST STATEMENT IS HOW YOU GET A SECOND PSEUDO FOR THE LOOP  `:30645`
-- A POINTER LOCAL TO A **SCALAR** SYMBOL IS WHAT SHARES ONE `%hi` ACROSS DISJOINT BRANCHES  `:30671`
-- A LOAD MUST PRECEDE A STORE FOR reorg TO PUT THE STORE IN A BRANCH'S DELAY SLOT  `:30690`
-- A DECLARATION INITIALISER'S POSITION AMONG THE OTHER LOCALS DECIDES WHICH CONSTANT OWNS A SHARED `lui`  `:30713`
-- A THREE-WORD `lui`/`addiu`/`lw 0x0(reg)` TAIL IS RELOAD REMATERIALISING A POINTER LOCAL, NOT A SPILL  `:30733`
-- A `(s16)` CAST OF AN UNSIGNED HALFWORD LOAD IS THREE WORDS WHERE `*(s16 *)` IS ONE  `:30756`
-- THE ALIAS ROUTE INTO sched1 IS CLOSED FOR TWO MEMBERS OF ONE STRUCT, AND THE COMPILER SAYS WHY  `:30773`
-- `MEM_IN_STRUCT_P` CUTS BOTH WAYS, AND WHICH WAY DEPENDS ON THE SIDE OF `true_dependence` IT LANDS ON  `:30799`
-- DRAW THE CALL RESULT INTO THE SHORT-LIVED LOCAL, NOT THE LONG-LIVED ONE  `:30827`
-- A SOURCE-LEVEL COPY CANNOT REPRODUCE AN ALLOCATOR COPY  `:30848`
-- PUT THE STORE INSIDE BOTH ARMS TO KEEP A TWO-ARM `if`  `:30884`
-- gcc TRUSTS A NARROW RETURN FOR A COMPARISON AND NOT FOR AN ASSIGNMENT -- TWO WORDS, IN OPPOSITE DIRECTIONS  `:30902`
-- WRITE A LOOP ADDRESS'S CONSTANT ON THE **INDEX** SIDE, OR loop.c FOLDS IT INTO A GIV AND COSTS A REGISTER  `:30918`
-- `cond ? a == K1 : a == K2` IS NOT TWO `if`s WITH THE BODY DUPLICATED, AND IT IS FIVE WORDS  `:30939`
-- `return -1` FIRST, NOT LAST, WHEN FOUR EARLIER TESTS ALSO RETURN IT  `:30956`
-- THE PERMUTER CAN CONFIRM A MECHANISM EVEN WHEN ITS SPELLING IS UNUSABLE  `:30970`
-- READ `move_movables`' THRESHOLD OUT OF `-dL` INSTEAD OF GUESSING IT -- AND ARRAY INDEXING IS HOW YOU PUSH `insn_count` PAST IT  `:31001`
-- THE SAME `threshold` vs `insn_count` DECIDES WHERE AN ELIMINATED BIV'S BOUND IS COMPUTED  `:31029`
-- A STORE WRITTEN INTO BOTH ARMS BUYS A REAL RELOAD AFTER THE JOIN, AND THAT RELOAD BLOCKS A CROSS-JUMP  `:31050`
-- reorg WILL LIFT A DECLARED SYMBOL'S `%hi` INTO A BRANCH DELAY SLOT AND WILL NOT LIFT A CONSTANT ADDRESS'S  `:31071`
-- WHERE A HOISTED CALL-ARGUMENT INDEX IS ASSIGNED IS A sched1 LEVER, AND THE POSITION SWEEP IS CHEAP  `:31090`
-- A FLAG ASSIGNMENT MUST BE IN THE BLOCK THAT **ENDS** AT THE BRANCH WHOSE DELAY SLOT SHOULD HOLD IT  `:31113`
-- A TERNARY STORE LETS cse FORWARD INTO A LATER RE-READ; TWO ARM STORES DO NOT -- AND CROSS-JUMPING HIDES THE DIFFERENCE  `:31135`
-- `fold` DISTRIBUTES `(x - 1) * 3 + 8` INTO `x * 3 + 5` UNLESS THE SUBTRACTION IS BOUND TO A LOCAL  `:31156`
-- A CALL-CROSSING SHARED LOCAL IN **ONE** ARM SETS THE REGISTER CLASS FOR **EVERY** ARM -- AND IT CAN COST YOU THE PARAMETER MAP  `:31171`
-- WHERE A READ-MODIFY-WRITE ON A GLOBAL SITS DECIDES WHETHER TWO OTHER ARMS CROSS-JUMP  `:31196`
-- AT OFFSET 0 RELOAD FOLDS A REMATERIALISED ADDRESS BACK INTO THE MEM -- WHICH IS WHY ONE FUNCTION SHOWS TWO ADDRESSING SHAPES FOR ONE SYMBOL  `:31229`
-- A DUPLICATED LOOP-EXIT TEST CAN NEED THE GUARD'S EXPRESSION TO BE TEXTUALLY DIFFERENT  `:31257`
-- `PROMOTE_MODE` KEEPS A `short` LOCAL IN AN SImode PSEUDO -- ONLY AN ADDRESSABLE LOCAL GETS AN HImode STACK SLOT  `:31278`
-- A CALL RESULT TESTED FOR NULL WANTS ITS OWN VARIABLE WHEN THE KEPT VALUE IS LOOP-CARRIED  `:31295`
-- A DEAD ASSIGNMENT THE TARGET EMITS IS NOT REACHABLE FROM C, AND SIX SPELLINGS PROVE IT  `:31310`
-- THREE BULK DECLARATION-ORDER SWEEPS, AND WHAT THEY SETTLE  `:31331`
-- A LOCAL FOR THE COMPARISON BOUND FORCES `slt reg,reg` WHERE A LITERAL GIVES `slti`  `:31355`
-- `do_cross_jump` ALWAYS DELETES THE **FIRST** COPY OF A DUPLICATED TAIL  `:31375`
-- A TRAILING ONE-INSN `return 0` BLOCK IS A CROSS-JUMP ANCHOR  `:31394`
-- READ `allocno_compare`'s SORT OUT OF `-da` INSTEAD OF REASONING ABOUT IT -- ONE COMPILE, TWO SECONDS  `:31407`
-- ALL THREE OF `scan_loop`'s ADMISSION ARMS CAN BE FAILED AT ONCE, AND THAT IS HOW YOU KEEP A CONVERSION IN THE LOOP  `:31484`
-- A `for` HEADER'S OWN `i = 0` IS EMITTED **AFTER** THE STATEMENTS THAT PRECEDE THE LOOP  `:31508`
-- A LOOP-INVARIANT `d * i` IS A GIV WHOSE `= 0` INIT GOES IN THE **PREHEADER** -- AN ACCUMULATOR'S DOES NOT  `:31533`
-- A LOCAL SHARED BY TWO ARMS OF AN `if`/`else` IS A **GLOBAL** ALLOCNO AND CANNOT COALESCE WITH ITS SOURCE  `:31562`
-- A DELAY SLOT THAT CLOBBERS THE REGISTER ITS TARGET BLOCK TESTS PROVES WHAT THE TARGET BLOCK IS TESTING -- AND THE WRONG READING CAN SCORE BETTER  `:31601`
-- `note_mem_written` CANNOT INVALIDATE A PLAIN GLOBAL'S cse ENTRY -- SO REORDERING A STORE IN FRONT OF IT NEVER WORKS  `:31624`
-- A `volatile` CAST ON ONE READ DOES WHAT DECLARING THE GLOBAL `volatile` DOES, WITHOUT THE REACH  `:31645`
-- `floor_log2` IN `allocno_compare` IS A CLIFF AT EVERY POWER OF TWO, AND IT DECIDES REGISTER SWAPS  `:31666`
-- cse FOLDS A POINTER LOCAL'S DEFINITION INTO EVERY LATER `base + N`, AND THAT DECIDES WHICH POINTER SURVIVES  `:31712`
-- `adjust_priority`'s BIRTHING BOOST: A SHARED LOCAL LOSES A SCHEDULING TIE IT SHOULD HAVE WON  `:31735`
-- THE BIRTHING BOOST AND local-alloc PULL IN OPPOSITE DIRECTIONS  `:31769`
-- alias.c RESOLVES A PSEUDO THROUGH ITS `REG_EQUIV` AND A HARD REGISTER THROUGH NOTHING -- SO sched1's ORDER IS FINAL  `:31793`
-- A SHORT-LIVED VALUE REACHES A CALLEE-SAVED REGISTER ONLY BY SHARING A LOCAL WITH SOMETHING THAT CROSSES CALLS  `:31810`
-- A LOOP'S INDEX REUSING AN EARLIER, LONGER-LIVED LOCAL BEATS A FRESH ONE  `:31832`
-- `o = n = p[x];` EMITS A COPY; `o = p[x]; n = o + d;` DOES NOT  `:31862`
-- A HOIST THAT ONLY SHORTENS A LIVE RANGE CAN FLIP AN ALLOCATION AT A 1% MARGIN  `:31877`
-- A POINTER LOCAL PER SITE IS WHAT STOPS `+K` FOLDING INTO A SYMBOL'S `%lo`  `:31897`
-- A VALUE A CALL'S DELAY SLOT WANTS NEEDS ITS OWN LOCAL, NOT AN IN-PLACE `&=`  `:31920`
-- INVERTING THE DIRECTION OF A COPY IS TWO FREE REFERENCES ACROSS THE `floor_log2` CLIFF  `:31943`
-- A SECOND `extern` UNDER THE SAME `__asm__` NAME RE-TYPES A SYMBOL FOR ONE FUNCTION ONLY  `:31966`
-- `true_dependence`'s STRUCT CLAUSE APPLIES TO THE STORE SIDE TOO  `:31993`
-- TWO CALL RESULTS IN ONE LOCAL CAN BE THE ALLOCATION LEVER, NOT A COST  `:32008`
-- A BARE `__asm__("")` IS A FREE FULL SCHEDULING BARRIER  `:32028`
-- A DIFFERENT-MODE COPY SPLITS ONE C VARIABLE INTO TWO PSEUDOS  `:32076`
-- "ONE LOCAL PER ARM" APPLIES TO SCRATCH INTEGERS, NOT JUST POINTERS  `:32122`
-- A CONSTANT MASK IN ITS OWN STATEMENT IS A sched1 TIE-BREAK  `:32143`
-- A DUPLICATED TAIL `return` IS A CONTROL-FLOW DEVICE  `:32165`
-- THREE `u16` SCALARS IN A FRAME GET EIGHT BYTES EACH; `u16 x[3]` GETS SIX  `:32192`
-- A SCRATCHPAD CONSTANT NEEDING `lui`+`ori` REACHES A CALLEE-SAVED REGISTER ONLY AS A POINTER LOCAL  `:32206`
-- A SECOND READ OF THE SAME MEMORY IS HOW A LOOP COUNTER GETS ITS OWN PSEUDO  `:32223`
-- A PARAMETER'S DECLARED WIDTH MOVES THE PROLOGUE SCHEDULE  `:32240`
-- THE `volatile` RE-READ GOES ON THE **FIRST** READ WHEN THE TARGET'S DELAY SLOTS SAY SO  `:32251`
-- A TWO-SET LOCAL LEAVES local-alloc ENTIRELY, WHICH IS HOW A VALUE REACHES A REGISTER ITS BLOCK HAS NOT USED  `:32270`
-- BINDING AN ADDRESS SUM TO A LOCAL IS WHAT KEEPS ITS `PLUS` OPERANDS IN SOURCE ORDER  `:32310`
-- A PARAMETER CAN BE THE LONG-LIVED HOST A SHORT-LIVED POINTER MERGES INTO  `:32324`
-- A LOST FUNCTION-POINTER TYPEDEF IS RECOVERABLE FROM ITS `jalr` SITE  `:32344`
-- NO PASS IN `cc1psx` INSERTS A REGISTER COPY THE SOURCE DID NOT ASK FOR  `:32378`
-- THE RENAME FORM HAS A CEILING AT TWO PSEUDOS  `:32396`
-- WHICH OF TWO SURVIVING COPIES GETS THE ARGUMENT REGISTER IS CSE'S TRAVERSAL, NOT THE SOURCE  `:32411`
-- `allocno_compare` READS `.lreg`, AND THE EARLIER DUMPS GIVE DIFFERENT NUMBERS  `:32433`
-- A PLAIN `local = param;` IS THE ONLY WAY INTO SCHED1'S REGION, AND IT WORKS ONCE  `:32451`
-- A ONCE-USED PARAMETER'S LIVE LENGTH HAS A HEAD OFFSET, NOT JUST A LAST USE  `:32499`
-- A LOOP-INVARIANT `loop.c` HOISTED IS PINNED TO THE END OF THE PREHEADER  `:32515`
-- `expand_expr` EMITS op0 FIRST, AND THE COMMUTATIVE SWAP HAS THREE TRIGGERS  `:32544`
-- A DEAD STORE AT THE END OF A DISJOINT ARM BUYS CANONICALITY WITHOUT A REFERENCE  `:32570`
-- sched1 FILLING A LOAD-DELAY SLOT WITH `return 0`'s `(set v0 0)` IS TWO SYMPTOMS FROM ONE CAUSE  `:32595`
-- A MASK-FREE `u16` MOVE NEEDS A MULTI-SET 16-BIT LOCAL, NOT A FRESH ONE  `:32624`
-- REUSING A LOCAL TO FIX ONE SIDE MOVES IT IN `allocno_compare`, AND THE FIX IS PAID ON THE OTHER  `:32640`
-- AN EXPLICIT COPY ACROSS A CALL IS STILL DELETED BY cse  `:32659`
-- THE ARGUMENT-COPY DEVICE NEEDS ITS HARD-REGISTER PIN  `:32675`
-- sched2 CAN REPRODUCE THE ORDER IT WAS HANDED, AND THEN IT IS NOT A SCHEDULER TIE  `:32690`
-- sched2's OUTPUT IS THE INSN CHAIN, WITH MEMORY INSNS SUNK -- IT IS NOT A TIE TO NUDGE  `:32705`
-- A PARAMETER COPY CANNOT BE MOVED AFTER A CALL'S ARGUMENT SETUP  `:32734`
-- FOR A PURE PERMUTATION, READ `ovlverify`'s COUNT, NOT `aligndiff`'s ROWS  `:32758`
-- A `loop.c`-INSERTED INSN IS ALWAYS LAST IN THE PREHEADER -- SO WHAT FOLLOWS ONE IS ALSO loop.c's  `:32771`
-- MOVABLES LAND BEFORE GIVS, SO SOME VALUES MUST BE WRITTEN *INSIDE* THE LOOP  `:32792`
-- A `for` LOOP GIVES ITS COUNTER ONE MORE `REG_N_REFS` THAN `if` + `do`/`while`  `:32808`
-- AN `asm` BARRIER FLUSHES sched.c's PENDING READ AND WRITE LISTS  `:32830`
-- INSIDE ONE sched1 PRIORITY GROUP, A STORE OUTRANKS A LOAD -- AND BLOCKS THE NEXT CYCLE  `:32847`
-- A `%lo` LOAD IS ALWAYS CONSTANT-ADDRESSED TO THE ALIAS CHECKER  `:32869`
-- `adjust_priority`'s BOOST IS ALWAYS `LAUNCH_PRIORITY`  `:32901`
-- THE `__asm__("" ::"r"(x))` MARKER HAS A SECOND, DIFFERENT JOB: KEEPING A COPY ALIVE THROUGH cse  `:32912`
-- `flow` ADDS `loop_depth` PER REFERENCE, SO `do { } while (0)` IS A REGION, NOT A DEVICE  `:32942`
-- A LOCAL-ALLOC QTY INVERSION HAS ARITHMETIC YOU CAN SOLVE FOR THE SCHEDULE  `:32969`
-- A DEAD STORE CANNOT MAKE A PSEUDO GLOBAL  `:32995`
-- A LOCAL-ALLOC TIE CHAIN PUTS A WHOLE ADDRESS COMPUTATION IN THE INDEX'S REGISTER  `:33014`
-- A SECOND SET ON A POINTER LOCAL TURNS ITS STORES INTO ALIASING STORES  `:33068`
-- sched.c KEEPS A *RUN* OF LEADING PARAMETER COPIES OUT OF sched1  `:33144`
-- WHICH BODY COPIES OF A PARAMETER SURVIVE: THE ONES cse CANNOT REACH FROM THE DEF  `:33168`
-- A SECOND, NON-CONSECUTIVE SET DISQUALIFIES AN INVARIANT FROM `move_movables` -- AND A DEAD ONE IS FREE  `:33185`
-  - THE `reg_n_sets == 1` FAMILY  `:33217`
-- WHEN YOU NEED TWO PSEUDOS TO CONFLICT, FIND A CONFLICT THAT IS ALREADY FREE  `:33239`
-- THE THREE-KINDS TAXONOMY PREDICTS WHICH OF A PARK'S FACTS SURVIVE -- MEASURED, 6 FOR 6  `:33265`
-- `convert.c` TAKES ITS UNSIGNEDNESS FROM THE *FIRST* OPERAND, WHICH TURNS -0x10 INTO AN `ori`  `:33294`
-- A PARK THAT CITES ANOTHER PARK: RE-CHECK THAT FUNCTION'S STATE FIRST  `:33342`
-- A NEGATIVE CONSTANT STORED THROUGH A `u8` LVALUE IS A ONE-ROW FAULT  `:33366`
-- THE ALIGNMENT-1 LOCAL IS FREE WHEN THE SOURCE SYMBOL IS ALREADY BYTE-ALIGNED  `:33384`
-- `const` ON A READ-ONLY TABLE'S DECLARATION IS A SCHEDULING LEVER, AND IT IS FREE  `:33399`
-- A LOCAL ARRAY *INITIALISER* IS A SCHEDULING LEVER  `:33427`
-- COUNTING TO THE NEXT POWER OF TWO BEFORE COMPILING -- A WORKED CASE  `:33449`
-- A SPARE CALLEE-SAVED REGISTER IN THE PROLOGUE IS A 0/1 FLAG WITH TWO REACHING DEFINITIONS  `:33478`
-- A STORE THROUGH ANOTHER BASE KILLS cse'S STORE-TO-LOAD FORWARDING, AND THE SURVIVOR NAMES THE LAST WRITE  `:33512`
-- THE SAVE COUNT PREDICTS A VALUE THAT MUST CROSS A CALL  `:33531`
-- WHERE A SHARED `return 0` COMES FROM IS A GATE-SHAPE FACT  `:33555`
-- `loop.c` RUNS `move_movables` BEFORE `strength_reduce`  `:33574`
-- `rank_for_schedule` SORTS DESCENDING BY LUID -- THE LATEST SOURCE STATEMENT IS SCHEDULED FIRST  `:33589`
-- A PARAMETER'S DECLARED WIDTH IS A SCHEDULING LEVER, AND THE RESIDUE IS IN THE PROLOGUE  `:33617`
-- A MISSING FALL-THROUGH DOES NOT ALWAYS COME OUT SHORT -- IT FAILS BOTH WAYS  `:33640`
-- A CONSTANT'S SIDE IN A SUBTRACTION DECIDES WHICH REGISTER IT LANDS ON  `:33660`
-- A MISSING `move` CAN BE A NARROW DECLARATION, NOT A PSEUDO YOU FAILED TO INVENT  `:33695`
-- TWO COPIES OF ONE ROUTINE CAN WANT OPPOSITE `lui` ORDERS -- THAT IS NOT A LEVER  `:33722`
-- A SELECTION FACT INVERTED -- THE THREE-KINDS TAXONOMY HAS A COUNTER-EXAMPLE  `:33741`
-- THE FRAME SIZE TELLS YOU AN ARRAY FROM A SET OF SCALARS BEFORE YOU COMPILE  `:33768`
-- A HALFWORD SPILL SLOT MEANS TWO LOCALS, NOT ONE  `:33788`
-- A TIED `lui`/`addiu` PAIR MEANS A SINGLE-SET LOCAL; AN UNTIED PAIR MEANS IT IS LIVE ACROSS A BRANCH  `:33826`
-- "THE TARGET HAS A `lui` WHERE I HAVE A `nop`" IS A STATEMENT-ORDER FAULT  `:33874`
-- THE WIDTHS OF TWO LOCALS ARE A PRODUCT -- SWEEP THE CROSS, NOT EACH AXIS  `:33888`
-- `u16` VERSUS `s16` ON ONE LOCAL IS MEASURABLE -- THREE WIDTHS, THREE ANSWERS  `:33932`
-- A READ-MODIFY-WRITE'S SPELLING DECIDES WHETHER sched1 MAY TRANSPOSE A STORE PAIR  `:33953`
-- `birthing_insn_p` BOOSTS AN INSN THAT SETS A SINGLE-SET PSEUDO, AND THE SCHEDULER IS BACKWARD  `:33975`
-- A SYMBOL-ADDRESS BASE NEEDS ONE LOCAL *PER BASIC BLOCK* -- 99 ROWS, AND THE SIGN INVERTS  `:34003`
-- TWO DRESS SITES ON ONE STRAIGHT-LINE PATH WITH A CALL BETWEEN THEM WANT THEIR OWN LOCALS -- 72 ROWS  `:34023`
-- CROSS-JUMPING RUNS *AFTER* RELOAD, SO TOO FEW SPILLS MAKES A BODY COME OUT SHORT  `:34043`
-- PERTURB THE SUSPECTED CAUSE: ONE THROWAWAY COMPILE CAN PROVE 150 ROWS ARE DOWNSTREAM OF ONE WORD  `:34081`
-- NEVER INTEGRATE FROM A LIVE AGENT'S COPY -- AND `dngland`'s GUARD IS NOT THE RULE  `:34115`
-- A DEVICE THAT IS NECESSARY ONLY BECAUSE OF ANOTHER FAULT IS INDISTINGUISHABLE FROM A FACT  `:34161`
-- `MEM_IN_STRUCT_P` DECIDED FIVE OF EIGHT BODIES IN ONE UNIT -- WITH A CONTROL  `:34222`
-- `if (1)` IS THE TWO-SECOND TEST FOR "PRIORITY OR SCHEDULING BARRIER"  `:34256`
-- reload's OWN cse RENAMES A PARAMETER'S BASE REGISTER *AFTER* ALLOCATION  `:34284`
-- A CROSS-JOINED DUPLICATE IS FREE IN THE OUTPUT AND **NOT** FREE IN THE ALLOCATOR -- 190 ROWS  `:34306`
-- A POST-INCREMENT IN A CONDITION IS A SCHEDULING TOOL  `:34346`
-- COUNT THE SETS ON EVERY LOCAL BEFORE REACHING FOR A DEVICE -- 88 ROWS, FOUR WITNESSES  `:34362`
-- READ A GATE'S OPERAND OFF THE *RELOAD*, NOT OFF THE COMPARISON  `:34386`
-- A CLEAN WHOLE-BODY TWO-REGISTER EXCHANGE CAN BE A MISSING SWITCH FALL-THROUGH  `:34407`
-- WHEN TWO COPIES OF A GATE MUST SHARE A TAIL, INVERT ONE COPY'S ARMS BEFORE REACHING FOR A `goto`  `:34456`
-- "ONE SHARED TEARDOWN WRITTEN OUT TWICE" IS NOT ALWAYS FREE -- 12 WORDS A COPY  `:34482`
-- THREE INDIVIDUALLY-GOOD POINTER LOCALS THROUGH ONE REUSED LOCAL ARE WORSE THAN NONE  `:34501`
-- TAKING A LOCAL'S ADDRESS FORCES ITS STACK SLOT -- AND THE FRAME GROWS  `:34523`
-- A PAIR OF STACK HALFWORDS WRITTEN AND READ BACK WITH NO CALL BETWEEN THEM IS A LOCAL ARRAY  `:34537`
-- A VALUE TERNARY IS DISTINGUISHABLE FROM TWO CROSS-JOINED ARMS -- READ FOR THE `j`  `:34552`
-- A CHANNEL BLOCK'S STORE DIRECTION DEPENDS ON HOW MANY VALUES IT WRITES  `:34569`
-- A STORE'S POSITION IS READABLE *OUTSIDE* A DRESS BLOCK AND NOT INSIDE ONE  `:34586`
-- A SHIFT FEEDING A NARROWER STORE LOSES ITS CAST; A MULTIPLY KEEPS IT  `:34616`
-- `* 0x40` KEEPS `lh` WHERE `<< 6` NARROWS IT TO `lhu`  `:34658`
-- `s16` VS `u16` ON A STACK-PASSED PARAMETER IS INVISIBLE IN THE CALLEE AND DECISIVE IN THE CALLER  `:34672`
-- ONE MORE REFERENCE CROSSING A POWER OF TWO IS WORTH 26 ROWS  `:34688`
-- THE SAME CONSTANT CAN NEED OPPOSITE SPELLINGS IN TWO BODIES OF ONE UNIT  `:34713`
-- A WIDTH AXIS CAN HAVE A PLATEAU -- AND THEN SIGNEDNESS IS THE REAL LEVER  `:34732`
-- A WHOLE-BODY REGISTER ROTATION AT THE *EXACT* WORD COUNT CAN BE ONE STATEMENT'S LOOP DEPTH  `:34750`
-- A STORE THROUGH A POINTER KILLS EVERY MEMORY VALUE cse KNOWS  `:34767`
-- A CALLEE-SAVED REGISTER HOLDING A SYMBOL BASE ACROSS A CALL IS NOT EVIDENCE OF A POINTER LOCAL  `:34793`
-- TWO SEPARATE LOCALS WHERE ONE WOULD DO -- 152 ROWS, AND IT IS A PASS-ORDER FACT  `:34810`
-- A LISTING'S *LOAD* POSITIONS ARE SOURCE ORDER EVEN WHEN ITS STORE POSITIONS ARE NOT  `:34831`
-- PRICE THE `MEM_IN_STRUCT_P` POLARITY PER *STATEMENT*, NOT PER BLOCK  `:34853`
-- A CRASHED `ovlverify` RUN LOOKS EXACTLY LIKE A CLEAN SWEEP -- COUNT THE PASSES  `:34868`
-- PRICE WITH `aligndiff`, NOT WITH `ovlverify`'s MASKED COUNT -- THEY DISAGREE BY 7x  `:34887`
-- MASKED MODE HIDES A SYMBOL SWAP BETWEEN TWO SCALARS -- READ THE CONSUMERS  `:34906`
-- `sll $v0, 16` AFTER A CALL MEANS THE CALLER'S *DECLARATION* IS WIDER THAN THE DEFINITION  `:34921`
-- cse MERGES IDENTICAL CONSTANTS ONLY WITHIN ONE MODE  `:34952`
-- `LEGITIMIZE_ADDRESS` FORCES A WHOLE `CONST_INT` ADDRESS INTO A REGISTER -- IT DOES NOT SPLIT IT  `:34998`
-- A LOOP OVER A CONSTANT-ADDRESS ARRAY NEEDS A POINTER LOCAL -- 12 WORDS  `:35019`
-- A THIRD WAY A BODY CANNOT MEET THE GATE: SPLAT MISLABELLED RODATA AS ITS FIRST INSTRUCTION  `:35039`
-- A SECOND WAY A TABLE CANNOT BE A `switch`: THE ROM HAS IT 4-BYTE ALIGNED  `:35066`
-- A TABLE IN A *DATA* SUBSEGMENT CANNOT BE LANDED AS A `switch` -- AND `ovlverify` SAYS 0  `:35121`
-- TWO KINDS OF "CONSTANT BASE", AND `--raw` SEPARATES THEM IN ONE COMMAND  `:35152`
-- `MEM_IN_STRUCT_P` HAS EXACTLY THREE SHAPES -- NAME YOURS BEFORE SPELLING IT  `:35222`
-- THE PRECONDITION FOR EVERY `MEM_IN_STRUCT_P` ENTRY BELOW -- READ THIS FIRST  `:35272`
-- A DESCRIPTOR READ INSIDE A LOOP THAT ALSO STORES MUST BE A COMPONENT_REF  `:35411`
-- `loop.c`'s GIV BIAS IS THE OFFSET OF THE LAST SUBSCRIPT IN THE LOOP BODY  `:35438`
-- THE COUNT-DOWN DISCRIMINATOR: LOOK AT WHETHER THE SUBSCRIPT WAS STRENGTH-REDUCED  `:35476`
-- COUNT `jr $ra` BEFORE YOU WRITE A BODY -- A SYMBOL IS NOT ALWAYS A FUNCTION  `:35491`
-- A "MEASURED FREE" FACT DOES NOT TRANSFER EITHER -- FREE IS NOT A CLASS  `:35528`
-- IF TWO SPELLINGS OF ONE OPERATOR READ THE SAME NUMBER, THAT OPERATOR IS NOT THE FAULT YET  `:35558`
-- `jump.c`'s STORE-FLAG TRANSFORM FIRES IN cc1psx DESPITE `BRANCH_COST` 1  `:35577`
-- `ovlverify` MASKED IS BLIND TO A DISPLACEMENT OFF A CONSTANT BASE -- THE CONTAINER IS THE ONLY AUTHORITY  `:35616`
-- A CONSTANT WHOSE DEF IS IN A DIFFERENT BLOCK FROM ITS USES LOSES ITS REGISTER  `:35657`
-- A STORE'S POSITION BETWEEN TWO FLAG STORES IS LOAD-BEARING (`flow.c` `last_mem_set`)  `:35688`
-- `ori` AGAINST `addiu` IS ABOUT THE LOCAL'S WIDTH, NOT ABOUT `+` AGAINST `|`  `:35746`
-- WHEN A POINTER LOCAL IS RIGHT, AND WHEN IT IS WRONG -- ONE DISCRIMINATOR  `:35800`
-- A LISTING'S REGISTER *REUSE* IS EVIDENCE ABOUT A CONSTANT'S VALUE  `:35823`
-- A RECORD TYPE IS PER-USE, NOT PER-SYMBOL  `:35852`
-- FOLLOW THE CORRESPONDENCE: ONE MATCHED PAIR IDENTIFIES THE NEXT DONOR  `:35872`
-- A SELECTION FACT'S MAGNITUDE SCALES WITH THE NUMBER OF SITES  `:35913`
-- THE RATIO IS GETTING LESS DECISIVE AS THE SWEEP PROGRESSES, AND THAT IS STRUCTURAL  `:35930`
-- A CLEAN TWO-REGISTER EXCHANGE WITH NOTHING MOVED IS RARELY AN ALLOCATION FAULT  `:35996`
-- AN INVERTED FACT OFTEN KEEPS THE DONOR'S MAGNITUDE, MIRRORED  `:36060`
-- A POINTER LOCAL SHARED BETWEEN TWO BASIC BLOCKS BREAKS THE `high`/`lo_sum` TIE  `:36098`
-- `MEM_IN_STRUCT_P` AGAINST `fixed_scalar_and_varying_struct_p` -- WHY A CAST LOSES A RELOAD  `:36124`
-- WRITE A ZERO STORE *BEFORE* THE VALUE THAT OVERWRITES IT, OR cse DELETES IT  `:36151`
-- INSIDE OR OUTSIDE THE LOOP: A CURSOR WANTS INSIDE, A CONSTANT MULTIPLIER WANTS OUTSIDE  `:36173`
-- A CURSOR INITIALISED OUTSIDE ITS LOOP LETS loop.c REBASE THE BIV  `:36206`
-- THE ROM HAS BUGS, AND THE COHERENT SPELLING CAN BE 137 ROWS WRONG  `:36231`
-- gcc 2.7.2 HAS NO LOOP UNSWITCHING -- SO AN UNSWITCHED LOOP WAS UNSWITCHED IN THE SOURCE  `:36254`
-- A NARROW LOCAL LETS cse MERGE TWO LOADS THE TARGET KEEPS SEPARATE  `:36282`
-- AN `sw`/`lhu` PAIR MAY BE AN ADDRESS-TAKEN LOCAL, NOT A SPILL  `:36314`
-- `lhu` + `sll 16` + `sra 16` IS NOT EVIDENCE OF A CAST -- FIVE SITES, ALL FREE  `:36342`
-- A MAGIC-MULTIPLY CONSTANT DOES NOT NAME ITS DIVISOR -- READ THE SHIFT TOO  `:36365`
-- BASIC-BLOCK BOUNDARIES MARK WHERE LISTING ORDER *IS* EVIDENCE  `:36390`
-- A FOLDED OFFSET IN A LISTING IS NOT A SPELLING -- ~95 ROWS FOR ONE CONSTANT  `:36422`
-- AT -G0, AN `extern u8 X[]` FOLDS ITS FIRST OFFSET INTO THE SYMBOL  `:36448`
-- SPLITTING A REASSOCIATED SUM IS NOT MONOTONIC -- TWO STATEMENTS CAN BE WORSE THAN ONE  `:36481`
-- THE PREHEADER'S INIT ORDER IS REVERSED, AND READING IT BACKWARDS TELLS YOU WHAT IS A SOURCE VARIABLE  `:36518`
-- AN EMITTED COUNT-DOWN LOOP MEANS THE SOURCE COUNTS *UP* -- check_dbra_loop  `:36556`
-- WHERE TO PUT A `+ 1`: IN THE SWITCH ARM, NOT THE HOISTED LOAD -- AND IT INVERTS  `:36620`
-- RE-PRICE EVERY FACT AFTER THE BODY REACHES 0 -- INCLUDING THE MECHANISM  `:36646`
-- `volatile` ON A STORE ALSO BLOCKS *combine* -- `init_recog_no_volatile`, combine.c:502  `:36689`
-- A MODULO'S QUOTIENT REGISTER IS DECIDED AT EXPANSION, NOT BY THE ALLOCATOR  `:36735`
-- A ONE-WORD-EARLY `c` START IS DETECTABLE, AND THE FIX NEEDS THE RODATA IN C  `:36770`
-- THREE SIMULTANEOUS RATIO FALSE POSITIVES, ALL THE SAME WRONG FAMILY  `:36833`
-- local-alloc's REFERENCE COUNTS ARE LOOP-WEIGHTED -- flow.c ADDS `loop_depth` PER REF  `:36851`
-- A HAND-WRITTEN LABEL HANDS jump2 THE CROSS-JUMP BONUS -- jump.c:2409  `:36880`
-- A ZERO PSEUDO SURVIVES cse AS A SHIFT OF A NON-CONSTANT -- NINTH SHAPE, FIRST SUCCESS  `:36913`
-- `MEM_IN_STRUCT_P` IS ASYMMETRIC: THE STORE MUST BE A STRUCT REF AND THE LOADS MUST NOT  `:36943`
-- A LITERAL IN A SWITCH ARM MAY BE EMITTED AS THE SWITCH REGISTER -- record_jump_equiv  `:37001`
-- DERIVE THE STACK LOCALS FROM THE FRAME OFFSETS -- AND AN ARRAY IS NOT TWO SCALARS  `:37025`
-- CHECK WHICH ARM IS THE `then` BEFORE ANYTHING ELSE -- ONE INVERSION WAS 110 ROWS  `:37065`
-- A SHARED LOCAL CAN DO ITS DAMAGE 150 WORDS AWAY  `:37089`
-- THE FRONT END FOLDS `&&` CHAINS BEFORE RTL -- TWO RANGE TESTS MUST BE NESTED `if`s  `:37119`
-- RE-MEASURING ON AN IMPROVED BASELINE PAID TWO TIMES IN EIGHT -- THE RULE HAS A COST  `:37148`
-- A VALUE USED IN THREE cse BLOCKS MUST BE NARROWED ONCE, INTO A LOCAL, FROM A WIDER PARAMETER  `:37170`
-- A FREE FACT ON A PRESSURE-FREE LEAF IS NOT A FACT  `:37205`
-- WHAT PRESENTS AS AN ALLOCATION FAULT AND IS NOT -- CHECK THESE FIVE FIRST  `:37225`
-- TO STOP loop.c HOISTING AN INVARIANT, PAD THE LOOP TO THIRTY INSNS -- move_movables  `:37272`
-- A RE-READ IS FREE WHEN THE STORE IS UNCONDITIONAL -- the other side of the cse block rule  `:37330`
-- DUPLICATING A STORE INTO BOTH ARMS IS FREE ONLY IF THE ARM FALLS INTO THE EPILOGUE  `:37350`
-- WHOLE-STRUCT COPY AGAINST FIELD-BY-FIELD: USE THE LISTING TELL, THE CAUSE IS UNKNOWN  `:37408`
-- gcc 2.7.2 DOES NO DEAD-STORE ELIMINATION ON MEMORY  `:37448`
-- THE PERMUTER'S SCORE IS NOT ALIGNED ROWS -- HAND-MEASURE EVERY RESULT  `:37466`
-- A PERMUTER SCORE IS ONLY VALID AGAINST ITS OWN BASE, AND THE DIRECTORY MIXES RUNS  `:37524`
-- AND THE SAME RULE BACKWARDS: A FIX CAN BE LOAD-BEARING ONLY WHILE THE REAL FAULT REMAINS  `:37555`
-- WHAT A TAIL BODY ACTUALLY COSTS -- THE READING IS CHEAP AND THE RESIDUE IS NOT  `:37590`
-- A FIX CAN BE WORSE ALONE AND NECESSARY IN COMBINATION -- WHICH BLINDS A ONE-AT-A-TIME SWEEP  `:37617`
-- A cse BASIC BLOCK ENDS ONLY AT A `CODE_LABEL`, SO A FALL-THROUGH ARM IS THE GATE'S BLOCK  `:37671`
-- CHECK PASS ORDER BEFORE BLAMING A REGISTER FOR A SCHEDULE  `:37692`
-- A PARK'S BODY CAN DISAGREE WITH ITS OWN PROSE -- RE-MEASURE BEFORE READING  `:37707`
-- A PARK ROTS AS ITS OWN UNIT LANDS BENEATH IT, AND THE CHECKER DID NOT SEE IT  `:37732`
-- MANY `return NULL`s MAY NEED ONE SHARED `goto fail` -- COUNT THE BLOCK'S USERS  `:37765`
-- A `do { } while (0)` REFERENCE BUMP HAS A PRICED SCOPE, AND `if (1)` IS THE CONTROL  `:37795`
-- WHETHER cse FORWARDS IS A PROPERTY OF THE SITE, NOT THE BODY -- 30 WORDS APART  `:37835`
-- THE SAVE COUNT TELLS YOU HOW MANY LONG-LIVED LOCALS THE BODY NEEDS -- BEFORE YOU COMPILE  `:37864`
-- DO NOT WRITE A MEASUREMENT INTO A BRIEF THAT YOU HAVE NOT TAKEN  `:37913`
-- FIX A LEAD TOOL MID-BATCH AND THE RUNNING AGENTS STILL HOLD THE OLD FILE  `:37950`
-- A LOW CALLEE-SET OVERLAP IS AN UNRANKED SET, NOT NOISE -- I HAD THIS WRONG IN THE BRIEFS  `:37981`
-- AN ARGUMENT REGISTER SET IN THE LISTING IS NOT EVIDENCE OF AN ARGUMENT  `:38020`
-- CALLER-SAVED WHERE THE TARGET HAS CALLEE-SAVED: THE PSEUDO MUST SPAN A CALL  `:38085`
-- READ A `combine_regs` CHAIN BREAK OFF THE LISTING: A TIED INSN WRITES WHAT IT READS  `:38120`
-- `find_free_reg` RUNS IN TWO ROUNDS, AND A SUGGESTED REGISTER IS RESERVED FIRST  `:38175`
-- FOR A CALLER-SAVED REGISTER FAULT, FIX THE OCCUPANT -- NOT THE SITE THAT READS WRONG  `:38223`
-- MARK A DECLARATION YOU COULD NOT WITNESS -- IT LOOKS IDENTICAL TO ONE YOU COULD  `:38371`
-- A PARK'S RESIDUE REPRODUCING ON A RELINK PROVES THE FAULT IS IN THE SHAPE  `:38412`
-- CHECK A PARK'S FAMILY AGAINST THE BATCH'S OWN PICKS -- I DID NOT, AND WASTED A RUN  `:38452`
-- A RESURRECTED PARK PAYS TWICE: IT BECOMES THE DONOR FOR ITS OWN UNIT-MATES  `:38492`
-- A TWIN'S CALL WITH ONE MORE ARGUMENT THAN YOURS IS AN ALLOCATION LEAD  `:38579`
-- THE SAME ROW COUNT CAN BE A DIFFERENT FAULT -- COMPARE THE ROWS, NOT THE NUMBER  `:38596`
-- WHEN THE SCHEDULER'S COST FUNCTION TIES, THE ORDER IS SOURCE ORDER  `:38625`
-- A PARK CAN HAVE THE RIGHT DIAGNOSIS AND THE WRONG REMEDY  `:38700`
-- `QTY_CMP_PRI` DOES NOTHING WHEN THE TWO RANGES ARE DISJOINT -- CHECK FOR A CONFLICT FIRST  `:38755`
-- `flow` RUNS ONCE, BEFORE `combine` -- SO A REFERENCE combine DELETES IS STILL FREE  `:38783`
-- AN INNER `do { } while (0)`'s LOOP NOTES ARE A FULL SCHEDULING BARRIER  `:38814`
-- NAMING A SIGN EXTENSION'S SHIFT TEMP IS FREE  `:38839`
-- `optimize_reg_copy_1` IS WHAT EATS A PARAMETER'S BODY COPY, AND `reg_set_p` IS THE FREE CURE  `:38850`
-- A TRAILING DEAD COPY IS A CANONICALITY DEVICE, AND THE COMPARISON IS *STRICTLY* GREATER  `:38878`
-- A COMPILER TEMP IS ALWAYS HOISTED -- ARM (2) OF `scan_loop` IS `! REG_USERVAR_P`  `:38894`
-- A BACKWARD `goto` IS NOT A LOOP TO `loop.c`, SO EVERY HOIST IS OFF THE TABLE  `:38930`
-- TWO BIT TESTS ON ONE HALFWORD MUST BE NESTED `if`s, NOT `&&`  `:38949`
-- ONE LOCAL PER REGION, NOT ONE REUSED LOCAL PER ROLE  `:38968`
-- READ THE RELOCATION, NOT THE SYMBOL NAME splat PRINTS  `:38995`
-- A ZERO-EXTENDING WIDENING IS WHAT LETS A C VARIABLE *BE* THE `sll` TEMP  `:39012`
-- `__asm__("" : "+r"(x))` IS NOT A DEVICE -- IT IS DELETED BEFORE flow  `:39086`
-- A DUPLICATED STORE RAISES AN ALLOCNO'S PRIORITY, AND CROSS-JUMPING MERGES IT BACK  `:39106`
-- MOSTLY-DISPLACEMENT ROWS WITH THE WORD COUNT OFF BY ONE MEANS A WRONG `goto` TARGET  `:39126`
-- A REPEATED LOAD BECOMING A REGISTER COPY IS AN ALLOCATION SYMPTOM, NOT A cse ONE  `:39140`
-- THE `MEM_IN_STRUCT` ESCAPE IS CHECKED BEFORE `memrefs_conflict_p` DECIDES ANYTHING  `:39158`
-- A TWO-BLOCK POINTER LOCAL LOSES ITS BIRTHING BOOST, AND A CALL'S ARG COPY THEN STRANDS ITS `lo_sum`  `:39195`
-- `loop.c` HOISTS AN INVARIANT FOR FREE IF IT IS THE LAST USE OF ANOTHER HOISTED INVARIANT  `:39228`
-- cse's SKIP-BLOCKS ARM EXTENDS A cse BLOCK AROUND AN `if` WITH NO `else`  `:39257`
-- A COPY IS EATEN THE MOMENT IT SHARES A BLOCK WITH A LATER USE OF ITS SOURCE  `:39273`
-- A BYTE THAT IS BOTH STORED AND WIDENED NEEDS A `u8` LOCAL, NOT A CAST  `:39286`
-- `block_alloc` TIES AN ARITHMETIC INSN'S OUTPUT TO AN INPUT THAT DIES IN IT  `:39295`
-- SOLVE THE sched1 PRIORITY INEQUALITIES BEFORE SWEEPING SPELLINGS  `:39316`
-- A USER COPY OF A PARAMETER IS THE ONLY WAY TO GIVE ITS HARD-REG COPY A LATER LUID  `:39342`
-- THERE IS NO FREE WAY TO RAISE `reg_n_sets` EXCEPT THE MATCHED-OPERAND `asm`  `:39358`
-- A REDUNDANT RECOMPUTATION IS A COPY THAT SURVIVES, WHERE A SOURCE-LEVEL COPY IS NOT  `:39381`
-- jump2 DELETES A REDUNDANT HARD-REGISTER COPY, SO TWO COPIES OF ONE VALUE CANNOT BOTH EXIST  `:39428`
-- READ THE `.set noreorder` BLOCKS IN THE OUTPUT BEFORE THEORISING ABOUT A DELAY SLOT  `:39466`
-- A TRAILING INPUT-ONLY FENCE *LOWERS* AN ALLOCNO'S PRIORITY  `:39484`
-- READ THE ASSEMBLER MACRO, NOT THE MNEMONIC  `:39501`
-- "SCORES EQUAL" IS NOT "STREAMS EQUAL" -- RE-MEASURE BEFORE TRUSTING A `byte-identical` NOTE  `:39515`
-- WHAT SETS `MEM_IN_STRUCT_P` IS THE `INDIRECT_REF`'s OPERAND BEING A `PLUS_EXPR`  `:39533`
-- A READ-MODIFY-WRITE AND A GLOBAL STORE CANNOT BOTH BE ORDERED FROM ONE STATEMENT  `:39566`
-- A REJECTED SPELLING MAY HAVE BEEN ONLY HALF APPLIED  `:39591`
-- `hi -= lo;` AS ITS OWN STATEMENT, FOR ONE BLOCK OUT OF SIX  `:39612`
-- WHICH USER VARIABLE HOLDS A DENIED CONSTANT IS A SECOND, INDEPENDENT CHOICE  `:39627`
-- A HOIST'S POSITION IN THE PREHEADER IS ITS SOURCE POSITION AMONG THE MOVABLES  `:39643`
-- combine CARRIES A KNOWN BIT PATTERN ACROSS BLOCKS ONLY WHILE `reg_n_sets == 1`  `:39669`
-- A `REG_EQUIV` NOTE DOUBLES A PSEUDO'S `live_length`, AND A SECOND SET SKIPS THE WHOLE THING  `:39707`
-- A DEAD *EARLIER* SET MAKES cse2 KEEP A REG-REG COPY  `:39740`
-- `-fcse-skip-blocks` CARRIES cse1's TABLE ACROSS A `||`, BUT NOT REGS SET IN THE SKIPPED BLOCK  `:39766`
-- `lw $t0` MEANS A SPILLED PSEUDO; `lw $v0`/`$v1` MEANS AN ADDRESSABLE VARIABLE  `:39790`
-- JOINING TWO EARLY-RETURN TESTS WITH `||` CHANGES WHICH BLOCK reorg CAN OWN  `:39809`
-- A REDUNDANT REGISTER COPY SURVIVES jump2 IF YOU SPELL IT `x + z0` WITH `z0` PINNED TO `$0`  `:39823`
-- A FREE REFERENCE WINS AN `allocno_compare` RACE, AND `do { } while (0)` IS THE SPELLING TO REACH FOR FIRST  `:39935`
-- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:40028`
-- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:40098`
-- DECLARATION ORDER IS NOT A LEVER -- 446 orders, no change  `:40136`
-- A CANCELLED INCREMENT PAIR BUYS REFERENCES, AND A SECOND SET, FOR NOTHING  `:40172`
-  - The second set is the part that lands functions  `:40196`
-  - Sweep it, do not reason about it  `:40225`
-- `divmodsi4`'S DEAD MOD OUTPUT HOLDS A HARD REGISTER, AND WHETHER THE QUOTIENT IS LOCAL OR GLOBAL DECIDES WHICH ONE  `:40237`
-- A DUPLICATED-ARM DEVICE'S CONDITION VARIABLE CAN CREATE THE RESIDUE IT IS BLAMED FOR  `:40302`
-- A SHARED TAIL IN THE TARGET MAY BE TWO BLOCKS CROSS-JUMPED AFTER RELOAD -- WRITE IT TWICE, WITH ITS OWN LOCALS  `:40360`
-- `do { } while (0);` IS A FULL SCHEDULING BARRIER, NOT ONLY A loop_depth WEIGHT  `:40412`
-- WHEN A CALL'S OLD ARGUMENT VALUE IS WHAT THE NEXT CALL NEEDS, PUT THE OLD VALUE IN THE TEMP -- NOT THE RESULT  `:40460`
-- `allocno_compare`'s PRIORITY IS READABLE STRAIGHT OFF THE `.lreg` DUMP -- STOP SWEEPING AND DO THE ARITHMETIC  `:40490`
-  - A cancelled pair placed after its variable's last use is DELETED and buys nothing  `:40521`
-  - The return copy CAN win the LUID tie -- if its destination has `reg_n_sets == 1`  `:40529`
-  - And re-measure the negatives that say "identical bytes"  `:40548`
-- A LOCAL COPY OF A POINTER PARAMETER DESTROYS ITS `REG_EQUIV` AND HALVES ITS PRICED LIVE LENGTH  `:40554`
-  - The diagnostic, and it is free  `:40578`
-- TWO ARMS WITH THEIR OWN ASSIGNMENT BEAT ONE CONDITION WITH A cse DEVICE  `:40594`
-- A `-G0` GLOBAL'S ADDRESS DOES NOT VARY, SO ONE ARRAY_REF DELETES A sched1 DEPENDENCE  `:40622`
-- A NEGATIVE DISPLACEMENT IN THE LISTING NAMES A SOURCE POINTER LOCAL  `:40684`
-- A NARROWER DECLARATION CAN FLIP A LOCAL-ALLOC TIE WITH NO REFERENCE CHANGE  `:40711`
-- AN ILLEGAL PERMUTER HOIST NAMES THE READ THE SCHEDULER WANTS EARLY  `:40744`
-- A TEMP NAME SHARED BY TWO BLOCKS IS A GLOBAL ALLOCNO, AND IT PRICES EVERY QUANTITY AROUND IT  `:40771`
-- `schedule_select` PROMOTES A STORE OVER AN ALU INSN WITHIN ONE PRIORITY GROUP  `:40797`
-- A DUPLICATED ARM AROUND A CALL ASSIGNMENT IS A SECOND SET, AND REPLACES `__asm__("" : "+r"(x))`  `:40825`
-- `qty_n_refs` IS ALREADY LOOP-WEIGHTED, SO DO NOT WEIGHT IT AGAIN  `:40854`
-- ONE REFERENCE OVER A `floor_log2` STEP MOVES A PARAMETER FIVE PLACES IN THE QUEUE  `:40869`
-  - A duplicated assignment is deleted BEFORE it is counted; a cancelled pair is not  `:40908`
-- THE POINTER IS ALWAYS TREE OPERAND 0, SO `i*4 + r` CANNOT PRODUCE INDEX-FIRST  `:40931`
-- A CONSTANT BESIDE A SYMBOL IS FOLDED INTO THE SYMBOL; A FIELD OFFSET IS NOT  `:40964`
-- TWO QUANTITIES THAT DIE AT THE SAME INSN ARE A FIXED ORDER; A THIRD RESTORES BIRTH ORDER  `:40999`
-  - Getting the third quantity: `v >= 0 ? v : -v`, and the asymmetry is in `fold`  `:41025`
-- `read_dependence` NEEDS *BOTH* MEMREFS VOLATILE  `:41054`
-- cse's PLUS ASSOCIATION CANNOT BE AVOIDED ON MIPS -- BREAK IT BY WRITING THE BASE VARIABLE  `:41073`
-- A HImode LOCAL RECEIVING AN SImode EXPRESSION IS WHERE SPARE `addu` COPIES COME FROM  `:41125`
-- cse CANONICALISES A QUANTITY TO WHICHEVER REGISTER IS USED LATER  `:41154`
-  - And a sharper statement of "make a C variable BE a compiler temp"  `:41175`
-- A SPILLED HImode PSEUDO UNDER A PARADOXICAL SUBREG TAKES AN 8-BYTE, 8-ALIGNED SLOT  `:41189`
-- LOOP BODY SIZE DECIDES WHETHER AN INVARIANT IS HOISTED, SO AN UNRELATED STATEMENT CAN PROTECT A LEVER  `:41228`
-- combine CAN MANUFACTURE A SURVIVING REGISTER COPY FROM A REDUNDANT SIGN EXTENSION  `:41258`
-- A SOURCE-LEVEL COPY SURVIVES cse BEHIND A LABEL WITH TWO PREDECESSORS  `:41285`
-  - A reading recipe for `.greg` that follows from pass order  `:41297`
-- EVALUATE THE LIMIT FIRST TO STOP jump2 CROSS-JUMPING A GUARD INTO THE LOOP TEST  `:41313`
-- CORRECTION: `MEM_IN_STRUCT_P` NEEDS A `PLUS_EXPR` ON TOP, NOT A STRUCT  `:41329`
-  - AND IT WORKS IN BOTH DIRECTIONS: A STORE SINKING PAST LOADS  `:41369`
-  - A STRUCT MEMBER ALSO SETS THE FLAG, AND COMMITS YOU TO THE FIELD'S TYPE  `:41384`
-- `set_preference` TAKES THE SOURCE'S FIRST OPERAND, SO A SHIFT INHERITS A PREFERENCE  `:41407`
-- A DUPLICATED ARM WITH IDENTICAL ARMS IS DELETED BY jump2; ITS ONLY EFFECT IS THE REFERENCE  `:41443`
-- A LOCAL ARRAY'S DECLARED LENGTH CHANGES ALLOCATION -- MEASURED, UNEXPLAINED  `:41471`
-- WRITE THE ASSOCIATION BACKWARDS: `A - (B - C)` AND `(A + C) - B` ARE THE SAME TREE  `:41489`
-- A READ-MODIFY-WRITE ON MEMORY IS NOT THE SAME AS ONE THROUGH A LOCAL  `:41525`
-  - And the root error in that park, which is worth its own warning  `:41547`
-- A SECOND SOURCE POINTER WITH THE SAME STRIDE IS A SECOND BIV, AND ITS giv COSTS A REGISTER  `:41561`
-- TWO SPELLINGS OF THE SAME CONSTANT ADDRESS SPLIT A QUANTITY'S REFERENCE COUNT  `:41598`
-- A DUPLICATED-ARM `if (v)` IS `loop_depth` REFERENCES, AND THAT CAN CROSS THE `floor_log2` STEP  `:41635`
-- EVALUATE THE LIMIT FIRST IN A PLAIN `if`, NOT ONLY IN A LOOP GUARD  `:41649`
-- READ BACK THE FIELD YOU JUST STORED, NOT THE SOURCE YOU STORED FROM  `:41666`
-  - And `(s16)` of an ADDRESSABLE just-stored stack local folds to one `lh`  `:41683`
-- A STORE IN A BRANCH'S DELAY SLOT IS UNCONDITIONAL IN THE SOURCE  `:41693`
-- `reg_n_calls_crossed` IS A PROPERTY OF THE C VARIABLE, SO TWO DISJOINT USES SHARE A REGISTER CLASS  `:41713`
-- A LOOP-HOISTED COPY REACHES AN EARLIER LOAD ONLY IF sched1 MOVES IT FIRST  `:41762`
-- A SWEEP'S *POSITIVE* IS AS BODY-SCOPED AS ITS NEGATIVE  `:41781`
-  - And ablate devices BEFORE reading any allocation dump  `:41796`
-- A DEAD COMPARISON IN THE TARGET IS POSITIVE EVIDENCE ABOUT A DECLARED WIDTH  `:41811`
-  - The corollary: check for a deleted BLOCK before believing a closed word gap  `:41848`
-- SWEEP `MEM_IN_STRUCT_P` CONVERSIONS IN GROUPS -- SINGLY THEY ALL READ AS NEGATIVES  `:41862`
-- CORRECTION: jump2's CROSS-JUMP PAIRING IS A GLOBAL PROPERTY OF THE FUNCTION  `:41895`
-- `update_equiv_regs` MOVES A CONSTANT'S INIT TO JUST BEFORE ITS USE -- MOVE THE ASSIGNMENT INSTEAD  `:41920`
-  - And do not spell such an address as a CONSTANT instead  `:41958`
-- ABLATE DEVICES TOGETHER AS WELL AS SINGLY -- A PAIR CAN CANCEL EXACTLY  `:41970`
-- A DEPTH-2 INNER LOOP SHARING AN OUTER LOOP'S INDEX GETS ITS REFERENCES DOUBLED  `:41991`
-- AN `s16` LOCAL IS ONE ALLOCATOR COPY PER BASIC BLOCK -- AN ALLOCATION LEVER, NOT A WIDTH ONE  `:42008`
-  - The corollary, which retires a whole class of stale park rejections  `:42037`
-- CORRECTION: `QTY_CMP_PRI`'s DENOMINATOR IS NOT THE NUMBER `.lreg` PRINTS  `:42052`
-- A `u8` FLAG BUYS TWO REFERENCES FOR ITS OWN QUANTITY, AT THE COST OF ONE `andi`  `:42086`
-- A ONE-ARMED `if` DOES NOT END cse's EXTENDED BLOCK; A TWO-ARMED ONE DOES  `:42107`
-  - And a trap in "ablate the power set"  `:42136`
-- TWO QUANTITIES ONLY EXCHANGE REGISTERS WHEN **BOTH** GO BLOCK-LOCAL  `:42151`
-- READING A GLOBAL BACK MANUFACTURES THE COPY THE TARGET HAS  `:42169`
-- A `symbol + register` ADDRESS NEVER TAKES THE `LO_SUM` ARM ON THIS TARGET  `:42192`
-  - Two measured negatives from the same park, worth not repeating  `:42215`
-- A CANCELLED PAIR *MOVES* THE DEFINITION; A PHANTOM ZERO DOES NOT  `:42229`
-- A HImode LOCAL FED BY A SEPARATE SImode LOCAL KEEPS ITS SET ACROSS A BLOCK BOUNDARY  `:42256`
-  - And the companion fact: one reference in a second block makes a pseudo global  `:42277`
-- A `do { } while (0)` STOPS cse1 BUT NOT cse2 -- AND A DUPLICATED FAIL-BODY'S LABEL IS FOLLOWED  `:42299`
-- `gen_binary` PUTS THE NARROW OPERAND FIRST, WHATEVER THE SOURCE SAYS  `:42331`
-  - And the width of a `|` chain is set by its FIRST operand, not its destination  `:42357`
-  - And the copy direction that survives  `:42365`
-- A USER INSN CAN NEVER GET A LUID BELOW THE PARAMETER COPIES -- STOP DIGGING  `:42373`
-- A PROLOGUE WHOSE PARAMETER COPIES ARE NOT IN PARAMETER ORDER WANTS A PLAIN `local = param;`  `:42394`
-- A DUPLICATED EARLY `return CONST` IS ITSELF THE CROSS-JUMP LEVER -- COUNT THE SITES  `:42426`
-- `x >= 0 ? x : -x` IS A sched1 LEVER ON THE OPERANDS AROUND IT, NOT ONLY AN `abs` FOLD  `:42460`
-  - Two tool cautions recorded with it  `:42474`
-- WHICH GATE THE SHARED `goto fail` LABEL BELONGS IN IS NOT A RULE -- IT IS THE *LAST* ONE AS OFTEN AS THE SECOND  `:42487`
-- A CALL RESULT'S DECLARED RETURN WIDTH IS AN `allocno_compare` LEVER, NOT ONLY A PLACEMENT ONE  `:42513`
-- MERGING TWO DISJOINT LIVE RANGES INTO ONE LOCAL IS THE OTHER CURE FOR AN INHERITED HARD-REGISTER PREFERENCE  `:42542`
-- A DUPLICATED TAIL AND A `goto` TO A SHARED ONE ARE THE SAME LENGTH BUT NOT THE SAME ALLOCATION, AND THE DUPLICATE CAN BE ONE STATEMENT  `:42578`
-- A SIGNED `/ 2` CAN COST AN EIGHT-BYTE UNREFERENCED STACK LOCAL THAT `>> 1` DOES NOT  `:42612`
-- AN `s16` STACK PARAMETER GETS A REGISTER; AN `s32` ONE IS REMATERIALISED FROM ITS INCOMING SLOT  `:42648`
-- IN A STATE INSTALLER, THE +0x8C WORD STORE GOES BETWEEN THE TWO STATE BYTES  `:42685`
-- A LOAD CANNOT REACH A STORE'S DELAY SLOT WHEN BOTH SIDES ARE STRUCT MEMs -- SO REORDER THE SOURCE  `:42706`
-- A GROUP OF DIVISIONS SHARING A DIVISOR: WRITE THE DIVISOR INLINE AT EVERY SITE, NEVER IN A LOCAL  `:42725`
-- AMENDMENT: THE FREE-REFERENCE DEVICES ARE NOT FREE WHEN THE SORT IS LOCAL-ALLOC'S  `:42764`
-- THE REFERENCE-COUNT DEVICES ARE MACRO RESIDUE, AND THE MACRO BOUNDARY IS THE SEARCH HINT  `:42807`
-- A BLOCK EMITTED IN THE WRONG PLACE, AT THE RIGHT WORD COUNT, IS USUALLY AN INVERTED TWO-ARM GATE  `:42854`
-- THE allocno_compare LEVER RUNS BOTH WAYS: SOMETIMES YOU REMOVE A REFERENCE  `:42875`
-- gcc 2.7.2 CANNOT DISAMBIGUATE A `lo_sum` STORE FROM A `reg+offset` LOAD, AND ARGUMENT LOADS ARE EMITTED LAST  `:42906`
-- A PAIRED CLEAR AND SET ON ONE WORD IS TWO STATEMENTS, NOT ONE COMBINED MASK  `:42935`
-- THE ORDER OF A GROUP OF STORES DECIDES WHICH cse RELOADS SURVIVE  `:42957`
-- A LOAD FIRST IN A BLOCK KEEPS A CONDITIONAL BRANCH'S DELAY SLOT EMPTY  `:42994`
-- A MODULO IN ITS OWN STATEMENT REUSES THE DIVIDEND'S PSEUDO  `:43041`
-- A PREDICTABLE-TRUE TWO-ARM GUARD IS A REFERENCE BUMP, AND ONLY ITS OPERAND MATTERS  `:43055`
-- A SHARED `goto` EXIT LABEL IS A cse BARRIER, AND ITS POSITION IS AN ALLOCATION FIX  `:43091`
-- THE BIASED BASE REGISTER A LOOP'S STORES SHARE IS ITS *LAST* MEMORY REFERENCE  `:43127`
-- MOVING A CONSTANT'S STORES FURTHER APART LOWERS ITS local-alloc RANK  `:43145`
-- A LOAD THAT MUST SURVIVE A GLOBAL STORE BUYS A PARAMETER COPY  `:43166`
-- A STRUCT ASSIGNMENT AND `memcpy` EMIT THE SAME BLOCK MOVE, NOT THE SAME SCHEDULE  `:43200`
-- `ptr + (i << 2)` KEEPS POINTER-FIRST ORDER WHERE `ptr + i * 4` REASSOCIATES  `:43231`
-- ROUTING A CONSTANT THROUGH AN EXISTING VARIABLE IS A FREE REFERENCE BUMP  `:43243`
-- THE PERMUTER'S SCORE IS NOT ALIGNED DIFFERENCES, AND ITS OUTPUT IS NOT CORRECT C  `:43267`
-- A TIE IN `allocno_compare` MAY NOT BE REACHABLE FROM STATEMENT ORDER AT ALL  `:43294`
-- A `switch` ON AN s16 FIELD DOES ITS MINVAL SUBTRACTION IN HImode  `:43325`
-- `andi 0xFFFF` / `or` / `and 0xFFFF0000` ON ONE REGISTER IS A 16.16 UNION  `:43344`
-- AN ARRAY REFERENCE AND A CAST-DEREFERENCE TO THE SAME HALFWORD SCHEDULE DIFFERENTLY  `:43369`
-- WHEN A CARVED BODY'S CALLEE SET SPANS TWO RESIDENT FUNCTIONS, SUSPECT A BLEND  `:43399`
-- A TWIN SEARCH BUILT ON `nm` CANNOT SEE OVERLAYS THAT SHARE A RAM WINDOW  `:43419`
-- A SIGNATURE LOOSE ENOUGH TO BE WRONG FOR CLONING IS THE RIGHT ONE FOR READING  `:43461`
-- ONE POINTER LOCAL PER BASIC BLOCK, NOT ONE SHARED: LOCAL VS GLOBAL ALLOCNO  `:43481`
-- A SURVIVING PARAMETER COPY NEEDS A *NARROWING* COPY, NOT JUST A LIVE PARAMETER  `:43520`
-- (ORIGINAL ENTRY) A PARAMETER THAT DIES AT ITS COPY LOSES THE COPY  `:43561`
-- A PROXIMITY TEST IS ONE `&&` CHAIN OF INLINE `abs()`, NOT TWO NEGATE BLOCKS  `:43608`
-- A TWIN'S LOAD-BEARING FACT CAN BE FREE ON YOUR BODY, AND THAT IS WORTH A ROW  `:43650`
-- A LOCAL REUSED FOR TWO UNRELATED VALUES IS A LIVE-RANGE BUG, 150 WORDS AWAY  `:43670`
-- A CALL DUPLICATED INTO BOTH ARMS IS HOW TWO `jal`s TO ONE CALLEE APPEAR  `:43700`
-- `do { } while (0)` AS A PURE SCHEDULING PIN, NOT A REFERENCE BUMP  `:43726`
-- A LOCAL WRITTEN TWICE BLOCKS SUBSTITUTION, AND COSTS A REGISTER TO DO IT  `:43784`
-- A TWIN'S STATED FACT HAS THREE OUTCOMES, AND A PRICED FACT DETECTS THE THIRD  `:43800`
-  - AND THE RATIO DOES NOT PREDICT WHICH  `:43832`
-  - THE DEVICE RULE IS A PROCEDURE, NOT A PREDICTION  `:43859`
-- REFERENCES BUY NOTHING UNTIL ONE CROSSES A POWER OF TWO  `:43876`
-  - AND THE JUMP IS DISCONTINUOUS, SO ONE BUMP CAN OVERSHOOT  `:43902`
-- `if (1)` BUYS NO REFERENCE; ONLY A LOOP CONSTRUCT DOES  `:43944`
-- A DEVICE'S SCOPE IS USUALLY NOT EVIDENCE ABOUT WHERE THE MACRO WAS  `:43963`
-- `ovlverify` CANNOT SEE WHICH DATA SYMBOL A RELOCATED LOAD NAMES  `:43984`
-- ALLOCATION FACTS FOLLOW THE FRAME; SHAPE FACTS FOLLOW THE SHAPE  `:44005`
-  - CORRECTION: THE FRAME PREDICTS A BUDGET, NOT A DIRECTION  `:44079`
-- EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE  `:44118`
-- A FOURTH OUTCOME FOR A TWIN'S FACT: NOT APPLICABLE  `:44152`
-  - THE POSITIVE SIDE OF THE FRAME RULE, MEASURED ACROSS 19 FACTS  `:44175`
-- `synth_mult` FACTORS A CONSTANT MULTIPLY, AND NOT THE WAY THE TARGET DID  `:44192`
-- A LOCAL WRITTEN AND NEVER READ CAN STILL BE LOAD-BEARING  `:44216`
-- A PARAMETER'S DECLARED WIDTH IS AN ALLOCATION LEVER EVEN WHEN EVERY USE IS A BYTE STORE  `:44235`
-  - AND A LIMIT ON THE FRAME RULE, FROM THE SAME FUNCTION  `:44263`
-- A TWIN'S PRICES DO NOT SURVIVE INTO A JUMP-TABLE OWNER  `:44275`
-  - AND A "PAIR" OF FACTS CAN BE TWO FACTS OF VERY DIFFERENT WEIGHT  `:44296`
-- THREE KINDS OF TWIN FACT, WITH THREE DIFFERENT TESTS  `:44310`
-  - AND A STATEMENT-ORDER FAULT PRESENTS AS AN ALLOCATION FAULT  `:44349`
-  - THE AMENDMENT: ALL THREE CLASSES HAVE INVERTED, SO THE TAXONOMY IS A SORT AND NOT A WARRANT  `:44357`
-- THE SAVE ORDER PREDICTS WHICH VALUE IS IN WHICH REGISTER, AND SO PREDICTS ALIAS SPLITS  `:44424`
-- A LISTING'S `%hi(SYMBOL)` IS NOT EVIDENCE THAT THE SOURCE DECLARED ONE  `:44477`
-- A GLOBAL READ INSIDE A LOOP THAT ALSO STORES THROUGH POINTERS GETS NO GIV  `:44499`
-- ONE LOCAL CAN HOLD A CALL RESULT, A LOOP COUNTER AND A SECOND CALL RESULT  `:44513`
-  - AND THE TAXONOMY'S CLEANEST POSITIVE CASE  `:44542`
-- A DEVICE THAT LEAVES EXACTLY ONE ROW STANDING IS COVERING FOR A MISSING STATEMENT  `:44558`
-- PICK A TWIN BY ITS CONSTANTS WHEN THE RATIO AND THE FRAME BOTH TIE  `:44593`
-- A TWIN'S REJECTED TABLE IS USEFUL IN REVERSE  `:44607`
-- CORRECTION: A TABLE OWNER'S PRICES ARE UNPREDICTABLE, NOT RELIABLY INFLATED  `:44621`
-  - AND `ovlverify`'s COUNT IS THE ONE THAT IS ACTUALLY WORTHLESS HERE  `:44652`
-- THE SAVE ORDER ALSO PREDICTS WHETHER A REFERENCE-COUNT DEVICE APPLIES  `:44664`
-- THREE SMALLER MEASURED FACTS FROM ovl_dng_b13  `:44695`
-  - A BANK FACT: ovl_dng_b13 KEEPS A COUNTDOWN AT p+0xA4  `:44715`
-- A GUARD WHOSE CONDITION FOLDS AWAY STILL BUYS THE REFERENCE  `:44726`
-- A SIGN-EXTENDED `(s16)(i + K)` IN A LOOP BECOMES AN INDUCTION VARIABLE ON `K << 16`  `:44764`
-  - AND A FRAME MISMATCH THAT IS ITSELF THE TWIN'S NOT-APPLICABLE FACT  `:44780`
-- GREP THE OFFSET SET, NOT JUST THE CALLEE SET  `:44796`
-- TWO CONSECUTIVE `|=` ON ONE FIELD COLLAPSE TO ONE `ori`, AND A STORE BETWEEN THEM SAVES BOTH  `:44818`
-- A `%hi` TALLY IS NOT A COUNT OF SOURCE SYMBOL REFERENCES  `:44851`
-  - AND A CLEAN `ovlverify` STILL PROVES NOTHING ABOUT TABLE IDENTITY  `:44864`
-- A SHARED REGISTER IS NOT EVIDENCE OF A SOURCE LOCAL  `:44874`
-  - A TWIN'S FACT CAN BE WEAKER THAN THE TWIN STATES  `:44890`
-- `reload_cse_regs` REWRITES `li $v0, 0` AS `move $v0, $sN`, AND FORGETS AT EVERY LABEL  `:44905`
-- A FRAME-MATCHING TWIN THAT IS STILL A STUB IS STILL THE RIGHT TWIN  `:44928`
-- THREE MORE MEASURED FACTS, ALL FROM RELINK DELTAS  `:44951`
-- THE PERMUTER'S SCORE IS NOT ALIGNED DIFFERENCES, SO `best < base` IS NOT PROGRESS  `:44968`
-  - THE SAME RESULT A SECOND TIME, AND A FACT ABOUT FREE SPELLINGS  `:44999`
-- A TWO-WAY VALUE PICK NEEDS ONE PSEUDO, AND THE SYNTAX IS NOT THE POINT  `:45022`
-  - AND WHEN `dngtwin` HAS NOTHING, `xsibs` STILL MIGHT  `:45043`
-- A JUMP TABLE'S ENTRY GROUPING IS A FOURTH TWIN SELECTOR  `:45054`
-- A NOT-APPLICABLE CAN BE PREDICTED FROM THE MECHANISM, NOT JUST MEASURED  `:45077`
-  - AND A FACT CAN BE ASYMMETRIC: TRUE IN ONE DIRECTION, FREE IN THE OTHER  `:45098`
-- cse DOES NOT UNIFY LOADS ACROSS A `div`, SO A REPEATED EXPRESSION CAN BE REAL  `:45107`
-- A DEVICE AND A STATEMENT-ORDER FAULT CAN STACK, AND THE DEVICE GOES FIRST  `:45129`
-- AN OUT-PARAMETER'S DECLARED SIZE IS AN ARGUMENT FACT, NOT AN ALLOCATION FACT  `:45148`
-  - AND A POSITION FACT CAN BE SET BY WHAT READS BEFORE IT  `:45162`
-- A FRAME DELTA WITH AN IDENTICAL SAVE LIST AND ORDER IS THE ARGUMENT AREA  `:45176`
-- FOUR MORE, EACH ONE A SINGLE ROW THAT LOOKS STRUCTURAL  `:45200`
-- NEITHER `ovlverify` NOR `aligndiff` CAN SEE WHICH ROUTINE A `jal` NAMES  `:45232`
-- READ WHICH ROWS *AGREE*, NOT ONLY WHICH DIFFER  `:45248`
-- cse DOES NOT UNIFY TWO IDENTICAL EXPRESSIONS ACROSS ARMS OF A BRANCH  `:45278`
-  - AND A TWIN'S FACT CAN BE "NOT WRONG, JUST UNNECESSARY"  `:45319`
-- A `.rodata, UNIT` SUBSEGMENT TAKES ITS SIZE FROM THE COMPILER, NOT THE YAML  `:45329`
-  - AND A SWALLOWED DATA WORD HAS A SIGNATURE YOU CAN GREP FOR  `:45361`
-- A ONE-WORD DELTA FROM A TWIN IS USUALLY A COMPARE CONSTANT, NOT A MISSING STATEMENT  `:45376`
-- AN ODD *CASE* COUNT PADS, SO A PADDED TABLE'S `.word` COUNT IS ALWAYS EVEN  `:45411`
-- `ovlverify`'s ROM FALLBACK WAS READING ANOTHER OBJECT'S BYTES ON CARVED UNITS  `:45480`
-- RE-CORRECTION: `fold_truthop`'s PRECONDITION IS ONE **OPERAND**, NOT ONE LOCAL  `:45523`
-- CORRECTION: `fold_truthop` ONLY BITES ON TESTS OF ONE LOCAL  `:45547`
-- A STORE OF THE SWITCH VALUE CAN BE A PLAIN CONSTANT  `:45573`
-  - AND THE CLEANEST CONFIRMATION YET THAT REFERENCE-COUNT FACTS FOLLOW NEITHER  `:45592`
-- `MEM_IN_STRUCT_P` DECIDES WHETHER A FIXED SCALAR CAN BE HOISTED PAST A STORE  `:45608`
-  - AND A POWER-OF-TWO MULTIPLY IS *NOT* LIKE THE `* 640` CASE  `:45632`
-  - AND "ANYTHING ELSE: WRITE THE CONSTANT" IS WRONG -- MEASURED BACKWARDS ON 0xC0000  `:45641`
-- ANCHOR A REVERT INSIDE THE FUNCTION'S OWN BODY -- SIBLING DECLARATION LISTS ARE IDENTICAL  `:45665`
-- IF AN EDIT TO PRICE A FACT RETURNS THE LANDED FIGURE, CHECK IT APPLIED  `:45696`
-  - AND A K&R IMPLICIT DECLARATION CAN HIDE INSIDE A CLEAN LANDING  `:45716`
-- CORRECTION: THE SUB-WORD PARAMETER LEVER NEEDS TWO COPIES TO BITE  `:45727`
-  - AND `func_800AAF00`'s FOURTH ARGUMENT IS A TABLE POINTER, NOT AN INT  `:45747`
-  - THE SUB-WORD PARAMETER CORRECTION, CONFIRMED INDEPENDENTLY  `:45760`
-  - AND THE ONE-WORD-DELTA RULE, CONFIRMED THE SAME WAY  `:45772`
-  - A LEVER FROM LAST BATCH WAS USED AS INTENDED  `:45782`
-- IN A MAGIC-NUMBER DIVISION, READ THE SHIFT AND NOT THE MAGIC  `:45793`
-  - AND A SMALL-POWER-OF-TWO DIVIDE OF A SIGNED VALUE IS NOT A SHIFT  `:45811`
-- A TWIN'S ARG-LESS-CALL DEVICE CAN BE FREE, AND POSITION IS THE DISCRIMINATOR  `:45820`
-  - A TABLE SWITCH DOES NOT CARE ABOUT ARM ORDER; A COMPARE CHAIN DOES  `:45841`
-- A FIRST-COMPILE LANDING'S COMMENT CONTAINS ASSERTIONS, NOT MEASUREMENTS  `:45854`
-- AND A BUILD-FREE RELOCATION AUDIT NOW EXISTS: `tools/decomp/relcand.py`  `:45879`
-- CARRY A TWIN'S MECHANISM, NOT ITS SPELLING -- THE `reload_cse_regs` CASE  `:45912`
-  - A DEVICE CAN BE COVERING FOR A STATEMENT *SHAPE*, NOT A MISSING STATEMENT  `:45948`
-  - AND A MIRRORED REGISTER MAP MEANS RE-PRICE, NOT ASSUME  `:45962`
-- A UNIFORM p/c SWAP ON AN ACTOR HANDLER: LOOK FOR A REPEATED DEFAULT ARM  `:45974`
-  - THE TWO SPELLINGS THAT WIN THE RANK AND STILL DO NOT LAND  `:45993`
-- A SWITCH'S ARM BODIES EMIT IN SOURCE ORDER WHILE ITS DECISION TREE IS BALANCED  `:46011`
-- THE LISTING'S `srl 8` / `andi 0xE` IS A FOLD, NOT THE SOURCE  `:46027`
-- A FACT CAN BE A CONJUNCTION, AND ONE-AT-A-TIME PRICING WILL MISS IT  `:46048`
-- WHETHER TWO MASK CLEARS FOLD DEPENDS ON WHETHER THE RESULT IS AN `andi` IMMEDIATE  `:46076`
-- A BYTE STORE THROUGH A `u8 *` WIPES cse's MEMORY TABLE, SO A RELOAD IS REAL  `:46099`
-  - AND `dngtwin` CAN BE USELESS WHILE THE ANSWER IS 150 LINES AWAY  `:46145`
-- TWO `|=` OR `&=` ON ONE FIELD: TWO MECHANISMS MERGE THEM, AND THE TEST IS DIFFERENT  `:46154`
-- A NARROWED ADD PUTS A NEGATIVE CONSTANT IN A CALLEE-SAVED REGISTER  `:46189`
-- A TABLE OWNER'S ARM ORDER IS INVISIBLE TO BOTH TOOLS, AND I COULD NOT AUTOMATE THE CHECK  `:46211`
-  - THE AUTOMATED CHECK I TRIED AND WITHDREW  `:46231`
-- `MEM_IN_STRUCT_P`, BOTH POLARITIES, WITH THE cse.c MECHANISM  `:46280`
-- IF NEITHER SPELLING OF A TWIN'S FACT GIVES 0, SUSPECT A SECOND FAULT  `:46312`
-- A CONJUNCTIVE FACT, MEASURED FROM BOTH SIDES  `:46334`
-  - AND ANOTHER COUNTER-EXAMPLE TO THE ONE-WORD HINT  `:46364`
-- THE SPLIT-DECREMENT FAMILY FACT INVERTS WHEN A CALL SITS IN THE MIDDLE  `:46376`
-  - AND A SIZE RATIO HID THE RIGHT TWIN BY A FACTOR OF TWO  `:46401`
-- THE WORD DELTA PREDICTS WHERE THE WORK IS BETTER THAN THE RATIO  `:46413`
-- A DONOR'S *FREE* VERDICT CAN INVERT TOO -- FREE IS BODY-SPECIFIC, NOT SAFE  `:46442`
-- A FACT'S PRICE DEPENDS ON WHETHER THE BODY ALREADY CONTAINS SOMETHING DOING THE SAME JOB  `:46481`
-- AN EXTRA ARGUMENT AT A CALL SITE CAN BE WHAT KEEPS A PARAMETER COPY ALIVE  `:46519`
-- THE CALLEE-SET INTERSECTION IS THE RECIPE THAT ACTUALLY LANDS THE NAKED BODIES  `:46591`
-- A MISSING ENTRY `addu $aN, $a0, $zero` CAN BE A SCHEDULING FAULT, NOT AN ALLOCATION ONE  `:46626`
-- WHEN A K&R EMPTY-PAREN PROTOTYPE CAN BE WIDENED, AND WHEN IT MUST NOT BE  `:46644`
-- A ROW'S MAGNITUDE CAN DIFFER BETWEEN RELINKS BECAUSE A CROSS-JOIN SURVIVES OR DOES NOT  `:46672`
-- AND IT CUTS THE OTHER WAY: A DUPLICATION A TWIN PRESENTS AS DELIBERATE CAN BE FREE  `:46709`
-- BUT A PRODUCT IS NOT THE DEFAULT -- THREE CROSSES IN A ROW FOUND NO CONJUNCTION  `:46728`
-- A ONE-AT-A-TIME FACT TABLE CANNOT SEE A CONJUNCTION -- CROSS THE TWO THAT LANDED TOGETHER  `:46757`
-- THE SAVE COUNT PRICES A HOIST *BEFORE* YOU COMPILE -- AND SETTLES TWO BODIES IN ONE FILE  `:46817`
-- SWEEP A STATEMENT'S POSITION ACROSS EVERY SLOT AND READ THE CURVE  `:46861`
-- A LISTING'S STORE ORDER IS NOT THE SOURCE'S STORE ORDER -- sched1 TRANSPOSES  `:46897`
-- `MEM_IN_STRUCT_P` CUTS BOTH WAYS -- THE ARRAY REF *DROPS* A DEPENDENCE  `:46926`
-- gcc MERGES TWO ADJACENT `|=` ON ONE LVALUE, SO A STATEMENT BETWEEN THEM IS LOAD-BEARING  `:46949`
-- A PARK'S LOAD-BEARING DEVICE CAN BE AN ARTEFACT OF THE WRONG SHAPE  `:46985`
-- THE CALL-ARITY FACT IS CONFIRMED ON A SECOND BODY, SAME FIGURE  `:47017`
-- A `volatile` STORE IS A DEVICE THAT TRANSFERS -- TWO BODIES, TWO UNITS  `:47041`
-- A NARROW ZERO LOCAL *RETURNED* SURVIVES WHERE A WIDE ONE IS FOLDED AWAY  `:47073`
-- A PERMUTER SCORE IMPROVEMENT CAN BE A SEMANTICALLY INVALID TRANSFORMATION  `:47143`
-- SCAFFOLD A PERMUTER RUN FROM THE RIGHT WORD COUNT, NOT THE FEWEST ROWS  `:47221`
-- A COMMENT IS ATTRIBUTED TO THE *PRECEDING* FUNCTION, WHICH INFLATED EVERY ROW  `:47254`
-- TWO MIRROR-IMAGE NAME-PATTERN BUGS IN ONE HOUR, EACH HIDING HALF THE CORPUS  `:47292`
-- `base=?` ON A CARVED PARK WAS A PRE-CARVE NAME PATTERN, NOT A MISSING DECLARATION  `:47334`
-- A LITERAL SPACE IN A REGEX SKIPPED EVERY WRAPPED HEADLINE AND READ A FOREIGN FIGURE  `:47391`
-- A PARK'S LEAD SET AGES, AND EXCLUDING PARKS FOREVER WAS MY MISTAKE  `:47440`
-- REPLICATED CODE FLOODS A LEAD LIST, AND THE BURIED ROW IS THE USEFUL ONE  `:47490`
-- A 0.6x TWIN IS USUALLY A *PARTIAL* MATCH AT FULL FIDELITY, NOT A UNIFORM APPROXIMATION  `:47575`
-- THE DUPLICATED-ARM LOCAL IS HELD ON TWO BODIES -- AND ITS FRAME TEST IS STILL OPEN  `:47617`
-- A WORD DELTA IS A *SIGNED SUM* OF NAMED BLOCKS, AND THE NET FIGURE HIDES BOTH  `:47678`
-- `relcand` CAUGHT ITS FIRST REAL CASE, ON A CLONE PAIR  `:47712`
-  - AND A TWIN'S FACT CAN BE TWO FACTS WHOSE CONJUNCTION IS THE LEVER  `:47729`
-- TWO EXTRA PSEUDOS CAN PUSH `loop.c` PAST ITS INVARIANT-HOISTING THRESHOLD  `:47743`
-  - AND THE TABLE-ORDER BLIND SPOT, REPRODUCED INDEPENDENTLY  `:47780`
-- ONE SENTENCE IN ONE FILE IS A SELECTION FACT ON ONE BODY AND A DEVICE ON ANOTHER  `:47794`
-- A RESIDUE THAT EQUALS A NUMBER IN THE TWIN'S REJECTED COLUMN  `:47824`
-  - AND THE FIRST-COMPILE-COMMENT TRAP, CONFIRMED A THIRD TIME  `:47840`
-- A LOOSE ANCHOR IN A PRICING EDIT CAN HIT OTHER LANDED BODIES  `:47848`
-- CORRECTION TO THE ROOT DISPATCHER'S OWN "ONE LOCAL PER DRESS SITE" FACT  `:47861`
-- cse1 WILL DELETE A FLAG GATE BY WALKING THROUGH A ONE-USE LABEL  `:47884`
-  - AND A PRECEDENCE TRAP IN A MEASUREMENT  `:47913`
-- THE DRESS-SITE RULE MEASURES BOTH SIGNS INSIDE ONE UNIT  `:47920`
-- SELECTION FACTS SURVIVE A DELIBERATE FRAME MISMATCH -- SEVEN FOR SEVEN  `:47934`
-- A STATEMENT-ORDER FACT INVERTS WHEN A NEW CALL LANDS IN THE MIDDLE  `:47956`
-- THE ANCHOR-UNIQUENESS RULE PAID OFF ON ITS FIRST BATCH  `:47976`
-  - AND ovlverify's WORD COUNT ON A TABLE OWNER, QUANTIFIED  `:47988`
-- relcand IS CALL-SET, NOT CALL-SEQUENCE -- SO IT IS NOT AN ARM-ORDER BACKSTOP  `:48000`
-  - AND THE CAVEAT IS EXACTLY HALF TRUE, NOW WITH NUMBERS  `:48016`
-- A FOURTH OUTCOME FOR THE DRESS-SITE RULE: HALF VACUOUS  `:48031`
-- THE WRONG SPELLING COMPILING SHORT IS A POSITION DIAGNOSTIC  `:48047`
-  - A "FACT" THAT WAS NEVER MEASURABLE  `:48068`
-- A SELECTION FACT HAS NOW INVERTED -- THE TAXONOMY'S STRONGEST CLAIM IS FALSE  `:48080`
-- A COMMITTED COMMENT CARRIED A FREE FACT THAT IS WRONG IN THE CONTAINER  `:48102`
-- WHEN TWO SPELLINGS LEAVE THE *SAME* RESIDUE, THE RESIDUE IS NOT A DISCRIMINATOR  `:48125`
-- A DISPATCHER ERROR: A BRIEF CITED AN ADDRESS INSIDE A STUBBED FUNCTION  `:48144`
-- BOTH RELOCATION AUDITS WERE SKIPPING EVERY s-UNIT'S BANK-LOCAL DATA  `:48160`
-- A TWIN'S FACT CAN BE FREE *AND* ITS STATED REASON WRONG  `:48195`
-  - AND THE SPLIT-DECREMENT FACT IS AN *ORDER*, NOT A SPLIT  `:48212`
-- A CLONE PAIR CAN DIFFER BY A PER-COPY IMMEDIATE, INVISIBLE TO relcand  `:48227`
-  - AND THE grep BEAT BOTH SHAPE MATCHERS FOR A THIRD CONSECUTIVE s-UNIT  `:48248`
-- convert.c DISTRIBUTES A NARROWING TRUNCATION INTO A SUM, AND THE CONSTANT'S SIDE DECIDES  `:48260`
-- A GENERATED LISTING WENT MISSING AND THE BUILD PASSED ANYWAY  `:48293`
-  - AND THE LEADS FILE NAMED A TWIN THAT WAS A BLEND  `:48316`
-- THE PAD-WORD RULE IS ON THE CASE COUNT, AND ONLY THE DISPATCH BOUND IS AUTHORITATIVE  `:48330`
-- A CONSTANT MULTIPLY IS NOT A SHIFT IN A NARROWING CONTEXT  `:48364`
-- A WORD DEFICIT CAN BE A MISSING *EMPTY* CASE  `:48390`
-  - AND THE DRESS-SITE FACT NOW SPLITS WITHIN A SINGLE BODY  `:48406`
-  - A NUMBER IN A TWIN'S COMMENT NEEDS ITS TOOL NAMED  `:48420`
-- I SENT AN AGENT FABRICATED TOOL OUTPUT WHILE CORRECTING ITS NUMBERS  `:48431`
-- A do-WRAPPER REFERENCE BUMP CAN MOVE THE RANKING THE WRONG WAY  `:48465`
-  - THREE SMALL FREE FACTS THAT LOOK LIKE LEVERS AND ARE NOT  `:48486`
-- dngclone RENAMES THE SYMBOLS IN ITS MAP AND LEAVES THE REST OF THE COMMENT  `:48515`
-  - AND A TWO-WORD BODY IS THE RISKIEST POSSIBLE FAMILY MATCH  `:48541`
-- MEM_IN_STRUCT_P, BOTH POLARITIES, 40 WORDS APART IN ONE BODY  `:48551`
-- convert.c, A THIRD TIME: BIT_AND DISTRIBUTION WANTS A 32-BIT MASK  `:48573`
-- AN UNDECLARED FUNCTION READS AS FREE  `:48592`
-  - AND A CONJUNCTION WHOSE do-WRAPPER IS A SCHEDULING BARRIER  `:48610`
-  - A TWIN'S TWO-VARIABLE FACT WAS REALLY A WIDTH FACT  `:48624`
-- THE DRESS-SITE FACT, FINALLY PREDICTABLE: ONE PATH versus DISJOINT ARMS  `:48635`
-- THE POWER-OF-TWO MULTIPLY RULE IS PER SITE, NOT PER BODY  `:48663`
-  - AND A SIGNED DIVIDE BY TWO IS FREE WHEN THE DIVIDEND IS PROVABLY EVEN  `:48700`
-- A NEW ROUTE PAST THE RANKER: GREP A FIELD-OFFSET STORE PATTERN  `:48713`
-  - ZERO DEVICES IN 827 WORDS  `:48734`
-- AN allocno_compare CROSS: SHARED FOR ONE VALUE, SPLIT FOR THE OTHER  `:48747`
-  - A SPELLING THAT *IMPROVES* CAN BE A FALSE LEVER  `:48776`
-- MEM_IN_STRUCT_P: EACH STORE IS ITS OWN FAULT, AND THE TWIN'S SITE WAS THE FREE ONE  `:48791`
-- A PARK FILE CAN CARRY A PROTOTYPE THAT BREAKS THE UNIT LATER  `:48811`
-  - AND parkcheck CAUGHT MY OWN FIX  `:48824`
-- dngtwin WAS 0 FOR 3 ON ONE UNIT WHILE THE CALLEE-SET GREP WAS 3 FOR 3  `:48832`
-- `+ 0xFFE00000` IS A C89 SIGNEDNESS TRAP IN A DIVIDED EXPRESSION  `:48846`
-- A THIRD OPPOSITE-ANSWERS PAIR, AND A RETRACTION THAT SHOWS WHY TO PRICE FIRST  `:48867`
-- TWO BODIES 40 WORDS APART WANTED OPPOSITE ANSWERS, TWICE, IN ONE UNIT  `:48915`
-  - MEM_IN_STRUCT_P HAS A THIRD SPELLING ROUTE: THE ARRAY REF  `:48937`
-  - `if (1)` IS NOT AN ENCLOSING LOOP -- 17 AGAINST 12  `:48950`
-- A PARK THAT DECLINES TO RE-SPEND `-da`  `:48961`
-- A COMPARISON'S OPERAND ORDER IS A LEVER, AND ITS RESIDUE LOOKS LIKE ALLOCATION  `:48977`
-  - AND IT INVERTS A SPELLING ANOTHER UNIT RECORDS  `:49001`
-- UPDATE AN EXISTING PARK RATHER THAN WRITING A SECOND ONE FOR ITS CLONE  `:49009`
-  - TWO PARKS IN ONE RESIDUE CLASS SHOULD BE SPENT TOGETHER OR NOT AT ALL  `:49027`
-- A CLONE PAIR WHOSE WHOLE DIFFERENCE IS ONE RELOCATED COUNTER  `:49040`
-- A MISSING EMPTY CASE CAN COST YOU THE JUMP TABLE ITSELF  `:49054`
-- "NOT MEASURABLE" IS A THIRD VERDICT, DISTINCT FROM "FREE"  `:49073`
-  - AND ELEVEN SPELLINGS WITH A BIT-IDENTICAL RESIDUE ARE NOT ELEVEN FACTS  `:49091`
-- A TWIN'S FACT CAN BE A THIRD SHAPE -- NEITHER HELD NOR INVERTED  `:49099`
-  - THE ANCHOR RULE CAUGHT A UNIQUE ANCHOR IN THE WRONG FUNCTION  `:49118`
-- THE PROLOGUE PICKED THE TWIN THE RANKER BURIED -- A SIXTH MISS VARIANT  `:49132`
-- ONE ALIAS LOCAL WAS WORTH 193 ROWS  `:49154`
-  - AND THE `w`/`t` CROSS REPRODUCED TO THE DIGIT ACROSS UNITS  `:49170`
-- `(x & 0x7FFF) & 8` FOLDS BACK TO `x & 8`, SO THE MASK MUST GO ABOVE THE GATE  `:49182`
-  - MEM_IN_STRUCT_P, OPPOSITE ANSWERS IN ONE AGENT'S OWN PAIR  `:49200`
-  - "NOT COMPARABLE" USED CORRECTLY, UNPROMPTED  `:49212`
-  - A NEGATIVE HALFWORD CONSTANT HAS TWO OPCODES  `:49224`
-- AN `addu`'s OPERAND ORDER: POINTER SUM versus INTEGER SUM  `:49230`
-- A CONSTANT IN A HOISTED ADDRESS IS UNREACHABLE BY ANY CAST  `:49250`
-- A `for` LOOP'S INITIALISER IS A SCHEDULING LEVER WORTH A WORD  `:49271`
-  - convert.c's MULT/LSHIFT ASYMMETRY NEEDS NO SUM -- JUST THE NARROWING STORE  `:49292`
-  - A THIRD SHAPE WITH A MECHANISM, NOT JUST A PRICE  `:49306`
-  - AND TWO BODIES IN ONE FILE DISAGREE ON THE SAME IDIOM  `:49318`
-  - THE ANCHOR RULE TRIPPED TWICE MORE  `:49325`
-- "DISTINCT TABLE ENTRIES" IS NOT AN ARM-ORDER TEST -- MY PROXY WAS WRONG  `:49336`
-  - AND A SECOND COMMITTED COMMENT CLAIMED A TABLE ARM ORDER WAS "FREE"  `:49358`
-- MEM_IN_STRUCT_P, THE OTHER WAY: PLAIN CASTS OVER A STRUCT POINTER  `:49371`
-  - A DEAD LOCAL WHOSE STORES THE TARGET KEEPS  `:49390`
-  - FOUR PRICED FACTS CARRIED ACROSS A FRAME MISMATCH -- A COUNTEREXAMPLE  `:49402`
-  - A HARNESS THAT DID NOT RESTORE BETWEEN VARIANTS  `:49415`
-- AN UNDECLARED CALLEE IS INVISIBLE TO EVERY CHECK IN THIS TREE  `:49427`
-- COLLAPSING FOUR LOCALS INTO TWO WAS WORTH 102 ROWS, AND THE PROLOGUE SAID SO  `:49466`
-  - MEM_IN_STRUCT_P AS A PURE SCHEDULING EFFECT, NO DELAY SLOT  `:49488`
-  - ONE BODY WANTED OPPOSITE ANSWERS FOR TWO DIFFERENT GLOBALS  `:49502`
-  - `& 0xFFFFFFE0` HAS A SECOND, DIFFERENT DIAGNOSTIC  `:49512`
-  - AND dngclone DRAGS A TYPEDEF'S NAME, NOT JUST A CALLER'S  `:49523`
-- jump2 DOES NOT CROSS-JOIN EVERY IDENTICAL BLOCK -- FOUR BYTE-IDENTICAL FAILS STAYED FOUR  `:49534`
-- A SPARSE SWITCH BECOMES A COMPARISON TREE, AND ITS TEST ORDER IS THE SOURCE'S CASE ORDER  `:49556`
-- A TABLE NEEDS FIVE CASE NODES IN THIS COMPILER, NOT FOUR -- HAVE_casesi IS 0  `:49581`
-- `(x & 0x80000000) == 0` AND `x >= 0` EMIT THE SAME `bltz` AND ARE NOT INTERCHANGEABLE  `:49611`
-- A SHARED JUMP-TABLE TARGET HAS FOUR SHAPES, AND THE RULE BELOW ONLY COVERED TWO  `:49652`
-- A SHARED JUMP-TABLE TARGET IS USUALLY THE DEFAULT LABEL -- NOW FIVE TABLES, 40 PHANTOM ARMS AVOIDED  `:49725`
-- A SHARED JUMP-TABLE TARGET IS USUALLY THE DEFAULT LABEL  `:49767`
-- `reg_n_sets` IS A BIGGER LEVER THAN ALLOCATION PRIORITY, AND LOOKS LIKE ONE  `:49795`
-  - A MISSING FALL-THROUGH COMES OUT SHORT, NOT LONG  `:49815`
-- A FAILED ASSERTION LEAVES THE LAST EXPERIMENT SPLICED IN  `:49826`
-  - AND AN ARGUMENT COUNT NO TOOL CAN SEE  `:49843`
-- A loop.c GIV LOOKS LIKE A SOURCE COUNTER, AND THE PROLOGUE TELLS THEM APART  `:49855`
-- relcand IS BLIND TO A PERMUTATION AMONG SYMBOLS ALREADY IN THE SET  `:49871`
-- FOURTEEN FOR FOURTEEN ON AN IDENTICAL FRAME, AND THE ONE INVERSION IS A CONSTANT  `:49895`
-  - A DIVISOR'S PRICE DEPENDS ON WHETHER IT SHARES ITS MAGIC CONSTANT  `:49921`
-- declcheck COULD NOT CHECK AN AGENT'S OWN FILE  `:49932`
-  - AND I NAMED THE WRONG TABLE OWNER IN A BRIEF  `:49949`
-- THE SWEEP'S 0.70 FLOOR WAS HIDING 129 STUBS WITH LANDED TWINS  `:49961`
-  - AND I MADE TWO WRONG INFERENCES ABOUT THIS TOOL BEFORE READING IT  `:50001`
-- THE THIRD TABLE BLINDNESS: CASE-LABEL GROUPING  `:50018`
-  - AND THE DEFAULT-LABEL GREP WORKS IN THE NEGATIVE DIRECTION TOO  `:50038`
-- A FOUR-SITE DRESS FACT: "NOT SHARING" IS THE LEVER, NOT "NAMING THE SYMBOL"  `:50049`
-  - SIX ORDERINGS OF THREE STORES, AND THE TARGET EMITS A SEVENTH  `:50069`
-  - AND A STORE THROUGH THE ALIAS THAT READS THROUGH THE PARAMETER  `:50085`
-- declcheck's `--src` EARNED ITSELF ON FIRST USE  `:50092`
-- A NINTH WAY: A STALE BUILD, AND `aligndiff` DISAGREEING WITH `ovlverify` IS THE TELL  `:50107`
-- `fold` REASSOCIATES TWO INDEPENDENT SUBTRAHENDS, SO THE LISTING'S `subu` ORDER IS NOT THE SOURCE'S  `:50135`
-- A SEVENTH WAY: A DECLARATION-ONLY EDIT, WHICH AN ANCHOR ASSERTION CANNOT CATCH  `:50160`
-- A BARE `addu $vY, $vX, $zero` AFTER A MATERIALISED CONSTANT MEANS THE SOURCE READ IT BACK  `:50191`
-- WHEN THE CALLEES ARE ALL LIBRARY-COMMON, GREP THE FIELD OFFSETS IN THEIR STORE ORDER  `:50222`
-- TWO CODE PATHS ANSWERING ONE QUESTION WITH DIFFERENT ARITHMETIC  `:50260`
-- A LEAD TOOL SHOULD ENUMERATE, NOT RANK, WHEN NO AVAILABLE SCALAR MEASURES THE ANSWER  `:50295`
-- WHEN A DRIVER LANDS OFF A TWIN, READ THE TWIN'S *CALLER* FOR THE SPAWNER  `:50336`
-- STOP TRUSTING "`* 0x400` AND `<< 10` ARE THE SAME TREE" -- IT HAS NOW BEEN NARROWED FOUR TIMES  `:50364`
-- A `div` BY A SMALL POWER OF TWO IN THE LISTING MEANS THE SOURCE DIVIDED BY *MEMORY*  `:50398`
-- `& 0xFFC0` IS NOT THE REDUNDANT MASK IT LOOKS LIKE -- `& 0xFFFFFFC0` IS  `:50437`
-- `fold` REASSOCIATES `A -= B + C`, SO THE SUM NEEDS ITS OWN LOCAL  `:50452`
-- A COMPARE-CHAIN SWITCH'S ARM ORDER SCALES BADLY WITH ARM COUNT  `:50463`
-- A FIFTH WAY A MEASUREMENT LIES: THE TOOL MEASURED A DIFFERENT FUNCTION  `:50481`
-- "FREE" versus "NOT MEASURABLE" -- THE TEST IS A STANDALONE COMPILE  `:50501`
-- MY PER-ARM TEST WAS TOO CONSERVATIVE -- WALK THE WHOLE BLOCK  `:50529`
-  - TWELVE FOR TWELVE ON DIRECTION, NINE TO THE DIGIT, AND TWO MAGNITUDES THAT MOVED  `:50550`
-- AN UNUSED TYPEDEF IN A UNIT'S OWN BLOCK CAN NAME ITS TWIN  `:50564`
-- A LOOP WITH ONE INDUCTION VARIABLE WHERE THE TARGET HAS TWO  `:50587`
-  - TWO MORE "THE BODY CAME OUT SHORT" DIAGNOSTICS  `:50606`
-- A STORE PAIR CAN BE REORDERABLE WHILE A LOAD BETWEEN THEM IS NOT  `:50619`
-  - AND DECLARATION ORDER OF TWO LOCALS DECIDES THE SAVE ORDER  `:50632`
-  - THE SAME FACT AT THE SAME PRICE ON TWO BODIES  `:50642`
-- A CROSS-JOINED ARM NEEDS ITS OWN LOCAL -- local-alloc.c:1759, NOT allocno_compare  `:50654`
-- (ORIGINAL ENTRY) A DUPLICATED ARM NEEDS ITS OWN LOCAL  `:50786`
-- AN IMPROVEMENT IS NOT EVIDENCE -- A SPELLING'S PRICE IS ONLY VALID AT 0  `:50813`
-- A COUNTER LOOP IS ROTATED IFF ITS TEST SITS IN THE CONDITION POSITION  `:50838`
-- A BLOCK EMITTED BETWEEN TWO SWITCH ARMS IS A `goto` TARGET  `:50871`
-- A TWIN'S FACT THAT THREE RELINKS ALL MEASURE FREE IS A FACT ABOUT THE TWIN  `:50889`
-- A NARROW SIGNED CALL RESULT IS A SHAPE FACT -- AND IT RUNS IN *BOTH* DIRECTIONS  `:50913`
-- (ORIGINAL ENTRY) A NARROW SIGNED RETURN VALUE IS A SHAPE FACT, NOT AN ALLOCATION ONE  `:50947`
-  - AND THE cse FOLLOW-JUMPS ENTRY PREDICTED A BODY BEFORE IT WAS COMPILED  `:50961`
-  - AND A do-WRAPPER THAT GENUINELY IMPROVED WHILE THE CAUSE SAT UNTOUCHED  `:50975`
-- A 4-BYTE STRUCT OF TWO SHORTS CANNOT LIVE IN A REGISTER ON THIS TARGET, AND IT MOVES THE WHOLE FRAME  `:50988`
-- A STORE TO A NEIGHBOURING FIELD IS WHAT STOPS cse CARRYING A FLAG WORD PAST A GATE  `:51011`
-- A COMPARISON'S OPERAND ORDER IS WORTH 67 ROWS, AND IT ALSO DECIDES WHAT CROSSES A CALL  `:51034`
-- AN IN-PLACE COUNTER UPDATE AGAINST A LOCAL IS 99 ROWS, AND THE RELOADS ARE NOT A CHOICE  `:51050`
-- DO NOT GENERALISE A STORE ORDER FROM ONE SITE -- ONE BODY HAD IT BOTH WAYS  `:51062`
-- WHICH OF A DONOR'S FACTS TRANSFER ON A RELINK -- the taxonomy held, with figures  `:51076`
-- THE SUBSCRIPT ESCAPE FOR `MEM_IN_STRUCT_P` IS UNAVAILABLE AT A ZERO NET DISPLACEMENT  `:51093`
-- THE INDEX-FIRST `addu` LEVER ONLY BITES WHEN THE BASE IS A POINTER *LOADED FROM MEMORY*  `:51123`
-- THE "STATE READ MUST BE AN ARRAY REF" FACT NEEDS NOTHING ELSE TO FILL THE LOAD'S SLOT  `:51147`
-- A SIGNED `/ 2` IS NOT `>> 1`, AND IT IS 3 WORDS A SITE  `:51174`
-- SHARE A REPEATED SUB-WORD READ BY READING THE JUST-STORED FIELD BACK -- NOT BY A LOCAL, NOT BY WRITING IT TWICE  `:51190`
-- A BYTE-STORE TEMP MUST BE UNSIGNED, AND THE IMMEDIATE IS THE TELL  `:51208`
-- AN IN-UNIT DONOR CAN WANT THE OPPOSITE TYPE -- TWO BODIES 40 WORDS APART DID  `:51222`
-- AND A DECLARATION ORDER THAT DOES NOT TRANSFER WITHIN ONE UNIT  `:51234`
-- READ WHICH ROWS *AGREE* -- IT NAMES THE FAULT FASTER THAN THE ROWS THAT DIFFER  `:51245`
-- `fold`'s TWO ASSOCIATE BRANCHES ARE EACH OTHER'S INVERSES, SO THE EMITTED `addu` OPERAND ORDER IS THE *NEGATION* OF THE SOURCE'S  `:51263`
-- A NEGATIVE DISPLACEMENT NAMES A SOURCE POINTER LOCAL ONLY IF ITS STRIDE DIFFERS FROM THE LOOP'S STEP  `:51283`
-- `&sp->field` ON A CONSTANT-POINTER LOCAL FOLDS TO A `CONST_INT`; `addiu $rX, $base, K` IS ORDINARY POINTER ARITHMETIC  `:51300`
-- THE DUPLICATED-ARM LOCAL RULE SCALES WITH THE COPY COUNT  `:51316`
-- A VALUE THAT MUST LIVE IN `$v0` WANTS THE STORE WRITTEN IN EVERY LEAF -- NOT A C VARIABLE  `:51332`
-- THE CURE FOR A `birthing_insn_p` PRIORITY FAULT IS THE BLOCK'S INSN COUNT, NOT THE DESTINATION'S SET COUNT  `:51356`
-- `ptr + i * 4` AND `ptr + (i << 2)` ARE NOT THE SAME `addu`  `:51375`
-- AN `lhu` FOLLOWED BY `sll 16` / `sra 16` MEANS AN `s16` LOCAL, NEVER A CAST  `:51388`
-- A MISSING `return` PRESENTS AS A MISSING `j`, WITH THE WORD COUNT AGREEING  `:51397`
-- A FRAME-LOCAL TABLE BASE NEEDS A POINTER LOCAL TO GET ITS OWN REGISTER  `:51410`
-- ARM ORDER IS DIRECTLY MEASURABLE: COMPILE STANDALONE AND READ THE EMITTED TABLE'S ENTRY-ADDRESS ORDER  `:51417`
-- A SUB-WORD LOOP BOUND INVERTS THE COUNT-DOWN LEVER  `:51451`
-- convert.c's NARROWING TAKES THE CONSTANT'S SIGN, AND THE HEX FORM IS THE TRAP HERE  `:51476`
-- AN `if`/`else` BETWEEN TWO READS OF A GLOBAL BLOCKS cse THE WAY A STORE DOES  `:51503`
-- `rank_for_schedule`'s LUID TIE-BREAK: SPLIT A LOAD OUT TO MOVE A STORE LATER  `:51524`
-- A PAYLOAD POINTER LOCAL INVERTS BETWEEN ONE SITE AND TWO  `:51547`
-- THE COUNT-DOWN LEVER'S PRECONDITIONS, NOW COMPLETE AFTER THREE BODIES IN ONE DAY  `:51558`
-- A MASK SURVIVES IN SImode ONLY WHILE IT STAYS SIGNED -- THE HEX FORM IS THE TRAP  `:51589`
-- AN `if`/`else` BETWEEN TWO READS OF A GLOBAL BLOCKS cse EXACTLY AS A STORE DOES  `:51606`
-- `rank_for_schedule`'s LUID TIE-BREAK: SPLIT A LOAD OUT TO MOVE A STORE LATER  `:51623`
-- `ovlverify` IS BLIND TO A JUMP TABLE'S ARM ORDER -- SO THE STANDALONE COMPILE IS NECESSARY, NOT A CONVENIENCE  `:51640`
-- `MEM_IN_STRUCT_P` FREES A VARYING *READ* FROM A FIXED-ADDRESS *WRITE*, AND THAT IS A DIFFERENT LEVER FROM THE ALLOCATION ONE  `:51665`
-- loop.c's HOIST THRESHOLD IS ~30 REAL INSNS -- AND A LOOP AT THE BOUNDARY HOISTS AN OUT-PARAMETER'S ADDRESS INTO A TENTH CALLEE-SAVED REGISTER  `:51701`
-- A SHARED POINTER LOCAL LETS jump2 CROSS-JOIN TWO ARMS' TAILS, AND THE BODY COMES OUT *SHORT* -- THREE WITNESSES IN ONE UNIT  `:51737`
-- `MEM_IN_STRUCT_P`: THE COMPLETE RULE, FROM TWO BODIES MEASURED HOURS APART  `:51773`
-- A SHARED DRESS-TABLE LOCAL ACROSS TWO DISJOINT ARMS COSTS THE `%hi' TEMP'S REGISTER -- 4 rows, and inline and per-arm are BOTH 0  `:51807`
-- A CALL RESULT'S STORE READS WHICHEVER REGISTER ITS PSEUDO GOT -- NO C SPELLING CHOOSES IT, and 26 of them prove it  `:51837`
-- A CALLEE'S `->unk_08` MUST BE RELOADED PER STORE -- a hoisting local is TWO WORDS SHORT  `:51893`
-- REUSING A POINTER LOCAL THAT IS ALREADY SET ELSEWHERE CHANGES THE SAVE ORDER -- 54 rows starting in the PROLOGUE  `:51911`
-- THE FOURTH WAY A BODY CANNOT BE REACHED FROM C -- AND THE FIRST THAT IS A LIVE RANGE  `:51923`
-- A DEAD INITIALISER MAKES cse KEEP A REG-REG COPY -- `regno_first_uid < cse_basic_block_start`, and it CLOSES the two sections above  `:51976`
-- THE PERMUTER CANNOT CRACK A REGISTER RESIDUE, AND WE NOW HAVE THE MECHANISM FOR WHY  `:52057`
+- The pass order, and what each pass does to you  `:1709`
+- 1. Block membership beats scheduling  `:1733`
+- 2. Loop notes change every reference weight in the function  `:1957`
+  - `threshold -= 3` IS A CONTROL, NOT JUST AN EXPLANATION -- AND IT IS HOW YOU SPLIT AN EQUAL PAIR  `:2008`
+  - AND TO PIN AN EXPRESSION *INSIDE* A LOOP: SET THE VARIABLE TWICE, NON-CONSECUTIVELY  `:2037`
+  - Giv EMISSION is the REVERSE of creation; a second pointer at offset ZERO reorders it  `:2126`
+  - A degenerate loop AROUND ONE STATEMENT weights that reference by 2  `:2177`
+  - WHERE YOU PUT A REFERENCE-BUMP DEVICE DECIDES WHETHER IT ALSO BREAKS THE SCHEDULE  `:2189`
+  - AND THE SAME NOTE COUNTING MAKES A `goto` LOOP A DIFFERENT PROGRAM -- 76 ROWS  `:2223`
+  - THE PRECONDITION: READ THE PREHEADER FIRST. NO LOOP NOTE MEANS NO INVARIANT HOISTING EITHER  `:2247`
+  - AND THE SAME ERROR IN STRENGTH REDUCTION: AN INDEX LOCAL KILLS THE giv  `:2292`
+  - AND A COROLLARY THAT COST ONE BODY 23 ROWS: A LOOP'S TABLE POINTERS ARE HOISTS, NOT SOURCE LOCALS  `:2314`
+  - A degenerate loop is a BLOCK BOUNDARY you can put anywhere  `:2400`
+  - A SCAN loop's failure `return` belongs INSIDE it -- LOOP_END is a sched1 slot  `:2430`
+- 3. Allocation priority is the commonest thing left  `:2473`
+  - DIAGNOSE IN THIS ORDER -- priority is the LAST question, not the first  `:2475`
+  - ONE variable per LOOP, not one counter reused -- refs add up, priority inflates  `:3009`
+  - A REUSED TEMPORARY IS HOW THE ARGUMENT KEEPS THE SHORT PSEUDO  `:3038`
+  - RETURN THROUGH THE PARAMETER to stop cse canonicalising a copy away  `:3101`
+  - A `u8` destination makes a register copy INVISIBLE to cse  `:3154`
+  - A LOCAL PER CONSTANT fixes the materialisation order without moving the stores  `:3226`
+  - Statement granularity is what orders the pieces of an address  `:3257`
+  - A two-term index adds the BASE LAST unless the row address is its own statement  `:3299`
+  - POINTER arithmetic is always pointer-first; INTEGER arithmetic keeps source order  `:3334`
+  - A wider store invalidates cse's entry for the narrow read after it  `:3359`
+  - A switch's tree says which cases share a body, and whether there is a default  `:3373`
+  - Two `beq`s that branch TO their bodies are a switch, not an if/else chain  `:3398`
+  - A 0/1 pair ALWAYS triggers jump.c's store-flag transform; share the site  `:3407`
+  - A switch's case bodies are emitted in SOURCE order  `:3447`
+  - The load-delay slot is filled by the NEXT insn only  `:3457`
+  - A `bgez`/nop/`negu` TRIO IS ONE INSN -- its nop is not a slot you can fill  `:3487`
+  - `?:` keeps the copies that `if` deletes  `:3523`
+  - A store through a loaded pointer pins the argument loads after it  `:3534`
+  - Two address materialisations interleave only if BOTH are split pairs  `:3564`
+  - An unresolved `%gp_rel` addend USED TO make advise.py print SHAPE (fixed)  `:3612`
+  - A %lo in the displacement with a REGISTER index means a constant base  `:3702`
+  - `p += x` is one long quantity; `q = p + x` is two short ones  `:3750`
+  - `||` puts the body BETWEEN the two tests  `:3767`
+  - Duplicate the tail per arm: cross-jumping puts it back  `:3789`
+  - A cross-jumped tail can present as a DELAY SLOT, not as registers  `:3833`
+  - A pass-through call that emits nothing still costs references  `:3878`
+  - `a - C + b` reassociates -- a TEMPORARY is the only way to pin the constant  `:3895`
+  - AND THE IN-PLACE FORM COSTS FOUR REFERENCES, which can be worth more  `:3919`
+  - A shared tail cross-jumping does NOT reach wants a `goto`  `:3947`
+  - WHERE A VARIABLE IS DECLARED DECIDES WHICH ALLOCATOR SEES IT  `:3964`
+  - THE SAME VARIABLE IN TWO BLOCKS COSTS THE TEMPS THAT FEED IT A REGISTER  `:4011`
+  - TWO WAYS TO PRICE AN ALLOCATION MARGIN WRONG, both of which I did  `:4067`
+  - TWO MORE REFERENCES ON A TIED CHAIN, not on its rival  `:4161`
+  - READ `.greg`'s OWN conflicts and preferences lines before pricing a margin  `:4213`
+  - A NARROW PARAMETER'S DELETED SIGN-EXTENSION STILL MOVES local-alloc  `:4347`
+  - A FREE RETURN of the value just stored is the first thing to check on an ALLOC row  `:4403`
+  - A DEAD reference is still a reference -- the free way to flip an allocno  `:4437`
+  - A reference that COMBINE folds away still counts -- the phantom test  `:4507`
+  - `update_equiv_regs` DOUBLES the live length of any ONCE-SET EQUIVALENT pseudo  `:4568`
+  - `SMALL_REGISTER_CLASSES` IS ABSENT, so gcc treats HARD registers like pseudos  `:4675`
+  - STORES CAN SHARE A HOISTED ARGUMENT REGISTER INSTEAD OF THE VALUE'S OWN  `:4716`
+  - A DEGENERATE LOOP BEFORE THE FIELD STORES BUYS CALLEE-SAVED REGISTERS  `:4762`
+  - A DEAD TEST ON THE STORED VALUE STOPS THE ARGUMENT-REGISTER SHARING  `:4831`
+  - THE LATE TEMPORARY GOES BACK INTO A DEAD PARAMETER  `:4864`
+  - COMBINE CANNOT FOLD ACROSS A BASIC BLOCK BOUNDARY  `:4880`
+  - A CONSTANT FOLDED INTO A LATER SHIFT needs a SECOND SET, not a boundary  `:4910`
+  - A PARAMETER always reserves its incoming register, unless there is a call  `:4990`
+  - Keep $v0 busy to make a `lui`/`addiu` pair share its register  `:5041`
+  - A VALUE-PRESERVING NARROWING CAST in a test still moves the allocation  `:5056`
+  - A POINTER LOCAL at ONE store site hoists that symbol's `(high)` to the TOP  `:5081`
+  - A PHANTOM ARGUMENT FROM A WRONG SIGNATURE COSTS A SCHED2 CYCLE  `:5113`
+  - THE FREE REFERENCE PAIR: ADD AND CANCEL A LIVE VALUE, NOT A CONSTANT  `:5151`
+  - A FREE REFERENCE PAIR ON A LOOP CURSOR DOES NOT FOLD BACK  `:5237`
+  - ONE SCRATCH LOCAL PER HALF, or the PARAMETER keeps its argument register  `:5265`
+  - THE ACCUMULATOR MUST OUTRANK THE COUNTER, and a call-result scratch is how  `:5293`
+  - A PRODUCT WRITTEN BACK INTO ITS VARIABLE TIES TO ITS QUANTITY  `:5328`
+- 4. Re-dereference rather than cache  `:5348`
+- TWO LOCALS INITIALISED TO THE SAME CONSTANT -- the second becomes a copy  `:5565`
+- STORES TO DISTINCT CONSTANT OFFSETS off one base do not pin source order  `:5603`
+- A REDUNDANT OUTGOING ARGUMENT is a FREE REFERENCE -- the cheapest tie-break  `:5631`
+  - AND A FREE REFERENCE THAT IS A HARD-REGISTER COPY ALSO *NAMES* THE REGISTER  `:5673`
+- A WHOLE-STRUCT ASSIGNMENT's copy expansion is picked by ALIGNMENT  `:5696`
+- READ A FIELD BACK OUT OF ITSELF to make cse forward the store  `:5720`
+- FOLD REASSOCIATES `A + K - B` INTO `A - (B - K)`; a STATEMENT BOUNDARY stops it  `:5740`
+- A COMPONENT_REF vs a CAST controls a SCHEDULER DEPENDENCE (MEM_IN_STRUCT_P)  `:5766`
+- A CAST beats a LOCAL for an `extern u8 []` whose address is used late  `:5797`
+- A MISSING PROTOTYPE for a MANY-ARGUMENT callee costs a word per narrow arg  `:5811`
+- AN EARLY `return` IS LAID OUT INLINE; the same test as an `if/else` is not  `:5836`
+- `lhu` FEEDING A `mult` means the source CASTS to `u16`; `lhu` feeding a store does not  `:5858`
+- `A - B - K - C` AND `A - B - (C + K)` ARE DIFFERENT CODE, AND THE FLAT FORM KEEPS THE GROUPING  `:5878`
+- A SPILLED TEMPORARY IN THE LISTING IS EVIDENCE *AGAINST* A SOURCE LOCAL  `:5924`
+- SWEEP A STATEMENT'S POSITION -- THE CURVE IS NOT CONVEX, AND ONE-AT-A-TIME MISSES  `:5942`
+- `x * 2` and `x << 1` ARE NOT INTERCHANGEABLE in a once-set local's INITIALISER  `:6030`
+- AN INT SUM ASSIGNED TO AN `s16` LOCAL swaps the add's operand order  `:6045`
+- TWO PARAMETERS THAT TIE IN PRIORITY allocate in DECLARATION ORDER -- copy one  `:6071`
+- WHEN TWO if/else ARMS END IN MIRROR STATEMENTS, the ELSE arm's copy is merged  `:6100`
+- `ori` WHERE THE TARGET HAS `addiu` off a held base: address-of a MEMBER  `:6121`
+- TWO INDEPENDENT IN-PLACE INCREMENTS: their source order is load-order visible  `:6141`
+- `abs()` IS ONE INSN, and its delay slot tells you how it was SPELLED  `:6155`
+- `sll`/`sll`/`slt` WITH NO `sra` means BOTH operands are 16-bit  `:6186`
+- AN OUT-OF-LINE `else` ARM: read it off the LABEL PAIR  `:6209`
+- A cse BLOCK ends at a LOOP-END note, not only at a label  `:6225`
+- A LIBRARY CONSTRUCT can have the shape the hand-written form loses  `:6241`
+- 5. MEM_IN_STRUCT_P decides sched1's alias calls -- and cse's invalidation  `:6268`
+  - A conditional negate with a COPY in it means the result is a NARROW local  `:6430`
+  - `x = x << 16; x = x >> 16;` is the IN-PLACE sign-extension; the cast is not  `:6445`
+  - A parameter re-assigned its own truncation extends IN PLACE -- and resets cse  `:6458`
+  - An `s16` parameter's sign-extension sits at its first INT USE, not at entry  `:6509`
+  - A RAW COPY of the parameter ahead of the `sll`/`sra` pair means `s16`, not in-place  `:6521`
+  - A narrow STACK parameter is loaded with `lw`, so `lw` is not evidence for `s32`  `:6553`
+  - "A pure register rotation" can be a narrow PARAMETER -- check the types first  `:6622`
+  - A switch subject read as `s16` is declared `s32`  `:6650`
+  - A stack buffer whose loads are NOT hoisted is a STRUCT, not a byte array  `:6667`
+  - A store that gcc deletes as dead is a VOLATILE field  `:6686`
+  - A load of a value just stored is a VOLATILE field  `:6742`
+  - THE LAST STORE OF A VOLATILE RUN CAN BE PLAIN, and that fills the delay slot  `:6768`
+  - Two bit tests that stayed separate are NESTED IFS  `:6783`
+  - Two bit tests that stayed separate are two SPELLINGS of one lvalue  `:6793`
+  - Which spelling a global's bound takes is PER SITE: read the `lui`'s register  `:6821`
+  - A struct POINTER local gets both a materialised base and MEM_IN_STRUCT_P  `:6838`
+  - Reading one field twice beats a local when the value is wanted in two registers  `:6857`
+  - A reg-reg copy right after an `lbu` means the byte is a LOCAL  `:6867`
+  - A PARAMETER RELOADED FROM ITS HOME SLOT AND RE-SHIFTED is a RESPELLING  `:6883`
+- 6. Declaration decides addressing  `:6909`
+  - A SUBSCRIPT keeps the symbol's own pseudo; a `u8 *` BASE eats the `%lo`  `:7231`
+  - A walked pointer RE-LOWERS its symbol; a separate cursor does not  `:7263`
+  - `sw X, -C($sN)` beside `sw Y, %gp_rel(SYM)` means ONE pointer, used  `:7291`
+  - A SYMBOL whose accesses ALL sit at a nonzero offset wants a POINTER LOCAL  `:7329`
+- 7. Narrow types  `:7354`
+  - A narrow parameter a CALLER must not see: define under an `__asm__` alias  `:7685`
+  - A narrow RETURN the caller must not see: truncate in the BODY, not in the type  `:7725`
+- 8. Statement order and expression shape  `:7751`
+  - sched1 defers a value SET EXACTLY ONCE, and that is a knob  `:7753`
+  - WHEN BOTH COMPETING INSNS ARE BUMPED, IT IS LUID -- AND A NEW LOCAL MOVES IT  `:7844`
+  - A THIRD SYMBOL'S MATERIALISATION DECIDES WHICH CYCLE A TWO-INSN CONTEST HAPPENS IN  `:7894`
+  - A THREE-SET integer chain puts a lookup's quantity on the INDEX, not the base  `:7960`
+  - A global's DECLARED SIZE also decides how many registers its address costs  `:7995`
+  - A 32-bit mask on a narrow value needs ITS OWN STATEMENT, not just a wide local  `:8103`
+  - Truncating an `lbu` result is FREE -- an explicit `& 0xFF` is not  `:8124`
+  - A value stored twice is a CHAINED assignment, because a store flushes cse  `:8142`
+  - Four `||` terms whose `or`s sit in the delay slots are `|`, written INLINE  `:8158`
+  - `% C` is NARROWED by the front end, and a cast will not stop it  `:8174`
+  - An index INLINE in a call argument gets the hard register; a local does not  `:8228`
+  - cse rewrites `*q` into `*(p + C)` but leaves `*(q + 4)` alone  `:8243`
+  - A symbol added to an index expands SECOND; a pointer variable expands first  `:8254`
+  - Read a field BACK instead of respelling the expression -- cse makes a MOVE  `:8280`
+  - Read the scheduler's own decisions -- it is not "priority, then LUID"  `:8302`
+- TWO CALL RESULTS IN ONE LOCAL BUY A CALLEE-SAVED REGISTER FOR BOTH  `:8517`
+  - THE SPLIT IS ABOUT TYPES AS WELL AS RANGES -- A CALL RESULT AND ITS REMAINDER  `:8727`
+  - A `nop` in a CONDITIONAL branch's delay slot can mean a LOAD comes next  `:8760`
+  - Two loads of one MEM collapse at greg unless they overlap at SCHED1 time  `:8770`
+  - An empty `jal` delay slot says the address was ONE instruction  `:8787`
+  - N materialisations of ONE base mean N LOCALS, because cse restarts at a join  `:8834`
+  - The PREHEADER's giv initialisations are in REVERSE body order  `:8852`
+  - A PARAMETER COPY IN THE PREHEADER, not the prologue, means the source INDEXES  `:8863`
+  - Two offsets off a walked pointer become TWO induction variables  `:8879`
+  - A THIRD induction variable presents as a SPILL, not as a giv-shaped diff  `:8889`
+  - A displacement offset by a CONSTANT from the field it reads is a REDUCED GIV  `:8977`
+  - A volatile MEM is NOT replaced by a reduced giv  `:9008`
+  - A struct copy is a FOUR-REGISTER block move; N statements are N lw/sw pairs  `:9025`
+  - A loop-invariant pointer belongs INSIDE the loop body  `:9036`
+  - A MUTATED cursor cannot be hoisted -- write the guard yourself  `:9045`
+  - A USER-VARIABLE POINTER WITH A DEAD EARLIER SET keeps the %lo INSIDE the loop  `:9081`
+  - WHICH REGISTER THE GIV USES SAYS WHETHER THE SOURCE WALKS THE POINTER  `:9126`
+  - A NAMED LOCAL FOR A GLOBAL'S VALUE keeps the LOAD inside the loop  `:9166`
+  - reorg fills a delay slot from the insn BEFORE the branch first  `:9216`
+  - Reusing one counter beats a second one, and that decides its register  `:9234`
+  - `p = param` BEFORE the first branch moves that parameter's copy LAST  `:9253`
+  - Where a loop's counter is INITIALISED decides which register it gets  `:9283`
+  - An early `return x` is another REFERENCE to x, and it can flip global-alloc  `:9302`
+  - A base pointer assigned before a call lives in a callee-saved register  `:9317`
+  - One call after the join, not a call in each arm  `:9328`
+  - Two bounds written with `&&` become one range check  `:9336`
+  - Two shifts with mismatched counts are two shifts in the source  `:9344`
+  - `break` and a tested `while` condition pick DIFFERENT registers  `:9353`
+  - No re-test at the bottom means that is not the loop condition  `:9363`
+  - Many arms rejoining at several places is LABELS AND GOTOS, laid out to match  `:9371`
+  - A comparison TREE where you get a jump table means a case you have not found  `:9395`
+  - A switch's range split means there is a case label you have not found  `:9426`
+  - A switch's range split means there is a case label you have not found  `:9444`
+  - A two-case store chain whose opcodes are `beq` then `bne` is a SWITCH  `:9462`
+  - Read the block ORDER off the listing and write the arms to match  `:9486`
+  - Spell the whole expression out in each arm, not a shared temp after the join  `:9510`
+  - Two masks of one word are two `&=` statements  `:9545`
+  - cse learns a case value inside a switch arm  `:9564`
+  - A value reassigned in several blocks is several block-scoped locals  `:9578`
+  - ...and the converse: two block-scoped locals with the same job are ONE function-scope local  `:9592`
+  - When a call's argument setup is EARLIER than the loop's giv updates, move `i++` after the call  `:9630`
+  - A post-increment whose value outlives its statement costs a copy  `:9656`
+  - Two primitives in one function are TWO variables, and that moves the mask  `:9688`
+  - An address sum written INLINE is one PLUS tree -- the loads and shifts all come first  `:9716`
+  - A live length is trimmed ONE insn at a time by what sched1 puts before the value's last store  `:9761`
+  - Declaration ORDER is the sched2 tie-break for same-priority prologue insns  `:9822`
+  - A VOLATILE byte read is how two loads of ONE byte sit side by side  `:9837`
+  - A SUB-WORD parameter type is how a parameter copy becomes schedulable  `:9859`
+- The PREHEADER's order is the order the invariants are FIRST USED  `:9977`
+  - A SOURCE statement in the preheader sits AHEAD of the bound hoist; a giv's init does not  `:10031`
+- 9. Induction variables  `:10078`
+- A STRUCT TYPE IS WHAT GIVES A STORE A MEMORY DEPENDENCE AT ALL  `:10236`
+  - THE OTHER HALF OF THAT CLAUSE: THE READ MUST BE A NON-AGGREGATE AT A FIXED ADDRESS  `:10327`
+- TWO EXITS FROM ONE LOOP WANT TWO DIFFERENT STATEMENTS  `:10386`
+- COMBINE WILL NOT COMBINE ACROSS A CALL  `:10445`
+- A REG-TO-REG MOVE IN THE LISTING IS A LOAD cse DID *NOT* EQUATE  `:10475`
+  - AND WHICH OF TWO SURVIVING LOADS BECOMES THE COPY IS DECIDED BY `birthing_insn_p`  `:10589`
+- loop.c CANNOT BE PERSUADED NOT TO STRENGTH-REDUCE -- READ ITS OWN PRINTOUT  `:10634`
+- 10. Measured dead ends -- do not retry  `:10683`
+- 11. Toolchain traps  `:10852`
+- 12. Keeping an agent's run cheap  `:10925`
+- Which of two givs is initialised first, and the bias on a walked pointer  `:11052`
+- TWO SAME-STRIDE GIVS STAY APART ONLY IF ONE `add_val` IS A REGISTER AND THE OTHER A CONST_INT -- WHICH IS WHERE YOU PARENTHESISE THE OFFSET  `:11091`
+- fold's `associate:` moves a constant onto the wrong operand  `:11166`
+  - Both halves of this are in search.py now  `:11213`
+- An explicit `goto` is how you get a loop that is NOT rotated  `:11224`
+- Put each accumulation next to the channel it consumes  `:11258`
+- `potential_hazard` acts ONLY inside one priority group  `:11291`
+- sched2's tie-break inside a priority group is MEMORY OVER ALU  `:11310`
+- A declaration NARROWING can be a semantic break that scores better  `:11355`
+- `REG_USERVAR_P`: where NAMING a value changes a decision, and where it cannot  `:11418`
+- A use before the assignment: a cure for a PARAMETER's copy, and it is not valid C  `:11505`
+- An unused `return p` is where a post-call copy of a PARAMETER comes from  `:11558`
+- A pointer BUMPED AND RETURNED needs to be its own variable  `:11591`
+- An in-place `x &= MASK` blocks the shift/and/scale fold, and costs nothing  `:11654`
+- A COMPARISON TEMPORARY'S $v1 PREFERENCE TRAVELS TO A LATER ZERO-EXTEND  `:11691`
+- TWO ARGUMENT SETUPS IN ONE CALL CANNOT BE REORDERED FROM THE SOURCE  `:11777`
+- `x >= 0 ? x : -x` FOLDS TO `abs`; `x < 0 ? -x : x` DOES NOT  `:11830`
+- A REDUNDANT TEST STILL HAS TO BE OUT OF THE ARM'S PATH  `:11878`
+- AN `s16` LOCAL READ FROM A `u8` FIELD COSTS A WIDENING COPY  `:11904`
+- A GUARD AROUND BOTH LOOPS is how the first test branches to the TAIL  `:11919`
+  - A VALUE'S OWN STATEMENT IS SCHEDULED INTO THE STORE'S ADDRESS-LOAD SLOTS  `:11980`
+- A RECOMPUTED GLOBAL+INDEX WANTS ITS OWN POINTER LOCAL *AND* ITS OWN DESTINATION LOCAL, ONE PAIR PER OCCURRENCE  `:12017`
+- WHICH LOCAL HOLDS A HOISTED SUB-EXPRESSION DECIDES BOTH ITS REGISTER AND ITS SCHEDULE SLOT  `:12074`
+- OF TWO SYMMETRIC LOCALS, COMPUTING ONE FIRST LENGTHENS ITS LIVE RANGE, AND THAT IS WHAT SPILLS IT  `:12103`
+- THREE BYTE READ-MODIFY-WRITES ON ONE BASE COME OUT WITH THE SECOND AND THIRD SWAPPED  `:12163`
+- WHICH LOOP A ONE-SET INVARIANT IS ASSIGNED IN IS AN ALLOCATION-PRIORITY LEVER, NOT ONLY A PLACEMENT ONE  `:12182`
+- A TWO-USE SIGN EXTENSION OF AN `s16` PARAMETER MATERIALISES IN PLACE, AND THAT IS ONE WORD  `:12213`
+- `__asm__("" ::"r"(x))` IS A ZERO-INSTRUCTION REFERENCE, AND IT MOVES TWO DIFFERENT ALLOCATION DECISIONS  `:12255`
+- TWO ARGUMENT COPIES IN THE LISTING'S ORDER: EMIT THE SECOND ONE YOURSELF, AS THE FENCE  `:12311`
+- A TIED PHANTOM COPY: three free references on a two-reference temporary move local-alloc's march  `:12429`
+- A `return 0` BETWEEN A COMPARE AND ITS BRANCH: one jump1 hoist is both the $v1 compare and the delay slot reorg declines  `:12553`
+- A PHANTOM ZERO: `+ ((v + v) - v - v)` is three references on ONE value, no insn, no tie  `:12686`
+- TWO ALIASES SPLIT THE TWO SIZE DECISIONS: an 8-byte alias gives cc1psx the `la`, a 16-byte decoy gives gas a `.extern` it will not call small  `:12777`
+- A DEAD SET IN A TWO-OUTPUT ASM: a conflict for global-alloc and a second death for local-alloc, with no insn and no fence  `:12889`
+- A BLOCK-LOCAL TWIN FOR A GLOBAL VALUE: local-alloc occupies the register global-alloc will hand the global  `:13099`
+- A GIV IS REPLACEABLE ONLY IF ITS SET SITS ABOVE THE LOOP'S FIRST JUMP -- and a volatile read through it is the tell  `:13216`
+- TWO FREE REFERENCES ON A CALL ARGUMENT: write the call in EVERY arm, cross-jumping runs only after flow  `:13267`
+- INDEX THE TABLE BY THE COUNTER AND LET loop.c MAKE THE COPY: a compiler-temp giv is reduced even when its store block has been moved out, and cse2's two passes decide which register the block keeps  `:13287`
+- A 3-BYTE STRUCT COPY IS A BLOCK MOVE WHOSE SCRATCHES PRUNE THE PARAMETER'S PREFERENCE  `:13355`
+- A POINTER ASSIGNED AT THE LOOP TOP HOISTS ITS high, THE ARM'S high MATCHES IT, AND RELOAD REMATERIALISES BOTH IN $t0  `:13460`
+- THE SWITCH INDEX'S STATEMENT POSITION IS A sched1 TIE-BREAK, AND THE TIE-BREAK IS THE WHOLE mfhi/mflo REGISTER BLOCK  `:13563`
+- A REG-REG COPY WHOSE DESTINATION ALREADY HOLDS THE SOURCE IS DELETED BY jump2 -- THE PASS IS IN THE TREE, AND ITS THREE EXITS ARE THE ONLY WAYS TO KEEP THE COPY  `:13600`
+- THE DELAY SLOT OF AN ENTRY BRANCH TAKES THE NEAREST ELIGIBLE INSN BEFORE IT -- NOT "THE FALL-THROUGH"  `:13639`
+- A RELOAD EMITTED AHEAD OF A BLOCK HEAD IS NEVER SCHEDULED -- and three more facts that landed func_8004B954  `:13672`
+- loop.c's HOIST THRESHOLD DECAYS BY 3 PER MOVE AND insn_count DOUBLES PER INNER-LOOP HOIST -- A lo_sum's LIFETIME IS THE LEVER, AND A goto LOOP IS NO LOOP AT ALL  `:13746`
+- A QImode COPY OF AN SImode REGISTER IS THE SAME `addu` BUT NOT THE SAME NO-OP -- a one-byte struct is how jump2 keeps the copy, and a dead write is how cse keeps the reads  `:13845`
+- THE SCAN LOOP WRITTEN AS THE SIBLING'S INNER-LOOP GIV KEEPS ITS high OUT OF THE OUTER MERGE, A DEAD STORE AT THE BODY TOP MOVES THE MERGED high BEFORE THE DOUBLINGS, AND A MATCHED lo_sum IS NEVER MOVED ON ITS OWN  `:13898`
+- AN ARGUMENT REGISTER SET IN A `jal`'s DELAY SLOT IS THAT CALL'S LIVE ARGUMENT -- AND THE SAME INSN IN EVERY PREDECESSOR'S SLOT IS A SUCCESSOR BLOCK'S FIRST INSN  `:14001`
+- CROSS-JUMPING RUNS AFTER sched2 AND BEFORE reorg, AND ONE MATCHING INSN IS ENOUGH -- SO AN EMPTY `__asm__` AT A BLOCK'S END IS A ONE-WORD LEVER  `:14040`
+  - `if (c) x = 1; else x = 0;` -- WHICH ARM'S ASSIGNMENT COMES FIRST decides whether the compare and the flag share a register  `:14100`
+- `while (1)` WITH A `break` DEFEATS LOOP REVERSAL, AND THAT IS WHAT KEEPS A WALKED POINTER  `:14171`
+- A SYMBOL ARRAY REFERENCE EMITS ITS `lui` FIRST AS A *MEM*, ITS `sll` FIRST AS A *POINTER VALUE* -- and the join block's first insn is what reorg puts in the delay slot  `:14241`
+  - A HOISTED CONSTANT CANNOT KEEP A COPY -- a body-order preheader can be all STATEMENTS  `:14316`
+  - loop.c's HOIST TEST IS `threshold * savings * lifetime >= insn_count` WITH threshold 60 HERE -- SO AN INVARIANT STAYS IN THE LOOP ONLY IF EARLIER MOVABLES SPEND THE THRESHOLD, A FORCED SHIFT RIDES OUT FREE WHATEVER YOU DO, AND A FOUR-USE CONSTANT CANNOT BE BLOCKED AT ALL  `:14379`
+  - A CONSTANT THAT IS ALSO THE RETURN VALUE CANNOT BE THE STORE'S REGISTER -- AN UNEXPLAINED `move` OF A CONSTANT IS EVIDENCE THE FUNCTION IS NOT `void`  `:14472`
+  - WHERE `i++` SITS RELATIVE TO THE POINTER BUMP DECIDES sched1's LOAD-DELAY FILLER -- loop.c pins the reduced giv's update to the biv update, and `rank_for_schedule` breaks a priority tie on the HIGHER LUID  `:14522`
+- A CROSS-JUMPED TAIL STARTS WHERE THE LABEL IS, NOT WHERE THE INSNS START LOOKING SHARED -- READ THE LABEL'S ADDRESS BEFORE DIAGNOSING ONE  `:14589`
+- `qty_size` IS IN WORDS, NOT BYTES -- A QImode QUANTITY IS NOT PRICED AT A QUARTER, AND WHICH STATEMENT FILLS A LOAD DELAY DECIDES WHO GETS `$v0`  `:14679`
+- gcc'S DIVIDE-BY-POWER-OF-TWO COPY SURVIVES ONLY WHEN THE QUOTIENT IS WRITTEN BACK INTO THE DIVIDEND -- cse1's `make_regs_eqv` DECIDES IT, ON THE *LAST* `regno_last_uid` OF THE TWO PSEUDOS  `:14766`
+  - AND A SECOND EXCEPTION: A SIGN-EXTENDED BYTE OPERAND  `:14779`
+  - THE SECOND WORD: A GIV INITIALISER IS A COPY ONLY IF THE ARRAY BASE IS ALREADY IN A PSEUDO  `:14876`
+- A `while` LOOP'S DUPLICATED GUARD IS REMOVED BY CROSS-JUMPING, NOT BY BLOCKING `duplicate_loop_exit_test` -- AND THE MERGE NEEDS TWO IDENTICAL INSNS, SO THE POINTER BUMP MUST SIT IN THE TEST  `:14908`
+- A DUPLICATED FAIL BODY IS WHAT PUTS IT IN cse1's PATH -- cse CAN ONLY SHARE A `%hi` WITH A BLOCK IT REACHES, AND IT REACHES ONE ONLY ACROSS A **ONE-USE** LABEL  `:14972`
+- `;; N regs to allocate:` IN `.greg` IS THE WHOLE ANSWER FOR CALLEE-SAVED REGISTERS -- AND `allocno_compare` IS global.c's, NOT local-alloc's  `:15077`
+  - A `return` WEIGHTED BY TWO NESTED DEGENERATE LOOPS  `:15150`
+  - SECOND INSTANCE: `func_800B85E8`, 2026-11-05 -- AND A CORRECTION TO MY OWN FRAMING  `:15185`
+  - THIRD INSTANCE: FOUR PARAMETERS, A 2% GAP, AND ELEVEN REWRITES THAT MOVED NOTHING  `:15268`
+- THE `lui` TEMP REGISTER TELLS SYMBOL FROM CONSTANT ADDRESS IN A *REGISTER* LOAD -- AND WRITING `p + 4` INLINE IS A LOCAL-ALLOC/GLOBAL-ALLOC LEVER  `:15305`
+  - 1. A word load from a constant address uses the DESTINATION as the `lui` temp  `:15310`
+  - 2. `p + 4` written INLINE at every call site is a register lever, not a wash  `:15339`
+  - 3. A TERNARY puts the shared call's `$a0` setup ABOVE the branch -- worth one word  `:15353`
+- A QImode STORE WIPES CSE'S WHOLE MEMORY TABLE; AN HImode STRUCT STORE DOES NOT  `:15388`
+  - Corollary: the load count feeds back into the register allocation  `:15443`
+- STORE-POINTER PARENTHESISATION, MEASURED END TO END  `:15454`
+- LOCAL-ALLOC PRICES THE *SCHED1* ORDER, AND A ZERO-WORD `asm` MARKER'S sched1 PRIORITY DECIDES WHICH LOAD-DELAY HOLE IT EATS  `:15484`
+  - A REFERENCE MARKER IS THE LOAD'S LAST CONSUMER, SO IT SETS THAT LOAD'S LAUNCH CLOCK -- WHICH IS A SECOND, USUALLY UNINTENDED JOB  `:15573`
+  - A PINNED HARD REGISTER NEEDS AN EXPLICIT SHIFT-AND-ADD, BECAUSE `expand_mult` COPIES IT INTO A PSEUDO  `:15605`
+  - PASS ORDER CORRECTION: cse2 RUNS RIGHT AFTER loop, BEFORE flow  `:15624`
+  - A BACK-TO-BACK DOUBLE CALL IS AN ARITY WITNESS  `:15639`
+  - TWO OUT-OF-IMAGE GLOBALS WITH ONE SHARED %hi ARE ONE BASE POINTER  `:15674`
+  - cc1psx EMITS `.align 3` FOR JUMP TABLES, WHICH CAN BLOCK A PERFECT BODY  `:15751`
+  - A BLOCK MOVE FORCES ITS ADDRESS WHOLE; A SCALAR ACCESS KEEPS ITS %lo  `:15806`
+  - WHICH OF TWO EQUAL LOCALS cse CANONICALISES ON IS DECIDED BY LAST MENTION  `:15833`
+  - THE STATEMENT POSITION OF A DEAD-LOOKING COPY IS MEASURABLE  `:15860`
+  - WHEN THE LIFT IS ONE floor_log2 STEP, THE LOOP WRAPPER IS THE ONLY TOOL  `:15875`
+  - A STRING CONSTANT'S DECLARED SIZE DECIDES WHETHER .rodata SURVIVES  `:15910`
+  - AN abs() RESULT THAT SHARES A VARIABLE ACROSS BLOCKS IS WORTH 8 WORDS  `:16036`
+  - TWO POINTERS WALKED BY A LOOP WANT AN ARRAY, NOT TWO NAMED FIELDS  `:16070`
+  - move_movables' THRESHOLD IS A BUDGET, SPENT 3 PER HOIST IN LOOP ORDER  `:16079`
+  - CITATIONS RE-ANCHORED TO THE CDK TREE, AND TWO TIE-BREAKS UPSTREAM LACKS  `:16114`
+  - A GLOBAL THAT *HOLDS* AN ADDRESS IS NOT A GLOBAL THAT *IS* AN ARRAY  `:16211`
+  - A STORED ARGUMENT REGISTER THE PROTOTYPE DOES NOT HAVE IS A FORWARDED PARAMETER -- AND ITS WITNESS IS THE GRANDCALLER  `:16231`
+  - A SYMMETRIC TWO-CALL `if/else` KEEPS SOURCE ORDER; ONLY AN ARM THAT *RETURNS* INVERTS  `:16276`
+  - A HALFWORD FIELD'S READ-MODIFY-WRITE NEEDS NO EXPLICIT TEMP FOR THE NEXT EXPRESSION ON THE SAME FIELD -- AND A USE THAT NEEDS THE SIGN-EXTENDED HALFWORD STILL RELOADS  `:16320`
+  - A NARROW PARAMETER THAT IS ONLY EVER TRUNCATED IS WITNESSED AT THE CALL SITE, NOT IN THE CALLEE  `:16356`
+  - A VALUE THAT IS *STORED* WANTS A TWO-ARM `if/else`; A VALUE THAT IS *RETURNED* WANTS AN ACCUMULATOR  `:16400`
+  - TWO DISJOINT LIVE RANGES IN ONE DECLARED LOCAL SHARE A REGISTER; TWO LOCALS DO NOT  `:16427`
+  - A DUPLICATED TAIL IS NOT ONLY A CROSS-JUMP -- IT CHANGES WHICH LOOP INVARIANTS ARE HOISTED  `:16449`
+  - loop.c's `combine_givs` MERGES ADDRESS GIVS, SO ONE `addiu $sN, $sN, 4` IS NOT A SOURCE POINTER WALK  `:16487`
+  - DECLARATION ORDER FIXES *AGGREGATE* STACK SLOTS ONLY, AND A SLOT IS ROUNDED TO 8 BYTES  `:16507`
+  - A STRUCT-ARRAY REFERENCE WHOSE SUBSCRIPT IS A MEMORY LOAD MUST BE CACHED IN A LOCAL POINTER -- WHEN A CALL SITS BETWEEN **TWO** USES  `:16533`
+  - gcc EVALUATES AN ASSIGNMENT'S *DESTINATION ADDRESS* BEFORE ITS RHS  `:16580`
+  - CHECK THE DEREFERENCE DEPTH BEFORE DIAGNOSING A FORWARDED STORE  `:16594`
+  - AN IMPLICITLY DECLARED CALLEE IS SOMETIMES THE MATCHING ONE  `:16610`
+  - cse CANNOT BE STOPPED FROM UNIFYING TWO IDENTICAL SMALL CONSTANTS, AND THE `do { } while (0)` BOUNDARY IS NOT ENOUGH FOR ONE  `:16626`
+  - A FLAT FUNCTION-POINTER TABLE IS AN ARITY WITNESS WHEN ITS OTHER ENTRIES ARE LANDED  `:16755`
+  - A HALF-THREADED GUARD EDGE NEEDS AN INSN THAT BREAKS `thread_jumps`' WALK AND THEN DISAPPEARS  `:16778`
+  - `<< 7` AND `* 128` ARE NOT THE SAME STATEMENT WHEN THE RESULT IS NARROW  `:16847`
+  - WHERE A LOOP'S POINTER INCREMENT IS WRITTEN CHANGES THE DELAY SLOT OF AN EARLY `break`, NOT THE LOOP  `:16873`
+  - A CONSTANT-BASE POINTER MUST BE RE-ASSIGNED PER `if`, NOT PER BASIC BLOCK  `:16903`
+  - TWO LOCAL ARRAYS WITH THE SAME INITIALISER SHARE ONE rodata LABEL ACROSS FUNCTIONS  `:16931`
+  - CROSS-JUMPING SWITCH ARMS ONTO A SHARED STORE TAIL NEEDS ONE SHARED VARIABLE, NOT A LITERAL PER ARM  `:16953`
+  - A `switch` ON A `short` SUBJECT PUTS THE SIGN EXTENSION *AFTER* THE RANGE BIAS  `:16983`
+  - WITH NO `default`, A SHARED TAIL MUST BE A `goto` LABEL INSIDE THE SWITCH  `:17011`
+  - DECLARATION ORDER ALSO FIXES INIT-CODE ORDER, NOT ONLY AGGREGATE SLOTS  `:17069`
+  - A `u16` FIELD PLUS AN EXPLICIT `(s16)` IS NOT THE SAME AS AN `s16` FIELD, AND ONLY THE SIGN-EXTENDED USES WITNESS IT  `:17141`
+  - THE FIRST OF A RUN OF IDENTICAL TESTS ON ONE BASE LOOKS CHEAPER THAN THE REST  `:17159`
+  - A SHORT LOCAL SEEDED FROM A PARAMETER IS WHY THE PARAMETER LANDS IN A CALLEE-SAVED REGISTER  `:17181`
+  - `s16 v = e;` PUTS THE NARROWING AT THE USE; `s32 v = (s16)e;` PUTS IT AT THE ASSIGNMENT  `:17196`
+  - `&arr[i]` GIVES A BASE-FIRST `addu`; `arr[i].field` GIVES AN INDEX-FIRST ONE  `:17208`
+  - sched WILL REORDER TWO STORES TO DISJOINT DISPLACEMENTS OFF ONE BASE, SO MEASURE BOTH SOURCE ORDERS  `:17222`
+  - THE PER-`if` CONSTANT-BASE RULE DOES NOT APPLY TO A TYPED SCRATCHPAD POINTER  `:17239`
+  - `CASE_VALUES_THRESHOLD` IS 5 ON THIS TARGET, SO A gcc JUMP TABLE NEEDS FIVE CASE NODES  `:17254`
+  - A CONSTANT ADDRESS IS A TWO-WORD ASSEMBLER MACRO IN ONE INSN; A SYMBOL IS `high` + `lo_sum` IN TWO -- AND ONLY THE SYMBOL'S `lui` CAN FILL A DELAY SLOT  `:17287`
+  - TWO BASE LOCALS IN ONE EXTENDED BASIC BLOCK ARE UNIFIED BY cse INTO ONE `lui`  `:17309`
+  - `u8` VERSUS `s32` FOR A VALUE USED INSIDE A LOOP DECIDES WHETHER A HOISTED `zero_extend` BECOMES A REGISTER COPY  `:17316`
+  - TWO SWITCH ARMS SHARE A HARD REGISTER FOR A VALUE ONLY IF ONE DECLARED LOCAL SPANS BOTH  `:17324`
+  - A RECORD POINTER WANTS `non-constant-base + index`, NOT AN ARRAY REF OR `symbol + index`  `:17338`
+  - A LOOP-INVARIANT CONSTANT THAT loop.c HOISTS IS A WORD IN THE WRONG PLACE -- MOVE ITS COMPETITOR INTO THE LOOP  `:17351`
+  - A LOOP COUNTER'S INIT MUST BE SEQUENCED BEFORE A PRECEDING SIGNED DIVIDE, OR reorg.c COSTS A WORD  `:17365`
+  - THE `non-constant-base + index` RULE IS WORTH ONE `addu` OPERAND ORDER, AND ONLY ON AN UNSCALED INDEX  `:17395`
+- A HALF-WORD STORE TO A STACK LOCAL MUST BE A COMPONENT_REF, NOT A CAST THROUGH A `u8 *` -- THE CAST LETS THE NEXT ARGUMENT LOAD FLOAT ABOVE THE STORE  `:17422`
+- A NEGATIVE CONSTANT STORED TO A HALF-WORD FIELD WITNESSES THE FIELD'S SIGNEDNESS, IN ONE WORD  `:17451`
+- TWO INDEPENDENT HALF STORES TO ONE STACK LOCAL COME OUT IN SOURCE ORDER, AND A PRE-LOOP STORE TO A FIELD THE LOOP OVERWRITES IS REAL SOURCE  `:17474`
+- TWO SHORT LOCALS FOR A REPEATED STRUCT FIELD CAN DECIDE WHICH CALLEE-SAVED REGISTER THE STRUCT POINTER GETS -- `reg_n_refs` IS TAKEN AT *flow* TIME AND NEVER RECOMPUTED  `:17496`
+- THE SCHEDULER'S PLACEMENT OF A PROLOGUE'S *NON*-STORES IS A SOURCE-ORDER QUESTION TOO  `:17541`
+- A BACKWARD POINTER WALK WANTS THE DECREMENT PRE-BIASED, NOT AT THE TOP OF THE BODY  `:17561`
+  - ONE CELL LIST, TWO POLYGON RECORD SIZES (ovl_town collision geometry)  `:17579`
+- A NARROW-TYPED BOOLEAN IS WHAT KEEPS gcc's VARIABLE-ASSIGNMENT COPY ALIVE -- FOUR SPELLINGS, THREE OUTCOMES  `:17597`
+- A TEMPORARY FOR THE ADDED OPERAND DECIDES `addu`'s OPERAND ORDER, AND THE SOURCE ORDER DOES NOT  `:17623`
+- AN EXPLICIT EARLY `return` IS A cse-REGION BOUNDARY LEVER, NOT JUST A LAYOUT ONE -- AND ITS RESIDUE IS INVISIBLE TO ovlverify  `:17642`
+- A SECOND `extern` WITH THE SAME `__asm__` NAME DEFEATS cse's UNIFICATION OF TWO POINTERS TO ONE GLOBAL  `:17673`
+- A SHARED COORDINATE NEEDS ONE VARIABLE PER REGION, NOT ONE PER AXIS  `:17698`
+  - THE SCRATCHPAD WANTS A STRUCT TYPEDEF, NOT A `u16 *` -- SAME MEM_IN_STRUCT_P RULE AS A STACK RECORD  `:17719`
+- `schedule_select`'s HAZARD PICK DECIDES WHETHER A LOOP PREHEADER IS EMITTED BEFORE OR AFTER THE STATEMENT THAT PRECEDES THE LOOP -- AND A BYTE STORE WINS THAT CONTEST WHERE A HALFWORD STORE DOES NOT  `:17734`
+- THE SIGNED `x % (1 << n)` IDIOM HAS TWO SHAPES AND WHICH ONE YOU GET IS A CONSEQUENCE, NOT A CAUSE  `:17771`
+- A LOAD THAT CANNOT MOVE ABOVE A STORE IS PINNED, AND ITS PINNED POSITION IS WHAT DECIDES THE REGISTER ALLOCATION  `:17787`
+- ONE POINTER VARIABLE REUSED ACROSS N BLOCKS IS A global-alloc QUANTITY AND GETS ONE HARD REGISTER IN ALL OF THEM; N VARIABLES ARE local-alloc QUANTITIES AND GET N  `:17805`
+- A `volatile` RE-READ PLUS A DEGENERATE LOOP DOES EVERYTHING A FULL MEMORY CLOBBER DOES  `:17825`
+- FOUR SMALL-FUNCTION SHAPES, MEASURED ACROSS 36 LEAVES IN ONE SITTING  `:17862`
+- WHERE A PARAMETER LIVES: THE THREE RULES, AND THE TWO SHAPES THEY EXPLAIN  `:17918`
+- A FOUR-WORD `if` ARM WHOSE ONLY CONTENT IS A LOAD IS A BARE `volatile` READ  `:17972`
+- A `do { } while (0)` AROUND A CALL IS THE GR-CONSTRAINED USE AT A JOIN THAT AN ASM OUTPUT OPERAND OTHERWISE BUYS  `:18008`
+- A LOOP'S SUBSCRIPT BIAS MUST LIVE IN THE BOUND, NOT IN THE SUBSCRIPT, WHEN THE BODY ALSO STORES A BIASED VALUE -- AND THE WRONG FORM IS *SHORTER*  `:18042`
+- AN `s16` LOCAL GETS AN HImode PSEUDO ON THIS TARGET, SO ITS LOAD NARROWS TO `lhu` AND EVERY ARITHMETIC USE PAYS ITS OWN `sll 16`/`sra 16`  `:18096`
+- A DECLARED STRUCT FIELD AT THE OFFSET IS A TIE FOR **ONE** FIELD AND WRONG FOR TWO -- IT DOES NOT OUTRANK THE SYMBOL THE LISTING NAMES  `:18132`
+- THE TRIVIAL ARM HAS TO BE THE EARLY `return`, NOT THE LAST STATEMENT  `:18188`
+- A `%lo` INSIDE THE LOAD MEANS A DECLARED SCALAR, AND ONE `lui` PER SYMBOL MEANS INDEPENDENT SYMBOLS  `:18221`
+- A TWO-CASE `switch` IS NOT THE SAME CODE AS AN `else if` CHAIN, AND IT IS WORTH EIGHT WORDS  `:18252`
+- TWO CONSTANT OFFSETS OFF ONE SYMBOL: THE RAW CAST IS ONE WORD SHORT, AND THE POINTER LOCAL'S POSITION IS THE LEVER  `:18279`
+- A HALFWORD READ MUST CROSS A BASIC-BLOCK BOUNDARY BEFORE ITS `(s16)` CONVERSION, OR combine FOLDS BOTH INTO ONE `lh`  `:18300`
+- READING THE SAME GLOBAL SLOT TWICE LEAVES A REGISTER COPY, AND THAT COPY IS A REAL WORD  `:18325`
+- A NARROWER-THAN-WORD PARAMETER TYPE KEEPS A STACK ARGUMENT'S ENTRY LOAD ALIVE  `:18355`
+- A ONE-WAY STORE OUT OF AN `if`/`else` IS HOISTED PAST THE COMPARE CONSTANT, WHICH IS AN UNREACHABLE REGISTER CONFLICT -- DUPLICATE THE STORE INTO BOTH ARMS, AT ZERO WORD COST  `:18403`
+- A `high`'s REGISTER IS DECIDED BY WHETHER `update_equiv_regs` MOVES IT TO ITS USE, AND LOOP NOTES AROUND THE USE KEEP IT GLOBAL  `:18457`
+- `seqcheck` REPORTS `HI16 .rodata` FOR EVERY C JUMP TABLE, AND THAT IS NOT A DEFECT  `:18513`
+- AN ARGUMENT LOAD IS HOISTED OVER A `%lo(global)` STORE ONLY IF IT IS MARKED `MEM_IN_STRUCT_P` -- AND WHICH SPELLINGS SET THAT FLAG DEPENDS ON THE TREE CODE, NOT ON THE DISPLACEMENT  `:18524`
+- A `<< k` BETWEEN A SIGN-EXTENDED LOAD AND A NARROWING STORE TURNS `lh` INTO `lhu`; `* (1 << k)` DOES NOT  `:18672`
+- WHICH SIDE OF A CALL A STORE SITS ON IS READABLE OFF THE DELAY SLOTS, AND IT IS WORTH A WORD  `:18712`
+  - THREE CORROBORATIONS WITH FRESH NUMBERS, ON THE allocate-or-teardown TEMPLATE  `:18753`
+  - A CALL CAN PERMUTE ITS ARGUMENTS, AND THE CALLEE'S OWN LISTING IS THE CORROBORATION  `:18777`
+- THE NARROWED `/ C % C` RESULT HAS TYPE `short`, SO THE DESTINATION LOCAL'S DECLARED TYPE DECIDES WHETHER YOU PAY A WIDENING  `:18793`
+- loop.c DOES NOT HOIST A NARROWING TRUNCATION OUT OF A CONDITIONALLY-EXECUTED LOOP BODY, THOUGH IT HOISTS SYMBOL ADDRESSES FROM THE SAME BLOCK  `:18829`
+  - WHICH OF TWO STORES LANDS IN THE `jal`'s DELAY SLOT IS DECIDED BY THEIR SOURCE ORDER, WHEN THEY ARE OFF DIFFERENT BASES  `:18854`
+  - ON A TRUNCATING STORE, A `(u16)` CAST IS FREE IN BOTH DIRECTIONS  `:18880`
+- A REG-REG COPY SURVIVES WHEN ITS TWO ENDS ARE READ IN DIFFERENT ARMS OF AN `if`/`else` -- AND IT MUST BE TWO STATEMENTS, INTERLEAVED, NOT A BLOCK AND NOT A CHAIN  `:18896`
+  - A DIFFERING COUNT THAT MATCHES ANOTHER FUNCTION'S IS NOT EVIDENCE  `:18961`
+- A LOOP BOUND gcc CAN PROVE NON-NEGATIVE MAKES THE GUARD `beqz`, NOT `blez` -- SO A LONE `beqz` IS NOT A MISSING `== 0` GUARD  `:18980`
+  - SCOPE CORRECTION: `* (1 << k)` vs `<< k` NEEDS A SIGN-EXTENDED MEMORY *LOAD*  `:19014`
+- A STORE PAIR OFF ONE BASE IS ORDER-VISIBLE ONLY WHEN ITS VALUES ARE NOT ALREADY LIVE  `:19025`
+  - THREE MORE MEASUREMENTS THAT NARROW EXISTING ENTRIES  `:19043`
+  - `lhu` ON AN `s16` FIELD UNDER A MASK IS NOT EVIDENCE OF `u16`  `:19077`
+- A SPLIT GLOBAL'S ADDRESS CHAIN SINKS ITS STORE PAST THE NEXT ONE -- THE LISTING'S STORE ORDER IS NOT THE SOURCE ORDER  `:19086`
+- A FUNCTION'S OWN BODY IS INSENSITIVE TO ITS DECLARED RETURN WIDTH -- ONLY THE WHOLE-UNIT SWEEP CATCHES A WRONG ONE, AND ONLY THROUGH ITS CALLERS  `:19137`
+  - WHICH LVALUE A POST-CALL RELOAD NAMES IS VISIBLE, AND IT IS WORTH ONE WORD  `:19170`
+  - A WRONG *ARGUMENT* TO A MASKED `jal` IS NOT MASKED -- ONLY A WRONG *CALLEE* IS  `:19189`
+  - A CHAINED ASSIGNMENT'S RIGHT-TO-LEFT STORE ORDER IS OBSERVABLE FOR BYTE STORES OFF ONE BASE  `:19202`
+  - THREE NO-OPS, MEASURED, SO NOBODY SPENDS A COMPILE ON THEM  `:19229`
+- A GATE WHOSE *BOTH* ARMS LEAVE THE FUNCTION IS STILL LAID OUT IN SOURCE ORDER -- AND INVERTING IT COSTS THE CROSS-JUMP  `:19250`
+  - TWO SMALLER MEASUREMENTS FROM THE SAME SET  `:19295`
+- A FORWARDED PARAMETER CARRIES A `REG_EQUIV` THAT **DOUBLES** ITS LIVE LENGTH -- COPYING IT INTO A LOCAL *BEFORE* THE BRANCH HALVES IT BACK AND WINS THE `$s` REGISTER  `:19318`
+  - WHEN A FAMILY MEMBER HAS NO ADDRESS-TAKEN SYMBOL AT ALL, A DESCRIPTOR WRITTEN INTO IT IS PURE INVENTION  `:19385`
+  - THE GATE AND THE SLOT CLEAR ARE INDEPENDENT -- `func_800C5ADC` IS THE MEMBER THAT SEPARATES THEM  `:19402`
+- AN OUTGOING ARGUMENT COPY CANNOT BE MOVED EARLIER FROM THE SOURCE -- IT TIES AT sched2 AGAINST A `high`/`lo_sum` PAIR AND THE TIE BREAKS ON LUID, WHICH `calls.c` FIXES  `:19411`
+  - A THIRTEEN-MEMBER FAMILY'S STATEMENT ORDER IS NOT INHERITED FROM ITS LANDED RELATIVE  `:19474`
+  - `lh` AND `lhu` ON ONE `s16` FIELD IS CORRECT, NOT A TYPING INCONSISTENCY  `:19493`
+  - A TAIL DUPLICATED INTO BOTH ARMS IS STILL TWO COPIES WHEN THE ALLOCATOR PRICES THE PSEUDOS  `:19527`
+  - A SHARED `goto` EXIT KEEPS THE FINAL BRANCH FROM BEING IF-CONVERTED  `:19567`
+  - SHARING THE EXIT IS THE CURE, NOT WRITING `goto` -- AN `else if` CHAIN DOES IT  `:19599`
+  - AN HImode STRUCT STORE DOES INVALIDATE A FIELD READ OFF A POINTER LOCAL  `:19639`
+  - THE DECLARED-SIZE RULE GOVERNS GLOBALS, NOT POINTER PARAMETERS  `:19661`
+  - TWO NEGATIVE RESULTS WORTH NOT RE-DERIVING  `:19673`
+  - A CHAINED ASSIGNMENT EMITS ITS STORES RIGHT-TO-LEFT  `:19708`
+  - A FORWARDED PARAMETER IS WITNESSABLE WHEN THE CALLER PASSES A CONSTANT  `:19737`
+  - A ONE-ARMED `if` CANNOT HIT THE IF/ELSE INVERSION TRAP  `:19750`
+  - `&&` WITH A SIDE-EFFECTING RIGHT OPERAND IS NOT A SINGLE `if`  `:19761`
+  - A STORE OF ZERO TO A HALFWORD FIELD IS ONE WORD CHEAPER THAN ANY CONSTANT  `:19773`
+  - AN UNREAD THIRD PARAMETER ON ONE CALLEE COSTS A WORD ON A *DIFFERENT*, LATER INDIRECT CALL  `:19782`
+  - A FORWARDED PARAMETER PASSED ON TO AN EARLIER CALL WINS THE LOWER `$s` REGISTER  `:19823`
+  - A `goto` BACK-EDGE IS INVISIBLE TO `loop.c`  `:19848`
+  - A NESTED LOOP'S `i = 0` INIT CAN BE STOLEN INTO THE OUTER LOOP'S DELAY SLOT  `:19874`
+  - `get_pointer_alignment` IS AN ALIGNMENT LEVER, AND IT IS HOW A STRING'S `.rodata` SURVIVES  `:19887`
+  - C POINTER ARITHMETIC CANNOT EMIT AN INDEX-FIRST ADD  `:19912`
+  - THE CONSTANT-ADDRESS-VS-SYMBOL CHOICE IS WORTH BYTES EVEN FOR A SINGLE `lbu`  `:19925`
+  - `sched1`/`sched2` ARE STRICTLY PER-BASIC-BLOCK, SO "WHICH BLOCK" IS A SOURCE QUESTION  `:19944`
+  - `reorg` STEALS FROM TWO INSNS BACK, AND A NEARER CANDIDATE IS A LEVER  `:19957`
+  - `expand_abs`'s COPY SURVIVES ONLY WHEN THE TERNARY WRITES A SEPARATE VARIABLE  `:19973`
+  - COMPARISON OPERAND ORDER IS WORTH A WORD WHEN IT DECIDES A BLOCK'S FIRST INSN  `:20016`
+  - TWO INDEPENDENT LOOP COUNTERS: SOURCE ORDER PICKS WHICH DELAY SLOT EACH FILLS  `:20039`
+  - A DUPLICATED TAIL *CALL STATEMENT* IS NOT THE DUPLICATED-TAIL LEVER  `:20068`
+  - A DEAD *MIDDLE* PARAMETER IS WITNESSED; ONLY A DEAD TRAILING ONE IS NOT  `:20087`
+  - A POINTER-TO-GLOBAL LOCAL MUST BE ASSIGNED ON THE SAME SIDE OF THE CALL OR BRANCH AS ITS USE -- WHICH IS NOT THE SAME AS "A STATEMENT, NOT AN INITIALISER"  `:20105`
+  - `*((u8 *)&SYM + N)` FOLDS THE OFFSET INTO THE RELOCATION -- AND `ovlverify` HIDES IT  `:20146`
+  - AN ALLOCATE-AND-WIRE BODY NEEDS A POINTER LOCAL FOR THE `n + 0x20` VIEW  `:20165`
+  - AN INSTALL FEEDING A LATER CALL'S ARGUMENT IS ORDER-SENSITIVE; A SLOT WRITE FOLLOWED BY A CALL THROUGH THAT SLOT IS NOT  `:20173`
+  - TWO FLAGS IN ONE FUNCTION CAN WANT OPPOSITE DECLARATION SCOPES -- `combine_regs` REFUSES THE TIE AT FUNCTION SCOPE  `:20210`
+  - loop.c's ADDRESS GIV IS REACHABLE ONLY FROM AN INDEXED SUBSCRIPT -- A POINTER WALK PUTS THE `lo_sum` IN THE WRONG BLOCK  `:20273`
+  - A LOCAL FED BY A CALL RESULT IS `s32` PLUS A CAST, NOT `s16` -- AND THE SIGN EXTENSION'S SOURCE REGISTER SAYS SO (BUT ONLY WITH NO CALL IN BETWEEN)  `:20317`
+  - TWO DIFFERENT LOAD WIDTHS FOR ONE `s16` GLOBAL IN ONE FUNCTION IS NOT TWO DECLARATIONS  `:20366`
+  - A PLAIN CONSTANT STORE TO A *SIGNED* NARROW FIELD CANNOT PRODUCE `ori`  `:20394`
+  - `preexpand_calls` PUTS THE CALL BEFORE **BOTH** OPERANDS, SO WHERE YOU SPLIT A STATEMENT DECIDES WHICH SIDE OF IT THE ARITHMETIC LANDS ON  `:20426`
+  - AN INTERIOR POINTER MUST BE ONE C VARIABLE WITH ITS BASE, OR IT COSTS A REGISTER OR VANISHES  `:20469`
+- A 16-BIT WINDOW MUST BE A `(u16)` CAST, NOT AN `& 0xFFFF` MASK -- SAME WORD COUNT, 32 DIFFERING  `:20495`
+- THE `addPrim` MACRO VS THE REAL CALL IS A PER-SITE QUESTION, AND A NEIGHBOUR'S RECORDED ANSWER DOES NOT TRANSFER  `:20527`
+- A `(u32)` CAST ON A STRUCT FIELD STORE RESTORES THE sched1 DEPENDENCE THAT `MEM_IN_STRUCT_P` CANCELS -- AND IT CAN FIX AN UNRELATED sched2 TIE TWO WORDS AWAY  `:20547`
+- A DIVISION USED AS A TRUTH VALUE STAYS A DIVISION WHEN ITS QUOTIENT IS LIVE DOWNSTREAM  `:20603`
+- ONE OF 24 STORE ORDERS, AND THE READER'S ORDER IS NOT IT -- A FOUR-STORE LEAF IS WORTH AN EXHAUSTIVE SWEEP  `:20619`
+- A NARROW RETURN TYPE ON A NEWLY LANDED FUNCTION IS A CALLER-SIDE HAZARD -- THE CALLEE IS IDENTICAL EITHER WAY  `:20635`
+- A DISPATCH CALL THROUGH A SLOT CAN BE A TIE ACROSS ARITY, SO THE CALL SITE CANNOT WITNESS ITS OWN ARGUMENT COUNT  `:20670`
+- THE PARENTHESISATION OF AN INTEGER SUM ADDED TO A POINTER IS DECIDED IN THE C FRONT END, AND IT FIRES ON THE PARENTHESISED FORM  `:20691`
+- `abs()` ON MIPS IS ONE RTL INSN, AND WHETHER IT COSTS 2 OR 3 WORDS IS AN ALLOCATION FACT, NOT A TREE SHAPE  `:20726`
+- A COMPARISON'S WRITTEN OPERAND ORDER FIXES THE RTL INSN NUMBERING OF BOTH OPERANDS, WHICH SETS A REGISTER PAIR AND ONE LOAD'S SCHEDULING SLOT  `:20755`
+- `memrefs_conflict_p` TREATS TWO CONSTANT-OFFSET MEMs ASYMMETRICALLY BY BASE REGISTER, WHICH SAYS WHICH STORE PERMUTATIONS WERE EVEN REACHABLE  `:20781`
+- reorg COPIES A LOOP HEAD IT DOES NOT OWN INTO THE BACK BRANCH'S DELAY SLOT -- BUT THE COUNTER ADJUSTMENT IS ONLY *SOURCE* WHEN THE COUNTER IS LIVE AFTER THE LOOP  `:20813`
+- A COMPOUND ASSIGNMENT TO A NARROW FIELD IS ABOUT `+=` VERSUS THE WRITTEN-OUT FORM, NOT ABOUT OPERAND ORDER  `:20873`
+- A 4 x `u8` RECORD CANNOT HAVE SImode, SO A 4-BYTE GLOBAL THAT MOVES IN ONE `lw`/`sw` IS NOT A RECORD TYPE  `:20890`
+- reorg's DELAY-SLOT THREAD CHOICE IS WORTH A WORD, AND THE SOURCE CONTROL IS WHICH OPERAND `fold` PUTS FIRST IN A PLUS  `:20927`
+- AN ODD `%hi`/`%lo` COUNT ON ONE FUNCTION SYMBOL IS reorg COPYING THE `lui`, NOT A SECOND INSTALL  `:20982`
+- sched1 DEFERS A SINGLE-ASSIGNMENT PSEUDO'S DEFINITION TO THE LATEST POINT IN ITS BLOCK, WHICH PUTS THE WRONG INSN IN A `jal`'s DELAY SLOT  `:21025`
+- A NEAR-`INT_MIN` CLAMP IS A `MAX_EXPR`, AND ITS OPERAND ORDER IS A SOURCE-VISIBLE FACT WORTH 16 WORDS  `:21063`
+- A POINTER LOCAL'S POSITION AMONG STATEMENTS DECIDES WHICH ALLOCATOR SEES IT, AND THE BOUNDARY IS THE BASIC BLOCK, NOT THE DECLARATION  `:21098`
+- HOW MANY IDENTICAL `return CONST;` BODIES A FUNCTION HAS DECIDES WHICH COPY SURVIVES CROSS-JUMPING, AND THE SURVIVOR'S POSITION DECIDES EVERY OTHER BRANCH'S DELAY SLOT  `:21128`
+- CORRECTION: abssi2's THREE-WORD FORM EMITS ITS OWN DELAY SLOT; reorg DOES NOT STEAL THE `move`  `:21154`
+- CORRECTION: AN EXPLICIT `(u8 *)` CAST DOES NOT BLOCK `pointer_int_sum`'s REWRITE -- A POINTER LOCAL DOES  `:21170`
+- `&&` IS LEFT-ASSOCIATIVE, AND THAT HIDES A RANGE TEST FROM `fold`  `:21179`
+- `fold`'s ADDITIVE-CONSTANT SWAP IS AN INVOLUTION, SO WRITE THE CONSTANT ON THE OPERAND THE LISTING DOES NOT HAVE IT ON  `:21219`
+- `split_tree` MATCHES ONLY THE OPERATOR BEING FOLDED, SO `<< k` BLOCKS MULT REASSOCIATION WHERE `* (1 << k)` DOES NOT  `:21255`
+- CORRECTION: TRY THE DECLARATION LEVER BEFORE THE BLOCK-COUNT ESCALATION WHEN A LEAF'S RESIDUE IS A PURE RENAME  `:21283`
+- THE abs TERNARY'S ARM ORDER DECIDES WHETHER `fold` PRODUCES `ABS_EXPR` AT ALL -- A SEPARATE VARIABLE IS NECESSARY BUT NOT SUFFICIENT  `:21326`
+- SHARING ONE LOCAL ACROSS REPEATED BLOCKS LETS THE SIGNED DIVIDE'S COPY BE PROPAGATED AWAY -- AND ONLY IN THE BLOCKS THAT ARE NOT LAST  `:21362`
+- AN INLINE `memcpy`'s ALIGNMENT IS DECIDED BY THE SOURCE DECLARATION ALONE  `:21386`
+- `output_block_move`'s BYTE CASE EMITS THE SIGNED `lb`, SO A SIGNED BYTE LOAD IN A STRAIGHT-LINE COPY IS POSITIVE EVIDENCE FOR `memcpy`  `:21402`
+- `LEGITIMIZE_ADDRESS` IS THE MECHANICAL BASIS OF THE ONE-`lui`-BASE LEVER, AND IT FIRES ONLY ON `(plus REG CONST_INT)`  `:21434`
+- A `nop` IN A BRANCH'S DELAY SLOT WHOSE FALL-THROUGH LOADS THE BRANCH'S OWN TEST REGISTER MEANS NOTHING ELSE WAS THERE  `:21456`
+- reorg's BACKWARD SCAN IS NOT LIMITED TO TWO INSNS -- IT IS LIMITED BY LABELS  `:21474`
+- A 16-BIT VALUE PASSED TO A 16-BIT PARAMETER MUST BE DECLARED 16-BIT -- THE EXTRA TRUNCATION REFERENCE RE-ORDERS THE WHOLE CALLEE-SAVED ALLOCATION  `:21499`
+- IN A THREE-TERM SUM `mem + BIGCONSTANT + index_term`, THE EMITTED OPERAND ORDER IS NOT THE SOURCE'S ASSOCIATION -- PERMUTE IT MECHANICALLY  `:21537`
+- AN IN-PLACE `+=` ON A LOCAL TIES THE LOAD AND THE SUM TO ONE PSEUDO; THE ONE-EXPRESSION FORM GIVES THE LOAD ITS OWN REGISTER  `:21578`
+- A CONSTANT STORED INTO ONE GLOBAL FROM BOTH ARMS BELONGS IN EACH ARM, NOT IN A LOCAL STORED AFTER THE MERGE -- AND IT IS A WORD  `:21618`
+- A FUNCTION ADDRESS USED TWICE MUST BE WRITTEN TWICE, NOT HELD IN A LOCAL  `:21662`
+- TWO BARE `nop`s, IN A BRANCH SLOT AND A CALL SLOT, PROVE THE ARM HOLDS EXACTLY ONE STATEMENT  `:21686`
+- BREAKING combine_regs' TIE IS NOT THE SAME AS MOVING THE REGISTER  `:21716`
+- REUSE ONE VARIABLE TO TIE A CONSTANT TO A DYING VALUE'S REGISTER  `:21740`
+- AT EQUAL PRIORITY A STORE BEATS A REG-TO-REG COPY, BECAUSE ONLY THE STORE TAKES A FUNCTION UNIT  `:21820`
+  - THE COROLLARY THAT MAKES IT A TRILEMMA: A COPY'S EXISTENCE AND ITS REFERENCE COUNT ARE THE SAME FACT  `:21869`
+- AN INDEX-FIRST `addu` IS POSITIVE EVIDENCE THAT THE SOURCE WROTE INTEGER ARITHMETIC, NOT A SUBSCRIPT  `:21895`
+- WHICH SCHEDULER SOURCE TO CITE: `sched.c`, NEVER `haifa-sched.c`  `:21934`
+- `MEM_IN_STRUCT_P` CANNOT MOVE A DEPENDENCE WHEN EVERY MEMREF IN THE FUNCTION HAS A REGISTER BASE  `:21963`
+- A DIVIDEND, ITS REMAINDER AND THE NEXT LOAD BECOME ONE PSEUDO ONLY WHEN THE VARIABLE IS cse-CANONICAL -- A REFERENCE IN AN EARLIER BLOCK IS WHAT MAKES IT SO  `:22009`
+- A THREE-QUANTITY BLOCK CAN ONLY REACH THREE OF THE SIX REGISTER ORDERS -- block_alloc's HAND-ROLLED SORT IS BUGGY  `:22086`
+- CANONICALITY IS PAID AT cse1, THE REFERENCE COUNT AT flow -- SO A REFERENCE THAT DIES IN BETWEEN BUYS THE COPY WITHOUT THE COUNT  `:22144`
+- `actual_hazard` STARVES LOADS BEHIND A RUN OF STORES IN sched1 -- AND A BUMPED ALU PRODUCER RELEASED MID-RUN IS WHAT BREAKS THE RUN  `:22212`
+- reload_cse SEES THROUGH SAME-BASE DISJOINT STORES BUT NOT ACROSS A DIFFERENT BASE REGISTER  `:22257`
+- A SAME-BASE DISJOINT STORE IS AN OFFSET-BLIND cse BARRIER -- SO A READ-BACK PLACED AFTER ONE SURVIVES AS A REAL LOAD  `:22284`
+- AN INDEX HOISTED INTO A LOCAL IS THREE DIFFERENT LEVERS AT ONCE: A SLOT INSIDE ANOTHER STATEMENT'S ADDRESS CHAIN, AN ANTI-DEPENDENCE THAT TIES TWO STORES' PRIORITIES, AND A LUID SWAP  `:22345`
+  - A CONSTANT ADDRESS WITH A ZERO LOW HALF IS A ONE-WORD BASE, and the only way to share one base across several symbols  `:22434`
+  - A PSEUDO THAT DIES TWICE IN A BLOCK ESCAPES LOCAL-ALLOC -- use it to lose a register race  `:22490`
+- `reload_cse_regs` IS AN SN ADDITION, SO AN `addu $rD, $rS, $zero` WHERE YOU MATERIALISE THE CONSTANT CAN BE A COMPILER-VERSION DIFFERENCE AND NOT A SPELLING  `:22525`
+- A FIXED-ADDRESS SCALAR DOES NOT CONFLICT WITH A VARYING-ADDRESS STRUCT -- SO A GLOBAL THAT MUST RELOAD AFTER A STORE THROUGH A POINTER HAS TO BE A STRUCT MEMBER  `:22589`
+- AN assert ARM THAT CANNOT FALL THROUGH IS WORTH SEVEN DELAY SLOTS AND A REGISTER ORDER -- DECLARE THE exit NORETURN  `:22633`
+- THE TWIN BLOCK'S ASSEMBLER EXPANDS DIVISION AND THE REST OF THE GAME'S DOES NOT  `:22652`
+- AN `__asm__` MARKER THAT READS A VARYING VALUE AND WRITES THE ONE YOU CARE ABOUT DECIDES WHICH SIDE OF THE LOOP AN INVARIANT LANDS ON -- IN BOTH DIRECTIONS  `:22667`
+- AN UNSIGNED DIVISION'S MAGIC CONSTANT IS A CONST_DOUBLE WHEN ITS TOP BIT IS SET, SO THE `lui`/`ori` SPLIT NEVER FIRES AND THE `lui` CANNOT FILL A LOAD DELAY  `:22706`
+- IN A UNIT WHOSE RODATA IS A HAND-OWNED BLOB, A LOCAL ARRAY INITIALISER EMITS THE TEMPLATE A SECOND TIME -- COPY THE BLOB'S OWN OBJECT INSTEAD  `:22773`
+- A SIGNED BYTE ASSIGNED STRAIGHT THROUGH LOADS WITH `lbu`; THROUGH AN `s32` LOCAL IT LOADS WITH `lb` -- AND THE PAIR REORDERS TO load/load/store/store  `:22797`
+- `memcpy`'s ALIGNMENT COMES OFF THE POINTER EXPRESSION, NOT THE TYPE -- AND A CAST IS UNDONE, SO ONLY A POINTER VARIABLE CARRIES IT  `:22819`
+- reorg FILLS A CALL'S DELAY SLOT FROM BEHIND TOO -- AN EMPTY `asm` BEFORE THE CALL MAKES IT LOOK FORWARD  `:22883`
+- AN asm-ONLY BLOCK BETWEEN THE LAST ARM AND THE SHARED TAIL KEEPS THAT ARM'S JUMP ALIVE -- AND PARKS THE DEFAULT'S JUMP ON A SLOT IT CANNOT FILL  `:22909`
+- A CONDITIONAL LOOP BOUND COSTS TWO PSEUDOS FOR THE INDUCTION VARIABLE -- WRITE IT AS TWO COMPARISONS  `:22951`
+- AN UNSIGNED DIVISION'S MAGIC NEVER SPLITS WHEN ITS BIT 31 IS SET  `:22985`
+- A THREE-TERM POINTER SUM REASSOCIATES AND PUTS THE INDEX FIRST -- NAME THE BASE  `:23056`
+- THE TWIN'S COMPILER REUSES HI'S REGISTER FOR THE RESULT; OURS NEVER DOES, 0 OF 115  `:23098`
+- WALK A STRING THROUGH A COPY OF THE POINTER TO KEEP THE ROTATED LOOP'S PREHEADER RELOAD  `:23154`
+- A STORE ALWAYS BEATS A REGISTER COPY FOR THE LAST SLOT OF A BLOCK -- ONLY A DEPENDENCE MOVES IT  `:23192`
+- MAKE THE STORE'S ADDRESS OPAQUE TO KEEP A LOAD ABOVE IT  `:23259`
+- THE TARGET'S `addu' OPERAND ORDER TELLS YOU WHICH SIDE ITS SOURCE WROTE FIRST  `:23285`
+- `birthing_insn_p' GLUES A `%hi'/`%lo' PAIR TO ITS CONSUMER, AND THE ONLY ESCAPE COSTS YOU LOCAL-ALLOC  `:23314`
+- A DEPENDENCE IS IN PROGRAM ORDER, SO THE TARGET'S LISTING GIVES YOU ITS SOURCE ORDER  `:23380`
+- reorg.c:3700 UN-SUBSTITUTES `optimize_reg_copy_1''s HARD REGISTER  `:23411`
+- A STALE POSITIVE IS AS DANGEROUS AS A STALE NEGATIVE  `:23441`
+- A REJECTED CANDIDATE IN A PARK HEADER IS NOT A REFUTED ONE -- IT MAY BE A PREREQUISITE WHOSE PARTNER IS MISSING  `:23463`
+- MATERIALISE A `&global' BASE POINTER LATE TO MOVE ITS `lo_sum'  `:23490`
+- A `do { } while (0)' BUYS REFERENCES ONLY WHERE loop.c CANNOT HOIST THE STATEMENT OUT  `:23521`
+- SPLIT A CAST COPY THROUGH A TEMP SO THE DEVICE'S MULTIPLIER LANDS ON THE SHORT-LIVED PSEUDO  `:23540`
+- A LOCAL ASSIGNED IN TWO ARMS CANNOT BE TIED TO ITS OWN SUM -- DECLARE IT INSIDE THE BLOCK  `:23563`
+- A LOAD'S DESTINATION IS NEVER TIED TO ITS ADDRESS REGISTER, BUT AN ARITHMETIC RESULT'S IS TIED TO ITS SOURCE -- AND ONE CROSS-BLOCK REFERENCE UNTIES IT  `:23620`
+- A CONSTANT-SIZE `memcpy` FROM AN ALIGNED SYMBOL IS ONE `movstrsi` INSN -- AND THEREFORE ONE SCHEDULING ATOM AT PRIORITY 1  `:23675`
+- TAKE `$v0` AWAY FROM A TIED QUANTITY BY STRETCHING A HIGHER-PRIORITY ONE OVER IT  `:23720`
+- A u64 WIDENING MULTIPLY REACHES A REAL `multu` WITH A C-LEVEL MAGIC, AND `(u32)` ON ITS PRODUCT EMITS `mfhi`  `:23758`
+  - A HARD-REGISTER DESTINATION SUGGESTS ITSELF TO EVERY DYING INPUT, AND THE HIGHEST-PRIORITY QUANTITY WINS IT  `:23830`
+- A `do { } while (0)` IS A FREE `loop_cost` MULTIPLIER FOR `regclass`, AND CAN FLIP A prefclass TIE  `:23858`
+  - THE COUNTER-LEVER: YOU CANNOT PUT A MULTIPLY'S HIGHPART AND ITS MULTIPLIER IN DIFFERENT GPRs  `:23910`
+- A NAMED LOCAL HOLDING THE SAME CONSTANT BECOMES A DIVISION'S MULTIPLIER, AND ONE USE AFTER THE MULTIPLY UNTIES IT FROM THE HIGHPART  `:23954`
+- A SYMBOL AND A CONSTANT ADDRESS EMIT THE SAME TWO WORDS AND SCHEDULE DIFFERENTLY -- WHICH IS HOW YOU TELL THEM APART WHEN THE RELOCATION IS MASKED  `:24029`
+- A TWO-STEP INDEX WRITTEN AS TWO STATEMENTS LOSES THE TABLE BASE'S REGISTER  `:24077`
+- READ A CALL'S SMALL ARGUMENTS BEFORE THE `if` THAT COMPUTES ITS LAST ONE  `:24109`
+- A `n->field` STORE LETS A `%lo(global)` LOAD HOIST ABOVE IT; THE SAME STORE THROUGH A CAST DOES NOT  `:24131`
+- A SCREEN FOR THE CONSTANT-ADDRESS TELL: AN UNFILLED LOAD-DELAY `nop` AFTER A `lui`/`lw` PAIR THAT SHARES ITS REGISTER  `:24173`
+- jump.c's `thread_jumps` REFUSES A BRANCH WHOSE TARGET BLOCK WRITES THE COMPARED REGISTER  `:24204`
+- HOW MANY REFERENCES YOU NEED IS AN ARITHMETIC PROBLEM, NOT A SWEEP -- READ BOTH QUANTITIES OUT OF `.flow` AND SOLVE `allocno_compare`  `:24236`
+- A REFERENCE THAT CROSS-JUMPING FOLDS AWAY STILL COUNTS IN `flow`'s REFERENCE COUNT  `:24279`
+- A LOOP-INVARIANT DIVISION IS NOT UNIFIED WITH A PRE-LOOP ONE -- WRITE BOTH INSIDE THE LOOP  `:24299`
+- `expand_abs`'s TERNARY NEEDS A SEPARATE *DESTINATION*, AND `abs()` IS EXEMPT  `:24322`
+- A FLAG TEST SPELLED `(x & 0x80000000) != 0` AND ONE SPELLED `x < 0` ALLOCATE DIFFERENTLY  `:24343`
+- A READ-MODIFY-WRITE ON A GLOBAL MUST BE SPLIT AROUND A STORE THE COMPILER CANNOT DISAMBIGUATE FROM IT  `:24367`
+- A `%hi`/`addiu` BASE SHARED BETWEEN TWO ENGINE GLOBALS IS WRITTEN AS ONE BASE MINUS A CONSTANT  `:24390`
+- A SIGNED DIVIDE-BY-2^k's `sra` BECOMES `srl` WHEN THE QUOTIENT'S DESTINATION IS NARROW  `:24410`
+- A `u16` LOCAL CANNOT BE A `srl`'s DESTINATION, SO IT BUYS AN EXTRA COPY  `:24436`
+- TWO AGENTS COMPILING `ovl_dungeon.c` SHARE ONE SCRATCH FILE  `:24456`
+- A PARAMETER'S DECLARED WIDTH IS AN ALLOCATION LEVER THROUGH `live_length`, NOT ONLY THROUGH ITS TRUNCATION REFERENCE  `:24470`
+- THE ONLY WAY TO LENGTHEN A LOCAL'S `live_length` IS TO MAKE IT LIVE AT FUNCTION ENTRY  `:24500`
+- combine DELETES A SIGNED `/ 2`'s ROUNDING TRIPLE WHEN THE DIVIDEND'S LOW BITS ARE PROVABLY ZERO  `:24531`
+- A FRAME LARGER THAN THE FUNCTION'S CALLS NEED IS AN UNREFERENCED STACK LOCAL, AND THE ARITHMETIC NAMES ITS SIZE  `:24556`
+- `volatile` ON THE FIRST OF TWO READ-MODIFY-WRITES OF ONE FIELD, AND ONLY THE FIRST  `:24581`
+- A NARROWER DECLARED TYPE CAN WIN A STACK PARAMETER A CALLEE-SAVED REGISTER  `:24608`
+- THE RETURN-THROUGH CURE LEAVES A REGISTER SWAP THAT THE PHANTOM ZERO FIXES  `:24625`
+- A GLOBAL'S LOAD FLOATS OVER A STRUCT-TYPED FIELD STORE, AND NOT OVER A CAST ONE  `:24656`
+- combine WILL NOT FOLD A `reg + const` BASE INTO A DISPLACEMENT ACROSS A CALL, AND THAT IS HOW A POINTER LOCAL SURVIVES  `:24698`
+- A `COMPONENT_REF` STORE IS SINKABLE AND A CAST STORE IS NOT  `:24721`
+- `x * 64` AND `x << 6` DECIDE `lh` AGAINST `lhu` UNDER A TRAILING MASK  `:24736`
+- AN EXPLICIT `& 0xFFFF` INTO AN `s32` IS NOT THE SAME ALLOCATION AS A `u16` LOCAL  `:24750`
+- A NARROW LOCAL FOR A `sltu` RESULT BUYS THE TARGET'S REDUNDANT `addu`  `:24768`
+- `abs(d) > K` CANNOT PRODUCE `slt reg, reg`; THE THRESHOLD MUST BE A LOCAL, AND ITS WIDTH MATTERS  `:24782`
+- AN `==` COMPARISON'S OPERAND ORDER CAN ROTATE EVERY CALLEE-SAVED REGISTER  `:24795`
+- A CALL RESULT'S DECLARED TYPE DECIDES WHERE ITS `sll`/`sra` LANDS  `:24806`
+- A LOAD THAT IS LIVE ACROSS A CALL MUST BE WRITTEN BEFORE IT  `:24815`
+- A TWO-STEP INDEX WRITTEN `(p + i)[K]` AND `p[i + K]` DIFFER BY THE `addu`'s OPERAND ORDER  `:24825`
+- A `u16` TABLE READ INTO A `u16` LOCAL STOPS combine FOLDING `lhu` + `sll`/`sra` INTO `lh`  `:24850`
+- A STEP WRITTEN AS A TERNARY WITH A SHARED TAIL CROSS-JUMPS; TWO COMPLETE ARMS DO NOT  `:24863`
+- HOLD A CONSTANT IN A LOCAL TO BLOCK fold's REASSOCIATION WITHOUT A STATEMENT BOUNDARY  `:24875`
+- ONE TEMPORARY PER READ-BACK, AND THE MODE IS THE SCREEN  `:24904`
+- A GLOBAL'S STORE GOES ABOVE THE STACK-ARRAY STORES THAT FEED THE SAME CALL  `:24922`
+- `(u8 *)&SYM - K` IS THREE INSTRUCTIONS AND A SEPARATE SYMBOL IS TWO  `:24931`
+- `&SYMBOL + K` FOLDS INTO THE RELOCATION; A BASE LOCAL DOES NOT  `:24946`
+- ONE LOOP COUNTER VARIABLE IS ONE HARD REGISTER FOR THE WHOLE FUNCTION  `:24966`
+- TO PLACE A LOOP'S INCREMENT INSIDE AN ADDRESS COMPUTATION, SPLIT THE SUBSCRIPT  `:24977`
+- WITH TWO COPIES OF ONE CALL CHAIN, SHARE THE LONG-LIVED VARIABLES AND SPLIT THE SHORT ONES  `:24997`
+- A THREE-VALUED FLAG'S MIDDLE TEST IS SPELLED BY THE BRANCH, NOT BY THE READING ORDER  `:25014`
+- A SUBSCRIPT READ INTO A LOCAL MOVES THE SYMBOL'S `lui`/`addiu` AFTER THE PRECEDING STORE  `:25025`
+- A do/while OVER A RING LOADS INTO THE CURSOR, NOT THE SENTINEL  `:25037`
+- A DUPLICATED `if` ARM IS A BASIC-BLOCK BOUNDARY YOU CAN PUT ANYWHERE, AND IT IS THIS BLOCK'S COMMONEST DEVICE  `:25045`
+- A DUPLICATED `if` ARM IS A cse-REGION BOUNDARY, AND IT STOPS AN EXTENSION THE OTHER DUPLICATION LEVER CREATES  `:25071`
+- THE ORDER OF TWO INDEPENDENT STORES DECIDES WHERE sched2 PUTS THE SECOND HALF OF A SPLIT `li`  `:25108`
+- ADVANCE A CURSOR BEFORE THE TAIL `if`, NOT IN THE `return`  `:25119`
+- TWO LOCALS HOLDING THE SAME POINTER ARE THREE WORDS  `:25128`
+- `allocno_compare`'s `floor_log2` STEP IS THE POINT OF A DEGENERATE LOOP, NOT THE DOUBLING  `:25139`
+- STATEMENT STRUCTURE CANNOT MOVE `reg_live_length`, SO AN ALLOCATION ROTATION IS NOT A REWRITING PROBLEM  `:25155`
+- THE FRONT END'S RANGE FOLDING COLLAPSES `a != 0 && a < K && a == C`; NESTED `if`s SURVIVE IT  `:25171`
+- DUPLICATING A SHARED TAIL KEEPS CROSS-JUMPING FROM FOLDING WHOLE CALL SEQUENCES  `:25182`
+- A WHOLE-BODY `&&` GUARD AND TWO EARLY `return 0`s ARE A DELAY-SLOT LEVER  `:25194`
+- AN `s16` DESTINATION DISTRIBUTES THE TRUNCATION INTO A PLUS AND SWAPS THE `addu`  `:25204`
+- A `+c1` POINTER LOCAL FOLDS INTO THE FOLLOWING `+c2` DISPLACEMENT UNLESS A CALL SEPARATES THEM  `:25217`
+- `x / 10` ON AN `(s8)` OPERAND IS SHORTENED TO A QImode DIVISION  `:25230`
+- AN `s16` RETURN ON A FUNCTION DEFINED IN THE SAME UNIT COSTS EVERY CALLER A WORD ON A ZERO TEST  `:25250`
+- A POINTER LOCAL ASSIGNED IN TWO ARMS BECOMES A GLOBAL ALLOCNO AND ITS `%hi`/`%lo` PAIR SPLITS  `:25264`
+  - Three more cases, and this is the highest-yield lever on a symbol-heavy body  `:25281`
+- A `return 1` PER ARM LOSES TO A SHARED TRAILING ONE WHEN THE ARMS' TAILS AGREE  `:25310`
+- AN ASSIGNMENT CONTEXT DOES NOT FOLD `(a < 0) ? -a : a` TO ABS_EXPR  `:25321`
+- A NARROW LOCAL FOR A PRODUCT IS A cse-INVISIBLE COPY THAT FILLS A BRANCH DELAY SLOT  `:25333`
+- A GIV'S INITIALISATION GOES AFTER loop.c's HOISTED INVARIANTS; AN ACCUMULATOR'S GOES BEFORE  `:25351`
+- COPY A REGISTER PARAMETER INTO A LOCAL *BEFORE* THE FIRST CALL, NOT AFTER  `:25365`
+- A TRAILING `do { } while (0)` IS A BASIC-BLOCK BOUNDARY THAT BREAKS A LOCAL-ALLOC TIE  `:25379`
+- AN ADDRESS-TAKEN LOCAL REUSED AS A LOOP COUNTER IS WHAT PUTS THE COUNTER IN MEMORY  `:25402`
+- A NARROW RETURN-FLAG LOCAL STOPS cse SUBSTITUTING ITS REGISTER FOR A LITERAL `return 0`  `:25418`
+- A DECLARED `extern u8 X[]` MUST BE SUBSCRIPTED EVEN FOR A SCALAR TEST  `:25433`
+- NEGATE-THEN-DIVIDE AND SUBTRACT-THE-QUOTIENT ARE DIFFERENT INSTRUCTIONS  `:25441`
+- `fold` FOLDS NEGATE-OF-NEGATE BUT WILL NOT DISTRIBUTE A NEGATION THROUGH A SIGNED DIVISION, SO `-(-x / 2)` IS FIVE INSTRUCTIONS AND `x / 2` IS THREE  `:25449`
+- A `roll = 0` HOISTED OUT OF ITS ARM IS CATASTROPHIC, NOT NEUTRAL  `:25475`
+- TWO DISTINCT `return 0` TARGETS IN A LISTING MEAN THE BODY IS AN OUTER `if` AND THE LAST STATEMENT IS THE `return`  `:25488`
+- DUPLICATE THE TAIL PER ARM FOR AN ADDRESS MATERIALISATION, NOT ONLY FOR A REGISTER  `:25505`
+- A STACK PARAMETER WANTS THE NARROW DECLARATION WHERE A REGISTER ONE WANTS `s32` PLUS A CAST  `:25520`
+- A HALFWORD STORE DELETES A 16-BIT SIGN-EXTENSION, AND `(s32)b * K` IS HOW YOU KEEP IT  `:25530`
+- MEM_IN_STRUCT_P HAS TO AGREE ON BOTH SIDES BEFORE cse WILL DROP A READ  `:25541`
+- AN ASSIGNMENT INSIDE A CONDITIONAL EXPRESSION HIDES THE VALUE'S LOW BITS FROM combine  `:25557`
+- `__asm__("" : "=r"(x) : "0"(x))` BUYS A SURVIVING REG-REG COPY -- CONFIRMED  `:25573`
+- clang-format REWRITES `(u32)*(s32 *)p` INTO A MULTIPLICATION  `:25590`
+- A TRAILING EMPTY `case` CHANGES `balance_case_nodes`' ROOT, AND IT IS WORTH SEVEN WORDS  `:25598`
+- A VALUE HELD ACROSS A CALL FOR A LATER ARGUMENT WANTS `s16`, AND THE WIDTH IS A sched1 LEVER  `:25620`
+- SEVEN EARLY `return 0`s PUT THEIR SHARED ZERO BLOCK WHERE THE FIRST ONE IS  `:25632`
+- A GATE THAT REWRITES THE VARIABLE IT TESTED IS NOT A SECOND VARIABLE  `:25647`
+- `i << 1` AND `i * 2` COMMUTE THE ROW `addu` IN AN ADDRESS EXPRESSION  `:25660`
+- A CONSTANT INSIDE A GIV UPDATE IS NEVER OFFERED FOR INVARIANT HOISTING  `:25675`
+- A SHARED `return` BLOCK PLACED LAST MAKES reorg COPY ITS INSN INTO THE DELAY SLOT INSTEAD OF MOVING IT  `:25697`
+- SHARING A LOOP COUNTER'S PSEUDO WITH A LATER VALUE DEFEATS `nonzero_bits`  `:25715`
+- AN EARLY `return` IS NOT ALWAYS LAID OUT INLINE -- IT CAN BE PUSHED TO THE END  `:25727`
+- A REGISTER ROTATION CAN BE THE SOURCE READING THE WRONG VARIABLE  `:25748`
+- AN ASSIGNMENT EMBEDDED IN A SUBTRACTION IS BOTH A fold BLOCK AND A STATEMENT-ORDER LEVER  `:25776`
+- THREE CALL RESULTS THAT MUST STAY IN MEMORY ARE AN ARRAY  `:25798`
+- AN IN-LOOP `lui`/`addiu` IS NOT EVIDENCE THAT loop.c DECLINED TO HOIST  `:25810`
+- A `%hi`/`%lo` PAIR FEEDING A STORE IS HOISTED; ONE FEEDING A CALL ARGUMENT IS NOT  `:25823`
+- A SWITCH ARM REUSES THE CONSTANT THE SWITCH HEAD MATERIALISED  `:25833`
+- A CALL RESULT SHARED BY TWO CALL SITES IN ONE VARIABLE BECOMES A GLOBAL ALLOCNO  `:25843`
+- THE `flags & MASK` STORE-FLAG REWRITE FIRES ON A PLAIN BOOLEAN TEST, AND CASTS DO NOT STOP IT  `:25866`
+- A `u16` DESTINATION KEEPS A NEGATIVE HALFWORD CONSTANT AS `ori`; AN `s16` ONE FOLDS IT TO `addiu`  `:25917`
+- A POINTER LOCAL'S POSITION INSIDE A BLOCK PICKS WHICH `lui` reorg TAKES INTO THE DELAY SLOT  `:25927`
+- AN `s16` INDEX USED THREE TIMES BUYS THE `addu` COPY THE TARGET SHARES  `:25940`
+- AN `s16` LOCAL WHOSE WIDENING IS ITS OWN STATEMENT PUTS THE SIGN EXTENSION AT THE JOIN  `:25951`
+- A SHARED `goto fail` LABEL IS WHERE CROSS-JUMPING LEAVES THE MERGED `return CONST` BLOCK  `:25971`
+- THERE IS NO SOURCE FORM THAT ATTACHES A `+K` TO THE BASE WHEN THE INDEX IS ALREADY SCALED  `:25988`
+- A CAST STORE WILL NOT SINK WHERE A FIELD STORE WILL -- THE THIRD DIRECTION OF THE MEM_IN_STRUCT_P RULE  `:26004`
+- A POINTER LOCAL WRITTEN `&g[K]` DOES NOT FOLD THE DISPLACEMENT WHERE `g + K` DOES  `:26021`
+- AN `s16` LOCAL ASSIGNED IN SEVERAL BLOCKS NEEDS AN EXPLICIT `s32` COPY TO GET ITS CONVERSION EMITTED  `:26034`
+- A NARROW-TYPED 0/1 FLAG KEEPS THE COPY BEFORE ITS `beqz`, WITH NO COMPARISON IN IT AT ALL  `:26048`
+- A COMPONENT_REF READ SCHEDULES LATER THAN THE SAME READ THROUGH A CAST, AND THAT CAN DECIDE A SPILL  `:26063`
+- A `switch` IS NOT AN if/else CHAIN, EVEN FOR TWO CASES PLUS A DEFAULT  `:26080`
+- `||` WITH THE WHOLE BODY INSIDE IT, AGAINST AN EARLY `return`  `:26089`
+- A `goto` CAN PREVENT A CROSS-JUMP AS WELL AS FORCE ONE  `:26100`
+- A DEGENERATE LOOP IS NOT ALWAYS A cse BOUNDARY -- SOMETIMES IT IS ONLY THE REFERENCE WEIGHT  `:26116`
+- `sh $aN` WITH NO ARGUMENT SETUP NEARBY CAN BE A SWITCH'S OWN COMPARE CONSTANT  `:26130`
+- A `void`-DECLARED CALLEE WHOSE RESULT IS DISCARDED STILL CHANGES CODEGEN  `:26140`
+- TWO PERMUTER WINS TODAY WERE HYPOTHESES, NOT PATCHES  `:26162`
+- A LOAD'S DELAY SLOT CROSSES A STORE ONLY WHEN *BOTH* POINTER-SIDE MEMs CARRY MEM_IN_STRUCT_P  `:26178`
+- A COMPONENT_REF STORE AT THE TOP OF A FUNCTION CAN COST A WHOLE CALLEE-SAVED REGISTER  `:26204`
+- TWO USES OF ONE `(u8 *)&SYM` BASE IN TWO `if` ARMS WANT TWO DECLARED LOCALS  `:26220`
+- READ A CALL'S ARGUMENTS INTO LOCALS BEFORE AN UNRELATED STORE, TO DECIDE WHICH TAKES THE DELAY SLOT  `:26232`
+- A NARROW LOCAL IS HOW YOU BUY A COPY OF A WIDENED VALUE -- THE `__asm__` TIE DOES NOT  `:26248`
+- AN `s16` DESTINATION KEEPS A REG-REG COPY cse WOULD DELETE, AS THE `u8` ONE DOES  `:26270`
+- A STORE'S MEM_IN_STRUCT_P DECIDES WHETHER AN INCOMING *STACK* PARAMETER'S LOAD CAN MOVE TO ITS USE  `:26291`
+  - Second instance, and the two things this entry did not say  `:26310`
+- A GOTO TO A BLOCK AFTER THE FUNCTION'S `return` LETS jump.c INVERT INTO THE CROSS-JUMPED TAIL  `:26343`
+- A DECLARED SYMBOL BEATS A CONSTANT ADDRESS WHEN BOTH MEASURE 0 MASKED  `:26355`
+- GLOBAL-ALLOC PRIORITY BETWEEN A PARAMETER AND A SHORT-LIVED LOCAL IS SET BY WHERE THE LOCAL IS COMPUTED  `:26368`
+- A WORD-ALIGNED STRUCT TYPE IS THE ONLY WAY TO GET THE ALIGNED BLOCK MOVE  `:26379`
+- A CONSTANT MULTIPLIER SPELLED AS A VARIABLE IS HOW YOU FORCE `mult`  `:26402`
+- A SHIFT BY A BOOLEAN NEEDS ITS OWN LOCAL OR GCC SPECIALISES IT INTO A BRANCH  `:26414`
+- `<< 5` NARROWS AN `s16` ARRAY READ TO `lhu`; `* 32` KEEPS THE `lh` -- AND THE OPPOSITE IS ALSO TRUE  `:26428`
+- fold's `associate:` PUTS THE CONSTANT ON WHICHEVER OPERAND IS WRITTEN SECOND  `:26443`
+- TWO LOCALS INITIALISED TO THE SAME CONSTANT BECOME A COPY ONLY IN THE SAME BASIC BLOCK  `:26459`
+- WITH A CONSTANT-ADDRESS BASE, `MEM_IN_STRUCT_P` IS THE ONLY WAY A STORE CAN KILL A LOAD IN cse  `:26469`
+- `abssi2` NEEDS TWO DIFFERENT REGISTERS, SO THE THREE-WORD TRIO NEEDS TWO VARIABLES  `:26496`
+- TWO NARROW LOCALS CAN BE NEEDED AT ONCE, AND EITHER ALONE LOOKS LIKE A NEAR MISS  `:26513`
+- STATEMENT ORDER INSIDE ONE BASIC BLOCK IS AN ALLOCATION LEVER  `:26533`
+- A `u8 *` POINTER LOCAL IS THE ONLY SPELLING THAT KEEPS A SYMBOL IN ONE REGISTER ACROSS A LOOP  `:26547`
+- AN IN-LOOP `return` OF A NARROWED COUNTER BECOMES AN INDUCTION VARIABLE  `:26563`
+- REUSE THE TEST'S OWN TEMPORARY AS THE VALUE TO BEAT jump.c's STORE-FLAG HOIST  `:26576`
+- TWO IDENTICAL `if` ARMS WANT TWO DIFFERENT LOCAL NAMES FOR THE SAME BASE  `:26599`
+- A FLAG DECLARED `s16` STOPS reload_cse TURNING A SECOND ZERO INTO A COPY  `:26612`
+- AN ARGUMENT THAT NEEDS NO SETUP IS STILL AN ARGUMENT  `:26624`
+- A NARROW PARAMETER HAS NO REG_EQUIV, SO ITS SPILL GETS A FRESH FRAME SLOT  `:26638`
+- STACK SLOTS ARE HANDED OUT IN ASCENDING PSEUDO NUMBER  `:26658`
+- AN 11-BYTE RECORD COPY IS `memcpy`, AND `lh`/`lb` IS THE TELL  `:26673`
+- A BINDING PLACED ONE STATEMENT TOO EARLY COSTS A WHOLE CALLEE-SAVED REGISTER  `:26691`
+- A SYMBOL NAMED TWICE AND A SYMBOL BOUND TO A LOCAL ARE BOTH RIGHT, PER SITE  `:26707`
+- STORES IN ALL THREE ARMS AGAINST ONE STORE AFTER THE JOIN -- THE DISCRIMINATOR  `:26728`
+- A PARAMETER'S CALLEE-SAVED REGISTER IS DECIDED BY WHERE ITS LAST USE SITS  `:26742`
+- A DUPLICATED `if` ARM CANNOT BREAK A cse REG-EQUIVALENCE  `:26839`
+- IN THE ENTRY BLOCK, WHICH SIDE OF A LOAD YOU WRITE A STORE ON IS THE WHOLE SCHEDULE  `:26855`
+- SMALLER SPELLINGS MEASURED IN BATCH j2  `:26916`
+- A LOAD HOISTED INTO A LOCAL IS A SCHEDULING LEVER ONLY AT ONE EXACT POSITION  `:26933`
+- A COMPONENT_REF STORE LETS A CAST LOAD FLOAT ABOVE IT -- THE THIRD DIRECTION OF THE MEM_IN_STRUCT_P RULE  `:26972`
+- loop.c's PREHEADER KEEPS BODY ORDER, SO A ONE-USE ADDRESS IN A LOCAL MOVES THE HOIST  `:26992`
+- A MASKED COMPARE IS UNSIGNED, AND A LOCAL IS HOW YOU GET IT BACK  `:27016`
+- A TWO-CASE `switch` CANNOT PUT THE HIGHER CASE AT THE TREE ROOT  `:27029`
+- `if (p[FIELD] > 1)` ON A `u8 *` GIVES `sltiu`; AN `s32` LOCAL GIVES `slti`  `:27043`
+- "TWO LOCALS INITIALISED TO THE SAME CONSTANT -- THE SECOND BECOMES A COPY" IS PER-MODE  `:27059`
+- A REUSED-TEMPORARY SAVE IS WORTH THE COPY, AND `x = y; y = f(y);` IS HOW YOU GET IT  `:27074`
+- A PERMUTER WIN THAT CHANGES A DECLARATION MUST BE GATED ON THE WHOLE UNIT  `:27081`
+- A READ-MODIFY-WRITE OF A LIVE FLAG IS NOT STEALABLE INTO A DELAY SLOT; A CONSTANT SET IS  `:27121`
+- `fold` REASSOCIATES `A - (B - C)`, AND BREAKING THE FOLD COSTS YOU THE LOAD ORDER  `:27138`
+- `fold_truthop` ALSO MERGES TWO *RELATIONAL* TESTS INTO AN UNSIGNED RANGE CHECK  `:27162`
+- `fold_truthop` MERGES CHAINED BIT TESTS, SO AN `&&` CHAIN IS SHORTER THAN NESTED `if`s  `:27182`
+- `fold` CANONICALISES AN `EQ` TERNARY TO `NE` WITH THE ARMS SWAPPED  `:27194`
+- ONE PAGE-BASE LOCAL PER REGION, NOT ONE PER FUNCTION  `:27211`
+- COPYING A PARAMETER INTO A LOCAL AT THE TOP COSTS NO INSTRUCTION AND RENUMBERS THE ALLOCNOS  `:27220`
+- A SECOND POINTER LOCAL WITH THE SAME VALUE IS A TENTH LONG-LIVED VALUE, AND THAT IS A STACK SLOT  `:27234`
+- A DECLARED-SIZE CHANGE DECIDES WHICH SIDE OF A CALL A `lo_sum` LANDS  `:27250`
+- A FUNCTION-SCOPE INDEX LOCAL SET IN TWO BLOCKS COSTS A REGISTER PAIR  `:27260`
+- INTEGER ARITHMETIC PUTS THE BASE LAST IN AN ADDRESS SUM  `:27272`
+- A DUPLICATED `while` GUARD IS REMOVED BY CROSS-JUMPING, NOT BY `duplicate_loop_exit_test`  `:27280`
+- A CHAINED ASSIGNMENT IS WHERE A REDUNDANT `andi $sN, $aM, 0xFF` COMES FROM  `:27291`
+- A CHAINED ASSIGNMENT BUYS A REGISTER WHEN EVERY LINK IS THE SAME WIDTH  `:27307`
+- `&&`/`||` LEFT-ASSOCIATIVITY HIDES A RANGE TEST AT ANY ADJACENT PAIR  `:27316`
+- THE 3-DENSE-CASE SWITCH TREE ROOTS ON THE MIDDLE CASE  `:27324`
+- A `jtbl_` TARGET AGAINST A `.rodata` CANDIDATE IS seqcheck's ESTABLISHED BENIGN CLASS  `:27332`
+- AN `__asm__` REFERENCE IS THE ONLY BARRIER THAT STOPS A MASK/TRUNCATION FOLD WITHOUT MOVING THE STATEMENT  `:27355`
+- A WIDE `s32` TEMPORARY KEEPS A SIGN EXTENSION `force_to_mode` WOULD OTHERWISE DELETE  `:27408`
+- A `u8` PROTOTYPE NARROWS THE CALLER'S ARGUMENT, AND ONLY THE CALLER WITNESSES IT  `:27430`
+- A JUMP TABLE'S ENTRY COUNT IS THE SWITCH'S RANGE, NOT ITS LIVE CASE COUNT  `:27447`
+- AN ARM THAT FALLS INTO THE SHARED `return` IS NOT THE SAME AS ONE THAT RETURNS  `:27456`
+- AN ARGUMENT REGISTER SET SIX WORDS EARLY, IN AN UNRELATED BRANCH'S DELAY SLOT, IS A REAL ARGUMENT  `:27475`
+- `update_equiv_regs` DOUBLES THE LIVE LENGTH OF A ONCE-SET PSEUDO WITH A CONSTANT `REG_EQUAL`  `:27489`
+- loop.c MOVES A `break` BODY TO THE NEAREST BARRIER, SO COUNT THE BARRIERS BEFORE THE LOOP  `:27520`
+- A PARAMETER READ THROUGH TWO POINTER ALIASES IS REAL, NOT A REDUNDANCY  `:27545`
+- AN EXTRA READ OF A SLOT POINTER BUYS A WORD  `:27557`
+- MERGE ONE LOCAL ACROSS TWO MUTUALLY EXCLUSIVE ARMS TO RAISE ITS PRIORITY  `:27569`
+- TWO ADJACENT STATEMENTS ON DIFFERENT POINTER BASES CANNOT BE INTERLEAVED  `:27578`
+- A ZERO-TRIP `do { } while (0)` AROUND AN `if` IS A REGISTER-ALLOCATION DEVICE  `:27587`
+- A CALL AFTER A JOIN MUST BE DUPLICATED INTO BOTH ARMS WHEN A CONSTANT COMPETES FOR THE BASE REGISTER  `:27608`
+- THE SYMBOL-NAMED-TWICE vs BOUND-TO-A-LOCAL CHOICE HAS A LISTING-VISIBLE TELL  `:27621`
+- A STACK PARAMETER'S `lw` vs `lhu` IS DECIDED BY A SECOND USE, NOT BY SIGNEDNESS  `:27636`
+  - A SECOND SET TURNS THE DOUBLING OFF, SO A CANCELLED PAIR OVERSHOOTS  `:27644`
+- `update_equiv_regs` UNDOES A HAND-HOISTED LOAD  `:27664`
+- SMALL SPELLINGS MEASURED IN BATCH j12  `:27671`
+- A SECOND SET IS WHAT KEEPS A SIGN EXTENSION ALIVE: `reg_nonzero_bits` IS ONLY CONSULTED FOR A PSEUDO SET ONCE  `:27680`
+- DUPLICATE A SHARED TAIL PER ARM INSTEAD OF `goto`-ING IT, AND CROSS-JUMPING PAYS YOU TWICE  `:27698`
+- A NARROW DESTINATION MAKES A REGISTER COPY OPAQUE TO cse  `:27718`
+- A SYMBOL PLUS A CONSTANT OFFSET IS ONE `%hi` TO cse; TWO SYMBOLS ARE TWO  `:27729`
+- `/ 2` vs `>> 1` IS PER SITE, NOT A RULE  `:27741`
+- THE PERMUTER CANNOT MOVE A CALL'S ARGUMENT SETUP -- 3 OF 8 NOW, AND THIS IS THE REFINEMENT  `:27750`
+- THE PERMUTER DOES NOT CRACK A SMALL PURE-ALLOCATION RESIDUE  `:27803`
+- THE NUMBER OF SOURCE LOCALS HOLDING ONE GLOBAL'S ADDRESS DECIDES WHETHER ITS `%hi` AND `%lo` SHARE A REGISTER  `:27834`
+- WHERE A GLOBAL IS READ DECIDES A DELAY-SLOT FILL, INDEPENDENTLY OF THE DEPENDENT STORE  `:27849`
+- AN EXTRA `addu` COPY IN THE OUTPUT IS AN `optimize_reg_copy_1` RESIDUE, AND ONLY A LOOP NOTE BLOCKS IT  `:27863`
+- A FIXED-ADDRESS SCALAR AND A VARYING-ADDRESS STRUCT: THE REVERSE EDIT IS SOMETIMES THE ONE THAT LANDS  `:27887`
+- "REUSE THE TEST'S OWN TEMPORARY AS THE VALUE" IS A REGISTER LEVER FIRST  `:27909`
+- `expand_call` EVALUATES AN INDIRECT CALLEE BEFORE THE ARGUMENT PRECOMPUTE  `:27927`
+- A THREE-DEEP CHAIN OF NARROW ASSIGNMENTS RELOADS THE BYTE IT JUST STORED  `:27936`
+- READING AN `s8` GLOBAL TWICE KEEPS THE HImode PSEUDO; READING IT ONCE COLLAPSES TO `lb`  `:27959`
+- `find_cross_jump` BREAKS ON THE REGISTERS OF THE TWO COMPARES, NOT ON THE INSN BEFORE THEM  `:27976`
+- `(t + 3) >> 2` INTO AN HImode DESTINATION IS A SOURCE CONDITIONAL; `t / 4` IS `expand_divmod`  `:27990`
+- AN `s16` LOCAL SEEDED FROM AN `s16` PARAMETER COSTS A PLAIN COPY, NOT A SHIFT PAIR  `:28009`
+- SPLIT A PERMUTER ANSWER INTO ITS INDEPENDENT EDITS AND MEASURE EACH ONE  `:28019`
+- WITHDRAWN: "A CONSTANT WITH BITS DISJOINT FROM THE OTHER ADDEND'S `nonzero_bits` IS REASSOCIATED ONTO IT"  `:28062`
+- `s16` ON A 0/1/2 TEMPORARY KEEPS THE JOIN COPY THAT `s32` CONSTANT-PROPAGATES AWAY  `:28101`
+- `s16` ON A VALUE USED ONLY BY A `!= 0` TEST AND AN OUTGOING ARGUMENT KEEPS THE ARGUMENT COPY  `:28124`
+- A STORE THROUGH A DIFFERENT BASE IS THE ONLY BARRIER BETWEEN TWO BYTE READ-MODIFY-WRITES ON ONE BASE  `:28133`
+- MEASURED NEGATIVE: `MEM_IN_STRUCT_P` IS NOT THE LEVER FOR STACK-ARRAY STORE SCHEDULING  `:28145`
+- A LOCAL WRITTEN IN MORE THAN ONE LOOP IS NEVER DEFERRED BY sched1 -- SPLIT EVERY TEMPORARY PER SITE  `:28156`
+- A `u8 *` BASE IS ALWAYS THE FIRST `addu` OPERAND; ONLY A NON-POINTER TYPE CHANGES IT  `:28185`
+- A `u16` PARAMETER COSTS `andi 0xFFFF` AT EVERY CALL SITE WHERE `s16` COSTS `sll`/`sra`  `:28199`
+- AN INNER-LOOP CURSOR MUST BE A REAL biv, NOT AN INDEXED EXPRESSION  `:28211`
+- USE `aligndiff.py`, NOT `ovlverify`'s COUNT, TO SIZE A BIG RESIDUE  `:28225`
+- A SHARED PARTIAL EXPRESSION PICKS UP HARD-REGISTER PREFERENCES THROUGH `expand_preferences`  `:28235`
+- DUPLICATING THE RETIRE TAIL PER ARM IS AN ALLOCATION LEVER, BECAUSE jump2 RUNS AFTER GLOBAL-ALLOC  `:28257`
+- WHERE A ONCE-SET SYMBOL POINTER IS ASSIGNED IS A sched2 LEVER, EVEN WHEN THE BYTES ARE THE SAME  `:28271`
+- A `u8` GLOBAL DIVIDED BY A SMALL CONSTANT IS A BARE `srl`  `:28280`
+- A SWITCH TABLE'S LENGTH IS THE ONLY WITNESS FOR ITS TOP CASE LABEL  `:28288`
+- OPEN TENSION: DOES A NARROW DESTINATION HIDE A REGISTER COPY FROM cse?  `:28297`
+- gcc 2.7.2 CROSS-JUMPS A TAIL ONLY AGAINST THE CODE BEFORE ITS OWN TARGET LABEL  `:28314`
+- A TERNARY ARGUMENT vs TWO CALLS DECIDES WHETHER A SYMBOL'S `%hi` AND `%lo` SHARE A REGISTER  `:28328`
+- `lui $at` IN A STORE IS THE ASSEMBLER MACRO, SO THE ADDRESS IS A CONSTANT, NOT A SYMBOL  `:28335`
+- `if (x != K)` vs `if (x == K)` DECIDES WHETHER cse's CONSTANT SURVIVES INTO THE STORING ARM  `:28347`
+- MEASURED NEGATIVE: `__asm__("" ::"r"(p))` CANNOT BUY A REFERENCE FOR A `high`/`lo_sum` PAIR  `:28354`
+- MEASURED NEGATIVE: `volatile` ON A GLOBAL IS DISPROVED BY ITS OTHER USERS  `:28362`
+- A `__asm__` ALIAS GIVES ONE CALL SITE A DIFFERENT RETURN MODE, AND THAT DECIDES WHETHER `expand_call` COPIES  `:28375`
+- AN EMPTY `asm` WITH ONE `"r"` INPUT BUYS LIVE-RANGE INSNS WITHOUT BUYING A REFERENCE  `:28398`
+- ONE POINTER LOCAL PER SITE CAN MEAN *TWO*, NOT ONE AND NOT THREE  `:28421`
+- BUILD THE ONE-FUNCTION DUMP BY TRUNCATION, NOT BY HAND  `:28439`
+- WHEN ALLOCNOS TIE ON PRIORITY, THE TIE-BREAK IS DECLARATION ORDER -- AND A cse-CREATED PSEUDO ALWAYS LOSES  `:28456`
+- NARROWING AN UNRELATED LOCAL CAN BLOCK A loop.c HOIST, AND THE SYMPTOM IS A SPILL ELSEWHERE  `:28490`
+- TWO NARROW COPIES OF ONE VALUE MUST NOT SHARE A MODE  `:28506`
+- A PARAMETER'S STRUCT TYPE NAMES THE RESIDENT TEMPLATE, IN PROSE  `:28522`
+- AN `"m"` INOUT `asm` BUYS TWO REFERENCES WHERE `"r"` BUYS NONE AND COSTS A WORD  `:28539`
+- AN `asm` REFERENCE IN A SECOND BASIC BLOCK STOPS local-alloc TYING AN ADDRESS TO ITS `sra`  `:28566`
+- A CONSTANT INITIALISED IN A `for`'s INIT CLAUSE OUTRANKS EVERY loop.c MOVABLE  `:28577`
+- TWO NOPS IN A ROW MEAN A HOISTED LOAD WITH NOTHING TO SCHEDULE AGAINST IT  `:28597`
+- METHOD: DUMP THE WHOLE UNIT, NOT A ONE-FUNCTION FILE  `:28615`
+- `lbu` + `sll 24` + `sra 24` INSTEAD OF `lb`: `volatile` IS ONE CAUSE, NOT THE CAUSE  `:28625`
+- A VOLATILE READ OF THE POINTER VARIABLE RESTORES A RELOAD cse FORWARDS  `:28674`
+- A `goto` LOOP CARRIES NO LOOP NOTES, SO IT CANNOT RAISE `loop_depth`  `:28690`
+- MEASURED NEGATIVES FROM BATCH j21  `:28705`
+- AN `asm` OUTPUT BUYS THE BASIC BLOCK WITHOUT BUYING LIVE RANGE; AN `asm` INPUT BUYS BOTH  `:28715`
+- AN `asm` THAT *WRITES* A VARIABLE KILLS cse's SUBREG EQUIVALENCE  `:28738`
+- A LINKER-SCRIPT SYMBOL RELOCATES WORDS THE ORIGINAL LEFT AS CONSTANTS  `:28757`
+- FIXED: `build/dungeon.bin` NOW LINKS `common_syms.txt` -- BUT CHECK THE RULE BEFORE TRUSTING A PSYQ NAME  `:28781`
+- GREP A CALL *WITH ITS LITERAL ARGUMENT* -- THE SHARPEST DONOR ROUTE LEFT  `:28828`
+- GREP THE CALLEE'S SPLAT NAME ACROSS `csrc/` -- NO `provision.py` ROUTE DOES  `:28912`
+- A WRAPPED DECLARATION HARD-EXITS THE WHOLE-UNIT SWEEP -- AGAIN  `:28935`
+- A FOLDED `(subreg:SI (reg:QI))` ALWAYS WINS THE COMMUTATIVE TIE, SO WRITE THE SUM BACK INTO THE POINTER  `:28947`
+- A NARROWED FOURTH PARAMETER IS A sched2 ENTRY-BLOCK LEVER  `:28971`
+- THE `|= 0x80000000` GATE IS A LOCALITY PROBLEM, NOT UNREACHABLE -- SOLVED 2026-11-16  `:28986`
+- TWO DISJOINT BRANCHES SHARING A LOCAL ARE ONE GLOBAL ALLOCNO WITH ONE HARD REGISTER  `:29058`
+- A MATCHED-OPERAND `asm` IS A SECOND SET THAT IS *NOT* A SCHEDULING BARRIER  `:29075`
+- A `do { } while (0)` CAN BE A cse-BLOCK DEVICE RATHER THAN AN ALIAS ONE  `:29096`
+- DO NOT DECLARE A SIZE UNRECOVERABLE BEFORE GREPPING `include/structs.h`  `:29109`
+- A SWITCH'S CASE BODIES ARE EMITTED IN SOURCE ORDER, AND THAT ORDER DECIDES A CROSS-JUMP  `:29128`
+- AN ARRAY REF IS AN ALIAS LEVER AGAINST A SCALAR-GLOBAL STORE, IN BOTH DIRECTIONS  `:29139`
+- WRITING A CASE'S TAIL EXPLICITLY INSTEAD OF `break` IS A WORD AND 60 DIFFERING  `:29161`
+- A NEVER-REASSIGNED PARAMETER CARRIES ROUGHLY TWICE A LOCAL'S `live_length` -- COPY IT TO WIN IT A REGISTER  `:29169`
+- `v + (tbl[i] & 0xFFFF)` AND `v + (u16)tbl[i]` DIFFER BY NINE TRANSPOSED `addu`s  `:29192`
+- THE POINTER-LOCAL LEVER EXTENDS FROM SYMBOLS TO RAW CONSTANT ADDRESSES  `:29204`
+- MAKING THE *STORE* THE STRUCT REF LETS A PLAIN GLOBAL'S `lw` HOIST OVER IT  `:29220`
+- `if (A && B) { goto shared; }` LETS cse CARRY AN ADDRESS ACROSS THE ARM; AN INLINE ARM DOES NOT  `:29238`
+- RECOGNISING THE `|= 0x80000000` GATE -- AND IT IS NO LONGER A REASON TO STOP  `:29254`
+- AN `asm` THAT WRITES A VARIABLE ALSO RESTORES ITS REFERENCE COUNT  `:29286`
+- A LOCAL WHOSE *ADDRESS* IS PASSED TWICE WANTS A POINTER LOCAL TOO  `:29323`
+- LOCAL DECLARATION ORDER IS FRAME LAYOUT, AND AN ARRAY BESIDE A `MATRIX` IS WHERE IT BITES  `:29343`
+- THE SCRATCHPAD INDEX TYPE CAN BE WORTH 45 DIFFERING WORDS BY ITSELF  `:29351`
+- A READ-MODIFY-WRITE OF A SCALAR GLOBAL BLOCKS ITS OWN LOAD DELAY  `:29365`
+- DENY loop.c A CONSTANT HOIST BY PUTTING THE CONSTANT IN A *USER* VARIABLE  `:29377`
+- LOAD POSITION INSIDE A REPEATED BLOCK DECIDES A `nop`, AND IT DIFFERS PER BLOCK  `:29407`
+- AN IN-PLACE BYTE UPDATE IS NOT THE SAME AS A FRESH SUM  `:29422`
+- `s16` FOR A BOOLEAN SWITCH RESULT KEEPS THE JOIN COPIES  `:29431`
+- A LOOP BOUND AS A LOCAL AND AS AN IN-CONDITION READ ARE BOTH RIGHT, PER LOOP  `:29439`
+- A CONSTANT ADDRESS AND ITS DECLARED SYMBOL CAN BE BYTE-IDENTICAL AND STILL DECIDE A REGISTER PAIR  `:29453`
+- AN `s16` DESTINATION IS WHAT STOPS combine FOLDING `lbu`/`sll 24`/`sra 24` INTO ONE `lb`  `:29501`
+- WHICH OPERAND OF A `<` IS WRITTEN FIRST DECIDES THE REGISTER PAIR AND THE LOAD ORDER  `:29512`
+- clang-format READS `(s16)*(u16 *)x` AS A MULTIPLY  `:29519`
+- A STORE'S `MEM_IN_STRUCT_P` ALSO DECIDES jump2's CROSS-JUMP LENGTH -- AND THAT IS WORDS, NOT REGISTERS  `:29525`
+- `MEM_IN_STRUCT_P` MUST GO ON THE VARYING-ADDRESS SIDE  `:29545`
+- UN-NESTING A CALL CHAIN BUYS TWO FREE REFERENCES PER STEP  `:29553`
+- `((u16 *)&SYM)[4]` FOLDS TO `SYM + 8` AND BIASES A REGISTER  `:29574`
+- A STORE THROUGH A CAST MOVES ITS REGISTER, AND THAT DECIDES WHAT reorg STEALS  `:29584`
+- `setSemiTrans(q, flag)` KEEPS A REDUNDANT `setcode`; TWO LITERALS DO NOT  `:29603`
+- "ONE POINTER LOCAL PER ARM" CUTS BOTH WAYS  `:29613`
+- READING A GLOBAL INTO A LOCAL BEFORE AN UNRELATED READ-MODIFY-WRITE LETS sched1 INTERLEAVE  `:29629`
+- ONE `s16` LOCAL SHARED BY TWO GROUPS CAN SHIFT EVERY COMPILER TEMPORARY IN THE FUNCTION  `:29637`
+- A COUNTER DECLARED FIRST AND ZEROED AT ITS DECLARATION IS NOT THE SAME AS `for (i = 0; ...)`  `:29656`
+- THE GIV BASE FOR A LOOP POINTER IS THE OFFSET OF ITS LAST *MEM* REFERENCE  `:29665`
+- TWO STRUCT FACES FOR ONE PRIMITIVE, WHEN TWO FUNCTIONS WRITE IT DIFFERENTLY  `:29692`
+- DUPLICATE THE JOIN SO CROSS-JUMPING CANNOT REACH IT -- THE INVERSE OF THE CROSS-JUMP ENTRY  `:29705`
+- A HOISTED CONSTANT NEEDS A USER VARIABLE AT THE *TOP* OF THE LOOP BODY  `:29721`
+- NINE SELF-ASSIGNMENTS THAT ARE REALLY IN THE TARGET  `:29743`
+- A BYTE STORE TO A NEIGHBOURING FIELD KEEPS cse FROM FORWARDING A HALFWORD LOAD ACROSS A FOLLOWED BRANCH -- AND THAT BUYS THE BRANCH'S NOP TOO  `:29755`
+- A TERNARY THAT REASSIGNS THE VARIABLE IN ITS OWN CONDITION COSTS A REGISTER COPY  `:29779`
+- A FIFTH ARGUMENT'S STACK STORE IS EMITTED BEFORE THE REGISTER ARGUMENTS, SO A LOADED POINTER ARGUMENT MUST BE PRECOMPUTED  `:29802`
+- WHY A RAW CONSTANT ADDRESS AND THE DECLARED SYMBOL ARE BYTE-IDENTICAL BUT NOT INTERCHANGEABLE  `:29821`
+- `aligndiff.py` USED TO REPORT MATCHING `%hi`/`%lo` WORDS AS DIFFERENCES -- FIXED, BUT CONFIRM AGAINST `ovlverify` ANYWAY  `:29841`
+- A POINTER LOCAL ONLY WINS A REGISTER IF ITS LIVE RANGE DOES NOT CROSS A FULL LOOP NEST -- COUNT THE ALLOCNOS, DO NOT RE-SPELL THE BASE  `:29863`
+- `a + (-1 - k)`, NOT `a - 1 - k` -- `fold` REASSOCIATES THE SUBTRACTION CHAIN  `:29889`
+- TWO CONSTANT ADDRESSES WITH THE SAME `%hi` SHARE ONE `lui` ONLY THROUGH AN EXPLICIT BASE POINTER  `:29904`
+- THE CONSTANT-VS-SYMBOL CHOICE CAN DIFFER BETWEEN SITES IN THE SAME FUNCTION, AND THE TELL IS A `nop`  `:29919`
+- gcc EMITS A SPARSE SWITCH'S ARM BODIES IN SOURCE ORDER, SO READ THE ORDER OFF THE LISTING  `:29940`
+- TWO SWITCH ARMS CROSS-JUMP ONLY IF THEIR INDEX LANDS IN THE SAME REGISTER -- AND A SHARED LOCAL IS NOT RELIABLY HOW YOU GET THAT  `:29955`
+- AN ARRAY OF **TWO** IS HOW YOU PUT A LOCAL IN A STACK SLOT -- NOT `volatile`, AND NOT AN ARRAY OF ONE  `:30017`
+- THE SECOND HALFWORD OF A `D_x` / `D_x+2` PAIR NEEDS AN `__asm__` ALIAS TO BE AN INDEPENDENT SYMBOL REFERENCE  `:30046`
+- WHICH LOCALS ARE THE **SAME** LOCAL IS A LEVER; SHUFFLING THE DECLARATION LIST IS NOT -- BUT NOT FOR THE REASON IT LOOKS LIKE  `:30066`
+- `f(ot, q++)` BIASES EVERY FIELD ADDRESS IN THE LOOP TO ZERO -- SPLIT IT INTO TWO STATEMENTS  `:30098`
+- A COPY TEMP SURVIVES cse ONLY IF THE VARIABLE IT COPIED IS KILLED BETWEEN THE TEMP'S SET AND ITS USE  `:30125`
+- A LOOP'S UPDATE GROUP IS EMITTED IN SOURCE ORDER, SO THE COUNTER'S POSITION IS THE `for` CLAUSE'S  `:30143`
+- A `s16` PARAMETER IS TWO PSEUDOS, SO AN EARLY TEST AND A LATE TEST READ DIFFERENT REGISTERS  `:30161`
+- A DEPENDENCE-FREE STORE IS THE SCHEDULER'S FAVOURITE STALL FILLER, SO ITS SOURCE POSITION MOVES THE WHOLE BLOCK'S ALLOCATION  `:30179`
+- AN IMPLICIT DECLARATION IS LOAD-BEARING -- ADDING THE PROTOTYPE BREAKS THE MATCH  `:30198`
+- `base=?` WITH ZERO ITERATIONS IS A pycparser PARSE ERROR, NOT A DEAD PERMUTER -- AND `compile.sh` CLEARS IT  `:30218`
+- TWO LEVERS CAN BE ORDER-DEPENDENT: A POINTER LOCAL THAT COSTS 3 WORDS ALONE CAN SAVE A WORD ONCE A LOCAL IS NARROWED  `:30247`
+- `s16` FOR A BOOLEAN LOCAL, WHEN `s32` COSTS A `move`  `:30277`
+- A STACK-PASSED ARGUMENT ONLY GETS A REGISTER IF A LOCAL BINDS IT BEFORE THE FIRST CALL -- AND IT HAS TO BE THE FIRST STATEMENT  `:30292`
+- THE PERMUTER'S SCORE IS NOT THE ALIGNED DIFFERENCE COUNT -- RE-MEASURE EVERY ANSWER BEFORE ADOPTING IT  `:30318`
+  - THE SIZE OF THE GAP, MEASURED FOUR TIMES  `:30348`
+  - THE FIVE OUTCOMES, AFTER SEVEN RUNS ON THIS BLOCK  `:30386`
+- `-fcse-skip-blocks` COMMONS TWO READS ACROSS A BRANCH EVEN WHEN THE JOIN BLOCK HAS TWO PREDECESSORS -- SO A RE-READ NEEDS A DEVICE  `:30428`
+- A JUMP TABLE'S GAPS NEED NO WRITTEN-OUT EMPTY CASES -- ONLY THE LOWEST AND HIGHEST LABELS MATTER  `:30461`
+- A "GOTO LADDER" WITH ENTRY POINTS ONE INSTRUCTION APART IS USUALLY ONE LABEL AND DELAY-SLOT STEALING  `:30486`
+- `shorten_compare` NEEDS **BOTH** OPERANDS SHORT-TYPED, SO ONE WIDE CALLEE COSTS THE WHOLE COMPARE  `:30515`
+- A RESULT MUST ARRIVE **UNEXTENDED** FOR `(u16)(x - k) < n` TO KEEP ITS `andi`  `:30536`
+- SPLITTING VARIABLES IS NOT MONOTONE -- AND THE THING TO WATCH IS WHERE THE MAIN RECORD POINTER LANDS  `:30550`
+- A SHORT CROSS-JUMP MATCH FOUND FIRST BLOCKS A LONGER ONE -- AND THE SHORT MATCH IS THE CODE BEFORE THE TARGET LABEL  `:30577`
+- A ONCE-SET NARROW LOCAL WHOSE VALUE IS PROVABLY NARROW DISAPPEARS -- GIVE IT A SECOND SET TO KEEP IT  `:30621`
+- A LOOP-INVARIANT COPY AS THE LOOP BODY'S FIRST STATEMENT IS HOW YOU GET A SECOND PSEUDO FOR THE LOOP  `:30647`
+- A POINTER LOCAL TO A **SCALAR** SYMBOL IS WHAT SHARES ONE `%hi` ACROSS DISJOINT BRANCHES  `:30673`
+- A LOAD MUST PRECEDE A STORE FOR reorg TO PUT THE STORE IN A BRANCH'S DELAY SLOT  `:30692`
+- A DECLARATION INITIALISER'S POSITION AMONG THE OTHER LOCALS DECIDES WHICH CONSTANT OWNS A SHARED `lui`  `:30715`
+- A THREE-WORD `lui`/`addiu`/`lw 0x0(reg)` TAIL IS RELOAD REMATERIALISING A POINTER LOCAL, NOT A SPILL  `:30735`
+- A `(s16)` CAST OF AN UNSIGNED HALFWORD LOAD IS THREE WORDS WHERE `*(s16 *)` IS ONE  `:30758`
+- THE ALIAS ROUTE INTO sched1 IS CLOSED FOR TWO MEMBERS OF ONE STRUCT, AND THE COMPILER SAYS WHY  `:30775`
+- `MEM_IN_STRUCT_P` CUTS BOTH WAYS, AND WHICH WAY DEPENDS ON THE SIDE OF `true_dependence` IT LANDS ON  `:30801`
+- DRAW THE CALL RESULT INTO THE SHORT-LIVED LOCAL, NOT THE LONG-LIVED ONE  `:30829`
+- A SOURCE-LEVEL COPY CANNOT REPRODUCE AN ALLOCATOR COPY  `:30850`
+- PUT THE STORE INSIDE BOTH ARMS TO KEEP A TWO-ARM `if`  `:30886`
+- gcc TRUSTS A NARROW RETURN FOR A COMPARISON AND NOT FOR AN ASSIGNMENT -- TWO WORDS, IN OPPOSITE DIRECTIONS  `:30904`
+- WRITE A LOOP ADDRESS'S CONSTANT ON THE **INDEX** SIDE, OR loop.c FOLDS IT INTO A GIV AND COSTS A REGISTER  `:30920`
+- `cond ? a == K1 : a == K2` IS NOT TWO `if`s WITH THE BODY DUPLICATED, AND IT IS FIVE WORDS  `:30941`
+- `return -1` FIRST, NOT LAST, WHEN FOUR EARLIER TESTS ALSO RETURN IT  `:30958`
+- THE PERMUTER CAN CONFIRM A MECHANISM EVEN WHEN ITS SPELLING IS UNUSABLE  `:30972`
+- READ `move_movables`' THRESHOLD OUT OF `-dL` INSTEAD OF GUESSING IT -- AND ARRAY INDEXING IS HOW YOU PUSH `insn_count` PAST IT  `:31003`
+- THE SAME `threshold` vs `insn_count` DECIDES WHERE AN ELIMINATED BIV'S BOUND IS COMPUTED  `:31031`
+- A STORE WRITTEN INTO BOTH ARMS BUYS A REAL RELOAD AFTER THE JOIN, AND THAT RELOAD BLOCKS A CROSS-JUMP  `:31052`
+- reorg WILL LIFT A DECLARED SYMBOL'S `%hi` INTO A BRANCH DELAY SLOT AND WILL NOT LIFT A CONSTANT ADDRESS'S  `:31073`
+- WHERE A HOISTED CALL-ARGUMENT INDEX IS ASSIGNED IS A sched1 LEVER, AND THE POSITION SWEEP IS CHEAP  `:31092`
+- A FLAG ASSIGNMENT MUST BE IN THE BLOCK THAT **ENDS** AT THE BRANCH WHOSE DELAY SLOT SHOULD HOLD IT  `:31115`
+- A TERNARY STORE LETS cse FORWARD INTO A LATER RE-READ; TWO ARM STORES DO NOT -- AND CROSS-JUMPING HIDES THE DIFFERENCE  `:31137`
+- `fold` DISTRIBUTES `(x - 1) * 3 + 8` INTO `x * 3 + 5` UNLESS THE SUBTRACTION IS BOUND TO A LOCAL  `:31158`
+- A CALL-CROSSING SHARED LOCAL IN **ONE** ARM SETS THE REGISTER CLASS FOR **EVERY** ARM -- AND IT CAN COST YOU THE PARAMETER MAP  `:31173`
+- WHERE A READ-MODIFY-WRITE ON A GLOBAL SITS DECIDES WHETHER TWO OTHER ARMS CROSS-JUMP  `:31198`
+- AT OFFSET 0 RELOAD FOLDS A REMATERIALISED ADDRESS BACK INTO THE MEM -- WHICH IS WHY ONE FUNCTION SHOWS TWO ADDRESSING SHAPES FOR ONE SYMBOL  `:31231`
+- A DUPLICATED LOOP-EXIT TEST CAN NEED THE GUARD'S EXPRESSION TO BE TEXTUALLY DIFFERENT  `:31259`
+- `PROMOTE_MODE` KEEPS A `short` LOCAL IN AN SImode PSEUDO -- ONLY AN ADDRESSABLE LOCAL GETS AN HImode STACK SLOT  `:31280`
+- A CALL RESULT TESTED FOR NULL WANTS ITS OWN VARIABLE WHEN THE KEPT VALUE IS LOOP-CARRIED  `:31297`
+- A DEAD ASSIGNMENT THE TARGET EMITS IS NOT REACHABLE FROM C, AND SIX SPELLINGS PROVE IT  `:31312`
+- THREE BULK DECLARATION-ORDER SWEEPS, AND WHAT THEY SETTLE  `:31333`
+- A LOCAL FOR THE COMPARISON BOUND FORCES `slt reg,reg` WHERE A LITERAL GIVES `slti`  `:31357`
+- `do_cross_jump` ALWAYS DELETES THE **FIRST** COPY OF A DUPLICATED TAIL  `:31377`
+- A TRAILING ONE-INSN `return 0` BLOCK IS A CROSS-JUMP ANCHOR  `:31396`
+- READ `allocno_compare`'s SORT OUT OF `-da` INSTEAD OF REASONING ABOUT IT -- ONE COMPILE, TWO SECONDS  `:31409`
+- ALL THREE OF `scan_loop`'s ADMISSION ARMS CAN BE FAILED AT ONCE, AND THAT IS HOW YOU KEEP A CONVERSION IN THE LOOP  `:31486`
+- A `for` HEADER'S OWN `i = 0` IS EMITTED **AFTER** THE STATEMENTS THAT PRECEDE THE LOOP  `:31510`
+- A LOOP-INVARIANT `d * i` IS A GIV WHOSE `= 0` INIT GOES IN THE **PREHEADER** -- AN ACCUMULATOR'S DOES NOT  `:31535`
+- A LOCAL SHARED BY TWO ARMS OF AN `if`/`else` IS A **GLOBAL** ALLOCNO AND CANNOT COALESCE WITH ITS SOURCE  `:31564`
+- A DELAY SLOT THAT CLOBBERS THE REGISTER ITS TARGET BLOCK TESTS PROVES WHAT THE TARGET BLOCK IS TESTING -- AND THE WRONG READING CAN SCORE BETTER  `:31603`
+- `note_mem_written` CANNOT INVALIDATE A PLAIN GLOBAL'S cse ENTRY -- SO REORDERING A STORE IN FRONT OF IT NEVER WORKS  `:31626`
+- A `volatile` CAST ON ONE READ DOES WHAT DECLARING THE GLOBAL `volatile` DOES, WITHOUT THE REACH  `:31647`
+- `floor_log2` IN `allocno_compare` IS A CLIFF AT EVERY POWER OF TWO, AND IT DECIDES REGISTER SWAPS  `:31668`
+- cse FOLDS A POINTER LOCAL'S DEFINITION INTO EVERY LATER `base + N`, AND THAT DECIDES WHICH POINTER SURVIVES  `:31714`
+- `adjust_priority`'s BIRTHING BOOST: A SHARED LOCAL LOSES A SCHEDULING TIE IT SHOULD HAVE WON  `:31737`
+- THE BIRTHING BOOST AND local-alloc PULL IN OPPOSITE DIRECTIONS  `:31771`
+- alias.c RESOLVES A PSEUDO THROUGH ITS `REG_EQUIV` AND A HARD REGISTER THROUGH NOTHING -- SO sched1's ORDER IS FINAL  `:31795`
+- A SHORT-LIVED VALUE REACHES A CALLEE-SAVED REGISTER ONLY BY SHARING A LOCAL WITH SOMETHING THAT CROSSES CALLS  `:31812`
+- A LOOP'S INDEX REUSING AN EARLIER, LONGER-LIVED LOCAL BEATS A FRESH ONE  `:31834`
+- `o = n = p[x];` EMITS A COPY; `o = p[x]; n = o + d;` DOES NOT  `:31864`
+- A HOIST THAT ONLY SHORTENS A LIVE RANGE CAN FLIP AN ALLOCATION AT A 1% MARGIN  `:31879`
+- A POINTER LOCAL PER SITE IS WHAT STOPS `+K` FOLDING INTO A SYMBOL'S `%lo`  `:31899`
+- A VALUE A CALL'S DELAY SLOT WANTS NEEDS ITS OWN LOCAL, NOT AN IN-PLACE `&=`  `:31922`
+- INVERTING THE DIRECTION OF A COPY IS TWO FREE REFERENCES ACROSS THE `floor_log2` CLIFF  `:31945`
+- A SECOND `extern` UNDER THE SAME `__asm__` NAME RE-TYPES A SYMBOL FOR ONE FUNCTION ONLY  `:31968`
+- `true_dependence`'s STRUCT CLAUSE APPLIES TO THE STORE SIDE TOO  `:31995`
+- TWO CALL RESULTS IN ONE LOCAL CAN BE THE ALLOCATION LEVER, NOT A COST  `:32010`
+- A BARE `__asm__("")` IS A FREE FULL SCHEDULING BARRIER  `:32030`
+- A DIFFERENT-MODE COPY SPLITS ONE C VARIABLE INTO TWO PSEUDOS  `:32078`
+- "ONE LOCAL PER ARM" APPLIES TO SCRATCH INTEGERS, NOT JUST POINTERS  `:32124`
+- A CONSTANT MASK IN ITS OWN STATEMENT IS A sched1 TIE-BREAK  `:32145`
+- A DUPLICATED TAIL `return` IS A CONTROL-FLOW DEVICE  `:32167`
+- THREE `u16` SCALARS IN A FRAME GET EIGHT BYTES EACH; `u16 x[3]` GETS SIX  `:32194`
+- A SCRATCHPAD CONSTANT NEEDING `lui`+`ori` REACHES A CALLEE-SAVED REGISTER ONLY AS A POINTER LOCAL  `:32208`
+- A SECOND READ OF THE SAME MEMORY IS HOW A LOOP COUNTER GETS ITS OWN PSEUDO  `:32225`
+- A PARAMETER'S DECLARED WIDTH MOVES THE PROLOGUE SCHEDULE  `:32242`
+- THE `volatile` RE-READ GOES ON THE **FIRST** READ WHEN THE TARGET'S DELAY SLOTS SAY SO  `:32253`
+- A TWO-SET LOCAL LEAVES local-alloc ENTIRELY, WHICH IS HOW A VALUE REACHES A REGISTER ITS BLOCK HAS NOT USED  `:32272`
+- BINDING AN ADDRESS SUM TO A LOCAL IS WHAT KEEPS ITS `PLUS` OPERANDS IN SOURCE ORDER  `:32312`
+- A PARAMETER CAN BE THE LONG-LIVED HOST A SHORT-LIVED POINTER MERGES INTO  `:32326`
+- A LOST FUNCTION-POINTER TYPEDEF IS RECOVERABLE FROM ITS `jalr` SITE  `:32346`
+- NO PASS IN `cc1psx` INSERTS A REGISTER COPY THE SOURCE DID NOT ASK FOR  `:32380`
+- THE RENAME FORM HAS A CEILING AT TWO PSEUDOS  `:32398`
+- WHICH OF TWO SURVIVING COPIES GETS THE ARGUMENT REGISTER IS CSE'S TRAVERSAL, NOT THE SOURCE  `:32413`
+- `allocno_compare` READS `.lreg`, AND THE EARLIER DUMPS GIVE DIFFERENT NUMBERS  `:32435`
+- A PLAIN `local = param;` IS THE ONLY WAY INTO SCHED1'S REGION, AND IT WORKS ONCE  `:32453`
+- A ONCE-USED PARAMETER'S LIVE LENGTH HAS A HEAD OFFSET, NOT JUST A LAST USE  `:32501`
+- A LOOP-INVARIANT `loop.c` HOISTED IS PINNED TO THE END OF THE PREHEADER  `:32517`
+- `expand_expr` EMITS op0 FIRST, AND THE COMMUTATIVE SWAP HAS THREE TRIGGERS  `:32546`
+- A DEAD STORE AT THE END OF A DISJOINT ARM BUYS CANONICALITY WITHOUT A REFERENCE  `:32572`
+- sched1 FILLING A LOAD-DELAY SLOT WITH `return 0`'s `(set v0 0)` IS TWO SYMPTOMS FROM ONE CAUSE  `:32597`
+- A MASK-FREE `u16` MOVE NEEDS A MULTI-SET 16-BIT LOCAL, NOT A FRESH ONE  `:32626`
+- REUSING A LOCAL TO FIX ONE SIDE MOVES IT IN `allocno_compare`, AND THE FIX IS PAID ON THE OTHER  `:32642`
+- AN EXPLICIT COPY ACROSS A CALL IS STILL DELETED BY cse  `:32661`
+- THE ARGUMENT-COPY DEVICE NEEDS ITS HARD-REGISTER PIN  `:32677`
+- sched2 CAN REPRODUCE THE ORDER IT WAS HANDED, AND THEN IT IS NOT A SCHEDULER TIE  `:32692`
+- sched2's OUTPUT IS THE INSN CHAIN, WITH MEMORY INSNS SUNK -- IT IS NOT A TIE TO NUDGE  `:32707`
+- A PARAMETER COPY CANNOT BE MOVED AFTER A CALL'S ARGUMENT SETUP  `:32736`
+- FOR A PURE PERMUTATION, READ `ovlverify`'s COUNT, NOT `aligndiff`'s ROWS  `:32760`
+- A `loop.c`-INSERTED INSN IS ALWAYS LAST IN THE PREHEADER -- SO WHAT FOLLOWS ONE IS ALSO loop.c's  `:32773`
+- MOVABLES LAND BEFORE GIVS, SO SOME VALUES MUST BE WRITTEN *INSIDE* THE LOOP  `:32794`
+- A `for` LOOP GIVES ITS COUNTER ONE MORE `REG_N_REFS` THAN `if` + `do`/`while`  `:32810`
+- AN `asm` BARRIER FLUSHES sched.c's PENDING READ AND WRITE LISTS  `:32832`
+- INSIDE ONE sched1 PRIORITY GROUP, A STORE OUTRANKS A LOAD -- AND BLOCKS THE NEXT CYCLE  `:32849`
+- A `%lo` LOAD IS ALWAYS CONSTANT-ADDRESSED TO THE ALIAS CHECKER  `:32871`
+- `adjust_priority`'s BOOST IS ALWAYS `LAUNCH_PRIORITY`  `:32903`
+- THE `__asm__("" ::"r"(x))` MARKER HAS A SECOND, DIFFERENT JOB: KEEPING A COPY ALIVE THROUGH cse  `:32914`
+- `flow` ADDS `loop_depth` PER REFERENCE, SO `do { } while (0)` IS A REGION, NOT A DEVICE  `:32944`
+- A LOCAL-ALLOC QTY INVERSION HAS ARITHMETIC YOU CAN SOLVE FOR THE SCHEDULE  `:32971`
+- A DEAD STORE CANNOT MAKE A PSEUDO GLOBAL  `:32997`
+- A LOCAL-ALLOC TIE CHAIN PUTS A WHOLE ADDRESS COMPUTATION IN THE INDEX'S REGISTER  `:33016`
+- A SECOND SET ON A POINTER LOCAL TURNS ITS STORES INTO ALIASING STORES  `:33070`
+- sched.c KEEPS A *RUN* OF LEADING PARAMETER COPIES OUT OF sched1  `:33146`
+- WHICH BODY COPIES OF A PARAMETER SURVIVE: THE ONES cse CANNOT REACH FROM THE DEF  `:33170`
+- A SECOND, NON-CONSECUTIVE SET DISQUALIFIES AN INVARIANT FROM `move_movables` -- AND A DEAD ONE IS FREE  `:33187`
+  - THE `reg_n_sets == 1` FAMILY  `:33219`
+- WHEN YOU NEED TWO PSEUDOS TO CONFLICT, FIND A CONFLICT THAT IS ALREADY FREE  `:33241`
+- THE THREE-KINDS TAXONOMY PREDICTS WHICH OF A PARK'S FACTS SURVIVE -- MEASURED, 6 FOR 6  `:33267`
+- `convert.c` TAKES ITS UNSIGNEDNESS FROM THE *FIRST* OPERAND, WHICH TURNS -0x10 INTO AN `ori`  `:33296`
+- A PARK THAT CITES ANOTHER PARK: RE-CHECK THAT FUNCTION'S STATE FIRST  `:33344`
+- A NEGATIVE CONSTANT STORED THROUGH A `u8` LVALUE IS A ONE-ROW FAULT  `:33368`
+- THE ALIGNMENT-1 LOCAL IS FREE WHEN THE SOURCE SYMBOL IS ALREADY BYTE-ALIGNED  `:33386`
+- `const` ON A READ-ONLY TABLE'S DECLARATION IS A SCHEDULING LEVER, AND IT IS FREE  `:33401`
+- A LOCAL ARRAY *INITIALISER* IS A SCHEDULING LEVER  `:33429`
+- COUNTING TO THE NEXT POWER OF TWO BEFORE COMPILING -- A WORKED CASE  `:33451`
+- A SPARE CALLEE-SAVED REGISTER IN THE PROLOGUE IS A 0/1 FLAG WITH TWO REACHING DEFINITIONS  `:33480`
+- A STORE THROUGH ANOTHER BASE KILLS cse'S STORE-TO-LOAD FORWARDING, AND THE SURVIVOR NAMES THE LAST WRITE  `:33514`
+- THE SAVE COUNT PREDICTS A VALUE THAT MUST CROSS A CALL  `:33533`
+- WHERE A SHARED `return 0` COMES FROM IS A GATE-SHAPE FACT  `:33557`
+- `loop.c` RUNS `move_movables` BEFORE `strength_reduce`  `:33576`
+- `rank_for_schedule` SORTS DESCENDING BY LUID -- THE LATEST SOURCE STATEMENT IS SCHEDULED FIRST  `:33591`
+- A PARAMETER'S DECLARED WIDTH IS A SCHEDULING LEVER, AND THE RESIDUE IS IN THE PROLOGUE  `:33619`
+- A MISSING FALL-THROUGH DOES NOT ALWAYS COME OUT SHORT -- IT FAILS BOTH WAYS  `:33642`
+- A CONSTANT'S SIDE IN A SUBTRACTION DECIDES WHICH REGISTER IT LANDS ON  `:33662`
+- A MISSING `move` CAN BE A NARROW DECLARATION, NOT A PSEUDO YOU FAILED TO INVENT  `:33697`
+- TWO COPIES OF ONE ROUTINE CAN WANT OPPOSITE `lui` ORDERS -- THAT IS NOT A LEVER  `:33724`
+- A SELECTION FACT INVERTED -- THE THREE-KINDS TAXONOMY HAS A COUNTER-EXAMPLE  `:33743`
+- THE FRAME SIZE TELLS YOU AN ARRAY FROM A SET OF SCALARS BEFORE YOU COMPILE  `:33770`
+- A HALFWORD SPILL SLOT MEANS TWO LOCALS, NOT ONE  `:33790`
+- A TIED `lui`/`addiu` PAIR MEANS A SINGLE-SET LOCAL; AN UNTIED PAIR MEANS IT IS LIVE ACROSS A BRANCH  `:33828`
+- "THE TARGET HAS A `lui` WHERE I HAVE A `nop`" IS A STATEMENT-ORDER FAULT  `:33876`
+- THE WIDTHS OF TWO LOCALS ARE A PRODUCT -- SWEEP THE CROSS, NOT EACH AXIS  `:33890`
+- `u16` VERSUS `s16` ON ONE LOCAL IS MEASURABLE -- THREE WIDTHS, THREE ANSWERS  `:33934`
+- A READ-MODIFY-WRITE'S SPELLING DECIDES WHETHER sched1 MAY TRANSPOSE A STORE PAIR  `:33955`
+- `birthing_insn_p` BOOSTS AN INSN THAT SETS A SINGLE-SET PSEUDO, AND THE SCHEDULER IS BACKWARD  `:33977`
+- A SYMBOL-ADDRESS BASE NEEDS ONE LOCAL *PER BASIC BLOCK* -- 99 ROWS, AND THE SIGN INVERTS  `:34005`
+- TWO DRESS SITES ON ONE STRAIGHT-LINE PATH WITH A CALL BETWEEN THEM WANT THEIR OWN LOCALS -- 72 ROWS  `:34025`
+- CROSS-JUMPING RUNS *AFTER* RELOAD, SO TOO FEW SPILLS MAKES A BODY COME OUT SHORT  `:34045`
+- PERTURB THE SUSPECTED CAUSE: ONE THROWAWAY COMPILE CAN PROVE 150 ROWS ARE DOWNSTREAM OF ONE WORD  `:34083`
+- NEVER INTEGRATE FROM A LIVE AGENT'S COPY -- AND `dngland`'s GUARD IS NOT THE RULE  `:34117`
+- A DEVICE THAT IS NECESSARY ONLY BECAUSE OF ANOTHER FAULT IS INDISTINGUISHABLE FROM A FACT  `:34163`
+- `MEM_IN_STRUCT_P` DECIDED FIVE OF EIGHT BODIES IN ONE UNIT -- WITH A CONTROL  `:34224`
+- `if (1)` IS THE TWO-SECOND TEST FOR "PRIORITY OR SCHEDULING BARRIER"  `:34258`
+- reload's OWN cse RENAMES A PARAMETER'S BASE REGISTER *AFTER* ALLOCATION  `:34286`
+- A CROSS-JOINED DUPLICATE IS FREE IN THE OUTPUT AND **NOT** FREE IN THE ALLOCATOR -- 190 ROWS  `:34308`
+- A POST-INCREMENT IN A CONDITION IS A SCHEDULING TOOL  `:34348`
+- COUNT THE SETS ON EVERY LOCAL BEFORE REACHING FOR A DEVICE -- 88 ROWS, FOUR WITNESSES  `:34364`
+- READ A GATE'S OPERAND OFF THE *RELOAD*, NOT OFF THE COMPARISON  `:34388`
+- A CLEAN WHOLE-BODY TWO-REGISTER EXCHANGE CAN BE A MISSING SWITCH FALL-THROUGH  `:34409`
+- WHEN TWO COPIES OF A GATE MUST SHARE A TAIL, INVERT ONE COPY'S ARMS BEFORE REACHING FOR A `goto`  `:34458`
+- "ONE SHARED TEARDOWN WRITTEN OUT TWICE" IS NOT ALWAYS FREE -- 12 WORDS A COPY  `:34484`
+- THREE INDIVIDUALLY-GOOD POINTER LOCALS THROUGH ONE REUSED LOCAL ARE WORSE THAN NONE  `:34503`
+- TAKING A LOCAL'S ADDRESS FORCES ITS STACK SLOT -- AND THE FRAME GROWS  `:34525`
+- A PAIR OF STACK HALFWORDS WRITTEN AND READ BACK WITH NO CALL BETWEEN THEM IS A LOCAL ARRAY  `:34539`
+- A VALUE TERNARY IS DISTINGUISHABLE FROM TWO CROSS-JOINED ARMS -- READ FOR THE `j`  `:34554`
+- A CHANNEL BLOCK'S STORE DIRECTION DEPENDS ON HOW MANY VALUES IT WRITES  `:34571`
+- A STORE'S POSITION IS READABLE *OUTSIDE* A DRESS BLOCK AND NOT INSIDE ONE  `:34588`
+- A SHIFT FEEDING A NARROWER STORE LOSES ITS CAST; A MULTIPLY KEEPS IT  `:34618`
+- `* 0x40` KEEPS `lh` WHERE `<< 6` NARROWS IT TO `lhu`  `:34660`
+- `s16` VS `u16` ON A STACK-PASSED PARAMETER IS INVISIBLE IN THE CALLEE AND DECISIVE IN THE CALLER  `:34674`
+- ONE MORE REFERENCE CROSSING A POWER OF TWO IS WORTH 26 ROWS  `:34690`
+- THE SAME CONSTANT CAN NEED OPPOSITE SPELLINGS IN TWO BODIES OF ONE UNIT  `:34715`
+- A WIDTH AXIS CAN HAVE A PLATEAU -- AND THEN SIGNEDNESS IS THE REAL LEVER  `:34734`
+- A WHOLE-BODY REGISTER ROTATION AT THE *EXACT* WORD COUNT CAN BE ONE STATEMENT'S LOOP DEPTH  `:34752`
+- A STORE THROUGH A POINTER KILLS EVERY MEMORY VALUE cse KNOWS  `:34769`
+- A CALLEE-SAVED REGISTER HOLDING A SYMBOL BASE ACROSS A CALL IS NOT EVIDENCE OF A POINTER LOCAL  `:34795`
+- TWO SEPARATE LOCALS WHERE ONE WOULD DO -- 152 ROWS, AND IT IS A PASS-ORDER FACT  `:34812`
+- A LISTING'S *LOAD* POSITIONS ARE SOURCE ORDER EVEN WHEN ITS STORE POSITIONS ARE NOT  `:34833`
+- PRICE THE `MEM_IN_STRUCT_P` POLARITY PER *STATEMENT*, NOT PER BLOCK  `:34855`
+- A CRASHED `ovlverify` RUN LOOKS EXACTLY LIKE A CLEAN SWEEP -- COUNT THE PASSES  `:34870`
+- PRICE WITH `aligndiff`, NOT WITH `ovlverify`'s MASKED COUNT -- THEY DISAGREE BY 7x  `:34889`
+- MASKED MODE HIDES A SYMBOL SWAP BETWEEN TWO SCALARS -- READ THE CONSUMERS  `:34908`
+- `sll $v0, 16` AFTER A CALL MEANS THE CALLER'S *DECLARATION* IS WIDER THAN THE DEFINITION  `:34923`
+- cse MERGES IDENTICAL CONSTANTS ONLY WITHIN ONE MODE  `:34954`
+- `LEGITIMIZE_ADDRESS` FORCES A WHOLE `CONST_INT` ADDRESS INTO A REGISTER -- IT DOES NOT SPLIT IT  `:35000`
+- A LOOP OVER A CONSTANT-ADDRESS ARRAY NEEDS A POINTER LOCAL -- 12 WORDS  `:35021`
+- A THIRD WAY A BODY CANNOT MEET THE GATE: SPLAT MISLABELLED RODATA AS ITS FIRST INSTRUCTION  `:35041`
+- A SECOND WAY A TABLE CANNOT BE A `switch`: THE ROM HAS IT 4-BYTE ALIGNED  `:35068`
+- A TABLE IN A *DATA* SUBSEGMENT CANNOT BE LANDED AS A `switch` -- AND `ovlverify` SAYS 0  `:35123`
+- TWO KINDS OF "CONSTANT BASE", AND `--raw` SEPARATES THEM IN ONE COMMAND  `:35154`
+- `MEM_IN_STRUCT_P` HAS EXACTLY THREE SHAPES -- NAME YOURS BEFORE SPELLING IT  `:35224`
+- THE PRECONDITION FOR EVERY `MEM_IN_STRUCT_P` ENTRY BELOW -- READ THIS FIRST  `:35274`
+- A DESCRIPTOR READ INSIDE A LOOP THAT ALSO STORES MUST BE A COMPONENT_REF  `:35413`
+- `loop.c`'s GIV BIAS IS THE OFFSET OF THE LAST SUBSCRIPT IN THE LOOP BODY  `:35440`
+- THE COUNT-DOWN DISCRIMINATOR: LOOK AT WHETHER THE SUBSCRIPT WAS STRENGTH-REDUCED  `:35478`
+- COUNT `jr $ra` BEFORE YOU WRITE A BODY -- A SYMBOL IS NOT ALWAYS A FUNCTION  `:35493`
+- A "MEASURED FREE" FACT DOES NOT TRANSFER EITHER -- FREE IS NOT A CLASS  `:35530`
+- IF TWO SPELLINGS OF ONE OPERATOR READ THE SAME NUMBER, THAT OPERATOR IS NOT THE FAULT YET  `:35560`
+- `jump.c`'s STORE-FLAG TRANSFORM FIRES IN cc1psx DESPITE `BRANCH_COST` 1  `:35579`
+- `ovlverify` MASKED IS BLIND TO A DISPLACEMENT OFF A CONSTANT BASE -- THE CONTAINER IS THE ONLY AUTHORITY  `:35618`
+- A CONSTANT WHOSE DEF IS IN A DIFFERENT BLOCK FROM ITS USES LOSES ITS REGISTER  `:35659`
+- A STORE'S POSITION BETWEEN TWO FLAG STORES IS LOAD-BEARING (`flow.c` `last_mem_set`)  `:35690`
+- `ori` AGAINST `addiu` IS ABOUT THE LOCAL'S WIDTH, NOT ABOUT `+` AGAINST `|`  `:35748`
+- WHEN A POINTER LOCAL IS RIGHT, AND WHEN IT IS WRONG -- ONE DISCRIMINATOR  `:35802`
+- A LISTING'S REGISTER *REUSE* IS EVIDENCE ABOUT A CONSTANT'S VALUE  `:35825`
+- A RECORD TYPE IS PER-USE, NOT PER-SYMBOL  `:35854`
+- FOLLOW THE CORRESPONDENCE: ONE MATCHED PAIR IDENTIFIES THE NEXT DONOR  `:35874`
+- A SELECTION FACT'S MAGNITUDE SCALES WITH THE NUMBER OF SITES  `:35915`
+- THE RATIO IS GETTING LESS DECISIVE AS THE SWEEP PROGRESSES, AND THAT IS STRUCTURAL  `:35932`
+- A CLEAN TWO-REGISTER EXCHANGE WITH NOTHING MOVED IS RARELY AN ALLOCATION FAULT  `:35998`
+- AN INVERTED FACT OFTEN KEEPS THE DONOR'S MAGNITUDE, MIRRORED  `:36062`
+- A POINTER LOCAL SHARED BETWEEN TWO BASIC BLOCKS BREAKS THE `high`/`lo_sum` TIE  `:36100`
+- `MEM_IN_STRUCT_P` AGAINST `fixed_scalar_and_varying_struct_p` -- WHY A CAST LOSES A RELOAD  `:36126`
+- WRITE A ZERO STORE *BEFORE* THE VALUE THAT OVERWRITES IT, OR cse DELETES IT  `:36153`
+- INSIDE OR OUTSIDE THE LOOP: A CURSOR WANTS INSIDE, A CONSTANT MULTIPLIER WANTS OUTSIDE  `:36175`
+- A CURSOR INITIALISED OUTSIDE ITS LOOP LETS loop.c REBASE THE BIV  `:36208`
+- THE ROM HAS BUGS, AND THE COHERENT SPELLING CAN BE 137 ROWS WRONG  `:36233`
+- gcc 2.7.2 HAS NO LOOP UNSWITCHING -- SO AN UNSWITCHED LOOP WAS UNSWITCHED IN THE SOURCE  `:36256`
+- A NARROW LOCAL LETS cse MERGE TWO LOADS THE TARGET KEEPS SEPARATE  `:36284`
+- AN `sw`/`lhu` PAIR MAY BE AN ADDRESS-TAKEN LOCAL, NOT A SPILL  `:36316`
+- `lhu` + `sll 16` + `sra 16` IS NOT EVIDENCE OF A CAST -- FIVE SITES, ALL FREE  `:36344`
+- A MAGIC-MULTIPLY CONSTANT DOES NOT NAME ITS DIVISOR -- READ THE SHIFT TOO  `:36367`
+- BASIC-BLOCK BOUNDARIES MARK WHERE LISTING ORDER *IS* EVIDENCE  `:36392`
+- A FOLDED OFFSET IN A LISTING IS NOT A SPELLING -- ~95 ROWS FOR ONE CONSTANT  `:36424`
+- AT -G0, AN `extern u8 X[]` FOLDS ITS FIRST OFFSET INTO THE SYMBOL  `:36450`
+- SPLITTING A REASSOCIATED SUM IS NOT MONOTONIC -- TWO STATEMENTS CAN BE WORSE THAN ONE  `:36483`
+- THE PREHEADER'S INIT ORDER IS REVERSED, AND READING IT BACKWARDS TELLS YOU WHAT IS A SOURCE VARIABLE  `:36520`
+- AN EMITTED COUNT-DOWN LOOP MEANS THE SOURCE COUNTS *UP* -- check_dbra_loop  `:36558`
+- WHERE TO PUT A `+ 1`: IN THE SWITCH ARM, NOT THE HOISTED LOAD -- AND IT INVERTS  `:36622`
+- RE-PRICE EVERY FACT AFTER THE BODY REACHES 0 -- INCLUDING THE MECHANISM  `:36648`
+- `volatile` ON A STORE ALSO BLOCKS *combine* -- `init_recog_no_volatile`, combine.c:502  `:36691`
+- A MODULO'S QUOTIENT REGISTER IS DECIDED AT EXPANSION, NOT BY THE ALLOCATOR  `:36737`
+- A ONE-WORD-EARLY `c` START IS DETECTABLE, AND THE FIX NEEDS THE RODATA IN C  `:36772`
+- THREE SIMULTANEOUS RATIO FALSE POSITIVES, ALL THE SAME WRONG FAMILY  `:36835`
+- local-alloc's REFERENCE COUNTS ARE LOOP-WEIGHTED -- flow.c ADDS `loop_depth` PER REF  `:36853`
+- A HAND-WRITTEN LABEL HANDS jump2 THE CROSS-JUMP BONUS -- jump.c:2409  `:36882`
+- A ZERO PSEUDO SURVIVES cse AS A SHIFT OF A NON-CONSTANT -- NINTH SHAPE, FIRST SUCCESS  `:36915`
+- `MEM_IN_STRUCT_P` IS ASYMMETRIC: THE STORE MUST BE A STRUCT REF AND THE LOADS MUST NOT  `:36945`
+- A LITERAL IN A SWITCH ARM MAY BE EMITTED AS THE SWITCH REGISTER -- record_jump_equiv  `:37003`
+- DERIVE THE STACK LOCALS FROM THE FRAME OFFSETS -- AND AN ARRAY IS NOT TWO SCALARS  `:37027`
+- CHECK WHICH ARM IS THE `then` BEFORE ANYTHING ELSE -- ONE INVERSION WAS 110 ROWS  `:37067`
+- A SHARED LOCAL CAN DO ITS DAMAGE 150 WORDS AWAY  `:37091`
+- THE FRONT END FOLDS `&&` CHAINS BEFORE RTL -- TWO RANGE TESTS MUST BE NESTED `if`s  `:37121`
+- RE-MEASURING ON AN IMPROVED BASELINE PAID TWO TIMES IN EIGHT -- THE RULE HAS A COST  `:37150`
+- A VALUE USED IN THREE cse BLOCKS MUST BE NARROWED ONCE, INTO A LOCAL, FROM A WIDER PARAMETER  `:37172`
+- A FREE FACT ON A PRESSURE-FREE LEAF IS NOT A FACT  `:37207`
+- WHAT PRESENTS AS AN ALLOCATION FAULT AND IS NOT -- CHECK THESE FIVE FIRST  `:37227`
+- TO STOP loop.c HOISTING AN INVARIANT, PAD THE LOOP TO THIRTY INSNS -- move_movables  `:37274`
+- A RE-READ IS FREE WHEN THE STORE IS UNCONDITIONAL -- the other side of the cse block rule  `:37332`
+- DUPLICATING A STORE INTO BOTH ARMS IS FREE ONLY IF THE ARM FALLS INTO THE EPILOGUE  `:37352`
+- WHOLE-STRUCT COPY AGAINST FIELD-BY-FIELD: USE THE LISTING TELL, THE CAUSE IS UNKNOWN  `:37410`
+- gcc 2.7.2 DOES NO DEAD-STORE ELIMINATION ON MEMORY  `:37450`
+- THE PERMUTER'S SCORE IS NOT ALIGNED ROWS -- HAND-MEASURE EVERY RESULT  `:37468`
+- A PERMUTER SCORE IS ONLY VALID AGAINST ITS OWN BASE, AND THE DIRECTORY MIXES RUNS  `:37526`
+- AND THE SAME RULE BACKWARDS: A FIX CAN BE LOAD-BEARING ONLY WHILE THE REAL FAULT REMAINS  `:37557`
+- WHAT A TAIL BODY ACTUALLY COSTS -- THE READING IS CHEAP AND THE RESIDUE IS NOT  `:37592`
+- A FIX CAN BE WORSE ALONE AND NECESSARY IN COMBINATION -- WHICH BLINDS A ONE-AT-A-TIME SWEEP  `:37619`
+- A cse BASIC BLOCK ENDS ONLY AT A `CODE_LABEL`, SO A FALL-THROUGH ARM IS THE GATE'S BLOCK  `:37673`
+- CHECK PASS ORDER BEFORE BLAMING A REGISTER FOR A SCHEDULE  `:37694`
+- A PARK'S BODY CAN DISAGREE WITH ITS OWN PROSE -- RE-MEASURE BEFORE READING  `:37709`
+- A PARK ROTS AS ITS OWN UNIT LANDS BENEATH IT, AND THE CHECKER DID NOT SEE IT  `:37734`
+- MANY `return NULL`s MAY NEED ONE SHARED `goto fail` -- COUNT THE BLOCK'S USERS  `:37767`
+- A `do { } while (0)` REFERENCE BUMP HAS A PRICED SCOPE, AND `if (1)` IS THE CONTROL  `:37797`
+- WHETHER cse FORWARDS IS A PROPERTY OF THE SITE, NOT THE BODY -- 30 WORDS APART  `:37837`
+- THE SAVE COUNT TELLS YOU HOW MANY LONG-LIVED LOCALS THE BODY NEEDS -- BEFORE YOU COMPILE  `:37866`
+- DO NOT WRITE A MEASUREMENT INTO A BRIEF THAT YOU HAVE NOT TAKEN  `:37915`
+- FIX A LEAD TOOL MID-BATCH AND THE RUNNING AGENTS STILL HOLD THE OLD FILE  `:37952`
+- A LOW CALLEE-SET OVERLAP IS AN UNRANKED SET, NOT NOISE -- I HAD THIS WRONG IN THE BRIEFS  `:37983`
+- AN ARGUMENT REGISTER SET IN THE LISTING IS NOT EVIDENCE OF AN ARGUMENT  `:38022`
+- CALLER-SAVED WHERE THE TARGET HAS CALLEE-SAVED: THE PSEUDO MUST SPAN A CALL  `:38087`
+- READ A `combine_regs` CHAIN BREAK OFF THE LISTING: A TIED INSN WRITES WHAT IT READS  `:38122`
+- `find_free_reg` RUNS IN TWO ROUNDS, AND A SUGGESTED REGISTER IS RESERVED FIRST  `:38177`
+- FOR A CALLER-SAVED REGISTER FAULT, FIX THE OCCUPANT -- NOT THE SITE THAT READS WRONG  `:38225`
+- MARK A DECLARATION YOU COULD NOT WITNESS -- IT LOOKS IDENTICAL TO ONE YOU COULD  `:38373`
+- A PARK'S RESIDUE REPRODUCING ON A RELINK PROVES THE FAULT IS IN THE SHAPE  `:38414`
+- CHECK A PARK'S FAMILY AGAINST THE BATCH'S OWN PICKS -- I DID NOT, AND WASTED A RUN  `:38454`
+- A RESURRECTED PARK PAYS TWICE: IT BECOMES THE DONOR FOR ITS OWN UNIT-MATES  `:38494`
+- A TWIN'S CALL WITH ONE MORE ARGUMENT THAN YOURS IS AN ALLOCATION LEAD  `:38581`
+- THE SAME ROW COUNT CAN BE A DIFFERENT FAULT -- COMPARE THE ROWS, NOT THE NUMBER  `:38598`
+- WHEN THE SCHEDULER'S COST FUNCTION TIES, THE ORDER IS SOURCE ORDER  `:38627`
+- A PARK CAN HAVE THE RIGHT DIAGNOSIS AND THE WRONG REMEDY  `:38702`
+- `QTY_CMP_PRI` DOES NOTHING WHEN THE TWO RANGES ARE DISJOINT -- CHECK FOR A CONFLICT FIRST  `:38757`
+- `flow` RUNS ONCE, BEFORE `combine` -- SO A REFERENCE combine DELETES IS STILL FREE  `:38785`
+- AN INNER `do { } while (0)`'s LOOP NOTES ARE A FULL SCHEDULING BARRIER  `:38816`
+- NAMING A SIGN EXTENSION'S SHIFT TEMP IS FREE  `:38841`
+- `optimize_reg_copy_1` IS WHAT EATS A PARAMETER'S BODY COPY, AND `reg_set_p` IS THE FREE CURE  `:38852`
+- A TRAILING DEAD COPY IS A CANONICALITY DEVICE, AND THE COMPARISON IS *STRICTLY* GREATER  `:38880`
+- A COMPILER TEMP IS ALWAYS HOISTED -- ARM (2) OF `scan_loop` IS `! REG_USERVAR_P`  `:38896`
+- A BACKWARD `goto` IS NOT A LOOP TO `loop.c`, SO EVERY HOIST IS OFF THE TABLE  `:38932`
+- TWO BIT TESTS ON ONE HALFWORD MUST BE NESTED `if`s, NOT `&&`  `:38951`
+- ONE LOCAL PER REGION, NOT ONE REUSED LOCAL PER ROLE  `:38970`
+- READ THE RELOCATION, NOT THE SYMBOL NAME splat PRINTS  `:38997`
+- A ZERO-EXTENDING WIDENING IS WHAT LETS A C VARIABLE *BE* THE `sll` TEMP  `:39014`
+- `__asm__("" : "+r"(x))` IS NOT A DEVICE -- IT IS DELETED BEFORE flow  `:39088`
+- A DUPLICATED STORE RAISES AN ALLOCNO'S PRIORITY, AND CROSS-JUMPING MERGES IT BACK  `:39108`
+- MOSTLY-DISPLACEMENT ROWS WITH THE WORD COUNT OFF BY ONE MEANS A WRONG `goto` TARGET  `:39128`
+- A REPEATED LOAD BECOMING A REGISTER COPY IS AN ALLOCATION SYMPTOM, NOT A cse ONE  `:39142`
+- THE `MEM_IN_STRUCT` ESCAPE IS CHECKED BEFORE `memrefs_conflict_p` DECIDES ANYTHING  `:39160`
+- A TWO-BLOCK POINTER LOCAL LOSES ITS BIRTHING BOOST, AND A CALL'S ARG COPY THEN STRANDS ITS `lo_sum`  `:39197`
+- `loop.c` HOISTS AN INVARIANT FOR FREE IF IT IS THE LAST USE OF ANOTHER HOISTED INVARIANT  `:39230`
+- cse's SKIP-BLOCKS ARM EXTENDS A cse BLOCK AROUND AN `if` WITH NO `else`  `:39259`
+- A COPY IS EATEN THE MOMENT IT SHARES A BLOCK WITH A LATER USE OF ITS SOURCE  `:39275`
+- A BYTE THAT IS BOTH STORED AND WIDENED NEEDS A `u8` LOCAL, NOT A CAST  `:39288`
+- `block_alloc` TIES AN ARITHMETIC INSN'S OUTPUT TO AN INPUT THAT DIES IN IT  `:39297`
+- SOLVE THE sched1 PRIORITY INEQUALITIES BEFORE SWEEPING SPELLINGS  `:39318`
+- A USER COPY OF A PARAMETER IS THE ONLY WAY TO GIVE ITS HARD-REG COPY A LATER LUID  `:39344`
+- THERE IS NO FREE WAY TO RAISE `reg_n_sets` EXCEPT THE MATCHED-OPERAND `asm`  `:39360`
+- A REDUNDANT RECOMPUTATION IS A COPY THAT SURVIVES, WHERE A SOURCE-LEVEL COPY IS NOT  `:39383`
+- jump2 DELETES A REDUNDANT HARD-REGISTER COPY, SO TWO COPIES OF ONE VALUE CANNOT BOTH EXIST  `:39430`
+- READ THE `.set noreorder` BLOCKS IN THE OUTPUT BEFORE THEORISING ABOUT A DELAY SLOT  `:39468`
+- A TRAILING INPUT-ONLY FENCE *LOWERS* AN ALLOCNO'S PRIORITY  `:39486`
+- READ THE ASSEMBLER MACRO, NOT THE MNEMONIC  `:39503`
+- "SCORES EQUAL" IS NOT "STREAMS EQUAL" -- RE-MEASURE BEFORE TRUSTING A `byte-identical` NOTE  `:39517`
+- WHAT SETS `MEM_IN_STRUCT_P` IS THE `INDIRECT_REF`'s OPERAND BEING A `PLUS_EXPR`  `:39535`
+- A READ-MODIFY-WRITE AND A GLOBAL STORE CANNOT BOTH BE ORDERED FROM ONE STATEMENT  `:39568`
+- A REJECTED SPELLING MAY HAVE BEEN ONLY HALF APPLIED  `:39593`
+- `hi -= lo;` AS ITS OWN STATEMENT, FOR ONE BLOCK OUT OF SIX  `:39614`
+- WHICH USER VARIABLE HOLDS A DENIED CONSTANT IS A SECOND, INDEPENDENT CHOICE  `:39629`
+- A HOIST'S POSITION IN THE PREHEADER IS ITS SOURCE POSITION AMONG THE MOVABLES  `:39645`
+- combine CARRIES A KNOWN BIT PATTERN ACROSS BLOCKS ONLY WHILE `reg_n_sets == 1`  `:39671`
+- A `REG_EQUIV` NOTE DOUBLES A PSEUDO'S `live_length`, AND A SECOND SET SKIPS THE WHOLE THING  `:39709`
+- A DEAD *EARLIER* SET MAKES cse2 KEEP A REG-REG COPY  `:39742`
+- `-fcse-skip-blocks` CARRIES cse1's TABLE ACROSS A `||`, BUT NOT REGS SET IN THE SKIPPED BLOCK  `:39768`
+- `lw $t0` MEANS A SPILLED PSEUDO; `lw $v0`/`$v1` MEANS AN ADDRESSABLE VARIABLE  `:39792`
+- JOINING TWO EARLY-RETURN TESTS WITH `||` CHANGES WHICH BLOCK reorg CAN OWN  `:39811`
+- A REDUNDANT REGISTER COPY SURVIVES jump2 IF YOU SPELL IT `x + z0` WITH `z0` PINNED TO `$0`  `:39825`
+- A FREE REFERENCE WINS AN `allocno_compare` RACE, AND `do { } while (0)` IS THE SPELLING TO REACH FOR FIRST  `:39937`
+- `birthing_insn_p` DECIDES WHETHER A LOAD OR A SIGN-EXTENSION SCHEDULES FIRST, AND A SECOND SET IS WHAT TURNS IT OFF  `:40030`
+- A DUPLICATED-ARM `if (x)` IS A LEGITIMATE ANSWER TO AN ALLOCATION RESIDUE THE SOURCE CANNOT REACH  `:40100`
+- DECLARATION ORDER IS NOT A LEVER -- 446 orders, no change  `:40138`
+- A CANCELLED INCREMENT PAIR BUYS REFERENCES, AND A SECOND SET, FOR NOTHING  `:40174`
+  - The second set is the part that lands functions  `:40198`
+  - Sweep it, do not reason about it  `:40227`
+- `divmodsi4`'S DEAD MOD OUTPUT HOLDS A HARD REGISTER, AND WHETHER THE QUOTIENT IS LOCAL OR GLOBAL DECIDES WHICH ONE  `:40239`
+- A DUPLICATED-ARM DEVICE'S CONDITION VARIABLE CAN CREATE THE RESIDUE IT IS BLAMED FOR  `:40304`
+- A SHARED TAIL IN THE TARGET MAY BE TWO BLOCKS CROSS-JUMPED AFTER RELOAD -- WRITE IT TWICE, WITH ITS OWN LOCALS  `:40362`
+- `do { } while (0);` IS A FULL SCHEDULING BARRIER, NOT ONLY A loop_depth WEIGHT  `:40414`
+- WHEN A CALL'S OLD ARGUMENT VALUE IS WHAT THE NEXT CALL NEEDS, PUT THE OLD VALUE IN THE TEMP -- NOT THE RESULT  `:40462`
+- `allocno_compare`'s PRIORITY IS READABLE STRAIGHT OFF THE `.lreg` DUMP -- STOP SWEEPING AND DO THE ARITHMETIC  `:40492`
+  - A cancelled pair placed after its variable's last use is DELETED and buys nothing  `:40523`
+  - The return copy CAN win the LUID tie -- if its destination has `reg_n_sets == 1`  `:40531`
+  - And re-measure the negatives that say "identical bytes"  `:40550`
+- A LOCAL COPY OF A POINTER PARAMETER DESTROYS ITS `REG_EQUIV` AND HALVES ITS PRICED LIVE LENGTH  `:40556`
+  - The diagnostic, and it is free  `:40580`
+- TWO ARMS WITH THEIR OWN ASSIGNMENT BEAT ONE CONDITION WITH A cse DEVICE  `:40596`
+- A `-G0` GLOBAL'S ADDRESS DOES NOT VARY, SO ONE ARRAY_REF DELETES A sched1 DEPENDENCE  `:40624`
+- A NEGATIVE DISPLACEMENT IN THE LISTING NAMES A SOURCE POINTER LOCAL  `:40686`
+- A NARROWER DECLARATION CAN FLIP A LOCAL-ALLOC TIE WITH NO REFERENCE CHANGE  `:40713`
+- AN ILLEGAL PERMUTER HOIST NAMES THE READ THE SCHEDULER WANTS EARLY  `:40746`
+- A TEMP NAME SHARED BY TWO BLOCKS IS A GLOBAL ALLOCNO, AND IT PRICES EVERY QUANTITY AROUND IT  `:40773`
+- `schedule_select` PROMOTES A STORE OVER AN ALU INSN WITHIN ONE PRIORITY GROUP  `:40799`
+- A DUPLICATED ARM AROUND A CALL ASSIGNMENT IS A SECOND SET, AND REPLACES `__asm__("" : "+r"(x))`  `:40827`
+- `qty_n_refs` IS ALREADY LOOP-WEIGHTED, SO DO NOT WEIGHT IT AGAIN  `:40856`
+- ONE REFERENCE OVER A `floor_log2` STEP MOVES A PARAMETER FIVE PLACES IN THE QUEUE  `:40871`
+  - A duplicated assignment is deleted BEFORE it is counted; a cancelled pair is not  `:40910`
+- THE POINTER IS ALWAYS TREE OPERAND 0, SO `i*4 + r` CANNOT PRODUCE INDEX-FIRST  `:40933`
+- A CONSTANT BESIDE A SYMBOL IS FOLDED INTO THE SYMBOL; A FIELD OFFSET IS NOT  `:40966`
+- TWO QUANTITIES THAT DIE AT THE SAME INSN ARE A FIXED ORDER; A THIRD RESTORES BIRTH ORDER  `:41001`
+  - Getting the third quantity: `v >= 0 ? v : -v`, and the asymmetry is in `fold`  `:41027`
+- `read_dependence` NEEDS *BOTH* MEMREFS VOLATILE  `:41056`
+- cse's PLUS ASSOCIATION CANNOT BE AVOIDED ON MIPS -- BREAK IT BY WRITING THE BASE VARIABLE  `:41075`
+- A HImode LOCAL RECEIVING AN SImode EXPRESSION IS WHERE SPARE `addu` COPIES COME FROM  `:41127`
+- cse CANONICALISES A QUANTITY TO WHICHEVER REGISTER IS USED LATER  `:41156`
+  - And a sharper statement of "make a C variable BE a compiler temp"  `:41177`
+- A SPILLED HImode PSEUDO UNDER A PARADOXICAL SUBREG TAKES AN 8-BYTE, 8-ALIGNED SLOT  `:41191`
+- LOOP BODY SIZE DECIDES WHETHER AN INVARIANT IS HOISTED, SO AN UNRELATED STATEMENT CAN PROTECT A LEVER  `:41230`
+- combine CAN MANUFACTURE A SURVIVING REGISTER COPY FROM A REDUNDANT SIGN EXTENSION  `:41260`
+- A SOURCE-LEVEL COPY SURVIVES cse BEHIND A LABEL WITH TWO PREDECESSORS  `:41287`
+  - A reading recipe for `.greg` that follows from pass order  `:41299`
+- EVALUATE THE LIMIT FIRST TO STOP jump2 CROSS-JUMPING A GUARD INTO THE LOOP TEST  `:41315`
+- CORRECTION: `MEM_IN_STRUCT_P` NEEDS A `PLUS_EXPR` ON TOP, NOT A STRUCT  `:41331`
+  - AND IT WORKS IN BOTH DIRECTIONS: A STORE SINKING PAST LOADS  `:41371`
+  - A STRUCT MEMBER ALSO SETS THE FLAG, AND COMMITS YOU TO THE FIELD'S TYPE  `:41386`
+- `set_preference` TAKES THE SOURCE'S FIRST OPERAND, SO A SHIFT INHERITS A PREFERENCE  `:41409`
+- A DUPLICATED ARM WITH IDENTICAL ARMS IS DELETED BY jump2; ITS ONLY EFFECT IS THE REFERENCE  `:41445`
+- A LOCAL ARRAY'S DECLARED LENGTH CHANGES ALLOCATION -- MEASURED, UNEXPLAINED  `:41473`
+- WRITE THE ASSOCIATION BACKWARDS: `A - (B - C)` AND `(A + C) - B` ARE THE SAME TREE  `:41491`
+- A READ-MODIFY-WRITE ON MEMORY IS NOT THE SAME AS ONE THROUGH A LOCAL  `:41527`
+  - And the root error in that park, which is worth its own warning  `:41549`
+- A SECOND SOURCE POINTER WITH THE SAME STRIDE IS A SECOND BIV, AND ITS giv COSTS A REGISTER  `:41563`
+- TWO SPELLINGS OF THE SAME CONSTANT ADDRESS SPLIT A QUANTITY'S REFERENCE COUNT  `:41600`
+- A DUPLICATED-ARM `if (v)` IS `loop_depth` REFERENCES, AND THAT CAN CROSS THE `floor_log2` STEP  `:41637`
+- EVALUATE THE LIMIT FIRST IN A PLAIN `if`, NOT ONLY IN A LOOP GUARD  `:41651`
+- READ BACK THE FIELD YOU JUST STORED, NOT THE SOURCE YOU STORED FROM  `:41668`
+  - And `(s16)` of an ADDRESSABLE just-stored stack local folds to one `lh`  `:41685`
+- A STORE IN A BRANCH'S DELAY SLOT IS UNCONDITIONAL IN THE SOURCE  `:41695`
+- `reg_n_calls_crossed` IS A PROPERTY OF THE C VARIABLE, SO TWO DISJOINT USES SHARE A REGISTER CLASS  `:41715`
+- A LOOP-HOISTED COPY REACHES AN EARLIER LOAD ONLY IF sched1 MOVES IT FIRST  `:41764`
+- A SWEEP'S *POSITIVE* IS AS BODY-SCOPED AS ITS NEGATIVE  `:41783`
+  - And ablate devices BEFORE reading any allocation dump  `:41798`
+- A DEAD COMPARISON IN THE TARGET IS POSITIVE EVIDENCE ABOUT A DECLARED WIDTH  `:41813`
+  - The corollary: check for a deleted BLOCK before believing a closed word gap  `:41850`
+- SWEEP `MEM_IN_STRUCT_P` CONVERSIONS IN GROUPS -- SINGLY THEY ALL READ AS NEGATIVES  `:41864`
+- CORRECTION: jump2's CROSS-JUMP PAIRING IS A GLOBAL PROPERTY OF THE FUNCTION  `:41897`
+- `update_equiv_regs` MOVES A CONSTANT'S INIT TO JUST BEFORE ITS USE -- MOVE THE ASSIGNMENT INSTEAD  `:41922`
+  - And do not spell such an address as a CONSTANT instead  `:41960`
+- ABLATE DEVICES TOGETHER AS WELL AS SINGLY -- A PAIR CAN CANCEL EXACTLY  `:41972`
+- A DEPTH-2 INNER LOOP SHARING AN OUTER LOOP'S INDEX GETS ITS REFERENCES DOUBLED  `:41993`
+- AN `s16` LOCAL IS ONE ALLOCATOR COPY PER BASIC BLOCK -- AN ALLOCATION LEVER, NOT A WIDTH ONE  `:42010`
+  - The corollary, which retires a whole class of stale park rejections  `:42039`
+- CORRECTION: `QTY_CMP_PRI`'s DENOMINATOR IS NOT THE NUMBER `.lreg` PRINTS  `:42054`
+- A `u8` FLAG BUYS TWO REFERENCES FOR ITS OWN QUANTITY, AT THE COST OF ONE `andi`  `:42088`
+- A ONE-ARMED `if` DOES NOT END cse's EXTENDED BLOCK; A TWO-ARMED ONE DOES  `:42109`
+  - And a trap in "ablate the power set"  `:42138`
+- TWO QUANTITIES ONLY EXCHANGE REGISTERS WHEN **BOTH** GO BLOCK-LOCAL  `:42153`
+- READING A GLOBAL BACK MANUFACTURES THE COPY THE TARGET HAS  `:42171`
+- A `symbol + register` ADDRESS NEVER TAKES THE `LO_SUM` ARM ON THIS TARGET  `:42194`
+  - Two measured negatives from the same park, worth not repeating  `:42217`
+- A CANCELLED PAIR *MOVES* THE DEFINITION; A PHANTOM ZERO DOES NOT  `:42231`
+- A HImode LOCAL FED BY A SEPARATE SImode LOCAL KEEPS ITS SET ACROSS A BLOCK BOUNDARY  `:42258`
+  - And the companion fact: one reference in a second block makes a pseudo global  `:42279`
+- A `do { } while (0)` STOPS cse1 BUT NOT cse2 -- AND A DUPLICATED FAIL-BODY'S LABEL IS FOLLOWED  `:42301`
+- `gen_binary` PUTS THE NARROW OPERAND FIRST, WHATEVER THE SOURCE SAYS  `:42333`
+  - And the width of a `|` chain is set by its FIRST operand, not its destination  `:42359`
+  - And the copy direction that survives  `:42367`
+- A USER INSN CAN NEVER GET A LUID BELOW THE PARAMETER COPIES -- STOP DIGGING  `:42375`
+- A PROLOGUE WHOSE PARAMETER COPIES ARE NOT IN PARAMETER ORDER WANTS A PLAIN `local = param;`  `:42396`
+- A DUPLICATED EARLY `return CONST` IS ITSELF THE CROSS-JUMP LEVER -- COUNT THE SITES  `:42428`
+- `x >= 0 ? x : -x` IS A sched1 LEVER ON THE OPERANDS AROUND IT, NOT ONLY AN `abs` FOLD  `:42462`
+  - Two tool cautions recorded with it  `:42476`
+- WHICH GATE THE SHARED `goto fail` LABEL BELONGS IN IS NOT A RULE -- IT IS THE *LAST* ONE AS OFTEN AS THE SECOND  `:42489`
+- A CALL RESULT'S DECLARED RETURN WIDTH IS AN `allocno_compare` LEVER, NOT ONLY A PLACEMENT ONE  `:42515`
+- MERGING TWO DISJOINT LIVE RANGES INTO ONE LOCAL IS THE OTHER CURE FOR AN INHERITED HARD-REGISTER PREFERENCE  `:42544`
+- A DUPLICATED TAIL AND A `goto` TO A SHARED ONE ARE THE SAME LENGTH BUT NOT THE SAME ALLOCATION, AND THE DUPLICATE CAN BE ONE STATEMENT  `:42580`
+- A SIGNED `/ 2` CAN COST AN EIGHT-BYTE UNREFERENCED STACK LOCAL THAT `>> 1` DOES NOT  `:42614`
+- AN `s16` STACK PARAMETER GETS A REGISTER; AN `s32` ONE IS REMATERIALISED FROM ITS INCOMING SLOT  `:42650`
+- IN A STATE INSTALLER, THE +0x8C WORD STORE GOES BETWEEN THE TWO STATE BYTES  `:42687`
+- A LOAD CANNOT REACH A STORE'S DELAY SLOT WHEN BOTH SIDES ARE STRUCT MEMs -- SO REORDER THE SOURCE  `:42708`
+- A GROUP OF DIVISIONS SHARING A DIVISOR: WRITE THE DIVISOR INLINE AT EVERY SITE, NEVER IN A LOCAL  `:42727`
+- AMENDMENT: THE FREE-REFERENCE DEVICES ARE NOT FREE WHEN THE SORT IS LOCAL-ALLOC'S  `:42766`
+- THE REFERENCE-COUNT DEVICES ARE MACRO RESIDUE, AND THE MACRO BOUNDARY IS THE SEARCH HINT  `:42809`
+- A BLOCK EMITTED IN THE WRONG PLACE, AT THE RIGHT WORD COUNT, IS USUALLY AN INVERTED TWO-ARM GATE  `:42856`
+- THE allocno_compare LEVER RUNS BOTH WAYS: SOMETIMES YOU REMOVE A REFERENCE  `:42877`
+- gcc 2.7.2 CANNOT DISAMBIGUATE A `lo_sum` STORE FROM A `reg+offset` LOAD, AND ARGUMENT LOADS ARE EMITTED LAST  `:42908`
+- A PAIRED CLEAR AND SET ON ONE WORD IS TWO STATEMENTS, NOT ONE COMBINED MASK  `:42937`
+- THE ORDER OF A GROUP OF STORES DECIDES WHICH cse RELOADS SURVIVE  `:42959`
+- A LOAD FIRST IN A BLOCK KEEPS A CONDITIONAL BRANCH'S DELAY SLOT EMPTY  `:42996`
+- A MODULO IN ITS OWN STATEMENT REUSES THE DIVIDEND'S PSEUDO  `:43043`
+- A PREDICTABLE-TRUE TWO-ARM GUARD IS A REFERENCE BUMP, AND ONLY ITS OPERAND MATTERS  `:43057`
+- A SHARED `goto` EXIT LABEL IS A cse BARRIER, AND ITS POSITION IS AN ALLOCATION FIX  `:43093`
+- THE BIASED BASE REGISTER A LOOP'S STORES SHARE IS ITS *LAST* MEMORY REFERENCE  `:43129`
+- MOVING A CONSTANT'S STORES FURTHER APART LOWERS ITS local-alloc RANK  `:43147`
+- A LOAD THAT MUST SURVIVE A GLOBAL STORE BUYS A PARAMETER COPY  `:43168`
+- A STRUCT ASSIGNMENT AND `memcpy` EMIT THE SAME BLOCK MOVE, NOT THE SAME SCHEDULE  `:43202`
+- `ptr + (i << 2)` KEEPS POINTER-FIRST ORDER WHERE `ptr + i * 4` REASSOCIATES  `:43233`
+- ROUTING A CONSTANT THROUGH AN EXISTING VARIABLE IS A FREE REFERENCE BUMP  `:43245`
+- THE PERMUTER'S SCORE IS NOT ALIGNED DIFFERENCES, AND ITS OUTPUT IS NOT CORRECT C  `:43269`
+- A TIE IN `allocno_compare` MAY NOT BE REACHABLE FROM STATEMENT ORDER AT ALL  `:43296`
+- A `switch` ON AN s16 FIELD DOES ITS MINVAL SUBTRACTION IN HImode  `:43327`
+- `andi 0xFFFF` / `or` / `and 0xFFFF0000` ON ONE REGISTER IS A 16.16 UNION  `:43346`
+- AN ARRAY REFERENCE AND A CAST-DEREFERENCE TO THE SAME HALFWORD SCHEDULE DIFFERENTLY  `:43371`
+- WHEN A CARVED BODY'S CALLEE SET SPANS TWO RESIDENT FUNCTIONS, SUSPECT A BLEND  `:43401`
+- A TWIN SEARCH BUILT ON `nm` CANNOT SEE OVERLAYS THAT SHARE A RAM WINDOW  `:43421`
+- A SIGNATURE LOOSE ENOUGH TO BE WRONG FOR CLONING IS THE RIGHT ONE FOR READING  `:43463`
+- ONE POINTER LOCAL PER BASIC BLOCK, NOT ONE SHARED: LOCAL VS GLOBAL ALLOCNO  `:43483`
+- A SURVIVING PARAMETER COPY NEEDS A *NARROWING* COPY, NOT JUST A LIVE PARAMETER  `:43522`
+- (ORIGINAL ENTRY) A PARAMETER THAT DIES AT ITS COPY LOSES THE COPY  `:43563`
+- A PROXIMITY TEST IS ONE `&&` CHAIN OF INLINE `abs()`, NOT TWO NEGATE BLOCKS  `:43610`
+- A TWIN'S LOAD-BEARING FACT CAN BE FREE ON YOUR BODY, AND THAT IS WORTH A ROW  `:43652`
+- A LOCAL REUSED FOR TWO UNRELATED VALUES IS A LIVE-RANGE BUG, 150 WORDS AWAY  `:43672`
+- A CALL DUPLICATED INTO BOTH ARMS IS HOW TWO `jal`s TO ONE CALLEE APPEAR  `:43702`
+- `do { } while (0)` AS A PURE SCHEDULING PIN, NOT A REFERENCE BUMP  `:43728`
+- A LOCAL WRITTEN TWICE BLOCKS SUBSTITUTION, AND COSTS A REGISTER TO DO IT  `:43786`
+- A TWIN'S STATED FACT HAS THREE OUTCOMES, AND A PRICED FACT DETECTS THE THIRD  `:43802`
+  - AND THE RATIO DOES NOT PREDICT WHICH  `:43834`
+  - THE DEVICE RULE IS A PROCEDURE, NOT A PREDICTION  `:43861`
+- REFERENCES BUY NOTHING UNTIL ONE CROSSES A POWER OF TWO  `:43878`
+  - AND THE JUMP IS DISCONTINUOUS, SO ONE BUMP CAN OVERSHOOT  `:43904`
+- `if (1)` BUYS NO REFERENCE; ONLY A LOOP CONSTRUCT DOES  `:43946`
+- A DEVICE'S SCOPE IS USUALLY NOT EVIDENCE ABOUT WHERE THE MACRO WAS  `:43965`
+- `ovlverify` CANNOT SEE WHICH DATA SYMBOL A RELOCATED LOAD NAMES  `:43986`
+- ALLOCATION FACTS FOLLOW THE FRAME; SHAPE FACTS FOLLOW THE SHAPE  `:44007`
+  - CORRECTION: THE FRAME PREDICTS A BUDGET, NOT A DIRECTION  `:44081`
+- EQUAL ALLOCNOS: MOVE AN UNRELATED STATEMENT, DO NOT ADD A REFERENCE  `:44120`
+- A FOURTH OUTCOME FOR A TWIN'S FACT: NOT APPLICABLE  `:44154`
+  - THE POSITIVE SIDE OF THE FRAME RULE, MEASURED ACROSS 19 FACTS  `:44177`
+- `synth_mult` FACTORS A CONSTANT MULTIPLY, AND NOT THE WAY THE TARGET DID  `:44194`
+- A LOCAL WRITTEN AND NEVER READ CAN STILL BE LOAD-BEARING  `:44218`
+- A PARAMETER'S DECLARED WIDTH IS AN ALLOCATION LEVER EVEN WHEN EVERY USE IS A BYTE STORE  `:44237`
+  - AND A LIMIT ON THE FRAME RULE, FROM THE SAME FUNCTION  `:44265`
+- A TWIN'S PRICES DO NOT SURVIVE INTO A JUMP-TABLE OWNER  `:44277`
+  - AND A "PAIR" OF FACTS CAN BE TWO FACTS OF VERY DIFFERENT WEIGHT  `:44298`
+- THREE KINDS OF TWIN FACT, WITH THREE DIFFERENT TESTS  `:44312`
+  - AND A STATEMENT-ORDER FAULT PRESENTS AS AN ALLOCATION FAULT  `:44351`
+  - THE AMENDMENT: ALL THREE CLASSES HAVE INVERTED, SO THE TAXONOMY IS A SORT AND NOT A WARRANT  `:44359`
+- THE SAVE ORDER PREDICTS WHICH VALUE IS IN WHICH REGISTER, AND SO PREDICTS ALIAS SPLITS  `:44426`
+- A LISTING'S `%hi(SYMBOL)` IS NOT EVIDENCE THAT THE SOURCE DECLARED ONE  `:44479`
+- A GLOBAL READ INSIDE A LOOP THAT ALSO STORES THROUGH POINTERS GETS NO GIV  `:44501`
+- ONE LOCAL CAN HOLD A CALL RESULT, A LOOP COUNTER AND A SECOND CALL RESULT  `:44515`
+  - AND THE TAXONOMY'S CLEANEST POSITIVE CASE  `:44544`
+- A DEVICE THAT LEAVES EXACTLY ONE ROW STANDING IS COVERING FOR A MISSING STATEMENT  `:44560`
+- PICK A TWIN BY ITS CONSTANTS WHEN THE RATIO AND THE FRAME BOTH TIE  `:44595`
+- A TWIN'S REJECTED TABLE IS USEFUL IN REVERSE  `:44609`
+- CORRECTION: A TABLE OWNER'S PRICES ARE UNPREDICTABLE, NOT RELIABLY INFLATED  `:44623`
+  - AND `ovlverify`'s COUNT IS THE ONE THAT IS ACTUALLY WORTHLESS HERE  `:44654`
+- THE SAVE ORDER ALSO PREDICTS WHETHER A REFERENCE-COUNT DEVICE APPLIES  `:44666`
+- THREE SMALLER MEASURED FACTS FROM ovl_dng_b13  `:44697`
+  - A BANK FACT: ovl_dng_b13 KEEPS A COUNTDOWN AT p+0xA4  `:44717`
+- A GUARD WHOSE CONDITION FOLDS AWAY STILL BUYS THE REFERENCE  `:44728`
+- A SIGN-EXTENDED `(s16)(i + K)` IN A LOOP BECOMES AN INDUCTION VARIABLE ON `K << 16`  `:44766`
+  - AND A FRAME MISMATCH THAT IS ITSELF THE TWIN'S NOT-APPLICABLE FACT  `:44782`
+- GREP THE OFFSET SET, NOT JUST THE CALLEE SET  `:44798`
+- TWO CONSECUTIVE `|=` ON ONE FIELD COLLAPSE TO ONE `ori`, AND A STORE BETWEEN THEM SAVES BOTH  `:44820`
+- A `%hi` TALLY IS NOT A COUNT OF SOURCE SYMBOL REFERENCES  `:44853`
+  - AND A CLEAN `ovlverify` STILL PROVES NOTHING ABOUT TABLE IDENTITY  `:44866`
+- A SHARED REGISTER IS NOT EVIDENCE OF A SOURCE LOCAL  `:44876`
+  - A TWIN'S FACT CAN BE WEAKER THAN THE TWIN STATES  `:44892`
+- `reload_cse_regs` REWRITES `li $v0, 0` AS `move $v0, $sN`, AND FORGETS AT EVERY LABEL  `:44907`
+- A FRAME-MATCHING TWIN THAT IS STILL A STUB IS STILL THE RIGHT TWIN  `:44930`
+- THREE MORE MEASURED FACTS, ALL FROM RELINK DELTAS  `:44953`
+- THE PERMUTER'S SCORE IS NOT ALIGNED DIFFERENCES, SO `best < base` IS NOT PROGRESS  `:44970`
+  - THE SAME RESULT A SECOND TIME, AND A FACT ABOUT FREE SPELLINGS  `:45001`
+- A TWO-WAY VALUE PICK NEEDS ONE PSEUDO, AND THE SYNTAX IS NOT THE POINT  `:45024`
+  - AND WHEN `dngtwin` HAS NOTHING, `xsibs` STILL MIGHT  `:45045`
+- A JUMP TABLE'S ENTRY GROUPING IS A FOURTH TWIN SELECTOR  `:45056`
+- A NOT-APPLICABLE CAN BE PREDICTED FROM THE MECHANISM, NOT JUST MEASURED  `:45079`
+  - AND A FACT CAN BE ASYMMETRIC: TRUE IN ONE DIRECTION, FREE IN THE OTHER  `:45100`
+- cse DOES NOT UNIFY LOADS ACROSS A `div`, SO A REPEATED EXPRESSION CAN BE REAL  `:45109`
+- A DEVICE AND A STATEMENT-ORDER FAULT CAN STACK, AND THE DEVICE GOES FIRST  `:45131`
+- AN OUT-PARAMETER'S DECLARED SIZE IS AN ARGUMENT FACT, NOT AN ALLOCATION FACT  `:45150`
+  - AND A POSITION FACT CAN BE SET BY WHAT READS BEFORE IT  `:45164`
+- A FRAME DELTA WITH AN IDENTICAL SAVE LIST AND ORDER IS THE ARGUMENT AREA  `:45178`
+- FOUR MORE, EACH ONE A SINGLE ROW THAT LOOKS STRUCTURAL  `:45202`
+- NEITHER `ovlverify` NOR `aligndiff` CAN SEE WHICH ROUTINE A `jal` NAMES  `:45234`
+- READ WHICH ROWS *AGREE*, NOT ONLY WHICH DIFFER  `:45250`
+- cse DOES NOT UNIFY TWO IDENTICAL EXPRESSIONS ACROSS ARMS OF A BRANCH  `:45280`
+  - AND A TWIN'S FACT CAN BE "NOT WRONG, JUST UNNECESSARY"  `:45321`
+- A `.rodata, UNIT` SUBSEGMENT TAKES ITS SIZE FROM THE COMPILER, NOT THE YAML  `:45331`
+  - AND A SWALLOWED DATA WORD HAS A SIGNATURE YOU CAN GREP FOR  `:45363`
+- A ONE-WORD DELTA FROM A TWIN IS USUALLY A COMPARE CONSTANT, NOT A MISSING STATEMENT  `:45378`
+- AN ODD *CASE* COUNT PADS, SO A PADDED TABLE'S `.word` COUNT IS ALWAYS EVEN  `:45413`
+- `ovlverify`'s ROM FALLBACK WAS READING ANOTHER OBJECT'S BYTES ON CARVED UNITS  `:45482`
+- RE-CORRECTION: `fold_truthop`'s PRECONDITION IS ONE **OPERAND**, NOT ONE LOCAL  `:45525`
+- CORRECTION: `fold_truthop` ONLY BITES ON TESTS OF ONE LOCAL  `:45549`
+- A STORE OF THE SWITCH VALUE CAN BE A PLAIN CONSTANT  `:45575`
+  - AND THE CLEANEST CONFIRMATION YET THAT REFERENCE-COUNT FACTS FOLLOW NEITHER  `:45594`
+- `MEM_IN_STRUCT_P` DECIDES WHETHER A FIXED SCALAR CAN BE HOISTED PAST A STORE  `:45610`
+  - AND A POWER-OF-TWO MULTIPLY IS *NOT* LIKE THE `* 640` CASE  `:45634`
+  - AND "ANYTHING ELSE: WRITE THE CONSTANT" IS WRONG -- MEASURED BACKWARDS ON 0xC0000  `:45643`
+- ANCHOR A REVERT INSIDE THE FUNCTION'S OWN BODY -- SIBLING DECLARATION LISTS ARE IDENTICAL  `:45667`
+- IF AN EDIT TO PRICE A FACT RETURNS THE LANDED FIGURE, CHECK IT APPLIED  `:45698`
+  - AND A K&R IMPLICIT DECLARATION CAN HIDE INSIDE A CLEAN LANDING  `:45718`
+- CORRECTION: THE SUB-WORD PARAMETER LEVER NEEDS TWO COPIES TO BITE  `:45729`
+  - AND `func_800AAF00`'s FOURTH ARGUMENT IS A TABLE POINTER, NOT AN INT  `:45749`
+  - THE SUB-WORD PARAMETER CORRECTION, CONFIRMED INDEPENDENTLY  `:45762`
+  - AND THE ONE-WORD-DELTA RULE, CONFIRMED THE SAME WAY  `:45774`
+  - A LEVER FROM LAST BATCH WAS USED AS INTENDED  `:45784`
+- IN A MAGIC-NUMBER DIVISION, READ THE SHIFT AND NOT THE MAGIC  `:45795`
+  - AND A SMALL-POWER-OF-TWO DIVIDE OF A SIGNED VALUE IS NOT A SHIFT  `:45813`
+- A TWIN'S ARG-LESS-CALL DEVICE CAN BE FREE, AND POSITION IS THE DISCRIMINATOR  `:45822`
+  - A TABLE SWITCH DOES NOT CARE ABOUT ARM ORDER; A COMPARE CHAIN DOES  `:45843`
+- A FIRST-COMPILE LANDING'S COMMENT CONTAINS ASSERTIONS, NOT MEASUREMENTS  `:45856`
+- AND A BUILD-FREE RELOCATION AUDIT NOW EXISTS: `tools/decomp/relcand.py`  `:45881`
+- CARRY A TWIN'S MECHANISM, NOT ITS SPELLING -- THE `reload_cse_regs` CASE  `:45914`
+  - A DEVICE CAN BE COVERING FOR A STATEMENT *SHAPE*, NOT A MISSING STATEMENT  `:45950`
+  - AND A MIRRORED REGISTER MAP MEANS RE-PRICE, NOT ASSUME  `:45964`
+- A UNIFORM p/c SWAP ON AN ACTOR HANDLER: LOOK FOR A REPEATED DEFAULT ARM  `:45976`
+  - THE TWO SPELLINGS THAT WIN THE RANK AND STILL DO NOT LAND  `:45995`
+- A SWITCH'S ARM BODIES EMIT IN SOURCE ORDER WHILE ITS DECISION TREE IS BALANCED  `:46013`
+- THE LISTING'S `srl 8` / `andi 0xE` IS A FOLD, NOT THE SOURCE  `:46029`
+- A FACT CAN BE A CONJUNCTION, AND ONE-AT-A-TIME PRICING WILL MISS IT  `:46050`
+- WHETHER TWO MASK CLEARS FOLD DEPENDS ON WHETHER THE RESULT IS AN `andi` IMMEDIATE  `:46078`
+- A BYTE STORE THROUGH A `u8 *` WIPES cse's MEMORY TABLE, SO A RELOAD IS REAL  `:46101`
+  - AND `dngtwin` CAN BE USELESS WHILE THE ANSWER IS 150 LINES AWAY  `:46147`
+- TWO `|=` OR `&=` ON ONE FIELD: TWO MECHANISMS MERGE THEM, AND THE TEST IS DIFFERENT  `:46156`
+- A NARROWED ADD PUTS A NEGATIVE CONSTANT IN A CALLEE-SAVED REGISTER  `:46191`
+- A TABLE OWNER'S ARM ORDER IS INVISIBLE TO BOTH TOOLS, AND I COULD NOT AUTOMATE THE CHECK  `:46213`
+  - THE AUTOMATED CHECK I TRIED AND WITHDREW  `:46233`
+- `MEM_IN_STRUCT_P`, BOTH POLARITIES, WITH THE cse.c MECHANISM  `:46282`
+- IF NEITHER SPELLING OF A TWIN'S FACT GIVES 0, SUSPECT A SECOND FAULT  `:46314`
+- A CONJUNCTIVE FACT, MEASURED FROM BOTH SIDES  `:46336`
+  - AND ANOTHER COUNTER-EXAMPLE TO THE ONE-WORD HINT  `:46366`
+- THE SPLIT-DECREMENT FAMILY FACT INVERTS WHEN A CALL SITS IN THE MIDDLE  `:46378`
+  - AND A SIZE RATIO HID THE RIGHT TWIN BY A FACTOR OF TWO  `:46403`
+- THE WORD DELTA PREDICTS WHERE THE WORK IS BETTER THAN THE RATIO  `:46415`
+- A DONOR'S *FREE* VERDICT CAN INVERT TOO -- FREE IS BODY-SPECIFIC, NOT SAFE  `:46444`
+- A FACT'S PRICE DEPENDS ON WHETHER THE BODY ALREADY CONTAINS SOMETHING DOING THE SAME JOB  `:46483`
+- AN EXTRA ARGUMENT AT A CALL SITE CAN BE WHAT KEEPS A PARAMETER COPY ALIVE  `:46521`
+- THE CALLEE-SET INTERSECTION IS THE RECIPE THAT ACTUALLY LANDS THE NAKED BODIES  `:46593`
+- A MISSING ENTRY `addu $aN, $a0, $zero` CAN BE A SCHEDULING FAULT, NOT AN ALLOCATION ONE  `:46628`
+- WHEN A K&R EMPTY-PAREN PROTOTYPE CAN BE WIDENED, AND WHEN IT MUST NOT BE  `:46646`
+- A ROW'S MAGNITUDE CAN DIFFER BETWEEN RELINKS BECAUSE A CROSS-JOIN SURVIVES OR DOES NOT  `:46674`
+- AND IT CUTS THE OTHER WAY: A DUPLICATION A TWIN PRESENTS AS DELIBERATE CAN BE FREE  `:46711`
+- BUT A PRODUCT IS NOT THE DEFAULT -- THREE CROSSES IN A ROW FOUND NO CONJUNCTION  `:46730`
+- A ONE-AT-A-TIME FACT TABLE CANNOT SEE A CONJUNCTION -- CROSS THE TWO THAT LANDED TOGETHER  `:46759`
+- THE SAVE COUNT PRICES A HOIST *BEFORE* YOU COMPILE -- AND SETTLES TWO BODIES IN ONE FILE  `:46819`
+- SWEEP A STATEMENT'S POSITION ACROSS EVERY SLOT AND READ THE CURVE  `:46863`
+- A LISTING'S STORE ORDER IS NOT THE SOURCE'S STORE ORDER -- sched1 TRANSPOSES  `:46899`
+- `MEM_IN_STRUCT_P` CUTS BOTH WAYS -- THE ARRAY REF *DROPS* A DEPENDENCE  `:46928`
+- gcc MERGES TWO ADJACENT `|=` ON ONE LVALUE, SO A STATEMENT BETWEEN THEM IS LOAD-BEARING  `:46951`
+- A PARK'S LOAD-BEARING DEVICE CAN BE AN ARTEFACT OF THE WRONG SHAPE  `:46987`
+- THE CALL-ARITY FACT IS CONFIRMED ON A SECOND BODY, SAME FIGURE  `:47019`
+- A `volatile` STORE IS A DEVICE THAT TRANSFERS -- TWO BODIES, TWO UNITS  `:47043`
+- A NARROW ZERO LOCAL *RETURNED* SURVIVES WHERE A WIDE ONE IS FOLDED AWAY  `:47075`
+- A PERMUTER SCORE IMPROVEMENT CAN BE A SEMANTICALLY INVALID TRANSFORMATION  `:47145`
+- SCAFFOLD A PERMUTER RUN FROM THE RIGHT WORD COUNT, NOT THE FEWEST ROWS  `:47223`
+- A COMMENT IS ATTRIBUTED TO THE *PRECEDING* FUNCTION, WHICH INFLATED EVERY ROW  `:47256`
+- TWO MIRROR-IMAGE NAME-PATTERN BUGS IN ONE HOUR, EACH HIDING HALF THE CORPUS  `:47294`
+- `base=?` ON A CARVED PARK WAS A PRE-CARVE NAME PATTERN, NOT A MISSING DECLARATION  `:47336`
+- A LITERAL SPACE IN A REGEX SKIPPED EVERY WRAPPED HEADLINE AND READ A FOREIGN FIGURE  `:47393`
+- A PARK'S LEAD SET AGES, AND EXCLUDING PARKS FOREVER WAS MY MISTAKE  `:47442`
+- REPLICATED CODE FLOODS A LEAD LIST, AND THE BURIED ROW IS THE USEFUL ONE  `:47492`
+- A 0.6x TWIN IS USUALLY A *PARTIAL* MATCH AT FULL FIDELITY, NOT A UNIFORM APPROXIMATION  `:47577`
+- THE DUPLICATED-ARM LOCAL IS HELD ON TWO BODIES -- AND ITS FRAME TEST IS STILL OPEN  `:47619`
+- A WORD DELTA IS A *SIGNED SUM* OF NAMED BLOCKS, AND THE NET FIGURE HIDES BOTH  `:47680`
+- `relcand` CAUGHT ITS FIRST REAL CASE, ON A CLONE PAIR  `:47714`
+  - AND A TWIN'S FACT CAN BE TWO FACTS WHOSE CONJUNCTION IS THE LEVER  `:47731`
+- TWO EXTRA PSEUDOS CAN PUSH `loop.c` PAST ITS INVARIANT-HOISTING THRESHOLD  `:47745`
+  - AND THE TABLE-ORDER BLIND SPOT, REPRODUCED INDEPENDENTLY  `:47782`
+- ONE SENTENCE IN ONE FILE IS A SELECTION FACT ON ONE BODY AND A DEVICE ON ANOTHER  `:47796`
+- A RESIDUE THAT EQUALS A NUMBER IN THE TWIN'S REJECTED COLUMN  `:47826`
+  - AND THE FIRST-COMPILE-COMMENT TRAP, CONFIRMED A THIRD TIME  `:47842`
+- A LOOSE ANCHOR IN A PRICING EDIT CAN HIT OTHER LANDED BODIES  `:47850`
+- CORRECTION TO THE ROOT DISPATCHER'S OWN "ONE LOCAL PER DRESS SITE" FACT  `:47863`
+- cse1 WILL DELETE A FLAG GATE BY WALKING THROUGH A ONE-USE LABEL  `:47886`
+  - AND A PRECEDENCE TRAP IN A MEASUREMENT  `:47915`
+- THE DRESS-SITE RULE MEASURES BOTH SIGNS INSIDE ONE UNIT  `:47922`
+- SELECTION FACTS SURVIVE A DELIBERATE FRAME MISMATCH -- SEVEN FOR SEVEN  `:47936`
+- A STATEMENT-ORDER FACT INVERTS WHEN A NEW CALL LANDS IN THE MIDDLE  `:47958`
+- THE ANCHOR-UNIQUENESS RULE PAID OFF ON ITS FIRST BATCH  `:47978`
+  - AND ovlverify's WORD COUNT ON A TABLE OWNER, QUANTIFIED  `:47990`
+- relcand IS CALL-SET, NOT CALL-SEQUENCE -- SO IT IS NOT AN ARM-ORDER BACKSTOP  `:48002`
+  - AND THE CAVEAT IS EXACTLY HALF TRUE, NOW WITH NUMBERS  `:48018`
+- A FOURTH OUTCOME FOR THE DRESS-SITE RULE: HALF VACUOUS  `:48033`
+- THE WRONG SPELLING COMPILING SHORT IS A POSITION DIAGNOSTIC  `:48049`
+  - A "FACT" THAT WAS NEVER MEASURABLE  `:48070`
+- A SELECTION FACT HAS NOW INVERTED -- THE TAXONOMY'S STRONGEST CLAIM IS FALSE  `:48082`
+- A COMMITTED COMMENT CARRIED A FREE FACT THAT IS WRONG IN THE CONTAINER  `:48104`
+- WHEN TWO SPELLINGS LEAVE THE *SAME* RESIDUE, THE RESIDUE IS NOT A DISCRIMINATOR  `:48127`
+- A DISPATCHER ERROR: A BRIEF CITED AN ADDRESS INSIDE A STUBBED FUNCTION  `:48146`
+- BOTH RELOCATION AUDITS WERE SKIPPING EVERY s-UNIT'S BANK-LOCAL DATA  `:48162`
+- A TWIN'S FACT CAN BE FREE *AND* ITS STATED REASON WRONG  `:48197`
+  - AND THE SPLIT-DECREMENT FACT IS AN *ORDER*, NOT A SPLIT  `:48214`
+- A CLONE PAIR CAN DIFFER BY A PER-COPY IMMEDIATE, INVISIBLE TO relcand  `:48229`
+  - AND THE grep BEAT BOTH SHAPE MATCHERS FOR A THIRD CONSECUTIVE s-UNIT  `:48250`
+- convert.c DISTRIBUTES A NARROWING TRUNCATION INTO A SUM, AND THE CONSTANT'S SIDE DECIDES  `:48262`
+- A GENERATED LISTING WENT MISSING AND THE BUILD PASSED ANYWAY  `:48295`
+  - AND THE LEADS FILE NAMED A TWIN THAT WAS A BLEND  `:48318`
+- THE PAD-WORD RULE IS ON THE CASE COUNT, AND ONLY THE DISPATCH BOUND IS AUTHORITATIVE  `:48332`
+- A CONSTANT MULTIPLY IS NOT A SHIFT IN A NARROWING CONTEXT  `:48366`
+- A WORD DEFICIT CAN BE A MISSING *EMPTY* CASE  `:48392`
+  - AND THE DRESS-SITE FACT NOW SPLITS WITHIN A SINGLE BODY  `:48408`
+  - A NUMBER IN A TWIN'S COMMENT NEEDS ITS TOOL NAMED  `:48422`
+- I SENT AN AGENT FABRICATED TOOL OUTPUT WHILE CORRECTING ITS NUMBERS  `:48433`
+- A do-WRAPPER REFERENCE BUMP CAN MOVE THE RANKING THE WRONG WAY  `:48467`
+  - THREE SMALL FREE FACTS THAT LOOK LIKE LEVERS AND ARE NOT  `:48488`
+- dngclone RENAMES THE SYMBOLS IN ITS MAP AND LEAVES THE REST OF THE COMMENT  `:48517`
+  - AND A TWO-WORD BODY IS THE RISKIEST POSSIBLE FAMILY MATCH  `:48543`
+- MEM_IN_STRUCT_P, BOTH POLARITIES, 40 WORDS APART IN ONE BODY  `:48553`
+- convert.c, A THIRD TIME: BIT_AND DISTRIBUTION WANTS A 32-BIT MASK  `:48575`
+- AN UNDECLARED FUNCTION READS AS FREE  `:48594`
+  - AND A CONJUNCTION WHOSE do-WRAPPER IS A SCHEDULING BARRIER  `:48612`
+  - A TWIN'S TWO-VARIABLE FACT WAS REALLY A WIDTH FACT  `:48626`
+- THE DRESS-SITE FACT, FINALLY PREDICTABLE: ONE PATH versus DISJOINT ARMS  `:48637`
+- THE POWER-OF-TWO MULTIPLY RULE IS PER SITE, NOT PER BODY  `:48665`
+  - AND A SIGNED DIVIDE BY TWO IS FREE WHEN THE DIVIDEND IS PROVABLY EVEN  `:48702`
+- A NEW ROUTE PAST THE RANKER: GREP A FIELD-OFFSET STORE PATTERN  `:48715`
+  - ZERO DEVICES IN 827 WORDS  `:48736`
+- AN allocno_compare CROSS: SHARED FOR ONE VALUE, SPLIT FOR THE OTHER  `:48749`
+  - A SPELLING THAT *IMPROVES* CAN BE A FALSE LEVER  `:48778`
+- MEM_IN_STRUCT_P: EACH STORE IS ITS OWN FAULT, AND THE TWIN'S SITE WAS THE FREE ONE  `:48793`
+- A PARK FILE CAN CARRY A PROTOTYPE THAT BREAKS THE UNIT LATER  `:48813`
+  - AND parkcheck CAUGHT MY OWN FIX  `:48826`
+- dngtwin WAS 0 FOR 3 ON ONE UNIT WHILE THE CALLEE-SET GREP WAS 3 FOR 3  `:48834`
+- `+ 0xFFE00000` IS A C89 SIGNEDNESS TRAP IN A DIVIDED EXPRESSION  `:48848`
+- A THIRD OPPOSITE-ANSWERS PAIR, AND A RETRACTION THAT SHOWS WHY TO PRICE FIRST  `:48869`
+- TWO BODIES 40 WORDS APART WANTED OPPOSITE ANSWERS, TWICE, IN ONE UNIT  `:48917`
+  - MEM_IN_STRUCT_P HAS A THIRD SPELLING ROUTE: THE ARRAY REF  `:48939`
+  - `if (1)` IS NOT AN ENCLOSING LOOP -- 17 AGAINST 12  `:48952`
+- A PARK THAT DECLINES TO RE-SPEND `-da`  `:48963`
+- A COMPARISON'S OPERAND ORDER IS A LEVER, AND ITS RESIDUE LOOKS LIKE ALLOCATION  `:48979`
+  - AND IT INVERTS A SPELLING ANOTHER UNIT RECORDS  `:49003`
+- UPDATE AN EXISTING PARK RATHER THAN WRITING A SECOND ONE FOR ITS CLONE  `:49011`
+  - TWO PARKS IN ONE RESIDUE CLASS SHOULD BE SPENT TOGETHER OR NOT AT ALL  `:49029`
+- A CLONE PAIR WHOSE WHOLE DIFFERENCE IS ONE RELOCATED COUNTER  `:49042`
+- A MISSING EMPTY CASE CAN COST YOU THE JUMP TABLE ITSELF  `:49056`
+- "NOT MEASURABLE" IS A THIRD VERDICT, DISTINCT FROM "FREE"  `:49075`
+  - AND ELEVEN SPELLINGS WITH A BIT-IDENTICAL RESIDUE ARE NOT ELEVEN FACTS  `:49093`
+- A TWIN'S FACT CAN BE A THIRD SHAPE -- NEITHER HELD NOR INVERTED  `:49101`
+  - THE ANCHOR RULE CAUGHT A UNIQUE ANCHOR IN THE WRONG FUNCTION  `:49120`
+- THE PROLOGUE PICKED THE TWIN THE RANKER BURIED -- A SIXTH MISS VARIANT  `:49134`
+- ONE ALIAS LOCAL WAS WORTH 193 ROWS  `:49156`
+  - AND THE `w`/`t` CROSS REPRODUCED TO THE DIGIT ACROSS UNITS  `:49172`
+- `(x & 0x7FFF) & 8` FOLDS BACK TO `x & 8`, SO THE MASK MUST GO ABOVE THE GATE  `:49184`
+  - MEM_IN_STRUCT_P, OPPOSITE ANSWERS IN ONE AGENT'S OWN PAIR  `:49202`
+  - "NOT COMPARABLE" USED CORRECTLY, UNPROMPTED  `:49214`
+  - A NEGATIVE HALFWORD CONSTANT HAS TWO OPCODES  `:49226`
+- AN `addu`'s OPERAND ORDER: POINTER SUM versus INTEGER SUM  `:49232`
+- A CONSTANT IN A HOISTED ADDRESS IS UNREACHABLE BY ANY CAST  `:49252`
+- A `for` LOOP'S INITIALISER IS A SCHEDULING LEVER WORTH A WORD  `:49273`
+  - convert.c's MULT/LSHIFT ASYMMETRY NEEDS NO SUM -- JUST THE NARROWING STORE  `:49294`
+  - A THIRD SHAPE WITH A MECHANISM, NOT JUST A PRICE  `:49308`
+  - AND TWO BODIES IN ONE FILE DISAGREE ON THE SAME IDIOM  `:49320`
+  - THE ANCHOR RULE TRIPPED TWICE MORE  `:49327`
+- "DISTINCT TABLE ENTRIES" IS NOT AN ARM-ORDER TEST -- MY PROXY WAS WRONG  `:49338`
+  - AND A SECOND COMMITTED COMMENT CLAIMED A TABLE ARM ORDER WAS "FREE"  `:49360`
+- MEM_IN_STRUCT_P, THE OTHER WAY: PLAIN CASTS OVER A STRUCT POINTER  `:49373`
+  - A DEAD LOCAL WHOSE STORES THE TARGET KEEPS  `:49392`
+  - FOUR PRICED FACTS CARRIED ACROSS A FRAME MISMATCH -- A COUNTEREXAMPLE  `:49404`
+  - A HARNESS THAT DID NOT RESTORE BETWEEN VARIANTS  `:49417`
+- AN UNDECLARED CALLEE IS INVISIBLE TO EVERY CHECK IN THIS TREE  `:49429`
+- COLLAPSING FOUR LOCALS INTO TWO WAS WORTH 102 ROWS, AND THE PROLOGUE SAID SO  `:49468`
+  - MEM_IN_STRUCT_P AS A PURE SCHEDULING EFFECT, NO DELAY SLOT  `:49490`
+  - ONE BODY WANTED OPPOSITE ANSWERS FOR TWO DIFFERENT GLOBALS  `:49504`
+  - `& 0xFFFFFFE0` HAS A SECOND, DIFFERENT DIAGNOSTIC  `:49514`
+  - AND dngclone DRAGS A TYPEDEF'S NAME, NOT JUST A CALLER'S  `:49525`
+- jump2 DOES NOT CROSS-JOIN EVERY IDENTICAL BLOCK -- FOUR BYTE-IDENTICAL FAILS STAYED FOUR  `:49536`
+- A SPARSE SWITCH BECOMES A COMPARISON TREE, AND ITS TEST ORDER IS THE SOURCE'S CASE ORDER  `:49558`
+- A TABLE NEEDS FIVE CASE NODES IN THIS COMPILER, NOT FOUR -- HAVE_casesi IS 0  `:49583`
+- `(x & 0x80000000) == 0` AND `x >= 0` EMIT THE SAME `bltz` AND ARE NOT INTERCHANGEABLE  `:49613`
+- A SHARED JUMP-TABLE TARGET HAS FOUR SHAPES, AND THE RULE BELOW ONLY COVERED TWO  `:49654`
+- A SHARED JUMP-TABLE TARGET IS USUALLY THE DEFAULT LABEL -- NOW FIVE TABLES, 40 PHANTOM ARMS AVOIDED  `:49727`
+- A SHARED JUMP-TABLE TARGET IS USUALLY THE DEFAULT LABEL  `:49769`
+- `reg_n_sets` IS A BIGGER LEVER THAN ALLOCATION PRIORITY, AND LOOKS LIKE ONE  `:49797`
+  - A MISSING FALL-THROUGH COMES OUT SHORT, NOT LONG  `:49817`
+- A FAILED ASSERTION LEAVES THE LAST EXPERIMENT SPLICED IN  `:49828`
+  - AND AN ARGUMENT COUNT NO TOOL CAN SEE  `:49845`
+- A loop.c GIV LOOKS LIKE A SOURCE COUNTER, AND THE PROLOGUE TELLS THEM APART  `:49857`
+- relcand IS BLIND TO A PERMUTATION AMONG SYMBOLS ALREADY IN THE SET  `:49873`
+- FOURTEEN FOR FOURTEEN ON AN IDENTICAL FRAME, AND THE ONE INVERSION IS A CONSTANT  `:49897`
+  - A DIVISOR'S PRICE DEPENDS ON WHETHER IT SHARES ITS MAGIC CONSTANT  `:49923`
+- declcheck COULD NOT CHECK AN AGENT'S OWN FILE  `:49934`
+  - AND I NAMED THE WRONG TABLE OWNER IN A BRIEF  `:49951`
+- THE SWEEP'S 0.70 FLOOR WAS HIDING 129 STUBS WITH LANDED TWINS  `:49963`
+  - AND I MADE TWO WRONG INFERENCES ABOUT THIS TOOL BEFORE READING IT  `:50003`
+- THE THIRD TABLE BLINDNESS: CASE-LABEL GROUPING  `:50020`
+  - AND THE DEFAULT-LABEL GREP WORKS IN THE NEGATIVE DIRECTION TOO  `:50040`
+- A FOUR-SITE DRESS FACT: "NOT SHARING" IS THE LEVER, NOT "NAMING THE SYMBOL"  `:50051`
+  - SIX ORDERINGS OF THREE STORES, AND THE TARGET EMITS A SEVENTH  `:50071`
+  - AND A STORE THROUGH THE ALIAS THAT READS THROUGH THE PARAMETER  `:50087`
+- declcheck's `--src` EARNED ITSELF ON FIRST USE  `:50094`
+- A NINTH WAY: A STALE BUILD, AND `aligndiff` DISAGREEING WITH `ovlverify` IS THE TELL  `:50109`
+- `fold` REASSOCIATES TWO INDEPENDENT SUBTRAHENDS, SO THE LISTING'S `subu` ORDER IS NOT THE SOURCE'S  `:50137`
+- A SEVENTH WAY: A DECLARATION-ONLY EDIT, WHICH AN ANCHOR ASSERTION CANNOT CATCH  `:50162`
+- A BARE `addu $vY, $vX, $zero` AFTER A MATERIALISED CONSTANT MEANS THE SOURCE READ IT BACK  `:50193`
+- WHEN THE CALLEES ARE ALL LIBRARY-COMMON, GREP THE FIELD OFFSETS IN THEIR STORE ORDER  `:50224`
+- TWO CODE PATHS ANSWERING ONE QUESTION WITH DIFFERENT ARITHMETIC  `:50262`
+- A LEAD TOOL SHOULD ENUMERATE, NOT RANK, WHEN NO AVAILABLE SCALAR MEASURES THE ANSWER  `:50297`
+- WHEN A DRIVER LANDS OFF A TWIN, READ THE TWIN'S *CALLER* FOR THE SPAWNER  `:50338`
+- STOP TRUSTING "`* 0x400` AND `<< 10` ARE THE SAME TREE" -- IT HAS NOW BEEN NARROWED FOUR TIMES  `:50366`
+- A `div` BY A SMALL POWER OF TWO IN THE LISTING MEANS THE SOURCE DIVIDED BY *MEMORY*  `:50400`
+- `& 0xFFC0` IS NOT THE REDUNDANT MASK IT LOOKS LIKE -- `& 0xFFFFFFC0` IS  `:50439`
+- `fold` REASSOCIATES `A -= B + C`, SO THE SUM NEEDS ITS OWN LOCAL  `:50454`
+- A COMPARE-CHAIN SWITCH'S ARM ORDER SCALES BADLY WITH ARM COUNT  `:50465`
+- A FIFTH WAY A MEASUREMENT LIES: THE TOOL MEASURED A DIFFERENT FUNCTION  `:50483`
+- "FREE" versus "NOT MEASURABLE" -- THE TEST IS A STANDALONE COMPILE  `:50503`
+- MY PER-ARM TEST WAS TOO CONSERVATIVE -- WALK THE WHOLE BLOCK  `:50531`
+  - TWELVE FOR TWELVE ON DIRECTION, NINE TO THE DIGIT, AND TWO MAGNITUDES THAT MOVED  `:50552`
+- AN UNUSED TYPEDEF IN A UNIT'S OWN BLOCK CAN NAME ITS TWIN  `:50566`
+- A LOOP WITH ONE INDUCTION VARIABLE WHERE THE TARGET HAS TWO  `:50589`
+  - TWO MORE "THE BODY CAME OUT SHORT" DIAGNOSTICS  `:50608`
+- A STORE PAIR CAN BE REORDERABLE WHILE A LOAD BETWEEN THEM IS NOT  `:50621`
+  - AND DECLARATION ORDER OF TWO LOCALS DECIDES THE SAVE ORDER  `:50634`
+  - THE SAME FACT AT THE SAME PRICE ON TWO BODIES  `:50644`
+- A CROSS-JOINED ARM NEEDS ITS OWN LOCAL -- local-alloc.c:1759, NOT allocno_compare  `:50656`
+- (ORIGINAL ENTRY) A DUPLICATED ARM NEEDS ITS OWN LOCAL  `:50788`
+- AN IMPROVEMENT IS NOT EVIDENCE -- A SPELLING'S PRICE IS ONLY VALID AT 0  `:50815`
+- A COUNTER LOOP IS ROTATED IFF ITS TEST SITS IN THE CONDITION POSITION  `:50840`
+- A BLOCK EMITTED BETWEEN TWO SWITCH ARMS IS A `goto` TARGET  `:50873`
+- A TWIN'S FACT THAT THREE RELINKS ALL MEASURE FREE IS A FACT ABOUT THE TWIN  `:50891`
+- A NARROW SIGNED CALL RESULT IS A SHAPE FACT -- AND IT RUNS IN *BOTH* DIRECTIONS  `:50915`
+- (ORIGINAL ENTRY) A NARROW SIGNED RETURN VALUE IS A SHAPE FACT, NOT AN ALLOCATION ONE  `:50949`
+  - AND THE cse FOLLOW-JUMPS ENTRY PREDICTED A BODY BEFORE IT WAS COMPILED  `:50963`
+  - AND A do-WRAPPER THAT GENUINELY IMPROVED WHILE THE CAUSE SAT UNTOUCHED  `:50977`
+- A 4-BYTE STRUCT OF TWO SHORTS CANNOT LIVE IN A REGISTER ON THIS TARGET, AND IT MOVES THE WHOLE FRAME  `:50990`
+- A STORE TO A NEIGHBOURING FIELD IS WHAT STOPS cse CARRYING A FLAG WORD PAST A GATE  `:51013`
+- A COMPARISON'S OPERAND ORDER IS WORTH 67 ROWS, AND IT ALSO DECIDES WHAT CROSSES A CALL  `:51036`
+- AN IN-PLACE COUNTER UPDATE AGAINST A LOCAL IS 99 ROWS, AND THE RELOADS ARE NOT A CHOICE  `:51052`
+- DO NOT GENERALISE A STORE ORDER FROM ONE SITE -- ONE BODY HAD IT BOTH WAYS  `:51064`
+- WHICH OF A DONOR'S FACTS TRANSFER ON A RELINK -- the taxonomy held, with figures  `:51078`
+- THE SUBSCRIPT ESCAPE FOR `MEM_IN_STRUCT_P` IS UNAVAILABLE AT A ZERO NET DISPLACEMENT  `:51095`
+- THE INDEX-FIRST `addu` LEVER ONLY BITES WHEN THE BASE IS A POINTER *LOADED FROM MEMORY*  `:51125`
+- THE "STATE READ MUST BE AN ARRAY REF" FACT NEEDS NOTHING ELSE TO FILL THE LOAD'S SLOT  `:51149`
+- A SIGNED `/ 2` IS NOT `>> 1`, AND IT IS 3 WORDS A SITE  `:51176`
+- SHARE A REPEATED SUB-WORD READ BY READING THE JUST-STORED FIELD BACK -- NOT BY A LOCAL, NOT BY WRITING IT TWICE  `:51192`
+- A BYTE-STORE TEMP MUST BE UNSIGNED, AND THE IMMEDIATE IS THE TELL  `:51210`
+- AN IN-UNIT DONOR CAN WANT THE OPPOSITE TYPE -- TWO BODIES 40 WORDS APART DID  `:51224`
+- AND A DECLARATION ORDER THAT DOES NOT TRANSFER WITHIN ONE UNIT  `:51236`
+- READ WHICH ROWS *AGREE* -- IT NAMES THE FAULT FASTER THAN THE ROWS THAT DIFFER  `:51247`
+- `fold`'s TWO ASSOCIATE BRANCHES ARE EACH OTHER'S INVERSES, SO THE EMITTED `addu` OPERAND ORDER IS THE *NEGATION* OF THE SOURCE'S  `:51265`
+- A NEGATIVE DISPLACEMENT NAMES A SOURCE POINTER LOCAL ONLY IF ITS STRIDE DIFFERS FROM THE LOOP'S STEP  `:51285`
+- `&sp->field` ON A CONSTANT-POINTER LOCAL FOLDS TO A `CONST_INT`; `addiu $rX, $base, K` IS ORDINARY POINTER ARITHMETIC  `:51302`
+- THE DUPLICATED-ARM LOCAL RULE SCALES WITH THE COPY COUNT  `:51318`
+- A VALUE THAT MUST LIVE IN `$v0` WANTS THE STORE WRITTEN IN EVERY LEAF -- NOT A C VARIABLE  `:51334`
+- THE CURE FOR A `birthing_insn_p` PRIORITY FAULT IS THE BLOCK'S INSN COUNT, NOT THE DESTINATION'S SET COUNT  `:51358`
+- `ptr + i * 4` AND `ptr + (i << 2)` ARE NOT THE SAME `addu`  `:51377`
+- AN `lhu` FOLLOWED BY `sll 16` / `sra 16` MEANS AN `s16` LOCAL, NEVER A CAST  `:51390`
+- A MISSING `return` PRESENTS AS A MISSING `j`, WITH THE WORD COUNT AGREEING  `:51399`
+- A FRAME-LOCAL TABLE BASE NEEDS A POINTER LOCAL TO GET ITS OWN REGISTER  `:51412`
+- ARM ORDER IS DIRECTLY MEASURABLE: COMPILE STANDALONE AND READ THE EMITTED TABLE'S ENTRY-ADDRESS ORDER  `:51419`
+- A SUB-WORD LOOP BOUND INVERTS THE COUNT-DOWN LEVER  `:51453`
+- convert.c's NARROWING TAKES THE CONSTANT'S SIGN, AND THE HEX FORM IS THE TRAP HERE  `:51478`
+- AN `if`/`else` BETWEEN TWO READS OF A GLOBAL BLOCKS cse THE WAY A STORE DOES  `:51505`
+- `rank_for_schedule`'s LUID TIE-BREAK: SPLIT A LOAD OUT TO MOVE A STORE LATER  `:51526`
+- A PAYLOAD POINTER LOCAL INVERTS BETWEEN ONE SITE AND TWO  `:51549`
+- THE COUNT-DOWN LEVER'S PRECONDITIONS, NOW COMPLETE AFTER THREE BODIES IN ONE DAY  `:51560`
+- A MASK SURVIVES IN SImode ONLY WHILE IT STAYS SIGNED -- THE HEX FORM IS THE TRAP  `:51591`
+- AN `if`/`else` BETWEEN TWO READS OF A GLOBAL BLOCKS cse EXACTLY AS A STORE DOES  `:51608`
+- `rank_for_schedule`'s LUID TIE-BREAK: SPLIT A LOAD OUT TO MOVE A STORE LATER  `:51625`
+- `ovlverify` IS BLIND TO A JUMP TABLE'S ARM ORDER -- SO THE STANDALONE COMPILE IS NECESSARY, NOT A CONVENIENCE  `:51642`
+- `MEM_IN_STRUCT_P` FREES A VARYING *READ* FROM A FIXED-ADDRESS *WRITE*, AND THAT IS A DIFFERENT LEVER FROM THE ALLOCATION ONE  `:51667`
+- loop.c's HOIST THRESHOLD IS ~30 REAL INSNS -- AND A LOOP AT THE BOUNDARY HOISTS AN OUT-PARAMETER'S ADDRESS INTO A TENTH CALLEE-SAVED REGISTER  `:51703`
+- A SHARED POINTER LOCAL LETS jump2 CROSS-JOIN TWO ARMS' TAILS, AND THE BODY COMES OUT *SHORT* -- THREE WITNESSES IN ONE UNIT  `:51739`
+- `MEM_IN_STRUCT_P`: THE COMPLETE RULE, FROM TWO BODIES MEASURED HOURS APART  `:51775`
+- A SHARED DRESS-TABLE LOCAL ACROSS TWO DISJOINT ARMS COSTS THE `%hi' TEMP'S REGISTER -- 4 rows, and inline and per-arm are BOTH 0  `:51809`
+- A CALL RESULT'S STORE READS WHICHEVER REGISTER ITS PSEUDO GOT -- NO C SPELLING CHOOSES IT, and 26 of them prove it  `:51839`
+- A CALLEE'S `->unk_08` MUST BE RELOADED PER STORE -- a hoisting local is TWO WORDS SHORT  `:51895`
+- REUSING A POINTER LOCAL THAT IS ALREADY SET ELSEWHERE CHANGES THE SAVE ORDER -- 54 rows starting in the PROLOGUE  `:51913`
+- RETRACTED: "THE FOURTH WAY A BODY CANNOT BE REACHED FROM C" WAS WRONG -- AND THE REAL LEVER IS A DEAD INITIALISER  `:51925`
+  - The lever  `:51948`
+  - The general form, which is worth more than the one body  `:51965`
+- A DEAD INITIALISER MAKES cse KEEP A REG-REG COPY -- `regno_first_uid < cse_basic_block_start`, and it CLOSES the two sections above  `:51989`
+- THE PERMUTER CANNOT CRACK A REGISTER RESIDUE, AND WE NOW HAVE THE MECHANISM FOR WHY  `:52070`
 
 <!-- END INDEX -->
 
@@ -51920,58 +51922,69 @@ So the `reg_n_sets` lever is visible before any of the body's own code: **a
 second set on a long-lived pointer can reorder the saved-register list itself.**
 A residue that starts at word 7 is never about the statement you just edited.
 
-## THE FOURTH WAY A BODY CANNOT BE REACHED FROM C -- AND THE FIRST THAT IS A LIVE RANGE
+## RETRACTED: "THE FOURTH WAY A BODY CANNOT BE REACHED FROM C" WAS WRONG -- AND THE REAL LEVER IS A DEAD INITIALISER
 
-Three members of this family are about the gate or the listing: a jump table in
+**I wrote that a one-row residue which is a call result's store register cannot
+be reached from C, with a compiler-source argument and 26 flat spellings behind
+it. It is reachable, the body landed at 455/455 and 0 rows, and the argument was
+half-read.** The retraction and the lever are the same fact, so they are here
+together.
+
+**What was right:** `calls.c:2141` does always `copy_to_reg` a non-BLKmode call
+result, the target does need two pseudos -- one dying at the store, one living
+across the next call -- and 26 spellings really are flat.
+
+**What was wrong:** `cse.c:838`'s `make_regs_eqv` makes a copy's destination the
+new `qty_first_reg` when
+
+    uid_cuid[regno_last_uid[new]]  > cse_basic_block_end
+      ||  uid_cuid[regno_first_uid[new]] < cse_basic_block_start
+
+AND-ed with `last_uid[new] > last_uid[firstr]`. **All 26 spellings attacked the
+FIRST disjunct**, which is unreachable when the statement sits in the function's
+last cse basic block -- which is exactly why the flatness looked like a proof.
+**The SECOND disjunct is free: a pseudo BORN BEFORE THE BLOCK STARTED.**
+
+### The lever
+
+    local declared, then `n2 = NULL;' as the FIRST statement,
+      plus a separate `raw' local, with the STORE BETWEEN
+      `raw = call;' and `n2 = raw;'                         455 w / 0 rows
+    the `raw' local alone, no `n2 = NULL'                    455   / 1
+    `n2 = NULL' alone, no `raw'                              455   / 1
+    neither                                                  455   / 1
+
+`n2` becomes canonical, so uses *after* the copy read `n2`; the store is
+processed *before* the copy and so before the pair is equivalent, and keeps
+`raw`. Two pseudos survive -- `raw` dies at the copy and `combine_regs` ties it
+to `$v0`, `n2` crosses the call and takes `$s0`. **`flow` deletes the dead
+initialiser, so it costs no words.** The store must sit BETWEEN the two
+assignments; `raw = call; n2 = raw; store from raw;` canonicalises back to one
+pseudo.
+
+### The general form, which is worth more than the one body
+
+**`regno_first_uid` is filled in by `reg_scan` BEFORE cse runs, so any earlier
+set of a local -- even one `flow` later deletes as dead -- changes which
+register of a qty cse makes canonical.**
+
+> That is the mirror of the `reg_n_sets` warning elsewhere in this file: a
+> second set on a local **already in the save list** moves the prologue and
+> cost one park 54 rows, while **a dead second set on a local introduced for
+> the purpose costs nothing** and buys you the canonical register.
+
+**And the lesson about the method, not the compiler:** a flat sweep plus a
+plausible mechanism read me straight to "impossible". Twenty-six spellings were
+all probing one disjunct of a two-disjunct condition, and no amount of adding
+more would have found the other. **When a sweep is flat and you have a
+mechanism, read the whole predicate in the source before concluding the axis is
+closed** -- the flatness is evidence about your spellings, not about the
+compiler.
+
+The cannot-be-reached family is back to its original three members, all of which
+are about the gate or the listing rather than the compiler: a jump table in
 `asm/data/`, a 4-byte-aligned table, and splat mislabelling a rodata word as a
-function's first instruction. **This one is about the compiler**, and it is the
-only one where the C is correct, the gate disagrees, and no spelling exists that
-would change it.
-
-**A call result's store reads whichever register its pseudo got, and no C
-spelling chooses it.** Measured on a 455-word body whose ENTIRE residue is one
-row -- `sw $s0, 0xA0($s3)` where the target has `sw $v0, 0xA0($s3)`, with every
-other word including a 12-entry jump table byte-identical. **Twenty-six
-spellings of that one statement all give 455 words and the same single row**:
-cast type, store before/after the test, a second local with the copy either
-side, reusing an existing local, store-then-read-back, the assignment chained,
-the chain inside the `if`, `do { } while (0)` around it, permuted declarations,
-and two conjunctions.
-
-The reason is in the compiler:
-
-* `calls.c:2141` always `copy_to_reg`s a non-BLKmode call result. (`calls.c:2057`
-  would move straight into a MEM target, but `store_expr` only passes the MEM
-  down in its `want_value` arm, and that arm then copies the MEM back -- costing
-  an `lw`.)
-* `cse.c`'s `make_regs_eqv` prefers *fixed* hard registers to anything and
-  pseudos to other hard registers, so `$v0` -- not being `FIXED_REGNO_P` --
-  can never become `qty_first_reg`, and `canon_reg` can therefore never
-  substitute it into the store.
-* Any second local holding the same value is a reg-reg copy inside one cse
-  basic block, and cse blocks end only at a `CODE_LABEL`, so cse collapses it
-  and `combine_regs` ties the remainder.
-
-> **So the target needs a pseudo that dies at the store beside one that lives
-> across the next call -- i.e. a cse-block boundary this control flow does not
-> have.** The register follows the LIVE RANGE, not the spelling.
-
-Confirmed in a 12-line standalone file: the identical statement sequence emits
-`sw $v0` when the node dies before the next call and `sw $s0` when it lives
-across it.
-
-**The diagnostic, so nobody spends a day on the next one:** a one-row residue
-that is a store's SOURCE REGISTER, with the hard-register copy already matching
-and the feeding insns byte-identical, is not a spelling question. Price two or
-three spellings to confirm flatness and then stop.
-
-**And the corroborating tell is that the row MOVES but will not close.** Pinning
-the call result with `register ... __asm__("$2")` does fix that row -- and
-breaks the next insn instead, because cse substitutes the still-live `$2` at the
-following call's argument. Pin placement makes no difference, and killing cse's
-record with an `__asm__ volatile` clobber costs 3 rows by forcing a save.
-**Movable but not removable is the signature of a missing cse-block boundary
-rather than a missing spelling.**
+function's first instruction.
 
 ## A DEAD INITIALISER MAKES cse KEEP A REG-REG COPY -- `regno_first_uid < cse_basic_block_start`, and it CLOSES the two sections above
 
