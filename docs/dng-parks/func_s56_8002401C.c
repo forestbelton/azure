@@ -227,7 +227,96 @@
    cycles in the target and three in the candidate.  **DO NOT re-measure
    MEM_IN_STRUCT_P on this load, and do not re-measure the statement swap.**
 
+   ==== THE h229 RESULT, 2026-11-26.  THE SIXTH-STATEMENT AXIS WAS THE RIGHT
+   ONE, AND (2) ABOVE IS REFUTED: THE LOAD IS NOT PINNED.  Rows 28 to 40 can
+   be made INDEX-EXACT against the target.  Read this before the list below,
+   most of which is now spent.
+
+   WHAT IS REFUTED.  (2) concludes "the parked candidate's load is PINNED
+   below that `sb' by a real edge -- no scheduling choice can move it".  The
+   edge is real, but it exists only because the `sb' to D_800273BE PRECEDES
+   the load IN THE INSN CHAIN, and that is a property of the SOURCE, not of
+   the body.  The target's own listing says so and nobody read it that way:
+
+     row 28  lbu $v1, 0x9($s1)                  the p[0x9] value
+     row 32  lw  $a0, 0x0($s1)                  the 2732C value
+     row 33  lui $a1, %hi(D_800814A8)
+     row 34  sb  $v1, %lo(D_800273BE)($v0)      its store -- SIX slots later
+     row 35  lw  $v1, 0x0($s1)                  the D_800273C0 value
+     row 38  lw  $v1, %lo(D_800814A8)($a1)
+     row 40  sw  $a0, %lo(D_s56_8002732C)($v0)  EIGHT slots after its load
+
+   So in the target BOTH p-relative loads sit far from their stores, and the
+   `sb' sits BETWEEN the 2732C load and the D_800273C0 load.  A load six or
+   eight slots from its store is not the shape a single statement produces --
+   it is the shape of a CARRIER LOCAL, and of a carrier whose pseudo has more
+   than one set, because `adjust_priority' -> `birthing_insn_p' in sched.c
+   gives a `(set (reg) (mem))' LAUNCH_PRIORITY (0x7f000001, sched.c:189) and
+   drags it down to its consumer whenever `reg_n_sets[dest] == 1'.  That is
+   the mechanism closed out on docs/dng-parks/func_s27_8002443C.c the same
+   day, and it is why every single-set spelling of these statements put the
+   load adjacent to its store.
+
+   MEASURED, all at 219 words, aligndiff rows:
+
+   | cell                                                        | rows |
+   |-------------------------------------------------------------|------|
+   | the parked body                                             |   2  |
+   | K1  `D_800273C0' through its own `u32 raw' (a 6th statement) |   2  |
+   | J1  the p+0 value through `q' (2 sets, via case 1)           |  12  |
+   | K2  `D_800273BE = p[0x9]' moved to slot 4                    |   8  |
+   | K3  `D_800273BE = p[0x9]' moved to slot 5 (last)             |   5  |
+   | K4  p[0x9] through `j' (2 sets, but a loop counter)          |  20  |
+   | K5  p[0x9] through a `u8 b' used AGAIN for p[0x8]            |  13  |
+   | K6  K5 + the `D_800273BE = b' store after the two p+0 reads  |  20  |
+   | K7  K6 + the two p+0 statements swapped                      |  17  |
+   | K8  K7 + the 2732C value ALSO through `q'                    |  19  |
+
+   K1 IS THE ANSWER TO THE SIXTH-STATEMENT QUESTION IN THE ABSTRACT: a sixth
+   statement in that block is FREE (2 rows, bit-identical) rather than
+   harmful, so the axis was open, not costly.
+
+   AND K8 IS THE RESULT THAT MATTERS.  Its rows 28, 32, 33, 34, 35, 38 and 40
+   ALL LAND ON THE TARGET'S OWN INDICES and every difference in that span is
+   an `R' -- a register name -- with no `+'/`-' displacement anywhere between
+   28 and 40.  The two-row slot residue this park is about IS GONE.  K8's 19
+   rows are a DIFFERENT residue: register names in that span, plus a
+   displacement that starts at row 41 (an extra `lui' at 41 and the
+   D_800274DC `lui' / D_800814A8 `lw' at 43/44 absent).
+
+   K8, exactly -- case 0's opening, with `u8 b' declared last and `q' reused:
+
+       D_800273BC = 1;
+       b = p[0x9];
+       D_s56_80027328 = 0;
+       q = *(u8 **)p;
+       D_800273BE = b;
+       D_800273C0 = *(u32 *)p;
+       D_s56_8002732C = q;
+       *(u32 *)(D_800814A8 + 0xF4) = 0;
+       *(u8 *)(D_800814A8 + 0x102) = 1;
+       b = p[0x8];
+       *(u8 *)(D_800814A8 + 0xA8) = b;
+
+   Both carriers get a second set and so escape the launch boost: `b' from the
+   p[0x8] store later in case 0, `q' from `q = *(u8 **)p' in case 1.  A
+   single-set carrier does not work -- that is the whole point -- and neither
+   does a two-set carrier that is a loop counter (K4, 20 rows) or a bare
+   statement move (K2/K3).
+
+   THE PARK BODY IS LEFT AS IT WAS, because 2 rows is still the lower score
+   and the contract says keep the best measured.  THAT IS A SCORE, NOT A
+   VERDICT: the levers file's own warning applies here in reverse -- a low
+   row count is not evidence the structure is right, and this park's 2 rows
+   are a structurally unreachable stream while K8's 19 are register names on
+   a structurally exact one.  **Start from K8, not from the park body.**
+
    WHAT TO TRY NEXT, in this order:
+   * FROM K8: the span 28-40 is index-exact, so the remaining question there
+     is purely which pseudo gets which hard register, and the row-41-to-44
+     displacement is a separate and smaller problem than this park ever had.
+     Diagnose the registers with `.lreg'/`.greg', not with more spellings of
+     the statements, and do not re-run any cell in the table above.
    * The load must lose MORE ready-list ties, which means some OTHER chain in
      the block must get LONGER -- not this statement's shorter.  The
      candidates are the three D_800814A8 reads and the

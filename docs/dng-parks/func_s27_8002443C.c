@@ -4,6 +4,11 @@
    (tools/decomp/aligndiff.py), 3 differing by ovlverify. 1 member, 117 words
    (dngfam.py), so no replication value.
 
+   ==== AXIS CLOSED WITH THE MECHANISM, agent-h229, 2026-11-26.  THE RESIDUE
+   IS A REGISTER-BUDGET WALL, NOT A SCHEDULE TIE-BREAK, AND THE EXISTING
+   LEVER'S PROOF FOR THE IDENTICAL SIBLING RESIDUE IS WRONG ABOUT WHY.
+   See THE h229 RESULT at the end of this header.  Nothing above it changed.
+
    THE RESIDUE IS A THREE-INSTRUCTION ROTATION IN ONE BASIC BLOCK AND NOTHING
    ELSE. Every other word of the 117 is exact, including the %hi/%lo pair, the
    register assignment and the frame. The block is the head of the non-NULL
@@ -64,10 +69,100 @@
      `k' as u16                                                       3
      `a' as s32 with `(s16)((s16)a % 16)'                             3
      `v' as UnkNode * throughout                                      3
-   UNMEASURED: anything that changes the number of RTL insns in the arm (the
-   sched priority is a critical-path length, so an extra or absent insn in
-   this block is the lever that was not tried); and -da on .sched/.sched2,
-   which is where the tie-break actually is.
+   (those figures are ovlverify counts; the baseline reads 3 there and 2 by
+   aligndiff, so every row above is FLAT.)
+
+   ==== THE h229 RESULT, 2026-11-26.  TWELVE MORE CELLS, AND THE CAUSE.
+
+   The identical residue on the identical body shape is recorded in
+   docs/matching-levers.md under "A `%lo` TRANSPOSED AGAINST INDEPENDENT INSNS
+   CAN BE PROVED UNREACHABLE BY STATEMENT ORDER" (func_s25_800244A0, 117
+   words, 2 rows, same five words).  That entry proves no STATEMENT ORDER
+   reaches it from sched2's LUID tie-break and says the fault must be the
+   statement SET.  The statement-SET axis has now been swept and the real
+   cause is one pass earlier.
+
+   THE BLOCK, read off the listing rather than inferred.  The block runs from
+   the beqz's fall-through to the first `jal', seven insns, and `tools/decomp/
+   sched.py --insn' names them:
+
+     32  sw $s1, 0x20($s3)       the old payload pointer  (C)
+     35  addiu $s1, $s3, 0x20    the cursor, REG_DEP_ANTI on 32  (D)
+     37  lui %hi(func_s27_800242E0)   (A)
+     39  lo_sum  -> $v0          (B, depends on A)
+     41  sw $v0, 0x10($s3)       (E, depends on B)
+     44  sh $s0, 0x4($s1)        (F, depends on D; ends in the jal's slot)
+     47  jal rand
+
+   sched2 emits in descending-LUID order here -- every insn prints priority 1,
+   so it is the identity on the chain -- and the chain entering sched2 is
+   sched1's output.  SCHED1 IS WHERE THE ROTATION IS DECIDED, and the decider
+   is `adjust_priority' -> `birthing_insn_p' in sched.c (scratch/gcc-src/
+   cdk-gcc-b18, cite by name; LAUNCH_PRIORITY is 0x7f000001 at sched.c:189).
+   An insn with no REG_DEAD notes -- and the file says they are all stripped
+   before sched, so that is every insn -- whose pattern is `(set (reg) ...)'
+   with the dest live and `reg_n_sets[dest] == 1' is given max_priority, which
+   `schedule_insn' has just set to LAUNCH_PRIORITY.  The dumps show it:
+
+     base body,  sched1  T-58: 35 (1) 39 (7f000001), now 39 35
+     base body,  sched2  T-56: 35 (1) 39 (1),        now 39 35
+
+   So the `lo_sum' is LAUNCHED down to the slot immediately before its
+   consuming store, whatever the statement order, and the cursor escapes the
+   boost ONLY because `v' is a reused parameter and so has reg_n_sets == 2.
+   The target's order needs the cursor to win that slot against the boosted
+   `lo_sum', which needs the cursor boosted too -- i.e. a single-set local.
+
+   CONFIRMED ON A STANDALONE PROBE (scratch probe, cdkgcc -O2 -G0), which is
+   what makes this a mechanism rather than a dump reading.  Same five words,
+   four cells:
+
+     address inline, cursor = reused parameter    sw / addu / lo_sum / sw
+     address in its own first statement, same     sw / addu / lo_sum / sw
+     address inline, cursor a single-set local    sw / addu / lo_sum / sw
+     BOTH: own statement AND single-set cursor    lo_sum / sw / addu / sw
+                                                  = THE TARGET'S ORDER
+
+   AND ON THIS BODY THE PAIR IS A REGISTER WALL.  Both conditions together DO
+   fix the rotation -- and cost exactly one callee-saved register:
+
+   | address statement | cursor      | words | aligned | note                |
+   |-------------------|-------------|-------|---------|---------------------|
+   | inline (park)     | reuse `v'   |  117  |    2    | the rotation        |
+   | own, 1st in arm   | reuse `v'   |  117  |    2    | BIT-IDENTICAL rows  |
+   | own, via u32      | reuse `v'   |  117  |    2    | BIT-IDENTICAL       |
+   | own, fn-ptr type  | reuse `v'   |  117  |    2    | BIT-IDENTICAL       |
+   | own, plain-cast store          |  117  |    2    | BIT-IDENTICAL       |
+   | own + dead `fptr = 0' first    |  117  |    2    | boost still fires   |
+   | own + dead `fptr = 0' last     |  117  |    2    | boost still fires   |
+   | own + `fptr' reused for D_80045340 | 117 |   2    | boost still fires   |
+   | own, 1st in arm   | `u8 *w'     |  119  |   25    | ROTATION FIXED, 6th |
+   | own, decls reordered | `u8 *w'  |  119  |   25    | ROTATION FIXED, 6th |
+   | via `m' (2 sets)  | reuse `v'   |  119  |   25    | 6th register        |
+   | via `r' (2 sets)  | reuse `v'   |  119  |   25    | 6th register        |
+
+   WHY THE DEAD SET DOES NOT WORK, and it is worth knowing wherever
+   `reg_n_sets' is the lever: `reg_n_sets' is counted by `life_analysis' in
+   flow.c (flow.c:2102/2120/2378/2781), and flow DELETES the dead store in the
+   same pass, so it is never counted.  This is the opposite timing from the
+   `regno_first_uid' lever in docs/matching-levers.md ("A DEAD INITIALISER
+   MAKES cse KEEP A REG-REG COPY"), where `reg_scan' runs early and a dead set
+   DOES count.  A DEAD SET IS FREE FOR cse AND INVISIBLE TO sched1.
+
+   AND THE BUDGET IS EXACTLY FULL.  The target's five callee-saved registers
+   are n ($s3), the cursor sharing $s1 with the parameter `v', q ($s2),
+   a ($s4) and m ($s0); `a' is live across the first rand(), `q' across it
+   too, and `m' across func_8003DB94, so none of them can be given up without
+   moving a word that already matches.  Every cell that supplies either
+   precondition adds a sixth, and that is +2 words in the prologue/epilogue.
+
+   > SO THE AXIS IS CLOSED: the rotation is reachable, the price is one
+   > callee-saved register, and this body has none to spend.  Do not re-run
+   > any 117-word spelling above -- all eight are bit-identical -- and do not
+   > re-run the separate-cursor family; it is 119/25 in four independent
+   > forms.  What is NOT closed is the possibility that one of the five
+   > callee-saved values can be freed by a shape nobody has found, which is a
+   > question about the OTHER 112 words, not about these five.
 
    DECLARATIONS
    void func_s27_800242E0(u8 *p, UnkVec *b, u8 *c, u8 *d);

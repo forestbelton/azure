@@ -134,6 +134,39 @@
    the store out of the arms into a local is what puts both in one block, and
    that is the 80/81-word family above.
 
+   ==== THE h229 RESULT, 2026-11-26.  TWO NEW LEVERS TESTED, BOTH NEGATIVE,
+   AND ONE OF THEM IS RULED OUT BY ARGUMENT RATHER THAN BY SWEEPING.
+
+   (a) THE DEAD-INITIALISER LEVER IS FLAT HERE.  docs/matching-levers.md's
+   "A DEAD INITIALISER MAKES cse KEEP A REG-REG COPY" says a second local is
+   worth nothing WITHOUT a dead earlier set, and this park's table already
+   has the second local alone ("a separate local for the shifted value", 81/3).
+   The missing half has now been measured, both ways round:
+
+   | a separate `s32 s' for the shifted value + dead `s = 0;' first  | 81 | 3 |
+   | a separate `s32 s' for the shifted value + dead `t = 0;' first  | 81 | 3 |
+
+   Bit-flat.  That is consistent with the lever's own stated precondition --
+   it needs a REG-REG COPY with a CONSUMER between the two assignments, and
+   here the second value is produced by an `srl', not by a copy, so
+   `make_regs_eqv' is never reached.  DO NOT re-run this.
+
+   (b) THE sched1 LAUNCH-BOOST LEVER CANNOT APPLY TO THE `mflo'.  The
+   mechanism closed out on docs/dng-parks/func_s27_8002443C.c the same day is
+   `adjust_priority' -> `birthing_insn_p' (sched.c, scratch/gcc-src/
+   cdk-gcc-b18): a `(set (reg) ...)' whose dest is live gets LAUNCH_PRIORITY
+   and is dragged down to its consumer, but ONLY when `reg_n_sets[dest] == 1'.
+   `t' is set in both arms of the gate in EVERY spelling in the table above --
+   two sets in the one-expression form, three in the split form -- so
+   `reg_n_sets[t]' is never 1 and the `mflo' is never a birthing insn.  The
+   boost therefore explains nothing here and is not an axis to sweep.  (This
+   is an argument from the compiler source plus the park's own ref counts, not
+   a measurement of this body's dumps.)
+
+   So the `mflo' register really is the local-alloc priority question this
+   park already diagnosed, and the next move remains the `.lreg'/`.greg'
+   reading it asks for -- not another source spelling.
+
    TWO FACTS FROM THIS BODY THAT DID LAND AND ARE WORTH CARRYING:
 
    * THE GATE ARMS ARE INVERTED relative to the obvious reading.  Writing

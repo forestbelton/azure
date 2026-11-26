@@ -160,3 +160,43 @@ size-1 included, and labelled the total "multi-member". The figure that matters
 was wrong until I spot-checked three parks against their own headers, which
 state their family size. **A park header that records `dngfam` says
 "one member" is a check on the tooling, not just a note to the reader.**
+
+## I ASSERTED "NO FRESH CODE LEFT" WITHOUT RUNNING THE DRY-RUN, AND IT WAS FALSE
+
+Recorded because this document already warns about exactly this confusion and I
+made it anyway, in a BRIEF, three times running.
+
+After two units completed in a row I told three consecutive agents *"There is no
+fresh code left in DUNGEON.BIN -- every remaining stub is a PARK"* and shaped
+their briefs around park work. Then I counted, and the counts disagree:
+
+    INCLUDE_ASM stubs in csrc/        225
+      ... that have a park file        84
+      ... with NO park file          141
+
+and `provision_batch --dry-run` on the units holding most of those 141:
+
+    lo20    0 fn      0w   fragments:33     <- all fragments, correctly 0
+    s24     5 fn    790w
+    s45     5 fn    971w
+    s49     5 fn    627w
+    s54     5 fn    601w
+    s66     5 fn    658w
+            -----------
+            25 fn  3,647w of FRESH, PROVISIONABLE WORK
+
+> **The cost was three briefs pointed at the hardest work in the project while
+> 3,647 words of ordinary stubs sat unclaimed.** Park work yields a closed axis;
+> a fresh unit yields functions.
+
+**The rule, and it is already written above:** `provision_batch --dry-run` is the
+only authority on what is provisionable. A stub count is not, a park count is
+not, and "the last two units completed" is not. **Run it before every claim
+about what is left, including -- especially -- a claim inside a brief.**
+
+The failure mode is specific: `lo20` alone holds 33 stubs that are all
+fragments, so a bare stub count overstates the work by a third on its own, while
+the park files undercount it because a fresh stub has no park. **Neither number
+is the answer and the dry-run is.** Note also that a dry-run over units with
+LIVE AGENTS prints `0 fn 0w` after refusing to overwrite their copies -- so
+read the refusal lines, and dry-run the units nobody is in.
