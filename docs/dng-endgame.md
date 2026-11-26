@@ -567,3 +567,53 @@ is the only thing that tells you whether a declaration is a compile-time claim o
 a note to the next reader** -- and an automated sweep over park declarations that
 does not distinguish them will produce confident findings about lines no compiler
 ever sees. Mine did, for about four minutes.
+
+## QUEUED: TWO DISPATCHER-ONLY TASKS THAT NEED AN EMPTY BOARD
+
+Both of these are available now and neither can be delegated, because both need
+a build. They are blocked on nothing except **having no live agents**, so they
+are the right work for the moment the last batch hands back.
+
+### 1. `func_lo16_8001D4AC` -- 75 words waiting on one yaml line
+
+`dngpick`'s own notes say this is landable as soon as `0x2a3000` is attributed
+`.rodata, ovl_dng_lo16` instead of being a bare `data` subsegment, and
+**verified today, the claim is not stale**: it is the unit's only remaining
+unparked stub, and `splat/dungeon.bin.yaml:321` still reads `- [0x2a3000, data]`.
+Its listing reaches the table through `%hi`/`%lo(jtbl_lo16_80016000)`, and the
+table sits at offset 0 of the region where `cc1psx`'s `.align 3` is a no-op --
+which is the whole reason this one is landable where its sibling
+`func_lo16_8001E824` (4 mod 8) never will be.
+
+Mind **the rodata dot** (`splat/dungeon.bin.yaml:120`, `docs/overlays.md`): it
+must be `.rodata` WITH the dot because `csrc/ovl_dungeon.c` exists, or the
+unit's own rodata comes out undefined.
+
+### 2. The 290 `incompatible pointer type` warnings
+
+Recipe already recorded. Eight units carry them, all on PSY-Q geometry routines
+(`RotTransPers`, `RotTransPers4`, `RotTransSV`) in bodies that verify at 0 -- the
+fix is a `(long *)` cast, which `libgte.h:326` is what declares. **One agent
+cleared six of them in passing today just by casting correctly**, so the backlog
+is 284 now and the per-unit work is small. `declcheck`'s summary line says
+"undeclared **or mistyped** callee", which conflates the two; an agent today read
+29 warnings on a unit with zero undeclared callees and had to say so explicitly.
+
+### WHY BOTH WAIT, which is the part worth writing down
+
+**`make splat` does `rm -rf asm build/asm`.** Every live agent is reading
+`asm/nonmatchings/` continuously -- it is the target listing, the thing they
+measure against. Running it mid-batch does not corrupt the repo, it **breaks
+every agent in flight**, and they would report confusing failures with no
+obvious cause.
+
+And the warning cleanup is blocked by something subtler: it edits committed units
+and then needs `make check` + `make containers` to prove nothing moved. **The
+gate is shared.** If an agent hands back during that cycle, two independent
+changes sit in one gate run and a failure cannot be attributed to either -- which
+is exactly how I reverted a GOOD lo20 landing today, by testing it in the same
+cycle as a failing b57 one and blaming the wrong change.
+
+> **The rule: a task that runs `make splat`, or that needs a clean gate cycle to
+> interpret, waits for an empty board.** Not for the files to be free -- the
+> files were free for both of these hours ago.
