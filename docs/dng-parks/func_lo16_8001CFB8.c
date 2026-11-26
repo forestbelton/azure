@@ -3,6 +3,17 @@
 
    BEST: 82 candidate words, 31 ALIGNED differences (54 under ovlverify).
 
+   RE-MEASURED 2026-11-25 and this figure is UNCHANGED at 31.  Between h172
+   parking it and that re-measure the park could not be spliced at all --
+   parkresidue printed SKIP on `redefinition of struct Unk...', because the
+   unit has since refined two typedefs this park also declares and
+   parksplice's drop_known matched declarations by exact text.  Fixed in
+   parksplice (a struct now matches by TAG, an `extern' by symbol name).
+   Nothing about the body or its residue changed; only the ability to measure
+   it did.  The dispatcher briefly reported this park at "1 aligned row" --
+   that was a column-cut parsing error on parkresidue's padded output, not a
+   result, and h172's 31 was correct the whole time.
+
    THE RESIDUE IS THREE EXTRA WORDS AND THEY ARE TWO EXTRA LOOP CURSORS.
    The target walks the 0x20 slots with exactly TWO cursors:
 
