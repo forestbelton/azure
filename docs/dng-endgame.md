@@ -465,3 +465,47 @@ each saw one. **And at that point the committed definition should probably be
 corrected rather than aliased four more times** -- it has no other caller in the
 tree, so changing it is cheap, but it is a landed body and the change needs its
 own verification and container gate.
+
+## THE THREE MECHANISMS NOBODY HAS ESTABLISHED, AND THE DUMP THAT WOULD SETTLE EACH
+
+Today's work added 195 lines to `docs/matching-levers.md` that flag a
+contradiction, a narrowing, a retraction, a precondition or an inference -- and
+agents were disciplined about saying which attributions they had NOT proved.
+Three of those are still open, and they are buried one per entry, so they are
+collected here.
+
+Each has a **measured figure** that is not in doubt and a **named pass** that is
+not established. All three need a single-function `-da` probe, which every agent
+judged not worth the detour once its body was at 0 or its park was priced. That
+judgment was right each time; the questions are collected so that someone
+holding a dump for another reason can answer one cheaply.
+
+**1. Why a pointer-base MERGE costs 49 rows** (`func_b37_801732A4`, landed).
+Two separate pointer bases are 451/0; one shared base is 451/49, every row a
+`$s2`/`$s3` rotation. The inference is that merging gives the one allocno the
+references of both arms and lifts it past `c` in `allocno_compare`'s ranking,
+while two locals with disjoint ranges both fit in `$s3`. **The reference counts
+and the ranking are not established** -- `.greg` on a single-function probe
+would print them.
+
+**2. Why a shared `goto` tail collapses ELEVEN words** (`func_b37_801732A4`).
+Written out in six reaching arms it is 451/0; a shared `goto bump` is **440/28**,
+eleven words SHORT. Both forms emit one `j` per arm and `jump2` merges the
+written-out copies into the single block the target has, so on the obvious
+accounting they should be equal length. **What collapses the eleven is not
+established**; the arms differ in the written-out form because each holds a
+symbol address in its own local, which is the likeliest place to look and is a
+guess. `.jump2` would settle it.
+
+**3. Why the target gives a non-conflicting value its own hard register**
+(`func_s11_80024004`, parked at 481/502). The park's whole cause -- that the
+target spills a parameter because nine callee-saved registers are live and the
+candidate needs only eight -- rests on this, and the park says so, marking its
+cause an INFERENCE rather than a measurement. **It is a `find_reg` scan-order
+question in `global.c` and it is open.**
+
+> **None of the three changes a figure or a landing.** All three are "why",
+> where the "what" is measured. They are listed because an unestablished
+> mechanism that is LABELLED unestablished is an asset -- the next person knows
+> exactly what to spend a dump on -- while the same mechanism stated as fact is
+> the thing that produced two confident wrong answers today.
