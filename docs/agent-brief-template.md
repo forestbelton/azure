@@ -92,6 +92,21 @@ check an order whose arms cross-join to one block, where the gate is blind by
 construction. Two agents found this independently; the figures are in
 docs/matching-levers.md. Do not infer arm order from a word count.
 
+**A WHOLE-UNIT `-da` COMPILE DUMPS ONLY THE FIRST FUNCTION IN THE FILE.** To
+read `.greg`, `.lreg`, `.loop` or `.sched` for any other body you must build a
+single-function probe. One agent lost a detour to this. And when you do read
+them: **`.flow`'s refs and lengths are the wrong numbers to compute allocation
+priority from** -- `global_alloc` runs after regmove, sched1 and local-alloc on
+recomputed values that are never dumped, so use `-da` for the MECHANISM and the
+printed `;; N regs to allocate:` order for the FACTS.
+
+**A `?:` IS NOT A NEUTRAL SPELLING OF A TWO-ARMED CHOICE.** Two independent
+passes punish it -- `jump.c:927` hoists one constant set above the comparison
+when both arms are bare sets, and `fold-const.c:3736` distributes a unary or
+constant-binary operation into BOTH arms of a `COND_EXPR`. Two `if`/`else`
+stores cost no words, because `jump2` cross-joins whatever they duplicate.
+Measured 678/0 against 678/3 and 678/5.
+
 **A HEADER'S WORD COUNTS ARE MOSTLY REJECTED SPELLINGS -- do not compare them
 to the tool and report a contradiction.** A landed body's comment prices every
 alternative it measured, so most "N words" figures in it belong to spellings

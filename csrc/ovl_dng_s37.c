@@ -709,26 +709,340 @@ void func_s37_80024FA0(UnkNode *a, s16 b, u32 c, s16 d, s16 dx, s16 dy, s16 dz)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_800250C0);
+/* A 0x212 spark's step handler: ramps the renderable's three colour bytes
+   from the spark's +0x4 age against its +0xA lifetime, ticks the age, runs
+   the +0x1E four-phase wobble on the +0x28/+0x29 screen offsets, and retires
+   the node once the age reaches the +0x2 limit.
+   76 words, 0 differing, 0 aligned differences.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_800251F0);
+   THE THIRD PARAMETER IS THE RENDERABLE AND THE SECOND IS UNUSED. The
+   listing clobbers $a1 before reading it and writes through $a2, so the
+   arity is three: this is the (spawn, vec, renderable) handler shape that
+   csrc/ovl_town.c:19042 calls through `n->unk_10'. func_s37_800255B4
+   installs this body at +0x10 of a 0x212 node.
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_80025360);
+   IT OWNS A JUMP TABLE AND THE TABLE IS VERIFIED POSITIONALLY.
+   jtbl_s37_80024008, 8 `.word's = 8 cases + 0 pad (tools/decomp/jtcheck.py),
+   dispatch `sltiu $v0, $v1, 0x8' with NO minval subtraction, so minval is 0
+   and the case set is 0..7. Three distinct targets, and -- unlike the usual
+   shape -- NONE of them is the range check's `beqz' target: that goes to
+   .Ls37_800251B0, the shared tail, which appears in no entry. So all EIGHT
+   entries are real arms and NOT ONE IS PAD; the three targets are genuine
+   arm sharing, with cases 0,1,2,4,5,6 on one arm. There is no `default:'.
+   Written as one six-label arm, then case 3, then case 7 -- which is entry
+   ADDRESS order (80025150 < 8002516C < 80025194). Confirmed by a standalone
+   `tools/cdkgcc -O2 -G0 -S' compile and substitution rather than by the
+   verifier, which cannot see .rodata:
+     emitted [$L76,$L76,$L76,$L77,$L76,$L76,$L76,$L78] with block addresses
+     $L76 < $L77 < $L78, so it resolves to the ROM's entry sequence exactly.
+
+   FOUR MEASURED SPELLINGS, every one priced by aligndiff against the LANDED
+   body (not mid-fight), each a single ablation off the body below.
+
+   * THE NUMERATOR AND THE QUOTIENT MUST BE TWO DIFFERENT LOCALS. This is
+     the whole fight and it is worth 4 rows. `n = a * 48' in each arm and
+     then `t = n / h' once lands at 0; writing `t = a * 48 / h' in both arms
+     is 76 words / 4 rows, and `t = a * 48' then `t = t / h' is 76 / 6.
+     The mechanism, read out of -da and not guessed: `divmodsi4' is a
+     PARALLEL that also sets an unused `mod' output. When the quotient is a
+     user variable assigned in BOTH arms it is a cross-block pseudo, so
+     local-alloc's `combine_regs' will not tie it to the dying dividend
+     ("not local to this block"), and ties the throwaway `mod' output to it
+     instead; that steals $v0 and the quotient takes $v1. With a separate
+     numerator the quotient has ONE set in the merge block, the tie goes to
+     it, and it gets the dividend's $v0 -- which is what the ROM has at
+     `div $zero, $v0, $a3' / `mflo $v0'. .greg confirms it on the 4-row
+     body: the quotient is in the global set with hard reg 2 in its conflict
+     list, because the mod output had already taken $v0 locally.
+
+   * THE TWO EARLY READS ARE `s32' LOCALS, NOT `s16'. `s16 a' / `s16 h' is
+     82 words / 45 rows -- six words of `sll 16'/`sra 16' re-extension plus
+     an extra parameter copy. The target loads both with `lh' straight into
+     $a1/$a3 and uses them unextended.
+
+   * BOTH READS MUST COME BEFORE THE `D_80026428 = 1' STORE. Written after
+     it the body is 77 words / 5 rows: the two `lh's cannot be scheduled up
+     past the store, because the store is a plain cast at a fixed address
+     and so are the loads, so `true_dependence' refuses and the extra word
+     is the `nop' the target does not have. (This is the same dependence
+     this unit's func_s37_800251F0 solves with an ARRAY REF to set
+     MEM_IN_STRUCT_P; here plain source ORDER does it, and the two are
+     alternatives for one mechanism.)
+
+   * THE THREE COLOUR STORES ARE DESCENDING, 0xE then 0xD then 0xC. Written
+     ascending they emit ascending: 76 words / 4 rows. sched1 did NOT
+     transpose them here, so for this triple the listing's store order IS
+     the source's -- the opposite of the usual caution, which is why it is
+     recorded rather than assumed. */
+void func_s37_800250C0(u8 *p, UnkVec *v, u8 *q)
+{
+    s32 a;
+    s32 h;
+    s32 n;
+    s32 t;
+
+    a = *(s16 *)(p + 0x4);
+    h = *(s16 *)(p + 0xA);
+    D_80026428 = 1;
+    if (a < h)
+    {
+        n = a * 48;
+    }
+    else
+    {
+        n = (*(s16 *)(p + 0x2) - a) * 48;
+    }
+    t = n / h;
+    *(u8 *)(q + 0xE) = t;
+    *(u8 *)(q + 0xD) = t;
+    *(u8 *)(q + 0xC) = t;
+    (*(u16 *)(p + 0x4))++;
+    switch (*(s16 *)(p + 0x1E))
+    {
+    case 0:
+    case 1:
+    case 2:
+    case 4:
+    case 5:
+    case 6:
+        (*(u16 *)(p + 0x1E))++;
+        *(u8 *)(p + 0x28) += 0x10;
+        break;
+    case 3:
+        (*(u16 *)(p + 0x1E))++;
+        *(u8 *)(p + 0x28) -= 0x30;
+        *(u8 *)(p + 0x29) += 0x20;
+        break;
+    case 7:
+        *(s16 *)(p + 0x1E) = 0;
+        *(u8 *)(p + 0x28) -= 0x30;
+        *(u8 *)(p + 0x29) -= 0x20;
+        break;
+    }
+    if (*(s16 *)(p + 0x4) >= *(s16 *)(p + 0x2))
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The 0x212 shockwave's step handler: counts the +0x2 life down and the
+   +0x8C spin up by 0xC8, advances the +0xA/+0xC two-stage ring radius
+   (clamped at 0x20), fattens every byte of the +0x50 radius profile by 2,
+   runs the same +0x1E/+0x28/+0x29 wobble as func_s37_800250C0, and retires
+   the node when the life reaches 0. func_s37_800255B4's case 3 installs it.
+   92 words, 0 differing, 0 aligned differences.
+
+   IT OWNS A JUMP TABLE, THE SAME SHAPE AS func_s37_800250C0'S AND VERIFIED
+   THE SAME WAY. jtbl_s37_80024028, 8 `.word's = 8 cases + 0 pad, dispatch
+   `sltiu $v0, $v1, 0x8' with no minval subtraction so the set is 0..7, three
+   distinct targets, and again NONE of them is the range check's `beqz'
+   target (.Ls37_80025328, the shared tail, is in no entry). All EIGHT
+   entries are real arms, no pad, no `default:', cases 0,1,2,4,5,6 sharing
+   one arm, written in entry-ADDRESS order (800252C8 < 800252E4 < 8002530C).
+   Standalone `tools/cdkgcc -O2 -G0 -S' substitution:
+     emitted [$L97,$L97,$L97,$L98,$L97,$L97,$L97,$L99], block addresses
+     $L97 < $L98 < $L99, resolving to the ROM's entry sequence exactly.
+   The switch arms and the tail are byte-identical to func_s37_800250C0's,
+   so landing that one first gave this body its whole second half.
+
+   TWO MEASURED SPELLINGS, both priced by aligndiff off the landed body.
+
+   * THE +0x2 DECREMENT IS AN ARRAY REF, `((u16 *)p)[1]--'. THIS IS THE
+     WHOLE FIGHT and it is worth a word and 42 rows. As the plain cast
+     `(*(u16 *)(p + 0x2))--' the body is 91 words / 42 aligned differences,
+     and the residue is a WHOLE-BODY register exchange -- `p' in $a0 and the
+     loop counter in $a1, where the target has them the other way round and
+     keeps an `addu $a1, $a0, $zero' entry copy this body does not emit.
+     The mechanism, measured by compiling both and confirmed in global.c:
+     an ARRAY_REF sets MEM_IN_STRUCT_P, so gcc's fixed-scalar-versus-varying
+     -struct rule lets the `lhu 0x2' hoist ABOVE the `sh %lo(D_80026428)'
+     store beside it. That hoist is what puts a third value live at the top
+     of the function, so local-alloc spends $a0 on the `%hi(D_80026428)'
+     address, which makes $a0 conflict with `p' -- and then
+     `prune_preferences' (global.c) cannot give `p' its preferred $a0, the
+     entry copy survives, and the counter takes $a0. As a plain cast neither
+     memref is in-struct, the hoist is illegal, `p' keeps $a0, and every
+     later row shifts. This is the same dependence func_s37_800250C0 settles
+     by plain statement ORDER rather than by an array ref; the two spellings
+     are alternatives for one mechanism and the choice is per body.
+
+   * THE PROFILE INDEX IS `*(u8 *)(p + i + 0x50)', NOT `p[0x50 + i]'. The
+     subscript form is 92 words / 2 rows, both of them the two
+     `addu $v0, $a1, $a0' sites coming out `$a0, $a1': `pointer_int_sum'
+     always builds PLUS(ptr, intop), so the subscript spelling can only emit
+     base-first. This re-measures the sibling func_s37_80024094's note on
+     the SAME +0x50 array (it prices its single site at 1 row); the fact
+     carries, the magnitude is per site count.
+
+   Note the loop reloads `*(s16 *)(p + 0xC)' every iteration and the target
+   does too, so the bound is NOT hoisted into a local -- a local there would
+   make the body shorter than the target. */
+void func_s37_800251F0(u8 *p, UnkVec *v, u8 *q)
+{
+    s32 i;
+
+    D_80026428 = 1;
+    ((u16 *)p)[1]--;
+    *(u16 *)(p + 0x8C) += 0xC8;
+    (*(u16 *)(p + 0xA))++;
+    if (*(s16 *)(p + 0xA) >= 2)
+    {
+        *(s16 *)(p + 0xA) = 0;
+        (*(u16 *)(p + 0xC))++;
+    }
+    if (*(s16 *)(p + 0xC) > 0x20)
+    {
+        *(s16 *)(p + 0xC) = 0x20;
+    }
+    for (i = 0; i < *(s16 *)(p + 0xC); i++)
+    {
+        *(u8 *)(p + i + 0x50) += 2;
+    }
+    switch (*(s16 *)(p + 0x1E))
+    {
+    case 0:
+    case 1:
+    case 2:
+    case 4:
+    case 5:
+    case 6:
+        (*(u16 *)(p + 0x1E))++;
+        *(u8 *)(p + 0x28) += 0x10;
+        break;
+    case 3:
+        (*(u16 *)(p + 0x1E))++;
+        *(u8 *)(p + 0x28) -= 0x30;
+        *(u8 *)(p + 0x29) += 0x20;
+        break;
+    case 7:
+        *(s16 *)(p + 0x1E) = 0;
+        *(u8 *)(p + 0x28) -= 0x30;
+        *(u8 *)(p + 0x29) -= 0x20;
+        break;
+    }
+    if (*(s16 *)(p + 0x2) <= 0)
+    {
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
+
+/* The 0x212 flash's step handler, two states deep: state 0 clears the
+   renderable's 0x80 bit and falls in with state 1, both then re-arm the two
+   screen rects and hand them to func_s37_80024A5C, ramp the renderable's
+   three colour bytes up over the first 0x15 frames and back down over the
+   last 0x14 of 0x64, and on the 0x65th frame bump the state, poke +0x9C on
+   the +0x40 partner and retire the node. func_s37_800255B4's case 3
+   installs it, passing itself at +0x40 and the shockwave node at +0x48.
+   149 words, 0 differing, 0 aligned differences.
+
+   THIS BODY DELETED A COMMITTED FILE-SCOPE OBJECT -- SAY SO LOUDLY.
+   `const u8 D_s37_80024048[]' used to sit between the stubs here as a
+   hand-written stand-in. It is NOT bank data: it is cc1psx's own anonymous
+   initialiser blob for this body's `s16 a[4] = { 0x340, 0x100, 0x60, 0x54 }'
+   local. Those four halfwords ARE its eight bytes, 40 03 00 01 60 00 54 00,
+   and a standalone `tools/cdkgcc -O2 -G0 -S' of the unit emits them as
+   `$LC0: .align 2 / .half 832, 256, 96, 84' immediately before this
+   function -- i.e. after jtbl_s37_80024028 and before D_s37_80024050, which
+   is exactly 0x80024048. So the array had to go: keeping both would put
+   sixteen bytes where the ROM has eight and shift every later rodata
+   object. With it gone the unit's emitted .rodata is, in file order,
+   jtbl_80024008 / jtbl_80024028 / $LC0 / D_s37_80024050 / jtbl_80024070 --
+   the ROM's layout exactly, with the ROM's alignments (3/3/2/2/3).
+   CONSEQUENCE FOR relcand: it reports "DATA in the listing, not in your
+   code: D_s37_80024048" on this body, because splat named the blob and an
+   anonymous compiler label has no name to match. That mismatch is expected
+   and benign; `--raw' shows the site is still a `lui'/`addiu' RELOCATION
+   pair and not a `lui'/`ori' constant. It is the one thing here that only
+   `make containers' can finally confirm.
+
+   THE 8-BYTE COPY IS A LOCAL AGGREGATE INITIALISER, NOT A STRUCT ASSIGNMENT.
+   The `lwl'/`lwr' + `swl'/`swr' pair at the top is gcc's unaligned block
+   move for `s16 a[4] = {...}' -- 2-byte alignment is under a word, so it
+   cannot use `lw'/`sw'. Note the initialiser is then fully OVERWRITTEN by
+   the four `a[...] =' stores below and the ROM still performs the copy: the
+   array's address escapes into func_s37_80024A5C, so gcc may not delete it.
+   Do not "clean that up"; the dead copy is four of the 149 words.
+
+   TWO MEASURED SPELLINGS, both priced by aligndiff off the landed body.
+
+   * THE TWO-STATE DISPATCH IS A `switch', NOT AN `if'/`else if'. This is
+     the whole fight. Written as
+     `if (s == 0) { ... } else if (s != 1) { return; }' the body is 148 words
+     / 10 aligned differences: gcc emits `bnez' first and puts the state-0
+     arm inline, where the ROM branches `beqz' PAST the range tests and puts
+     that arm after them. With two cases and a `default: return', gcc 2.7.2
+     is under `case_values_threshold' so `expand_end_case' emits a
+     COMPARISON TREE rather than a table -- and a comparison tree emits its
+     arms AFTER the tests, which is the ROM's block order and supplies the
+     missing word. `case 1:' is an empty `break' and `default:' is the
+     `return'.
+
+   * BOTH COLOUR RAMPS STORE DESCENDING, 0xE then 0xD then 0xC. Flipping the
+     SECOND ramp to ascending is 149 words / 2 rows -- the first and last
+     `sb' of that ramp, with nothing else moving. I expected this to be free
+     (each store has its own re-read and division between it and the next,
+     so there is nothing adjacent for sched1 to transpose) and it is not, so
+     it is recorded as measured rather than reasoned. The same descending
+     order is worth 4 rows on func_s37_800250C0's single triple.
+
+   The `* 128 / 20' in both ramps is a literal divisor: `expand_divmod'
+   strength-reduces it at expand time, which is where the 0x66666667 magic
+   multiply and `sra 3' come from, and each of the three stores re-reads
+   `*(s16 *)(p + 0x2)' because the `sb' between them invalidates cse's
+   entry. */
+void func_s37_80025360(u8 *p, UnkVec *v, u8 *q)
+{
+    s16 a[4] = {0x340, 0x100, 0x60, 0x54};
+    s16 b[2];
+
+    D_80026428 = 1;
+    switch (*(s16 *)p)
+    {
+    case 0:
+        (*(u16 *)p)++;
+        *(u16 *)(q + 0x14) &= 0xFF7F;
+        break;
+    case 1:
+        break;
+    default:
+        return;
+    }
+    a[0] = 0x340;
+    a[1] = 0x100;
+    a[2] = 0x60;
+    a[3] = 0x40;
+    b[0] = 0x370;
+    b[1] = 0x120;
+    func_s37_80024A5C(*(u8 **)(p + 0x48), (s32 *)a, (s32 *)b, 1, 1);
+    if (*(s16 *)(p + 0x2) < 0x15)
+    {
+        *(u8 *)(q + 0xE) = *(s16 *)(p + 0x2) * 128 / 20;
+        *(u8 *)(q + 0xD) = *(s16 *)(p + 0x2) * 128 / 20;
+        *(u8 *)(q + 0xC) = *(s16 *)(p + 0x2) * 128 / 20;
+    }
+    if (*(s16 *)(p + 0x2) > 0x50)
+    {
+        *(u8 *)(q + 0xE) = (0x64 - *(s16 *)(p + 0x2)) * 128 / 20;
+        *(u8 *)(q + 0xD) = (0x64 - *(s16 *)(p + 0x2)) * 128 / 20;
+        *(u8 *)(q + 0xC) = (0x64 - *(s16 *)(p + 0x2)) * 128 / 20;
+    }
+    (*(u16 *)(p + 0x2))++;
+    if (*(s16 *)(p + 0x2) >= 0x65)
+    {
+        *(s16 *)(p + 0x2) = 0;
+        (*(u16 *)p)++;
+        *(s16 *)(*(u8 **)(p + 0x40) + 0x9C) = 1;
+        *(u16 *)(p - 0x2) |= 0x8000;
+        D_800814A0 |= 0x8000;
+    }
+}
 
 /* 0x8 bytes of this bank's own rodata, between its jump tables,
    read by func_s37_80025360. Spelled as BYTES because that is all the
    reference witnesses, and `const' because without it the array
    goes to .data and the linker puts it outside this segment's
    declared .rodata. */
-const u8 D_s37_80024048[] = {
-    0x40,
-    0x03,
-    0x00,
-    0x01,
-    0x60,
-    0x00,
-    0x54,
-    0x00,
-};
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s37", func_s37_800255B4);
