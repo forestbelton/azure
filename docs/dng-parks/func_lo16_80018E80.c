@@ -130,6 +130,33 @@
    closes the source-level space for this residue.  The remaining route is the
    one h197 named -- a `-da' `.cse1'/`.cse2' pair to see why the target's
    compiler did not canonicalise at all -- and NOT another spelling.
+
+   AND THE ONE LEVER THAT LOOKED LIKE IT SHOULD BREAK THAT IS NOW MEASURED AND
+   FLAT (dispatcher, 2026-11-26).  A park in b07 had the same shape as this one
+   -- two pseudos in one equivalence class, the wrong member canonical, every
+   spelling flat -- and it landed on the SECOND disjunct of `cse.c:838's
+   `make_regs_eqv': a pseudo whose `regno_first_uid' is BEFORE
+   `cse_basic_block_start' becomes `qty_first_reg'.  `regno_first_uid' is
+   filled by `reg_scan' before cse runs, so a DEAD earlier set is enough and
+   `flow' deletes it at no cost in words.  On that body it was 455/1 -> 455/0.
+
+   It does nothing here:
+
+       `k = 0;' as the first statement after the declarations   401 w / 1 row
+       `q = 0;' instead                                         401     / 1
+       both                                                     401     / 1
+
+   So the lever has a precondition this body does not meet.  In b07 the pair
+   was a CALL RESULT and a copy of it, with the consuming store sitting
+   BETWEEN the two assignments -- the store is processed before the pair
+   becomes equivalent and so keeps the non-canonical member.  Here the pair is
+   a local-to-local copy (`q = k') with no consumer between them, so there is
+   no insn that cse processes while the two are still distinct, and which
+   member is canonical does not change what any insn reads.
+
+   That is the whole source-level space closed twice over, by two different
+   mechanisms, and it is worth more than another flat spelling: the
+   `-da' `.cse1'/`.cse2' route is now the ONLY one left.
 */
 
 s32 func_lo16_80018E80(void)
