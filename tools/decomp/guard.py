@@ -50,6 +50,29 @@ for f in glob.glob(PROJ + '/csrc/**/*.c', recursive=True):
         if re.search(r'^[A-Za-z_][\w \*]*?\b' + name + r'\s*\([^;]*?\)\s*\{',
                      t, re.M):
             have.add(label)
+# A SYMBOL CAN BE ABSORBED INTO ITS PARENT BODY, and then it is accounted for
+# by that parent rather than by a stub or a definition of its own. The carve
+# split some functions at the wrong boundary: `func_lo20_800280F4' is two
+# words, `jr $ra' with a `sb' in its delay slot, reading exactly the registers
+# the preceding body's last two instructions set. It is the TAIL of
+# func_lo20_80028050, and landing that body emits both symbols' words -- so its
+# INCLUDE_ASM was deleted outright, with `make containers' confirming five
+# byte-identical.
+#
+# Its listing still exists, so it stays in `known', and without this entry
+# guard.py reported "441 accounted for" of 442 forever after. That is a check
+# failing CORRECTLY on a real change, and the honest fix is to declare the
+# absorption rather than loosen the check: each entry names the parent, so the
+# claim is auditable with pairverify.py.
+ABSORBED = {
+    'func_lo20_800280F4': 'func_lo20_80028050',   # 2-word tail, 43/43/0 joined
+}
+for _sym, _parent in ABSORBED.items():
+    if _parent in have:
+        have.add(_sym)
+    else:
+        print('guard: %s is declared ABSORBED into %s, which is NOT present -- '
+              'the absorption claim is stale' % (_sym, _parent))
 missing = sorted(known - have)
 # Count macro INVOCATIONS, not the bare word: `INCLUDE_ASM` also appears in
 # prose inside csrc comments, which silently inflated this project's headline
