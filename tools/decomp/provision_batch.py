@@ -39,10 +39,37 @@ def fragments(tag):
 # Usage:  provision_batch.py [--first-agent hNNN] TAG[:COUNT] ...
 #   provision_batch.py b31f s10 b25 s58 s19 --first-agent h186
 #   provision_batch.py b31f:17 s10:9          (explicit per-unit counts)
-# With no TAG arguments it falls back to LAST_BATCH below, so an accidental
-# bare run still does something inspectable rather than nothing.
-LAST_BATCH={"h181":("lo16",16),"h182":("s29",13),"h183":("s30",11),
-            "h184":("s43",10),"h185":("b02",10)}
+#   provision_batch.py                        (no tags: PRINT THE INVENTORY)
+#
+# A BARE RUN USED TO RE-PROVISION `LAST_BATCH', AND THAT IS A DATA-LOSS PATH.
+# The fallback was added so an accidental bare run "did something inspectable
+# rather than nothing" -- but what it does is attempt ten writes into five
+# directories that may hold LIVE agents' work. On 2026-11-26 the dispatcher ran
+# a bare `provision_batch.py --dry-run' (believing --dry-run existed, because a
+# memory note said this script was the authority on remaining work), the flag
+# was swallowed by the `startswith("-")' skip, and it tried to re-provision five
+# running agents. All ten writes were refused by the guards below, so nothing
+# was lost -- but the guards are a backstop, not a design.
+#
+# So a bare run now PRINTS THE REMAINING-WORK INVENTORY and exits without
+# writing anything. That is what a dispatcher actually wants from a bare run,
+# it makes `--dry-run' real rather than silently ignored, and it removes the
+# re-provision path instead of relying on a refusal to catch it.
+def _inventory():
+    """Unparked stubs per unit, largest first. Writes nothing."""
+    rows = []
+    for tag in per:
+        w = sum(x for x, _ in per[tag])
+        rows.append((w, tag, len(per[tag])))
+    rows.sort(reverse=True)
+    print("remaining unparked stubs, by unit (nothing was provisioned):")
+    print("  %-6s %4s %8s" % ("UNIT", "FN", "WORDS"))
+    for w, tag, n in rows:
+        print("  %-6s %4d %8d" % (tag, n, w))
+    print("  %-6s %4d %8d   across %d units"
+          % ("TOTAL", sum(n for _, _, n in rows),
+             sum(w for w, _, _ in rows), len(rows)))
+    print("to provision:  provision_batch.py TAG [TAG ...]")
 
 def _next_free_agent():
     """The lowest hNNN with no directory yet.
@@ -90,7 +117,8 @@ def _picks_from_argv(argv):
         tags.append((tag, int(cnt) if cnt else 0))
         i += 1
     if not tags:
-        return dict(LAST_BATCH)
+        _inventory()
+        sys.exit(0)
     base = int(re.match(r"h(\d+)", first).group(1))
     return {"h%d" % (base + k): (tag, cnt)
             for k, (tag, cnt) in enumerate(tags)}
