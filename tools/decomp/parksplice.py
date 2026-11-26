@@ -69,13 +69,48 @@ def drop_known(decls, unit, func="", quiet=False):
     redefinition, and `parksplice' spliced the same parks cleanly.
     """
     unit_norm = _norm(unit)
-    kept, dropped = [], []
+    # MATCHING BY EXACT TEXT WAS NOT ENOUGH. A unit that has since REFINED a
+    # typedef the park also declares -- renamed a field, resized a pad -- no
+    # longer contains the park's spelling, so the park's copy survived and the
+    # splice died on `redefinition of struct Unk...'. Measured 2026-11-25: SIX
+    # of ovl_dng_lo16's nineteen parks could not be measured at all for this
+    # reason, which is invisible in any park inventory because the figures were
+    # recorded when the park still compiled.
+    #
+    # So a struct/union/enum declaration is now matched BY TAG. If the unit
+    # defines that tag, the unit's definition is the current truth and the
+    # park's copy goes, whether or not the two agree. They cannot both be
+    # present, and keeping the park's is not an option that compiles.
+    tags = set(re.findall(r"\b(?:struct|union|enum)\s+([A-Za-z_]\w*)\s*\{",
+                          unit))
+    kept, dropped, refined = [], [], []
     for decl in decl_units(decls):
         t = decl.strip()
         if t and len(_norm(t)) > 8 and _norm(t) in unit_norm:
             dropped.append(t.split("\n")[0])
             continue
+        # SAME RULE FOR A DATA SYMBOL. A park's `extern s32 D_800E3D6C;'
+        # against the unit's `extern u32 D_800E3D6C;' is `conflicting types',
+        # which names the symbol but not which side to believe. The unit is
+        # the current truth, so the park's declaration goes.
+        m = re.match(r"extern\s+[^;{]*?\b([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*;",
+                     t)
+        if m and re.search(r"(?m)^\s*extern\b[^;{\n]*\b%s\b\s*(?:\[[^\]]*\])?\s*;"
+                           % re.escape(m.group(1)), unit):
+            refined.append("%s (the unit declares it with a different type; "
+                           "using the unit's)" % m.group(1))
+            dropped.append(t.split("\n")[0])
+            continue
+        m = re.search(r"\b(?:struct|union|enum)\s+([A-Za-z_]\w*)\s*\{", t)
+        if m and m.group(1) in tags:
+            refined.append("%s (the unit's definition differs; using the "
+                           "unit's)" % m.group(1))
+            dropped.append(t.split("\n")[0])
+            continue
         kept.append(decl)
+    if refined and not quiet:
+        print("%s: %d park typedef(s) the unit has REDEFINED since: %s"
+              % (func, len(refined), "; ".join(refined[:4])))
     if dropped and not quiet:
         print("%s: dropped %d declaration(s) the unit already has "
               "(park rot from a sibling landing): %s"
