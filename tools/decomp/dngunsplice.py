@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Put a landed carved function back to its INCLUDE_ASM stub.
 
+IT DOES NOT UNDO `dngland''s DECLARATION ADDITIONS, and that asymmetry leaves
+cruft. `dngland' reconciles and appends the externs and prototypes a body needs;
+this removes only the DEFINITION. One unsplice therefore left 32 orphan externs
+in a committed unit for a body that was no longer there -- inert (the container
+gated clean at five byte-identical) but confusing, and an agent flagged the file
+as modified-and-not-mine, which is the right instinct and cost it a paragraph.
+
+Not fixed here, deliberately: the declarations may be shared with bodies that
+are still landed, so removing them needs the same reconciliation `dngland' does
+rather than a reverse-diff. **If you unsplice a body you just landed, revert the
+unit file instead** -- `git checkout -- csrc/<unit>.c' is exact and takes the
+declarations with it.
+
 The sweep needs this when a body VERIFIES but the CONTAINER still will not
 build -- which is a real and separate failure. `ovlverify` measures a
 function's own words and nothing else, so a body that makes gcc emit its own
