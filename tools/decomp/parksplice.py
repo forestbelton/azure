@@ -129,9 +129,50 @@ def drop_known(decls, unit, func="", quiet=False):
             # so the park's prototype goes -- and loudly, because a parameter's
             # width changes promotion at the call.
             if not um:
-                um = re.search(
+                # ONLY IF THE DEFINITION PRECEDES THE SPLICE POINT. A
+                # definition LATER in the file does not declare the function
+                # for a body spliced above it, so the park's forward prototype
+                # is required and dropping it costs words.
+                #
+                # My first version of this ignored position and regressed a
+                # park from 401 words / 1 row to 399 / 5 -- the exact
+                # missing-prototype signature, because the dropped prototype
+                # was `func_lo16_80019684(s16, s16, s16)' and without it the
+                # argument's sll/sra sign-extension disappears. Caught by
+                # re-measuring a park I had a known figure for, which is the
+                # only reason I found it: the splice still compiled.
+                dm = re.search(
                     r"(?m)^\s*[A-Za-z_][\w \*]*?\b%s\s*\(([^;{]*)\)\s*\{"
                     % re.escape(fn), unit)
+                # `stub' lives in main(), not here -- find the splice
+                # point from the unit text instead (my first attempt raised
+                # NameError, which at least failed loudly).
+                m_stub = re.search(r"INCLUDE_ASM\([^)]*\b%s\)"
+                                   % re.escape(func), unit)
+                at = m_stub.start() if m_stub else len(unit)
+                if dm and dm.start() < at:
+                    um = dm
+                elif dm:
+                    # THE DEFINITION IS BELOW THE SPLICE POINT, so the park
+                    # needs a forward prototype -- and the park's own may
+                    # DISAGREE with that definition, which is `conflicting
+                    # types' whether we keep it or drop it. Neither is right:
+                    # REPLACE it with one synthesised from the definition's
+                    # own head, which is the truth by construction.
+                    #
+                    # The two cases really do need different handling, and
+                    # trying to serve both with one rule cost me three
+                    # attempts: dropping fixed b29 and regressed lo16 by two
+                    # words, keeping fixed lo16 and broke b29 again.
+                    proto = " ".join(dm.group(0).split())
+                    proto = proto[:proto.rfind(")") + 1] + ";"
+                    kept.append(proto)
+                    tagdiff_note = ("%s (the unit DEFINES it below this "
+                                    "splice; using a prototype synthesised "
+                                    "from that definition)" % fn)
+                    refined.append(tagdiff_note)
+                    dropped.append(t.split("\n")[0])
+                    continue
             if um:
                 protos.append((fn, " ".join(t.split()),
                                " ".join(um.group(0).split())))

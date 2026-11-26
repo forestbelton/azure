@@ -179,9 +179,33 @@ def main():
     if pstart < preamble_end_char(text):
         pstart = preamble_end_char(text)
     extra = []
-    for l in head[pstart:].split("\n"):
+    # STRIP COMMENTS BY DEPTH, NOT BY HOW A LINE LOOKS. My first version
+    # skipped lines starting with `/*', `*' or `//', which misses a block
+    # comment's CONTINUATION line -- and this project indents those with
+    # spaces, so a line reading "   typedef struct UnkFoo ..." inside a
+    # comment strips to something the declaration pattern below accepts. An
+    # agent hit it on 2026-11-26: a prose line in its header merely CONTAINING
+    # the word `typedef' was carried into the standalone's declaration block,
+    # which then failed with `syntax error before for' on a unit that compiles
+    # perfectly. Nothing was wrong with its body, and the error pointed
+    # nowhere near the cause.
+    region = head[pstart:]
+    out, i, depth = [], 0, 0
+    while i < len(region):
+        if depth == 0 and region.startswith("/*", i):
+            depth, i = 1, i + 2
+            continue
+        if depth and region.startswith("*/", i):
+            depth, i = 0, i + 2
+            continue
+        if depth == 0:
+            out.append(region[i])
+        elif region[i] == "\n":
+            out.append("\n")          # keep line structure for the split
+        i += 1
+    for l in "".join(out).split("\n"):
         t = l.strip()
-        if not t or t.startswith("/*") or t.startswith("*") or t.startswith("//"):
+        if not t or t.startswith("//"):
             continue
         # NOT an INCLUDE_ASM: it looks exactly like a prototype to the
         # pattern below (an identifier, parens, a semicolon), and carrying one
