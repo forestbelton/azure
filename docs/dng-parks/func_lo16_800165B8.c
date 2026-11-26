@@ -78,6 +78,9 @@
    extern u8 *D_800DCFB0[];
    extern u16 D_800DD264[];
    extern u16 D_800DD26C[];
+   typedef struct UnkDngLo16Name13
+   {
+       u8 unk_00[0xD];
    } UnkDngLo16Name13;
    UnkNode *func_8003FE78(s32, UnkNode *, s16);
    s32 func_80042900(s8 *, s8);

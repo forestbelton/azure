@@ -43,7 +43,7 @@ typedef struct UnkDungeonSpotA
 {
     u8 unk_00;
     u8 unk_01;
-    u8 pad_02[0x2];
+    u16 unk_02;
     u16 unk_04;
     u8 pad_06[0x1];
     u8 unk_07;
@@ -81,7 +81,7 @@ typedef struct UnkDngRoom2970
     u16 unk_02;
     u16 unk_04;
     u16 unk_06;
-    u8 pad_08[0x2];
+    s16 unk_08;
     s16 unk_0A;
     u16 unk_0C;
     s16 unk_0E;

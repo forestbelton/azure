@@ -83,7 +83,7 @@ def drop_known(decls, unit, func="", quiet=False):
     # present, and keeping the park's is not an option that compiles.
     tags = set(re.findall(r"\b(?:struct|union|enum)\s+([A-Za-z_]\w*)\s*\{",
                           unit))
-    kept, dropped, refined = [], [], []
+    kept, dropped, refined, protos = [], [], [], []
     for decl in decl_units(decls):
         t = decl.strip()
         if t and len(_norm(t)) > 8 and _norm(t) in unit_norm:
@@ -101,6 +101,25 @@ def drop_known(decls, unit, func="", quiet=False):
                            "using the unit's)" % m.group(1))
             dropped.append(t.split("\n")[0])
             continue
+        # AND THE THIRD KIND: A FUNCTION PROTOTYPE. The unit's own block
+        # declares the unit's stubs and callees, and a park that declares one
+        # of them differently is `conflicting types' -- which blocked
+        # func_lo16_800165B8 entirely. Dropping the park's copy is again the
+        # only option that compiles, BUT unlike a typedef this can change
+        # CODEGEN at the call: a parameter's width decides promotion. So this
+        # one is reported LOUDLY and separately, because the park's recorded
+        # figures were measured against ITS prototype and may not reproduce.
+        m = re.match(r"(?:[A-Za-z_][\w \*]*?)\b([A-Za-z_]\w*)\s*\([^;{]*\)\s*;",
+                     t)
+        if m:
+            fn = m.group(1)
+            um = re.search(r"(?m)^\s*[A-Za-z_][\w \*]*?\b%s\s*\(([^;{]*)\)\s*;"
+                           % re.escape(fn), unit)
+            if um:
+                protos.append((fn, " ".join(t.split()),
+                               " ".join(um.group(0).split())))
+                dropped.append(t.split("\n")[0])
+                continue
         m = re.search(r"\b(?:struct|union|enum)\s+([A-Za-z_]\w*)\s*\{", t)
         if m and m.group(1) in tags:
             refined.append("%s (the unit's definition differs; using the "
@@ -108,6 +127,13 @@ def drop_known(decls, unit, func="", quiet=False):
             dropped.append(t.split("\n")[0])
             continue
         kept.append(decl)
+    if protos and not quiet:
+        print("%s: %d PROTOTYPE(S) THE UNIT DECLARES DIFFERENTLY -- dropped the "
+              "park's, kept the unit's. A parameter's width changes promotion "
+              "at the call, so THIS PARK'S RECORDED FIGURES MAY NOT REPRODUCE:"
+              % (func, len(protos)))
+        for fn, parkv, unitv in protos:
+            print("    %s\n      park: %s\n      unit: %s" % (fn, parkv, unitv))
     if refined and not quiet:
         print("%s: %d park typedef(s) the unit has REDEFINED since: %s"
               % (func, len(refined), "; ".join(refined[:4])))

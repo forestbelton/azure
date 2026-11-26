@@ -21,6 +21,12 @@
    PARKED at 219 words / 6 differing (ovlverify) / 2 ALIGNED (agent h179,
    batch 35).  dngfam: one-member family.
 
+   ==== `-da' HAS NOW BEEN RUN, 2026-11-25 (agent h207, batch 35).  IT IS NOT
+   AN ALLOCATION QUESTION; THE BARRIER IS A MEMORY DEPENDENCE ON THE `sb' TO
+   D_800273BE; AND ONE ROW OF THE TABLE BELOW WAS MEASURING NOTHING FOR A
+   REASON WORTH KNOWING.  See THE `-da' RESULT at the end of this header; the
+   body and every other figure are unchanged.
+
    *** THE TABLE, RESOLVED.  jtbl_s56_80024008, 5 words = 5 cases + 0 pad,
    dispatch bound 5, 5 distinct targets.  MINVAL IS 0: the dispatch is
    `lh $v1, 0xA($s1)' / `sltiu $v0, $v1, 0x5' with NO subtraction, so entry k
@@ -139,17 +145,104 @@
    * the position of `D_s56_8002732C = *(u8 **)p' among case 0's five opening
      stores: slots 3 and 4 are both 2 rows, slots 0, 1 and 2 are 5-6 rows, so
      the curve has a flat minimum and the statement order is not the cause.
-   * `*(u32 *)&D_s56_8002732C = *(u32 *)p', `((u8 **)p)[0]', and
-     `((u8 *)D_800814A8)[0xA8]' are each bit-identical to the kept spelling
-     (2 rows), so neither the store width nor MEM_IN_STRUCT_P on those
-     references moves the residue.  `((u32 *)D_800814A8)[0x3D]' for the +0xF4
-     store is 16 rows -- worse.
-   * reordering case 0's two `*(u32 *)p' reads: free (2 rows either way).
+   * `*(u32 *)&D_s56_8002732C = *(u32 *)p' and `((u8 *)D_800814A8)[0xA8]' are
+     each bit-identical to the kept spelling (2 rows), so the store width does
+     not move the residue.  `((u32 *)D_800814A8)[0x3D]' for the +0xF4 store is
+     16 rows -- worse.
+     *** QUALIFIED 2026-11-25: the `((u8 **)p)[0]' row that used to sit here
+     is a true NOT-MEASURABLE, and the clause "so MEM_IN_STRUCT_P on those
+     references does not move the residue" that it carried is FALSE.  That
+     subscript does not set the flag, for a reason that matters wherever this
+     project reaches for the subscript escape -- see (3) below.  The flag was
+     then set by a different spelling and measured properly. ***
+   * reordering case 0's two `*(u32 *)p' reads: free (2 rows either way), and
+     CONFIRMED 2026-11-25 by compiling both standalone: the two emitted
+     streams are a MIRROR IMAGE of each other, identical instruction for
+     instruction with only the two `%hi'/`%lo' symbols and the two
+     destination registers exchanged.  The two statements are provably
+     symmetric, so that row carries no information either.
    * a local holding `*(u8 **)p' for the D_s56_8002732C store: 15-17 rows,
      worse -- the target genuinely loads p + 0 twice.
 
-   WHAT TO TRY NEXT: `-da' on the opening block of case 0 to read that load's
-   INSN_PRIORITY against the five `lui'/`sw' pairs around it, or the permuter.
+   ==== THE `-da' RESULT, 2026-11-25 (agent h207).  Probe: this body plus the
+   DECLARATIONS below, compiled standalone with
+   `tools/cdkgcc -O2 -G0 -DPERMUTER -da -S', which reproduces the parked
+   candidate's case-0 opening instruction for instruction.
+
+   (1) IT IS NOT AN ALLOCATION QUESTION.  sched1 runs BEFORE local-alloc, so
+   the slot is settled in `.sched', not in `.lreg'/`.greg'.  The block is
+   `basic block number 3', 24 insns, `total time = 24' -- one insn per cycle,
+   no stalls -- and the register is $a0 in BOTH streams, so "which allocno
+   wins $a0" is the wrong question; only the issue slot differs.
+
+   (2) THE BARRIER IS A MEMORY DEPENDENCE, AND IT IS THE `sb' TO D_800273BE,
+   NOT THE `sw' TO D_800273C0.  Read the target again: the hoisted
+   `lw $a0, 0x0($s1)' sits ABOVE `sb $v1, %lo(D_800273BE)($v0)' as well as
+   above the D_800273C0 store.  `true_dependence' (sched.c; its `mem' is the
+   store and its `x' the load) conflicts a fixed-address store with a
+   pseudo-based load through `memrefs_conflict_p' unless one of its two
+   escape clauses fires, and the only one that can here needs
+   `MEM_IN_STRUCT_P (x) && rtx_addr_varies_p (x) && GET_MODE (x) != QImode'
+   on the LOAD together with `! MEM_IN_STRUCT_P (mem) && ! rtx_addr_varies_p
+   (mem)' on the store.  A plain cast off `p' fails the first conjunct, so the
+   parked candidate's load is PINNED below that `sb' by a real edge -- no
+   scheduling choice can move it, which is why twelve spellings and 205,805
+   permuter candidates all stopped at the same 2 rows.
+
+   (3) **THE SUBSCRIPT ESCAPE FOR `MEM_IN_STRUCT_P' IS UNAVAILABLE AT A ZERO
+   NET DISPLACEMENT, AND THAT IS WHY THE `((u8 **)p)[0]' ROW MEASURED
+   NOTHING.**  docs/matching-levers.md's entry "CORRECTION: `MEM_IN_STRUCT_P'
+   NEEDS A `PLUS_EXPR' ON TOP, NOT A STRUCT" is right that expand_expr's
+   INDIRECT_REF arm sets the flag when the TOP NODE of the address tree is a
+   PLUS_EXPR, and right that `((T *)p)[k]' is normally the way to get one.
+   But `fold' runs on that tree first, so at displacement 0 there is no
+   subscript spelling that keeps the PLUS: `((u8 **)p)[0]' folds `PLUS(p, 0)'
+   away and `((u8 **)(p - 0x4))[1]' reassociates `(p - 4) + 4' back to `p',
+   leaving the cast's NOP_EXPR on top in both cases.  Measured on the `.sched'
+   dump of this block (ref_counts of insns 22 / 29 / 34 / 39, and the block's
+   longest path):
+
+       `*(u8 **)p'                      7 / 6 / 6 / 5, path 5   flag CLEAR
+       `((u8 **)p)[0]'                  7 / 6 / 6 / 5, path 5   flag CLEAR
+       `((u8 **)(p - 0x4))[1]'          7 / 6 / 6 / 5, path 5   flag CLEAR
+       `((UnkSlot *)p)->unk_00'         6 / 5 / 5 / 4, path 4   flag SET
+
+   The only route to the flag at offset 0 is a COMPONENT_REF, whose own arm of
+   expand_expr sets it unconditionally (or an AGGREGATE_TYPE_P load).  The
+   `UnkSlot' above is a PROBE for the flag, not a claim about `p'.
+
+   (4) AND WITH THE EDGE GONE, THE SCHEDULE STILL DOES NOT FOLLOW -- so the
+   direction is closed rather than open.  Two orders measured with the
+   COMPONENT_REF load:
+     * as the FIFTH statement (the parked order): the two p + 0 loads COLLAPSE
+       into one `lw' plus a `move', so the body loses a load the target has --
+       worse.
+     * as the FOURTH statement, with the D_800273C0 store after it: both loads
+       survive, but the emitted stream is BYTE-IDENTICAL to the plain
+       mirror-image swap and the load is STILL below the `sb'.
+   Removing the edge SHORTENS this load's chain (path 5 -> 4), and in a
+   backward scheduler a shorter chain is scheduled sooner and therefore
+   emitted LATER.  The load feeds only the 2732C store, so its INSN_PRIORITY
+   is 2 against competitors at 1-4, and it loses ready-list ties for eight
+   cycles in the target and three in the candidate.  **DO NOT re-measure
+   MEM_IN_STRUCT_P on this load, and do not re-measure the statement swap.**
+
+   WHAT TO TRY NEXT, in this order:
+   * The load must lose MORE ready-list ties, which means some OTHER chain in
+     the block must get LONGER -- not this statement's shorter.  The
+     candidates are the three D_800814A8 reads and the
+     `*(u8 *)(D_800814A8 + 0x102) = 1' store, which shares its `li 1' with
+     `D_800273BC = 1' and gives $a2 a live range across the whole block.  Read
+     `rank_for_schedule's tie-break in sched.c for what separates two
+     priority-2 insns before writing any C.
+   * The park assumes the five opening statements are exactly these five, in
+     case 0, with nothing else between.  A SIXTH statement in that block --
+     anything that lengthens a competing chain -- has never been tried, and it
+     is the one axis both the position sweep and the permuter miss, because
+     both permute a FIXED STATEMENT SET.
+   * NOT worth another pass: the statement swap, the statement position sweep,
+     MEM_IN_STRUCT_P on either p + 0 read, a local for either value, the store
+     widths, or the permuter.
 
    DECLARATIONS
    extern u32 D_s56_80027328;

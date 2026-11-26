@@ -105,13 +105,27 @@
        s8 unk_02;
    typedef struct UnkDngLo16Walk
    {
-       u16 unk_00;
+       s16 unk_00;
+       u16 unk_02;
+       u8 pad_04[0x2];
+       u16 unk_06;
    } UnkDngLo16Walk;
+   RECONSTRUCTED 2026-11-25: this typedef had been truncated to its first
+      field, so the body's `.unk_02' and `.unk_06' would not compile and the
+      park could not be measured at all. The field set and the SIGNEDNESS come
+      from the usage-witness recorded in docs/dng-parks/func_lo16_8001C06C.c,
+      which is the callee both `&a' and `&b' are passed to: it reads $a0 as
+      `lh 0x0', `lhu 0x2', `lhu 0x6' -- a signed/unsigned MIX at distinct
+      offsets, which is why that park concludes the struct is witnessed and
+      says to reconcile toward it rather than toward `s16 *'. The truncated
+      version had `u16 unk_00' where the witness says `lh', i.e. signed.
    void func_lo16_800177D8_h(s16, s16, s16, s16) __asm__("func_lo16_800177D8");
    void func_800A6D60(s32);
    u32 func_800A07D0u(s32, s32, s32, s32) __asm__("func_800A07D0");
    s32 func_lo16_8001C06C(UnkDngLo16Walk *, UnkDngLo16Walk *, s32, s16 *, s16 *);
    s16 func_lo16_8001C5E4(UnkDngLo16Walk *, UnkDngLo16Walk *, s32, s16 *, s16 *, s32 *, s32 *);
+   void func_lo16_8001CCEC(s16 d, s16 *ox, s16 *oy, s16 *p);
+   s32 func_lo16_8001CE14(s16 a, s16 b, s16 c);
    END DECLARATIONS */
 
 /* DRAFT */
