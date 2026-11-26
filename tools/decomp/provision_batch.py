@@ -22,10 +22,32 @@ def fragments(tag):
         body=t[t.find("glabel"):] if "glabel" in t else t
         n=len(re.findall(r"\bjr\s+\$ra\b", body))
         if n==0 or (n>=2 and w<=48): bad.add(f)
-    # and every symbol that FOLLOWS a no-jr one, by address
+    # and every symbol that FOLLOWS a no-jr one, by address.
+    #
+    # THIS LOOP USED TO MUTATE `bad' WHILE TESTING AGAINST IT, AND THAT CASCADED
+    # THROUGH A WHOLE UNIT. Written as
+    #
+    #     for i,(a,f) in enumerate(addrs):
+    #         if f in bad and i+1 < len(addrs): bad.add(addrs[i+1][1])
+    #
+    # each freshly-tainted successor was itself `in bad' on the NEXT iteration
+    # and tainted its own successor, so one self-bad lowest-addressed stub
+    # poisoned every remaining symbol in address order. On 2026-11-26
+    # `provision_batch.py lo20:5' printed `0 fn 0w tables:0 fragments:32' and
+    # wrote a ZERO-BYTE FUNCS.txt: all 32 unparked stubs dropped, where the
+    # genuine self-bad set is 11. The agent derived its own list from the
+    # listings by hand and landed four bodies anyway.
+    #
+    # The failure mode is the dangerous kind: an empty FUNCS.txt reads as a
+    # FINISHED unit, not as a refusal. Measured scope at the time of the fix:
+    # exactly one unit (lo20) went empty, because the cascade only bites when
+    # the LOWEST-ADDRESSED unparked stub is itself self-bad.
+    #
+    # The successor set is now computed from a frozen copy.
     addrs=sorted((int(f.split("_")[-1],16), f) for _,f in rows)
+    selfbad=frozenset(bad)
     for i,(a,f) in enumerate(addrs):
-        if f in bad and i+1 < len(addrs): bad.add(addrs[i+1][1])
+        if f in selfbad and i+1 < len(addrs): bad.add(addrs[i+1][1])
     return bad
 
 # TAKE THE BATCH FROM THE COMMAND LINE.

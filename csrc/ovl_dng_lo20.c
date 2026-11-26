@@ -55,6 +55,16 @@ s32 func_80048FBC(u8 *, s32);
 extern u8 D_lo20_80025BF4[];
 u8 *func_80048EE4(u8 **, s32);
 void func_800491CC(u32 **, u32, s32);
+UnkNode *func_8003FC64(s32);
+extern u8 D_8004CAA0[];
+void func_lo20_80026314(u8 *);
+void func_lo20_80028620(u8 *);
+/* psyq/include/strings.h declares this, but nothing includes that header and
+   it is not in structs.h beside strcpy, so every caller in the tree has been
+   compiling it implicitly -- csrc/ovl_town.c included.  Declared here because
+   an undeclared callee measures as free; func_lo20_8002714C is still
+   119 words / 0 differing with this in scope. */
+char *strncpy(char *, const char *, s32);
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_8001E814);
 
@@ -517,7 +527,64 @@ s32 func_lo20_800260CC(u8 *p, s32 n)
     return r;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80026168);
+/* 58 words, 0 differing.  FIRST COMPILE, so read the priced block below
+   before trusting any spelling in here: everything else was chosen, not
+   measured.
+
+   Twin: town.bin's `func_800B4F60', landed in csrc/ovl_town.c -- found by
+   xsibs (0.911 against func_800B6A0C, the same family) after dngtwin returned
+   nothing for every lo20 stub, this object being outside the banked slot so
+   there is no carved sibling anywhere.  The twin's shape carried verbatim:
+   allocate a node, dress its 0x20 payload, publish it, and on a failed
+   payload allocation tear it down and return 0.  Deltas are offsets and
+   callees only (0x64/0x50/0x54/0x78 and 0xD here).
+
+   func_lo20_8002845C, 54 words, is this same routine with two parameters
+   instead of three; it landed from this body with only the offsets changed.
+
+   Arity: the landed func_lo20_80026084 three listings up records that all
+   four of its arguments are forwarded and names THIS function as its only
+   caller, so the three parameters are its b/c/d.  That is where they come
+   from -- the listing shows $s2/$s3/$s4 set and never read before the call.
+
+   Measured and FREE at 58/0, so NOT why this lands:
+     - the 0x1E halfword read-modify-write as a plain cast
+       `*(u16 *)((u8 *)o + 0x1E) |= 0x8000' instead of `o->unk_1E'.
+   That matters because func_lo20_80026294 in this unit prices the same
+   read-modify-write at 1 word / 14 aligned differences and says the ARRAY REF
+   is load-bearing.  It does not reproduce here, and the discriminator is the
+   `o = 0' that follows: it is independent of both read-modify-writes, so the
+   scheduler has a slot to fill whichever way MEM_IN_STRUCT_P falls, and the
+   D_800814A0 load never pays a delay.  func_lo20_80026294 has nothing after
+   the pair.  Confirmed FREE on func_lo20_8002845C too, which is why this is
+   stated as a mechanism rather than a one-body oddity. */
+UnkNode *func_lo20_80026168(s32 b, s32 c, s32 d)
+{
+    UnkNode *o;
+    u8 *v;
+
+    o = func_8003FC64(0);
+    if (o != 0)
+    {
+        v = (u8 *)o + 0x20;
+        if (func_lo20_800260CC(v, 0xD) != 0)
+        {
+            o->unk_0C = (u32)((u8 *)o + 0x64);
+            *(u32 *)(v + 0x50) = func_lo20_80025D74(*(s32 *)(v + 0x54));
+            func_lo20_80026084(v, b, c, d);
+            func_8004491C(o, (u32)D_8004CAA0);
+            func_lo20_80026314((u8 *)o);
+        }
+        else
+        {
+            func_8004B248((u32 *)((u8 *)o + 0x78));
+            o->unk_1E |= 0x8000;
+            D_800814A0 |= 0x8000;
+            o = 0;
+        }
+    }
+    return o;
+}
 
 /* 17 words, 0 differing.  First compile.  The second `lw $v0, 0x14($s0)' is
    not a source repetition to avoid -- the call invalidates cse's entry, so
@@ -959,7 +1026,56 @@ void func_lo20_80026CF0(u8 *p, s32 v)
     **(s32 **)(p + 0x10) = v;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80026D0C);
+/* 53 words, 0 differing, after four spellings.  No twin: dngtwin finds no
+   carved sibling for ANY lo20 stub (this object is outside the banked slot),
+   and xsibs' best resident offer was town.bin's func_800B47BC at 0.759, which
+   is a different routine.  Written from the listing.
+
+   The magic multiply, read off the raw hex rather than guessed:
+   0x38E38E39 with `sra 4' after `mfhi' is /72, and with `sra 1' it is /9.
+   So the source is `n %= 72' then `n / 9' and `n % 9', one `mult' each --
+   cse shares each quotient with its remainder.
+
+   THREE facts, each priced from this body AT 0, one change at a time:
+
+   1. Worth 1 word / 25 aligned differences -- the convert.c narrowing trap.
+      The constant must sit on the addend that is NOT the unsigned byte load:
+      `(cx - 0x29) + (byte >> 1)', never `cx + ((byte >> 1) - 0x29)'.
+      Written the second way the whole sum is narrowed to the s16 store, trunc1
+      takes `typex = unsigned_type (short)', fold rewrites MINUS(byte, 41) as
+      PLUS(byte, 65495) and cc1psx emits `ori $v1, $zero, 0xFFD7' plus a
+      register `addu' where the target has one `addiu $v0, $v0, -0x29'.
+      Diagnostic: an `ori reg, zero, 0xFFxx' against an `addiu' with a negative
+      immediate.  The same applies to the `+ 0xF' pair at 0xA.
+      Note the FIRST store, `cx - 0x2B', has no load in its sum and is immune.
+   2. Worth 11 aligned differences: the parameter `n' is reused as the running
+      remainder (`n %= 72'), not copied into a fresh local.  With `i = n % 72'
+      the whole division chain shifts register: `mfhi $t0' where the target has
+      `mfhi $a3', and the remainder lands in $v1 instead of back in $a1.
+   3. Worth 3 aligned differences: TWO pointer locals, `q' and `r', one per
+      p + 0x10 read.  Reusing one `q' for both statements puts two sets on the
+      pseudo and costs 3 rows (reg_n_sets, not allocation priority).
+
+   The two p + 0xC reads are written out inline twice on purpose -- the `sh'
+   between them invalidates the load, so the target's reload is what plain C
+   gives and no local is wanted there. */
+void func_lo20_80026D0C(u8 *p, s32 n)
+{
+    s32 cx;
+    s32 cy;
+    u8 *q;
+    u8 *r;
+
+    n %= 72;
+    cy = (n / 9) * 16;
+    cx = (n % 9) * 11;
+    *(s16 *)(*(u8 **)(*(u8 **)(p + 0xC) + 0x4) + 0x8) = cx - 0x2B;
+    *(s16 *)(*(u8 **)(*(u8 **)(p + 0xC) + 0x4) + 0xA) = cy + 0xF;
+    q = *(u8 **)(p + 0x10);
+    *(s16 *)(*(u8 **)(q + 0x4) + 0x8) = (cx - 0x29) + ((*(u8 **)q)[0xA] >> 1);
+    r = *(u8 **)(p + 0x10);
+    *(s16 *)(*(u8 **)(r + 0x4) + 0xA) = (cy + 0xF) + ((*(u8 **)r)[0xB] >> 1);
+}
 
 /* 20 words, 0 differing.  First compile.
    THE CALL IS FOUR ARGUMENTS TO A LANDED TWO-PARAMETER FUNCTION.  The
@@ -1183,7 +1299,88 @@ u8 *func_lo20_80027110(s32 a, s32 j)
     return (u8 *)(o + (s32)q);
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_8002714C);
+/* 119 words, 0 differing, after three spellings.  No twin (see
+   func_lo20_80026D0C's note: lo20 has no carved sibling at any ratio).
+   Arity and types were already fixed by the landed caller
+   func_lo20_800273E4, which calls `func_lo20_8002714C(*(s32 *)p, b, n, c)'
+   against the declaration at the top of this unit.
+
+   func_80069E88 is `strncpy' -- taken from splat/common_syms.txt, not written
+   as an address.  0x800157C0 is OUTSIDE the loaded image and arrives as
+   `lui' + `ori', i.e. gas' `li' macro and a CONST_INT, so it is an integer
+   constant in the C and not a symbol; loop.c then hoists it into $s5 in each
+   loop.  The same 0x38E38E39/`sra 4' pair as func_lo20_80026D0C is /72.
+
+   FOUR facts, each priced from this body AT 0, one change at a time:
+
+   1. Worth 24 words / 67 aligned differences, the largest: the tail loop is
+      written out TWICE, once in each arm of `if (b == 0)'.  Shared as one loop
+      after the if/else the body is 95 words -- jump2 does NOT rebuild the two
+      copies, because each arm's entry test is specialised differently (the
+      `b != 0' arm knows i == 0 and emits `blez $s3', the other enters with
+      i == 5 and emits `slt').  Two preheaders, two loops.
+   2. Worth 1 word / 9 aligned differences: the parameter `b' is reused
+      (`b /= 72'), not copied into a `rows' local.  `b' is then live across the
+      func_8004B404 call, so it needs a callee-saved register and the target's
+      `addu $s0, $a1, $zero' parameter copy survives; with a `rows' local the
+      quotient goes straight from $v1 to $s0 and that `move' is gone, which
+      also pushes `sw $s0, 0x10($sp)' 14 words down the prologue.
+   3. Worth 1 word / 6 aligned differences: the first loop passes `i | j' with
+      `j = i = 0', not a bare `i'.  The chained assignment is what the listing
+      shows -- `addu $s1, $zero, $zero' then `addu $s2, $s1, $zero', a COPY
+      from i rather than a second zero -- and the `or $a1, $s1, $s2' is the
+      missing word.  `j' is dead afterwards.
+   4. Measured and FREE at 119/0, so NOT why this lands: `0x800157C0 + t * 19'
+      against `t * 19 + 0x800157C0'.  Both operands are integers, so
+      pointer_int_sum never runs and there is no PLUS(ptr, intop) to order.
+      This NARROWS func_lo20_80027110's 1-row operand-order fact three
+      listings up: that one has a real relocated symbol on one side, and the
+      lever needs one. */
+s32 func_lo20_8002714C(s32 a, s32 b, s32 c, s32 d)
+{
+    u8 *buf;
+    s32 i;
+    s32 j;
+    s32 t;
+
+    b /= 72;
+    buf = (u8 *)func_8004B404(0x91);
+    if (buf != NULL)
+    {
+        c -= b * 8;
+        if (c >= 9)
+        {
+            c = 8;
+        }
+        if (b == 0)
+        {
+            j = i = 0;
+            for (; i < 5; i++)
+            {
+                strncpy((char *)(buf + i * 0x12),
+                        (char *)func_lo20_80027110(d, i | j), 0x12);
+            }
+            t = func_lo20_80026F54(a, d, 0);
+            for (; i < c; i++)
+            {
+                strncpy((char *)(buf + i * 0x12),
+                        (char *)(t * 19 + 0x800157C0), 0x12);
+                t = func_lo20_80026FA8(a, d, t + 1);
+            }
+        }
+        else
+        {
+            t = func_lo20_80026F54(a, d, b * 8 - 5);
+            for (i = 0; i < c; i++)
+            {
+                strncpy((char *)(buf + i * 0x12),
+                        (char *)(t * 19 + 0x800157C0), 0x12);
+                t = func_lo20_80026FA8(a, d, t + 1);
+            }
+        }
+    }
+    return (s32)buf;
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_80027328);
 
@@ -1383,7 +1580,6 @@ void func_lo20_80028050(u8 *p, u8 *b, u8 *c, u8 *d)
     (*(u8 **)(b + 0x4))[0xF] = 4;
 }
 
-
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_800280FC);
 
 void func_lo20_80028208(void)
@@ -1519,7 +1715,51 @@ void func_lo20_800283B4(u8 *p)
     *(u8 **)(q - 0x10) = D_lo20_80027D7C;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_lo20", func_lo20_8002845C);
+/* 54 words, 0 differing.  FIRST COMPILE, off func_lo20_80026168 above: the
+   identical body with 0x98/0x84/0x88/0xAC in place of 0x64/0x50/0x54/0x78,
+   0xF for 0xD, and TWO parameters rather than three.  Read that function's
+   header for the twin (town.bin's func_800B4F60) and for the one priced fact.
+
+   Arity: the landed func_lo20_8002823C just above already settled it -- its
+   header records that it reads exactly $a0/$a1/$a2 and that "the call site in
+   func_lo20_8002845C sets three", the third being this function's own `c'
+   forwarded.  So (u8 *q, s32 c), and its own types come from that callee's
+   landed signature rather than from a guess here.
+
+   Measured and FREE at 54/0, so NONE of these is why this lands:
+     - `((u16 *)o)[0xF] |= 0x8000' (array ref) for the 0x1E read-modify-write;
+     - `*(u16 *)((u8 *)o + 0x1E) |= 0x8000' (plain cast) for the same;
+     - D_800814A0 updated BEFORE the 0x1E halfword instead of after.
+   All three are three-way free here.  func_lo20_80026294 in this unit prices
+   the first at 14 aligned differences and the ordering at 4; see
+   func_lo20_80026168's header for why neither bites on this shape. */
+UnkNode *func_lo20_8002845C(u8 *q, s32 c)
+{
+    UnkNode *o;
+    u8 *v;
+
+    o = func_8003FC64(0);
+    if (o != 0)
+    {
+        v = (u8 *)o + 0x20;
+        if (func_lo20_80028284(v, 0xF) != 0)
+        {
+            o->unk_0C = (u32)((u8 *)o + 0x98);
+            *(u32 *)(v + 0x84) = func_lo20_80027FCC(*(s32 *)(v + 0x88));
+            func_lo20_8002823C(v, q, c);
+            func_8004491C(o, (u32)D_8004CAA0);
+            func_lo20_80028620((u8 *)o);
+        }
+        else
+        {
+            func_8004B248((u32 *)((u8 *)o + 0xAC));
+            o->unk_1E |= 0x8000;
+            D_800814A0 |= 0x8000;
+            o = 0;
+        }
+    }
+    return o;
+}
 
 /* 31 words, 0 differing.  func_lo20_80026250's release-and-clear over the
    eight pointer slots at p + 0x18..p + 0x34, then slot 0xE (p + 0x38) once
