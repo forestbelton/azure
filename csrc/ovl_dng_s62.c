@@ -58,6 +58,60 @@ typedef struct UnkDngS69SP
     MATRIX unk_D0;
 } UnkDngS69SP;
 
+typedef struct UnkDngRoom2970
+{
+    u8 pad_00[0xC];
+    u16 unk_0C;
+    u8 pad_0E[0x6];
+} UnkDngRoom2970;
+typedef struct UnkDng73E94SP
+{
+    s16 unk_00;
+    s16 unk_02;
+    s16 unk_04;
+    u8 pad_06[0x12];
+    u8 *unk_18;
+    u8 pad_1C[0x4];
+    u8 *unk_20;
+    u8 pad_24[0x6C];
+    s32 unk_90;
+    s32 unk_94;
+    u8 pad_98[0x28];
+    s32 unk_C0;
+} UnkDng73E94SP;
+typedef struct UnkDng74334SP
+{
+    u8 pad_00[0xC];
+    Unk3DBD0W unk_0C;
+    Unk3DBD0W unk_10;
+    Unk3DBD0W unk_14;
+    Unk3DBD0W unk_18;
+    u8 pad_1C[0x8];
+    u8 *unk_24;
+    u16 unk_28;
+    u8 pad_2A[0xA];
+    VECTOR unk_34;
+    u8 pad_44[0x10];
+    MATRIX unk_54;
+    MATRIX unk_74;
+    u8 pad_94[0x10];
+    SVECTOR unk_A4;
+    u8 pad_AC[0x4];
+    SVECTOR unk_B0[4];
+    s32 unk_D0;
+    s32 unk_D4;
+    u8 pad_D8[0x28];
+    s32 unk_100;
+} UnkDng74334SP;
+typedef struct UnkDngS72Dirs
+{
+    u8 unk_00[0x20];
+} UnkDngS72Dirs;
+typedef struct UnkDng25FB0Rot
+{
+    s16 m[3][3];
+} UnkDng25FB0Rot;
+
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_80024064);
 
 /* The step func_s62_800244EC parks, in three states on *(s16 *)(p + 0x2C).
@@ -555,7 +609,46 @@ void func_s62_800263C0(u8 *s, s16 d)
     *(s32 *)s = *(s32 *)(*(u8 **)(s + 0x8) + 0xC) + d * 22;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_800263F0);
+/* Walk the whole +0x5C actor ring from D_800814A8 and clear the 0x2000 bit in
+   every node's +0x1E flag halfword.  21 words, 0 differing.
+
+   The ring idiom is csrc/ovl_dng_b42.c's func_b42_801748FC (the `g = p - 0x20'
+   node base at the top of the loop body) crossed with csrc/ovl_dng_s69.c's
+   func_s69_8002501C fact (3) -- the cursor is loaded from D_800814A8 in a
+   statement of its OWN and then advanced, so the head value passes through
+   `p''s register and the test gets it as a copy.  Both facts re-priced here:
+
+   | spelling                                              | words | differing |
+   | as written below                                       |  21   |     0     |
+   | `h = (u8 *)D_800814A8; p = *(u8 **)(h + 0x5C) + 0x20'  |  19   |    19     |
+   | the store as `*(u16 *)(g + 0x1E) &= 0xDFFF'            |  19   |    20     |
+   | no `g', `((u16 *)(p - 0x20))[0xF]' written inline      |  18   |    12     |
+
+   THE ARRAY-REF STORE IS THE WHOLE SECOND WORD PAIR.  The target reads
+   D_800814A8 once and keeps the ring head in TWO registers -- `addu $v0, $a0,
+   $zero' for the entry test and `addu $a1, $v0, $zero' for the loop test.
+   The second copy only exists if loop.c may hoist the loop test's read of the
+   global above the `sh' in the body, and a PLAIN CAST store blocks that:
+   true_dependence refuses to excuse an anonymous store against a
+   fixed-address scalar, so the test re-reads the global inside the loop
+   (`lw $v1, 0($a1)') and the body comes out two words short.  Written as an
+   array ref MEM_IN_STRUCT_P is true, the hoist is allowed, and cse2 turns the
+   hoisted load back into the copy.  This is the MEM_IN_STRUCT_P hoist
+   polarity, measured on a 21-word body. */
+void func_s62_800263F0(void)
+{
+    u8 *p;
+    u8 *g;
+
+    p = (u8 *)D_800814A8;
+    p = *(u8 **)(p + 0x5C) + 0x20;
+    while (p != (u8 *)D_800814A8)
+    {
+        g = p - 0x20;
+        ((u16 *)g)[0xF] &= 0xDFFF;
+        p = *(u8 **)(p + 0x5C) + 0x20;
+    }
+}
 
 INCLUDE_ASM("asm/nonmatchings/ovl_dng_s62", func_s62_80026444);
 
