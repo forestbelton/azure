@@ -228,9 +228,47 @@ def fix_forward_decl(text, func):
     return text[:start] + block + text[end:] if changed else text
 
 
-def defined_funcs(text):
-    """Every carved function `text` DEFINES, in source order."""
+_CARVED = re.compile(r"^func_[A-Za-z0-9]+_[0-9A-Fa-f]{8}$")
+
+
+def defined_funcs(text, path=None):
+    """Every carved function `text` DEFINES.
+
+    NOT in source order when called without PATH, despite what this docstring
+    used to claim. The fallback scan matches `^type name(' at column 0, which
+    the top-of-file DECLARATION block also satisfies, so it returns roughly
+    declaration order -- on ovl_dng_b01 its first entry is the file's 29th
+    definition. Both callers use the result as a SET (the "N other functions
+    re-verified" list), so nothing depended on the order; it is documented
+    here so nobody starts depending on it.
+
+    With PATH, enumeration is tree-sitter's and the order IS source order.
+    Verified 2026-11-25: the two paths return IDENTICAL SETS on all 116 carved
+    units and differ only in order, so the parser adds no coverage today -- it
+    is here because it also sees K&R and indented definitions, which the
+    fallback cannot, and because it cannot mistake a declaration for a
+    definition at all.
+
+    Enumeration comes from tools/c/func.py (tree-sitter) when a PATH is
+    available, because the pattern this used --
+    `^[A-Za-z_][\w \*\t]*?\b(func_..._........)\s*\(' over a comment-stripped
+    view -- requires the return type and name on one line at column 0 and so
+    cannot see a K&R definition or an indented one. The `def_match' filter
+    below is kept as a cross-check: a name the parser reports but `def_match'
+    cannot slice would break the splice silently, so it is dropped here rather
+    than later.
+    """
     out = []
+    if path is not None:
+        try:
+            import cfuncs
+            for f in cfuncs.functions(path):
+                if (_CARVED.match(f.name) and f.name not in out
+                        and def_match(text, f.name)[0] is not None):
+                    out.append(f.name)
+            return out
+        except SystemExit:
+            pass            # no tree_sitter: fall through to the old scan
     for m in re.finditer(r"(?m)^[A-Za-z_][\w \*\t]*?\b(func_[A-Za-z0-9]+_[0-9A-Fa-f]{8})\s*\(",
                          code_view(text)):
         name = m.group(1)

@@ -45,6 +45,7 @@ import glob
 import os
 import re
 import sys
+import cfuncs as _cf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJ = os.environ.get("AZURE_ROOT", os.path.dirname(os.path.dirname(HERE)))
@@ -80,11 +81,17 @@ def check(path):
     # header to top level as bare prose -- and this check, which then only
     # looked for a nested "/*", passed all three files. clang-format had
     # already mangled one of them before anyone noticed.
-    m = None
-    for mm in re.finditer(r"^[A-Za-z_][\w \*]*\b%s\s*\(" % re.escape(name), s, re.M):
-        m = mm
-    if m:
-        head = s[:m.start()].strip()
+    # ASK THE PARSER FOR THE DEFINITION. This used to be
+    # `^[A-Za-z_][\w \*]*\bNAME\s*\(' over re.M, taking the LAST match --
+    # which is the same declaration-versus-definition pattern that made
+    # permimport slice a park from its own self-prototype and feed prose to
+    # cc1psx. It was only accidentally right here (a park's definition
+    # normally follows its declaration), and it required column 0, so a K&R or
+    # indented definition was invisible to it. Verified against all 65 parks:
+    # tree-sitter finds the definition in every one.
+    _fn = _cf.find(path, name)
+    if _fn is not None:
+        head = s[:_fn.byte_start].strip()
         if head.startswith("/*"):
             # Strip EVERY well-formed comment, not just the first. A park may
             # legitimately follow its header with a second commented block of
@@ -101,9 +108,10 @@ def check(path):
                     return ("prose OUTSIDE the header comment: %r -- the "
                             "header closed early" % t[:50])
                 break
-    if not re.search(r"^[A-Za-z_][\w \*]*\b%s\s*\(" % re.escape(name), s, re.M):
-        return ("no line defining %s at column 0 -- the merge scripts find the "
-                "body by that line" % name)
+    if _fn is None:
+        return ("no DEFINITION of %s -- the merge scripts splice the body by "
+                "parsing it, so a forward declaration alone is not enough"
+                % name)
     return None
 
 

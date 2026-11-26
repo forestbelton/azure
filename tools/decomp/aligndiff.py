@@ -29,11 +29,17 @@ src, func = sys.argv[1], sys.argv[2]
 # to being a stub. Re-splice before every measurement -- and now the tool says
 # so rather than leaving it to discipline.
 if '--allow-stub' not in sys.argv:
+    # ASK cfuncs, WHICH STRIPS COMMENTS FIRST. This used to re.search the raw
+    # text for the macro, so a park header or a body comment QUOTING
+    # `INCLUDE_ASM("...", func_x)' would match and the tool would refuse to
+    # measure a body that is really spliced in. The same raw-text mistake, as
+    # `grep -c INCLUDE_ASM', once reported one stub for a unit with none.
     try:
-        _src_txt = open(src, encoding="utf-8", errors="replace").read()
+        import cfuncs as _cf
+        _still_stub = func in _cf.stubs(src)
     except OSError:
-        _src_txt = ""
-    if re.search(r'INCLUDE_ASM\("[^"]*",\s*%s\s*\)' % re.escape(func), _src_txt):
+        _still_stub = False
+    if _still_stub:
         print("%s: STILL AN INCLUDE_ASM STUB in %s -- refusing to measure the "
               "stub against itself (it would report 0 aligned differences). "
               "Re-splice the body first, or pass --allow-stub." % (func, src))

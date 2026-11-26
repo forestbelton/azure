@@ -234,35 +234,32 @@ def main():
         # as a missing symbol in the park rather than a missing parse.
         import parkresidue as _pr
         decls = [l for l in _pr.decls_of(park).split("\n") if l.strip()]
-        # MATCH THE DEFINITION, NOT A FORWARD DECLARATION OF THE SAME NAME.
+        # MATCH THE DEFINITION, NOT A FORWARD DECLARATION OF THE SAME NAME --
+        # and ask the parser, do not pattern-match for it.
         #
-        # This pattern alone matched the park's own self-prototype inside its
-        # DECLARATIONS block. There is no `*/' before that line, so the
-        # "everything after the header comment" slice below started AT the
-        # prototype and carried `END DECLARATIONS', the trailing prose and the
-        # real `*/' into source.c as C code -- and cc1psx then failed on
-        # "unterminated character constant", because the prose spells symbols
-        # as `rand'. The park was fine; the parser was not.
-        #
-        # A definition's parameter list is followed by `{', never by `;'. That
-        # is the same declaration-versus-definition trap that has cost three
-        # hand edits in this project, so require the brace.
-        m = None
-        for cand in re.finditer(r"(?m)^[A-Za-z_][^\n;]*\b" + re.escape(func)
-                                + r"\s*\([^;{]*\)\s*\n?\s*\{", raw):
-            m = cand
-            break
-        if not m:
+        # A hand-rolled `^[A-Za-z_][^\n;]*\bNAME\s*\(' matched the park's own
+        # self-prototype inside its DECLARATIONS block. There is no `*/'
+        # before that line, so the "everything after the header comment" slice
+        # below started AT the prototype and carried `END DECLARATIONS', the
+        # trailing prose and the real `*/' into source.c as C code; cc1psx
+        # then failed on "unterminated character constant", because the prose
+        # spells symbols as `rand'. The park was fine; the parser was not.
+        # Requiring a `{' fixed that one case and would still have missed a
+        # K&R definition, so this now goes through tools/c/func.py.
+        import cfuncs
+        _fn = cfuncs.find(park, func)
+        if _fn is None:
             print("permimport: no definition of %s in %s" % (func, park))
             return 1
+        defn_start = _fn.byte_start
         # TAKE EVERYTHING AFTER THE HEADER COMMENT, not just the definition. A
         # park may put a typedef or a file-scope declaration BETWEEN its header
         # and its body -- func_8009A3D0 carries `typedef struct
         # UnkDungeonMapHdr' there, and it has been lost once already by a
         # rewrite that rebuilt the park from header plus body. Slicing at the
         # definition drops it and the base fails on an undeclared type.
-        close = raw.rfind("*/", 0, m.start())
-        cut = raw.index("\n", close) + 1 if close >= 0 else m.start()
+        close = raw.rfind("*/", 0, defn_start)
+        cut = raw.index("\n", close) + 1 if close >= 0 else defn_start
         pre = ['#include "common.h"']
         if os.path.exists(os.path.join(PROJ, "csrc", "ovl_dungeon_decls.h")):
             pre.append('#include "ovl_dungeon_decls.h"')
