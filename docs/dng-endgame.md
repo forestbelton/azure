@@ -117,3 +117,46 @@ Two incidental findings from the attempt, both worth keeping:
   three parks the change targeted showed them still skipping, which read as
   "no effect" rather than "no effect here, catastrophe elsewhere".
   **Re-measure the WHOLE set after touching a shared splicer.**
+
+
+## MEASURED: the "sibling landing" route is CLOSED for every current park
+
+This note lists three things that have cracked parks, in order of how often:
+a lever that did not exist when the park was written, a sibling landing in the
+same family, and a tool fix. **The middle one is measured and it is empty.**
+
+    park family sizes (dngfam.families)   {1: 82, 2: 1}
+    parks with a LANDED family sibling    0 of 83
+
+**Eighty-two of the eighty-three parks are ONE-MEMBER families.** That is not a
+coincidence: a family with a landed member gets its body replicated by
+`dngclone`, so it never stays parked. Parks are, almost by construction, the
+functions with no copy anywhere.
+
+> **So for the parks that remain, only two of the three routes are live: a NEW
+> LEVER, or a TOOL FIX.** Do not write a park brief that tells an agent to look
+> for its family's landed siblings -- `dngfam` has none to offer.
+
+### And `dngfam` would not have found the one sibling that DID crack a park
+
+`func_b07_80170E54`'s park was closed by `func_b08_80170E7C` -- the same
+function in another unit, which that agent described as "the park's body with
+the symbols relinked". **`dngfam` puts `func_b07_80170E54` in a family of
+one.** The normalisation that makes two bodies one family did not match across
+those two units, so no amount of consulting `dngfam` would have pointed from
+one to the other.
+
+**What did point there was `jtcheck`: both bodies carry the same 12-entry jump
+table.** So for finding a park's real siblings, **a shared JUMP TABLE is a
+better signal than `dngfam`'s instruction families**, and
+`docs/dng-shared-tables.md` is the file to consult rather than `dngfam`.
+
+### One honest correction about how this was measured
+
+My first pass at this printed "83 of 83 parks are in a multi-member family",
+which was a bad loop of mine -- it counted every park found in any family,
+size-1 included, and labelled the total "multi-member". The figure that matters
+(0 with a landed sibling) was right in both passes, but the sentence around it
+was wrong until I spot-checked three parks against their own headers, which
+state their family size. **A park header that records `dngfam` says
+"one member" is a check on the tooling, not just a note to the reader.**
