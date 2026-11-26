@@ -196,7 +196,34 @@ def decls_of(path):
             # its own table prices at 17 of 44 rows: the splice then failed on
             # `D_80083160_s undeclared' with no hint that a line had been
             # discarded.
-            if explicit and line and not line.startswith(("/*", "*", "//")):
+            # ONLY WARN FOR AN UNAMBIGUOUS DECLARATION ATTEMPT. My first
+            # version warned for every unmatched line, which on a park whose
+            # DECLARATIONS block carries PROSE and a multi-line typedef meant a
+            # storm of false positives -- it reported `s8 unk_02;' (a struct
+            # FIELD) and whole sentences as dropped declarations, on every
+            # parkresidue run. A warning that fires on correct input is worse
+            # than none, because it trains the reader to skip it.
+            #
+            # A line is a declaration ATTEMPT if it ends in `;' and either
+            # begins `extern' or carries a parameter list. A bare `type name;'
+            # is indistinguishable from a struct field, so it is left alone --
+            # the multi-line typedef branch above has already consumed the
+            # fields of any typedef it could parse.
+            # AND NOT AN ASSIGNMENT. The six that survived the first
+            # narrowing were body STATEMENTS -- `q = *(u8 **)p;' and
+            # `*(u32 *)(D_800814A8 + 0xF4) = 0;' with its leading `*' stripped
+            # by the comment-continuation handling above. They end in `;' and
+            # carry parens, so the rule below could not tell them from a
+            # prototype. A top-level `=' is the thing no declaration in a park
+            # block ever has, unless it opens with a declaration keyword.
+            looks_declarative = (
+                line.endswith(";")
+                and (line.startswith("extern")
+                     or ("(" in line and ")" in line))
+                and ("=" not in line
+                     or line.startswith(("extern", "typedef", "static",
+                                         "const"))))
+            if explicit and looks_declarative:
                 print("parkresidue: %s: a DECLARATIONS line matched no "
                       "declaration form and was DROPPED -- fix the line or "
                       "DECL_LINE:\n    %s"
