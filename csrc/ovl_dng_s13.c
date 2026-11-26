@@ -58,7 +58,8 @@ s32 func_800644B8(s32);
 s32 func_80064584(s32);
 void func_s13_80024330(u8 *p, UnkVec *b, u8 *c);
 void func_s13_800244D4(u8 *, UnkVec *, u8 *);
-void func_s13_800247D4(u8 *, u8 *);
+s32 func_s13_800247D4(u8 *);
+s32 func_s13_800247D4_2(u8 *, u8 *) __asm__("func_s13_800247D4");
 s32 func_800A44E0(u16, u16, s16, u32);
 s32 func_800BCB04(s32, s32, s16);
 s32 func_800A56E0(s32);
@@ -283,7 +284,72 @@ void func_s13_80024330(u8 *p, UnkVec *b, u8 *c)
     }
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s13", func_s13_800244D4);
+/* The ring frame's LATE step, the variant func_s13_80024330 turns into once
+   the flash stops respawning: bump the +0x14 counter on the node at the
+   actor's +0x0, fade the renderable's packed +0xC colour word by 0x80808 a
+   frame, spin the +0x1C angle by the +0x1E speed modulo 0x1000, grow the
+   +0x20 radius by 4, place the mover at the payload position offset by the
+   angle's sine and cosine scaled by that radius, set the renderable's +0x1A
+   rotation from the same angle relative to the camera's D_80083160 +0xC8
+   heading, hand it to func_800478B8 and re-dress it from D_800DEAE0 when its
+   +0x14 reports 0x6000.
+   85 words, 0 differing, FIRST COMPILE.
+
+   DONOR: the landed func_s13_80024330 twenty listings up in this same file,
+   found by dngcallee at 6 of 6 symbols with a CLEAN GAP to the 4/6 tier --
+   and with a byte-identical frame (-0x28, s0/ra/s3/s2/s1 in that order), so
+   its allocation facts were in budget before any compile. dngtwin and xsibs
+   were never run. This body is that one minus the +0x22/+0x24 frame-index
+   block and the +0x1E ramp gate, plus the +0xC colour fade; all three of the
+   donor's facts HELD, and the figures below are this body's own.
+
+   FACTS MEASURED ON THIS BODY FROM THE 0 STATE, both spellings priced
+   (aligned differences):
+
+   | spelling                                                | words | rows |
+   |---------------------------------------------------------|-------|------|
+   | `Unk80083160 *g' SET IN THE ENTRY BLOCK                  |   85  |   0  |
+   |   ... `D_80083160.unk_C8' named directly at the use      |   82  |  15  |
+   | the +0x1C spin as TWO statements, sum then `% 0x1000'    |   85  |   0  |
+   |   ... folded into one statement                          |   82  |   9  |
+   | the +0xC fade SECOND, right after the +0x14 bump         |   85  |   0  |
+   |   ... moved below the +0x20 radius bump                   |   87  |  27  |
+   | the fade as `-= 0x80808'                                 |   85  |   0  |
+   |   ... `+= 0xFFF7F7F8'                                     |   85  |   0  |
+
+   THE FADE'S POSITION IS THE BIG ONE and it is a fact the donor cannot have,
+   because the donor has no fade. Second in the body it costs nothing; below
+   the radius bump it is 87 words and 27 rows, because `c' then has to stay
+   live across the `% 0x1000' block and takes the callee-saved register the
+   payload pointer wants. The two constant spellings are FREE -- both are one
+   `lui'/`ori' pair, so the C89 unsignedness of 0xFFF7F7F8 never reaches an
+   operator that could see it. `-= 0x80808' is kept because it says what the
+   code does.
+
+   The `g' and `% 0x1000' rows reproduce the donor's DIRECTION and neither
+   its magnitude (24 and 20 there, 15 and 9 here), which is the usual pattern
+   for this family. */
+void func_s13_800244D4(u8 *p, UnkVec *b, u8 *c)
+{
+    Unk80083160 *g;
+
+    g = &D_80083160;
+    *(s16 *)(*(u8 **)p + 0x14) = *(u16 *)(*(u8 **)p + 0x14) + 1;
+    *(s32 *)(c + 0xC) -= 0x80808;
+    *(s16 *)(p + 0x1C) = *(u16 *)(p + 0x1C) + *(u16 *)(p + 0x1E);
+    *(s16 *)(p + 0x1C) = *(s16 *)(p + 0x1C) % 0x1000;
+    *(s16 *)(p + 0x20) = *(u16 *)(p + 0x20) + 4;
+    *(s16 *)((u8 *)b + 0x2) =
+        *(u16 *)(p + 0x6) + ((func_800644B8(*(s16 *)(p + 0x1C)) >> 4) * *(s16 *)(p + 0x20) >> 8);
+    *(s16 *)((u8 *)b + 0x6) =
+        *(u16 *)(p + 0xA) + ((func_80064584(*(s16 *)(p + 0x1C)) >> 4) * *(s16 *)(p + 0x20) >> 8);
+    *(s16 *)(c + 0x1A) = (func_80064584(*(s16 *)(p + 0x1C) - g->unk_C8) >> 4) * -0x100 >> 8;
+    func_800478B8(c);
+    if ((*(u16 *)(c + 0x14) & 0x6000) != 0)
+    {
+        func_8003DB94(c, D_800DEAE0, 0);
+    }
+}
 
 /* Spawn the 0x212 node for one of the ring's eight frames, three steps of
    the eight-way circle per call: the caller's record at +0x20, then the
@@ -375,7 +441,274 @@ UnkNode *func_s13_80024628(u8 *v, UnkVec *q, s16 k)
     return NULL;
 }
 
-INCLUDE_ASM("asm/nonmatchings/ovl_dng_s13", func_s13_800247D4);
+/* THE BEAM FAN: eight semi-transparent LINE_G2 primitives per call, one per
+   eighth of the circle, each drawn from the payload's +0x3A/+0x3E/+0x42
+   origin to its +0x52/+0x56/+0x5A endpoint swung round by the
+   `(i * 3 % 8) * 0x200' angle, interpolated and coloured by the +0x10 phase,
+   projected through the 0x1F800000 scratchpad with RotTransPers and chained
+   into D_80083160's +0x8D0 primitive ring with the addPrim macro. Returns 0.
+   301 words, 0 differing.
+
+   THIS FUNCTION OWNS jtbl_s13_80024008. 15 cases, 3 distinct targets: cases
+   0..6 (phase 1..7) share the forward arm, case 7 (phase 8) is the flat
+   middle, cases 8..14 (phase 9..15) the reverse arm. A standalone
+   `tools/cdkgcc -S' of this unit emits the entries in exactly that order --
+   7 x forward, then the middle, then 7 x reverse -- which is entry-address
+   order and the listing's order. The ROM's 16th `.word 0' is the pad, which
+   a standalone compile cannot show.
+
+   ITS ARITY IS ONE ARGUMENT AND THE CALLER PASSES TWO. This body takes one
+   `u8 *p' and returns `s32'; func_s13_80024C88 calls it with `(p, c)', and
+   that two-argument call is priced 465/0 in that function's own comment. So
+   the call goes through the unit-local alias `func_s13_800247D4_2', exactly
+   as csrc/ovl_dng_s14.c and csrc/ovl_dng_s15.c do for their copies. The
+   stale `void func_s13_800247D4(u8 *, u8 *);' forward declaration this unit
+   carried was replaced; func_s13_80024C88 re-verified at 465/0 afterwards.
+
+   DONORS: the landed func_s14_800246D8 (csrc/ovl_dng_s14.c) for the SHAPE
+   and the landed func_s22_8002445C (csrc/ovl_dng_s22.c) for the two
+   scratchpad facts. Neither dngtwin nor xsibs was needed -- the route in was
+   this unit's TYPES.txt flagging `UnkDngS14LineSP' and `UnkDngS14Word' as
+   declared-but-unused here, and both typedefs name exactly the scratchpad
+   layout and the 16.16 union this body uses. s14 is a ONE-SHOT version of
+   this routine (no loop, 259 words); everything structural came from it.
+
+   WHAT TRANSFERRED FROM s14, UNCHANGED AND AT ITS PRICE:
+     - the int-typed switch index (`- 1' in the source, cases numbered from
+       0), because c_expand_start_case strips the s16 promotion back off;
+     - the 16.16 union interpolator, `u.h[1] = delta' then the mask then
+       `u.w >>= 3; u.w *= k;' as SEPARATE statements;
+     - the two colour multipliers as VARIABLES, not literals, so the
+       multiply is a real `mult' instead of expand-time `sll'/`subu'.
+   WHAT INVERTED: s14's `(u32)sp | 0x64' argument form. Here all four
+   RotTransPers addresses are `&sp->unk_XX' and the ior form is 4 rows --
+   the same inversion func_s22_8002445C recorded, so that is now 2 for 2 and
+   s14's ior is the outlier.
+   WHAT s22 SUPPLIED: `g = &D_80083160' as a pointer local for the two
+   in-loop +0x8D0 reads while the ONE pre-loop use stays direct. That gives
+   the target's `lui'/`addiu'/`lw 0($t0)' triple inside the loop and the
+   folded `lw %lo(D_80083160)($v0)' outside it, and it is the whole reason
+   the loop body reads the ring pointer the way it does.
+
+   FACTS MEASURED ON THIS BODY FROM THE 0 STATE, both spellings priced
+   (aligned differences; EVERY figure below was re-measured after the body
+   reached 0, and four of them had read differently mid-fight -- see the
+   retractions at the end):
+
+   | spelling                                                 | words | rows |
+   |----------------------------------------------------------|-------|------|
+   | `msk = -0x10000;' BEFORE `w = 0x40;' at the loop top      |  301  |   0  |
+   |   ... the two statements swapped                          |  301  |   4  |
+   |   ... `u.h[0] = 0' at all six sites, no `msk' at all      |  301  |   4  |
+   | `w = 0x40;' as the FIRST statement of the loop body       |  301  |   0  |
+   |   ... moved below the two trig calls, before the switch    |  298  |  61  |
+   |   ... literal 0x40 at all seven sites, no local           |  300  |  67  |
+   | `rr = 0x7F' a local in the REVERSE arm                     |  301  |   0  |
+   |   ... the literal 0x7F at its store                        |  301  |   7  |
+   |   ... plus a `bb = 0xFF' local beside it                   |  301  |  12  |
+   | `switch (*(s16 *)(p + 0x10) - 1)', cases 0..14             |  301  |   0  |
+   |   ... `switch (*(s16 *)(p + 0x10))', cases 1..15           |  303  |   5  |
+   | `g = &D_80083160' for the two in-loop +0x8D0 reads         |  301  |   0  |
+   |   ... `D_80083160.unk_00' named directly at both           |  300  |   4  |
+   | `for (i = 7; i >= 0; i--)' with `i * 3' in the angle        |  301  |   0  |
+   |   ... `for (i = 21; i >= 0; i -= 3)' with `i % 8'          |  297  |  45  |
+   | `&sp->unk_64' / `&sp->unk_D8' at RotTransPers              |  301  |   0  |
+   |   ... s14's `(SVECTOR *)((u32)sp | 0x64)' ior form         |  301  |   4  |
+
+   MEASURED AND FREE, so none of these is why this lands:
+     - `c = 0xF; c2 = 0x17;' both assigned before their uses, against the
+       interleaved `c; r; c2; b' order (301/0 either way);
+     - an `s32 st' local for the colour block's one `p + 0x10' read, against
+       naming the cast three times (301/0 either way);
+     - the angle as an `s32 a' local, against writing `(i * 3 % 8) << 9'
+       inline at BOTH trig calls (301/0 either way -- cse unifies the two
+       occurrences and the value still survives the first call in $s0). Note
+       func_s13_80024628 in this unit prices the same inline-versus-local
+       question at 9 rows in the opposite direction; it is free here.
+
+   THE TWO HOISTED CONSTANTS ARE AN ORDER FACT, AND IT IS WHY THIS BODY
+   NEEDS AN EXPLICIT MASK LOCAL. The target keeps 0x40 in $s7 and 0xFFFF0000
+   in $fp, both initialised in the prologue, and 0xFFFF0000 is initialised
+   FIRST. Both are loop.c hoists out of the loop body, and move_movables
+   emits each moved insn immediately before loop_start, so the hoists come
+   out in the order their SETS appear inside the loop -- and a hoist always
+   lands AFTER any statement the source already wrote before the loop. With
+   `u.h[0] = 0' the 0xFFFF0000 pseudo is created by store_bit_field inside
+   the forward ARM, i.e. after `w = 0x40' at the loop top, so 0x40 is hoisted
+   first and the two prologue pairs come out swapped: 4 rows. Writing the
+   mask as a source local assigned one line ABOVE `w' puts both sets at the
+   loop top in the order I choose. Spelling it `-0x10000' rather than
+   `0xFFFF0000' keeps the expression signed; the value only feeds an `and',
+   so both spellings are the same word, and the signed one is kept so a later
+   reader is not relying on that.
+
+   AND `w = 0x40' HAS TO BE ABOVE THE TWO TRIG CALLS, not merely inside the
+   loop. loop.c will not move a set it reached after a CALL_INSN, so placed
+   just before the switch the constant is not hoisted at all, the frame drops
+   to -0x38 with one fewer callee-saved register, and the body is 298 words /
+   61 rows. That is a STATEMENT-POSITION fact, not a shape one, and it is the
+   same class as func_s13_80024330's `g' row twenty listings up.
+
+   THE REVERSE ARM'S `rr' LOCAL IS A ONE-WORD FACT. The target materialises
+   0x7F and 0xFF into $t0 and $v0 BEFORE the first colour store, so both are
+   live at once, and $t0 is then clobbered -- which forces reload to
+   rematerialise the 0xF for `(c - phase)' a second time. That second
+   `addiu $t0, $zero, 0xF' IS the 301st word. Written as a bare literal the
+   two constants go sequentially through one register, nothing is clobbered,
+   the 0xF survives, and the body is one word short. Making 0xFF a local as
+   well overshoots: both then share $t0 and it is 12 rows.
+
+   FOUR FIGURES RETRACTED -- each was measured mid-fight and each was wrong:
+     - `c = 0xF; c2 = 0x17' up front read 24 rows (35 -> 11) while the `rr'
+       and `msk' faults were live. It is FREE from the clean body; it was
+       compensating. KEPT anyway, for symmetry with the reverse arm.
+     - `w' before the switch read 204 rows; the true figure is 61.
+     - the literal 0x40 read 93 rows / 298 words; the true figure is 67 / 300.
+     - `rr'/`bb' as locals read 0 -- FREE -- on the 35-row body. From 0, `rr'
+       alone is worth 7 and the pair is worth 12. That one INVERTED.
+   An `s32 k' local for `phase + 1' and a literal `0xF' in place of `c' in
+   the reverse arm were both measured FREE on the 35-row body and have NOT
+   been re-priced from 0; treat them as unmeasured. */
+s32 func_s13_800247D4(u8 *p)
+{
+    UnkDngS14LineSP *sp = (UnkDngS14LineSP *)0x1F800000;
+    s32 w;
+    LINE_G2 *l;
+    UnkDngS14Word u;
+    Unk80083160 *g;
+    s32 i;
+    s32 a;
+    s32 msk;
+
+    g = &D_80083160;
+    sp->unk_18 = D_80083160.unk_00 + 0xB0;
+    for (i = 7; i >= 0; i--)
+    {
+        msk = -0x10000;
+        w = 0x40;
+        l = *(LINE_G2 **)(g->unk_00 + 0x8D0);
+        *(LINE_G2 **)(g->unk_00 + 0x8D0) = l + 1;
+        setLineG2(l);
+        sp->unk_64 = *(u16 *)(p + 0x3A);
+        sp->unk_66 = *(u16 *)(p + 0x3E);
+        sp->unk_68 = *(u16 *)(p + 0x42);
+        a = (i * 3 % 8) << 9;
+        sp->unk_6C = *(u16 *)(p + 0x52) + (func_800644B8(a) * 2 >> 8);
+        sp->unk_6E = *(u16 *)(p + 0x56) + (func_80064584(a) * 2 >> 8);
+        sp->unk_70 = *(u16 *)(p + 0x5A);
+        switch (*(s16 *)(p + 0x10) - 1)
+        {
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+            u.h[1] = sp->unk_6C - sp->unk_64;
+            u.w &= msk;
+            u.w >>= 3;
+            u.w *= *(s16 *)(p + 0x10) + 1;
+            sp->unk_6C = sp->unk_64 + (u.w >> 16);
+            u.h[1] = sp->unk_6E - sp->unk_66;
+            u.w &= msk;
+            u.w >>= 3;
+            u.w *= *(s16 *)(p + 0x10) + 1;
+            sp->unk_6E = sp->unk_66 + (u.w >> 16);
+            u.h[1] = sp->unk_70 - sp->unk_68;
+            u.w &= msk;
+            u.w >>= 3;
+            u.w *= *(s16 *)(p + 0x10) + 1;
+            sp->unk_70 = sp->unk_68 + (u.w >> 16);
+            {
+                s32 c;
+                s32 c2;
+                s32 r;
+                s32 gr;
+                s32 b;
+
+                c = 0xF;
+                c2 = 0x17;
+                r = (*(s16 *)(p + 0x10) + 1) * c + 0x40;
+                b = (*(s16 *)(p + 0x10) + 1) * c2 + 0x40;
+                gr = (7 - *(s16 *)(p + 0x10)) << 3;
+                l->r0 = w;
+                l->g0 = w;
+                l->b0 = w;
+                l->g1 = w - gr;
+                l->r1 = r;
+                l->b1 = b;
+            }
+            break;
+        case 7:
+            l->r0 = w;
+            l->g0 = w;
+            l->b0 = w;
+            l->r1 = 0x7F;
+            l->g1 = 0;
+            l->b1 = 0xFF;
+            break;
+        case 8:
+        case 9:
+        case 10:
+        case 11:
+        case 12:
+        case 13:
+        case 14:
+            u.h[1] = sp->unk_6C - sp->unk_64;
+            u.w &= msk;
+            u.w >>= 3;
+            u.w *= *(s16 *)(p + 0x10) - 7;
+            sp->unk_64 = sp->unk_64 + (u.w >> 16);
+            u.h[1] = sp->unk_6E - sp->unk_66;
+            u.w &= msk;
+            u.w >>= 3;
+            u.w *= *(s16 *)(p + 0x10) - 7;
+            sp->unk_66 = sp->unk_66 + (u.w >> 16);
+            u.h[1] = sp->unk_70 - sp->unk_68;
+            u.w &= msk;
+            u.w >>= 3;
+            u.w *= *(s16 *)(p + 0x10) - 7;
+            sp->unk_68 = sp->unk_68 + (u.w >> 16);
+            {
+                s32 c;
+                s32 c2;
+                s32 r;
+                s32 gr;
+                s32 b;
+                s32 rr;
+
+                c = 0xF;
+                c2 = 0x17;
+                rr = 0x7F;
+                r = (*(s16 *)(p + 0x10) - 7) * c + 0x40;
+                b = (*(s16 *)(p + 0x10) - 7) * c2 + 0x40;
+                gr = (c - *(s16 *)(p + 0x10)) << 3;
+                l->g1 = 0;
+                l->r1 = rr;
+                l->b1 = 0xFF;
+                l->g0 = gr;
+                l->r0 = r;
+                l->b0 = b;
+            }
+            break;
+        }
+        sp->unk_F4 = RotTransPers((SVECTOR *)&sp->unk_64, (long *)&sp->unk_D8, (long *)&sp->unk_84,
+                                  (long *)&sp->unk_88);
+        sp->unk_F8 = RotTransPers((SVECTOR *)&sp->unk_6C, (long *)&sp->unk_DC, (long *)&sp->unk_84,
+                                  (long *)&sp->unk_88);
+        l->x0 = sp->unk_D8;
+        l->y0 = sp->unk_DA;
+        l->x1 = sp->unk_DC;
+        l->y1 = sp->unk_DE;
+        sp->unk_B4 = (sp->unk_F4 + sp->unk_F8) / 2;
+        if ((u32)sp->unk_B4 < 0x1E0)
+        {
+            addPrim(sp->unk_18 + sp->unk_B4 * 4, l);
+        }
+    }
+    return 0;
+}
 
 /* THE EFFECT'S ROOT STEP, a six-state machine on *(s16 *)(p + 0xA); every
    frame bumps the +0x10 timer first. State 0 resets the timer, clears the
@@ -651,7 +984,7 @@ void func_s13_80024C88(u8 *p, UnkVec *b, u8 *c)
         b->unk_00 = b->unk_00 + b->unk_0C;
         b->unk_04 = b->unk_04 + b->unk_10;
         b->unk_08 = b->unk_08 + b->unk_14;
-        func_s13_800247D4(p, c);
+        func_s13_800247D4_2(p, c);
         if (*(s16 *)(p + 0x10) >= 0xF)
         {
             *(s16 *)(p + 0x10) = 0;
