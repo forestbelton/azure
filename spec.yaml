@@ -1,24 +1,139 @@
+# Every file in az.bin's ISO9660 filesystem, in disc order.
+#
+# az.bin is a raw MODE2/2352 image: 126,946 sectors, all mode 2, and the files
+# cover it contiguously from lba 23 to lba 126,795.  The only sectors no file
+# owns are the system area (0..15), the volume descriptors (16..17), the path
+# tables (18..21), the root directory (22), the five directory records, and 150
+# blank sectors of post-gap at the tail.  There is nothing hidden outside the
+# filesystem.
+#
+# `type` says what a file holds, and that picks which length field it carries:
+#
+#   data         Plain MODE2/FORM1.  Every sector carries 2048 bytes of user
+#                data and the directory record is a true byte length, so these
+#                carry `size`; the sector count follows from it.
+#
+#   audio-video  A CD-XA stream: MDEC video in FORM1 sectors interleaved 7:1
+#                with XA-ADPCM audio in FORM2 sectors.
+#
+#   audio        A CD-XA stream with no video sectors at all -- XA-ADPCM audio
+#                padded out with blank FORM1 sectors to pace the drive.
+#
+# The two stream types carry `sectors`, the on-disc extent, because a byte
+# length cannot be turned back into a sector count: FORM1 sectors contribute
+# 2048 bytes and FORM2 sectors 2324, so the length depends on the interleave.
+# Extraction keeps every sector's payload -- the audio is woven into the video
+# and separating it would mean demuxing, not slicing.
 infile: az.bin
 shasum: fab68454be5e4e48f7a43ac797cc8c47325c6a20
 outdir: data
 files:
   - name: system.cnf
+    type: data
     shasum: a60bb34a165f9e1a1fceb3aa254475f9208efe77
     sector: 23
     size: 0x43
   - name: slus_006.14
+    type: data
     shasum: e6bfbb95ff6676899e077481221d73ddd4d3bf52
     sector: 24
     size: 0x80000
+  # The movie-player overlay. Plain data despite the name -- no XA sectors.
+  - name: ovmovie.bin
+    type: data
+    shasum: 4f6f2cb2b4a74a601137b7dc0ed5168493b2c7bb
+    sector: 280
+    size: 0x300000
   - name: main/main.bin
+    type: data
     shasum: 69f63236b7ab2260e2e9aa2048ce7aa540bdbe6d
     sector: 1817
     size: 0x275800
   - name: town/town.bin
+    type: data
     shasum: b946a57aa5fc8cec29db3ecabad6e6b76df418b7
     sector: 3077
     size: 0x101b800
+  # 3 XA channels (file 1, channels 0..2).
+  - name: strt/m_game1.str
+    type: audio
+    shasum: 131172c0fcf7624b948868337797675ac624b4ec
+    sector: 11325
+    sectors: 664
+  # Filler: 10 audio sectors, the rest blank. Byte-identical to str/dummy_.str.
+  - name: strt/dummym.str
+    type: audio
+    shasum: fb02d991ba51b96594dd602a2d9605b4b4021326
+    sector: 11989
+    sectors: 320
   - name: dungeon/dungeon.bin
+    type: data
     shasum: 27f9fcc384a570a991e349b920881e7070c0e13c
     sector: 12310
     size: 0x1a86800
+  # 8 XA channels per file number, file numbers 1..11.
+  - name: str/merge.str
+    type: audio
+    shasum: 205fe3f1d14c92fe5c745d4b10603b11087f86de
+    sector: 25892
+    sectors: 5240
+  # Filler: 10 audio sectors, the rest blank. Byte-identical to strt/dummym.str.
+  - name: str/dummy_.str
+    type: audio
+    shasum: fb02d991ba51b96594dd602a2d9605b4b4021326
+    sector: 31132
+    sectors: 320
+  # 8 XA channels per file number, file numbers 1..11.
+  - name: str/q_guy_m.str
+    type: audio
+    shasum: d10b29ce549287ea47fff552188d612db32015d6
+    sector: 31452
+    sectors: 6888
+  # 320x224, 116 frames.
+  - name: str/jo001_ws.str
+    type: audio-video
+    shasum: 3ae5961fc59a7f7f23ac5190f7553abeda31eac0
+    sector: 38340
+    sectors: 1161
+  # 320x224, 199 frames.
+  - name: str/jo002_ws.str
+    type: audio-video
+    shasum: 0f9916196790394d666e7183fdf9d036e3ce6bfb
+    sector: 39501
+    sectors: 1992
+  # 320x224, 773 frames.
+  - name: str/jo003_ws.str
+    type: audio-video
+    shasum: d33661f035d241853a592da1b304baadfbfb1ed3
+    sector: 41493
+    sectors: 7738
+  # 320x192, 1500 frames.
+  - name: str/lop1_ws.str
+    type: audio-video
+    shasum: 8c9de7401c9146f158fcad0cb1243ac2b3d2cf87
+    sector: 49231
+    sectors: 15024
+  # 320x224, 2233 frames.
+  - name: str/lop2_ws.str
+    type: audio-video
+    shasum: 7b5d19c6f751cd096d8739db91ddf3e4f45ecb9c
+    sector: 64255
+    sectors: 22330
+  # 320x224, 95 frames.
+  - name: str/top_ws.str
+    type: audio-video
+    shasum: 5a052ec5fed75c1045c59c8cf1b03f1ac58824d4
+    sector: 86585
+    sectors: 950
+  # 320x240, 142 frames.
+  - name: str/konami.str
+    type: audio-video
+    shasum: f908243d0516a16e976a64027c3ff9eedd8f2e79
+    sector: 87535
+    sectors: 1421
+  # One XA channel every 8th sector; the other 33,109 sectors are blank.
+  - name: str/stafroll.str
+    type: audio
+    shasum: 35a2d371f2149315def4903f46dffe9087f886b5
+    sector: 88956
+    sectors: 37840

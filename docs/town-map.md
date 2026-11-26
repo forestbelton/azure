@@ -135,11 +135,14 @@ checking:
   too carries about 0x9100 bytes of data past the 0xf7700 text end
   `splat/dungeon.bin.yaml` stops at.
 * **The 133-sector read at LBA 280 is in none of the four containers.**
-  `spec.yaml` extracts `slus_006.14` as sectors 24..280 and `main.bin` from
-  1817, so LBA 280 is in the gap. Its first sector holds
+  `spec.yaml` extracts `slus_006.14` as sectors 24..279 and `main.bin` from
+  1817, so LBA 280 is in neither. Its first sector holds
   `MDEC_rest:bad option(%d)`, `MDEC_in_sync`, `MDEC_out_sync` -- PSY-Q
-  **libpress** -- so 272,384 bytes of resident library code is loaded from a
-  region nothing in this repo currently extracts.
+  **libpress** -- so 272,384 bytes of resident library code is loaded from
+  there. Resolved 2026-11-25: that region is the front of `OVMOVIE.BIN`, a
+  fifth plain data file at LBA 280 spanning 1,536 sectors, which the ISO9660
+  scan turned up and `spec.yaml` now extracts whole as `data/ovmovie.bin`.
+  `MDEC_rest` sits at offset 0 of it.
 
 ## 2. The preamble is shared, and its sound bank does not fit
 
@@ -372,8 +375,10 @@ name.
   generator, `tools/decomp/dataverify.py` is the gate. `docs/owning-data.md`
   §8 is the method: why it goes to `ovl_town.c` as a contiguous prefix, why
   this overlay has no unit oracle, and the traps. 4,657 `dlabel`s to go.
-* **Extract LBA 280..413.** 133 sectors of libpress that `spec.yaml` does not
-  see at all.
+* ~~**Extract LBA 280..413.** 133 sectors of libpress that `spec.yaml` does
+  not see at all.~~ **Done 2026-11-25**: it is the front of `OVMOVIE.BIN`
+  (LBA 280, 1,536 sectors), now extracted as `data/ovmovie.bin`. What is left
+  is to split it -- the libpress text is only the first 133 sectors of it.
 * **Check `dungeon.bin`'s data tail**, from the descriptor table above.
   `main.bin+0x21800`, the other half of this item, is **done**: it is a code
   overlay, split 2026-11-11, and `docs/overlays.md` has it.
