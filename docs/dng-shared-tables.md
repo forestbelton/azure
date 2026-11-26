@@ -68,12 +68,37 @@ standalone compile has no following object because `asmlib` does not expand
 `INCLUDE_ASM`/`INCLUDE_RODATA`. **So compare the ENTRIES, not the word count,
 and expect a missing trailing pad.**
 
-**A guess in the recon that turned out wrong**, recorded so it is not inherited:
-b39's OTHER table, the 5-case `jtbl_b39_80170808`, was expected to be b42's
-inlined `d + 0x46` dispatch. It is not. It is a separate
-`*(s16 *)(p + 0xA8)` state machine gated on `*(s32 *)(d + 0x14) & 0x20000`,
-minval 0, cases 0..4, and its sixth word is a real `0x00000000` alignment pad
-rather than a label.
+**TWO GUESSES IN THE RECON THAT TURNED OUT WRONG**, recorded so they are not
+inherited. Both were mine and both were passed on to agents before being
+checked.
+
+1. The recon said b42 "inlines the `d + 0x46` dispatch that yours compiles to a
+   5-case table". **It does not.** b42's `d + 0x46` dispatch is ALSO a 12-entry
+   table at the same address -- it is a member of this family, not an
+   alternative to it. The relink delta between b39 and b42 is therefore NOT
+   "one table against an inlined chain".
+
+2. The 5-case `jtbl_b39_80170808` is **not** related to `d + 0x46` at all. It
+   is a separate `*(s16 *)(p + 0xA8)` five-state machine gated on
+   `*(s32 *)(d + 0x14) & 0x20000`, minval 0, cases 0..4, five distinct targets,
+   with **no `default` arm** (the range check goes straight to the epilogue).
+   b42 has no counterpart for it. Its sixth ROM word is a real `0x00000000`
+   alignment pad rather than a label.
+
+## And a caution about RECON, not just bookkeeping
+
+A guess in a recon paragraph reads exactly like a measurement once it has been
+copied into a brief. Both wrong items above were my inferences from a word-count
+delta, written in the same voice as the facts beside them, and they went to two
+agents. One of them spent effort discovering that b42's dispatch is a table
+after all.
+
+**Mark an inference as an inference in a brief.** The agents' own reports
+separate "measured" from "read off the listing" from "assumed" without being
+asked; a dispatcher's recon should do the same. Everything else in that recon
+held, and the b42 header plus the twin chain it names was worth most of a
+617-word body -- which is the argument for carrying recon forward, not against
+it.
 
 ## A bookkeeping caution, learned the hard way on this file
 
