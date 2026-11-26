@@ -115,6 +115,36 @@
    (283 / 8, bit-identical with the plain cast). Note these are bit-identical
    residues and therefore NOT MEASURABLE rather than free.
 
+   DIRECTION (1) IS NOW CLOSED (dispatcher, 2026-11-25).  I ran it as a 2x2
+   and every cell is 283 words / 2 aligned rows -- the same figure as the kept
+   body:
+
+       setUV4 expanded to eight field stores, `w' one set     283 /  2
+       ... expanded, `w' TWO sets                             283 /  2
+       ... u0 and u3 PINNED as plain casts
+           (`*(u8 *)((u8 *)q + 0xC)' and `+ 0x30', which clear
+            MEM_IN_STRUCT_P where a COMPONENT_REF sets it),
+           `w' one set                                        283 /  2
+       ... u0 and u3 pinned AND `w' two sets                   283 /  2
+
+   So neither half of the suggested conjunction moves it and nor does the
+   combination.  Two things worth having from that: EXPANDING `setUV4' INTO ITS
+   EIGHT FIELD STORES IS FREE (the macro is a comma expression, so this was
+   never a shape question), and the two-set `w' residue is now pinned down
+   precisely -- it is the `sll $v0, $v0, 3' at TARGET WORD 103 against word 123
+   here, a 20-slot displacement, with nothing else differing.
+
+   Pinning the zero stores was the specific thing direction (1) asked for, on
+   the theory that the u0 store was taking the slot the `sll' needs.  It is
+   not: clearing MEM_IN_STRUCT_P on both zero stores changes nothing at all,
+   so whatever holds that slot is not those stores' mobility.
+
+   ONLY DIRECTION (2) REMAINS -- the primitive not being reached as a POLY_GT4
+   struct pointer at all -- and the author's reason for not trying it still
+   stands: it rewrites the whole body, and the colour and position groups are
+   already byte-identical as struct fields.  Anyone attempting it should expect
+   to re-measure everything, not just the UV group.
+
    WHAT A NEXT AGENT SHOULD TRY. The body is one insn out, so this is not an
    allocation problem and -da will corroborate whatever story it is given. The
    question is narrow: what source shape puts the p+0x4 mod-4-times-8 chain at
